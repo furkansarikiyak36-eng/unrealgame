@@ -1,0 +1,371 @@
+# Kod haritası
+
+Otomatik üretildi (13 October 2026 13:07) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+
+Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
+Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
+
+## BuildingNodeActor.h
+
+**ABuildingNodeActor** (class) — Base building node actor for all structural elements (Logs, Stone Masonry, Trusses, Bucks). Integrates with UStructuralIntegritySubsystem to propagate gravity & lateral …
+
+- `virtual float ApplyDamage(float Amount, const FVector& Direction)` — Deals structural damage. Returns remaining structural health.
+- `virtual void TriggerChaosCollapse(const FVector& Impulse = FVector::ZeroVector)` — Triggers dynamic Chaos Physics collapse of this building node
+- `void AddSupportingNode(ABuildingNodeActor* Child)` — Adds a child node that rests on top of this node
+- `void RemoveSupportingNode(ABuildingNodeActor* Child)` — Removes a child node
+- `void AddSupportedByNode(ABuildingNodeActor* Parent)` — Sets parent nodes that physically support this node from below
+- `float GetSelfWeight() const` — --- Structural Getters & Setters ---
+- Ayrıca (açıklamasız): `ABuildingNodeActor`, `GetCurrentLoadKN`, `SetCurrentLoadKN`, `GetCompressiveCapacityKN`, `IsGrounded`, `SetGrounded`, `IsCollapsed`, `GetSupportingNodes`, `GetSupportedByNodes`
+
+## Campfire.h
+
+**ACampfire** (class) — A campfire. Any piece of wood is fuel: it burns as long as the wood it holds (a whole log 10 minutes, a half 5, a quarter 2.5), so cutting a log up into firewood is just …
+
+- `static float FuelSecondsOf(const ACarvableLog* Piece)` — Seconds Piece would burn.
+- `static ACampfire* Build(UWorld* World, const FVector& Ground)` — A fire pit with a ring of stones on the ground at Ground, not lit until it has fuel.
+- `bool AddFuel(ACarvableLog* Piece)` — Throws Piece on the fire: it is used up, the fire is lit. False if the fire is already full or the piece is part of a structure. The caller takes the piece off the …
+- `void Burn(float Seconds)` — Burns for Seconds: fuel goes down, the light follows, wood in reach is scorched. Called every tick as well.
+- Ayrıca (açıklamasız): `ACampfire`, `IsBurning`, `GetFuelSeconds`
+
+## CarvableLog.h
+
+**FJointCut** (struct) — A joint cut into a piece (a cup, a socket...), kept so the same cut can be made in a replacement.
+
+
+**FCrossPlacement** (struct) — Where a log laid across another one goes, and the saddle notch that seats it (see ACarvableLog::ComputeCrossPlacement).
+
+
+**ACarvableLog** (class) — A raw log that can be carved while playing: smooth cups and grooves (notches), cross cuts and lengthwise splits, cut from the scanned mesh with Geometry Script. Local X …
+
+- `static ACarvableLog* SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh, const FTransform& Transform)` — Spawns a carvable copy of a raw log mesh (e.g. /Game/Building/Raw/SM_RawLog_C).
+- `static ACarvableLog* SpawnLog(UWorld* World, const FTransform& Transform)` — A whole log as a tree gives it (the greybox log, six modules long), falling into place.
+- `static ACarvableLog* SpawnFromPickup(APickupItem* Pickup)` — Puts a log lying on the ground on the bench: replaces the pickup with a carvable log of the same mesh, in place.
+- `static bool GetLogAxis(const AActor* Log, FVector& OutCentre, FVector& OutAxis, float& OutRadius, float& OutHalfLength)` — Axis of a log lying in the world: a carvable log or a carryable log item. False for anything else.
+- `static bool ComputeCrossPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper, FCros …` — Laying a log (UpperMesh) square across Lower, aimed at Aim by a player standing at Viewer, like the corner of a log wall: it crosses near one end (an overhang past the …
+- `static ACarvableLog* FindBeamOnPost(const ACarvableLog* Post)` — An anchored, horizontal log lying across the top of Post (a beam on a post), if there is one.
+- `static bool ComputeBracePlacement(const ACarvableLog* Post, const ACarvableLog* Piece, FTransform& OutTransform)` — A brace for Piece: from the side of Post up to the underside of the beam on its top at 45 degrees, running towards the middle of the beam. It needs a piece between two …
+- `static bool ComputeFloorPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Piece, FTran …` — A split piece laid across a lying log as a floor board: flat face up, running away from Viewer over the log, its near end a little past it, resting on top. False if …
+- `static void GetCrossNotchGuide(const FCrossPlacement& Placement, const ACarvableLog* Upper, TArray<TArray<FVector>>& OutLines, TAr …` — Rim of that saddle notch on the upper log, in its local space (for the dashed guide before it is placed).
+- `static ACarvableLog* PlaceAcross(AActor* Lower, const FCrossPlacement& Placement, ACarvableLog* Upper)` — Lays Upper across Lower as computed: moves it there (off the shoulder), cuts its saddle notch and seats it. Both logs are anchored where they are (a lying log item is …
+- `float GetDamage() const` — 0 sound .. 1 burnt through or broken (wood goes darker as it takes damage). From the Wood structure rules: above 0.6 the joints of a piece let go (it no longer holds or …
+- `bool IsTemporary() const` — Scaffolding: part of the building site only until the structure is done.
+- `static bool CanReplace(const ACarvableLog* Old, const ACarvableLog* Replacement)` — A damaged piece in a structure can be swapped for another one of the same size (see ReplaceDamaged).
+- `static bool ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)` — Replacement takes Old's place, anchored, with the same joints cut into it. Old is released from the structure, damage and all, for the caller to pick up.
+- `void Anchor()` — Part of a structure now: stays exactly where it is, no physics, also after further cuts.
+- `void Release()` — Off the structure to be carried: no longer anchored, physics stays off (the shoulder takes it).
+- `void LetFall()` — No longer held up: anchoring is dropped and physics takes over, so it tips or falls where it is.
+- `ACarvableLog* SnapAt(float LocalX)` — A beam that cannot carry its own span: it lets go and snaps in two at LocalX, both halves left to physics.
+- `const TArray<FVector2f>& GetCutSpans() const` — Joints cut into this log, as local X ranges.
+- `float GetVolume() const` — Wood in this piece (cm3); what it weighs on the shoulder.
+- `static float GetShoulderCapacity()` — How much wood fits on the shoulder: one whole log (390 x 70 cm), or two halves, or six one-module pieces.
+- `bool IsSplit() const` — Split lengthwise at some point (a half, a quarter): not a round log any more.
+- `bool IsFullLog() const` — A whole round log, full length: what a wall plan or a recipe takes as "a log".
+- `FBox GetLocalBox() const` — The piece's extent in its own frame.
+- `void BeginCarry(USceneComponent* AttachTo, const FTransform& Relative)` — On the player's shoulder: no physics, no collision, attached to AttachTo at Relative.
+- `void PlaceAt(const FTransform& Transform, bool bAnchorIt)` — Off the shoulder to Transform: anchored (a post) or left to settle where it lands.
+- `FTransform GetLayTransform(const FVector& Ground, float Yaw) const` — Lying on the ground at Ground, its length along Yaw.
+- `FTransform GetStandTransform(const FVector& Ground, float Yaw) const` — Standing upright as a post with its lower end on Ground.
+- `int32 GetTriangleCount() const` — Triangles in the current mesh; grows with every cut, used by the mechanics demo to check a cut landed.
+- `void GetModuleLines(TArray<float>& OutX) const` — Local X of the grid lines that lie inside the log (not its ends).
+- `void GetSnapPoints(ECarveTool Tool, float Width, TArray<float>& OutX) const` — Where an axe can make this cut on this log, all on the module grid. Joints (notch, round, flat) go at the corners, one module in from each end, and on the middle line of …
+- `bool FindSnapPoint(ECarveTool Tool, float LocalX, float Width, float& OutX) const` — The snap point nearest LocalX; false when the log has none left for this tool.
+- `bool IsSpanFree(float X0, float X1) const` — No earlier joint overlaps [X0, X1].
+- `bool Notch(float LocalX, float SideAngleDeg, float CrossAngleDeg, float MateRadius, float Depth)` — Cuts a cup for a crossing log of MateRadius. SideAngleDeg turns around the log axis (0 = top, 180 = bottom); CrossAngleDeg is the crossing angle (90 = square, 0 = …
+- `bool CutProfile(float LocalX, float SideAngleDeg, float Width, float Depth, bool bRound)` — Cuts a crosswise notch Width long (along the log) and Depth deep, opening toward SideAngleDeg (0 = top, 180 = bottom). Round leaves a circular side profile, flat a …
+- `bool CutDovetail(float LocalX, float SideAngleDeg, float Width, float Depth)` — A dovetail socket: Width wide at the floor, 70% of that at the surface, Depth deep, through the whole log.
+- `bool ShapeEnd(bool bMaxEnd, ECarveTool Shape)` — Works one end: Point (a stake), Chamfer (bevelled edge) or Trim (cut a pointed or chamfered end back square). Pointed and chamfered ends are only made on flat ends with …
+- `int32 GetSplitCount() const` — 0 whole, 1 half, 2 quarter: how many times the log has been split lengthwise.
+- `float GetFlatAngle() const` — Direction (in the YZ plane, as Split's angle) the flat face of a split piece looks out of the wood.
+- `void GetProfileFrame(float LocalX, float SideAngleDeg, float Width, float Depth, bool bRound, FVector& OutCentre, FVector& OutOut, …` — Frame of a profile notch for previews: axis direction out of the log, across direction, and the cutter centre.
+- `void GetCutGuide(ECarveTool Tool, float LocalX, float SideAngleDeg, float AngleDeg, float Width, float Depth, TArray<TArray<FVecto …` — Where a cut would meet the log's surface, as local-space polylines lying just above the bark: the rim of a notch, the ring of a cross cut, the two lines of a split. Used …
+- `ACarvableLog* CrossCut(float LocalX)` — Saws across at LocalX; the part beyond becomes a new log.
+- `ACarvableLog* Split(float AngleDeg)` — Splits along the axis on the plane at AngleDeg around X (0 = vertical); the other half becomes a new log.
+- `void GetNotchFrame(float LocalX, float SideAngleDeg, float CrossAngleDeg, float MateRadius, float Depth, FVector& OutCentre, FVect …` — Where the cup's mating log axis runs (local space), for previews.
+- Ayrıca (açıklamasız): `ACarvableLog`, `AddDamage`, `SetDamage`, `SetTemporary`, `IsAnchored`, `IsCarried`, `GetLength`, `GetRadius`, `GetCenterX`, `GetDiameter`, `GetMinX`, `GetMaxX`, `GetEnd`, `GetGridOriginX`
+
+## ForestCharacter.h
+
+**AForestCharacter** (class) — First person survival character: chop trees, break rocks, pick up drops, craft simple materials and place stone blocks. Input is built in code so the prototype needs no …
+
+- `void GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutSlots) const` — The backpack as slots, in display order: one entry per stack.
+- `EForestItem GetCarriedItem() const` — The log in the player's hands (None when empty; TrunkLog while a trunk is dragged by rope).
+- `bool IsWallTool() const` — The log wall planner is selected (shown as the first build option).
+- `static float GetCarveDepthFraction(int32 Index)` — Round / flat notch depth as a share of the log's thickness: 1/6, 1/3, 1/2.
+- `bool IsCarveSpotValid() const` — The log in sight still has a place for the selected tool.
+- `bool CanPlaceAcross() const` — E would lay the carried log across the log in sight.
+- `bool IsPlaceSupported() const` — The piece would be held up where it is about to go (the structure graph says so); false: it would fall.
+- `bool IsPlacingStanding() const` — R while carrying: lay pieces down or stand them up as posts.
+- `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
+- `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
+- `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
+- `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).
+- `bool TestPlace(bool bStanding, const FHitResult& Hit)` — For the mechanics test: a left click with the carried piece aimed at Hit (true if it was placed).
+- `bool TestPlaceFire(const FHitResult& Hit)` — For the mechanics test: the same with the fire mode chosen (lights a fire pit on the ground, or feeds one that is aimed at).
+- `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `IsPlacingFire`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`
+
+## ForestOutline.h
+
+**ForestOutline** (namespace) — Line drawings for build plans and previews, in the style of Sons of the Forest blueprints: round pieces get rings at both ends plus lines along their length, square …
+
+- `FLinearColor ValidColor()` — Plan colour for a spot that can be built on, and for one that cannot.
+- `FLinearColor CarveColor()` — Colour of carving previews.
+- `FLinearColor CutColor()` — Red of the dashed cut guide on trees and logs.
+- `void DrawDashed(ULineBatchComponent* Lines, const FTransform& Transform, const TArray<FVector>& Points, bool bClosed, const FLinea …` — A dashed line through local-space Points (closed back to the first point if bClosed), like a cut marked on bark.
+- `void DrawPieceBox(ULineBatchComponent* Lines, EForestItem Item, const FBox& Box, const FTransform& Transform, const FLinearColor&  …` — Outline of a piece given its local box (a carvable log): round items as a cylinder along X, others as a box.
+- `void DrawPiece(ULineBatchComponent* Lines, EForestItem Item, const UStaticMesh* Mesh, const FTransform& Transform, const FLinearCo …` — Outline of a build piece (log, plank, stone...) placed with Transform (scale included).
+- `void DrawCylinder(ULineBatchComponent* Lines, const FTransform& Transform, int32 Axis, const FVector& Centre, float Radius, float  …` — A cylinder whose axis is local X (Axis = 0) or local Z (Axis = 2), centred on Centre in local space.
+- `void DrawBox(ULineBatchComponent* Lines, const FTransform& Transform, const FBox& Box, const FLinearColor& Color)` — The twelve edges of a local-space box.
+- Ayrıca (açıklamasız): `InvalidColor`
+
+## ForestTypes.h
+
+**ForestItems** (namespace)
+
+- `const TArray<EForestItem>& GetAllItems()` — Items in the order they are shown in the HUD.
+- `bool IsLogItem(EForestItem Item)` — Any of the three log stages (trunk, big log, log): they nest when stacked.
+- `bool IsCarriedItem(EForestItem Item)` — Items that never enter the backpack: they are carried or dragged in the world (the three log stages).
+- `UStaticMesh* GetMesh(EForestItem Item, int32 Variant = 0)` — Mesh used when the item lies in the world. Variant picks between pack variations.
+- `FVector GetItemScale(EForestItem Item)` — Scale the item is shown at in the world (pickups, placed pieces, wall plans). Lets a piece read bigger without touching its mesh asset.
+- `UStaticMesh* GetLogStageMesh(int32 Stage)` — Big logs left by a felled tree. Stage 1 is the trunk, cutting it gives two stage 2 logs, cutting those gives the carryable Log item (stage 3).
+- `FVector GetLogStageScale(int32 Stage)` — Scale for a big log stage: each stage is twice as long as the next so halves line up exactly.
+- `UStaticMesh* GetDebrisMesh(EHarvestType Type, int32 Variant)` — Small cosmetic pieces thrown off when a tree or rock is hit.
+- `UMaterialInterface* GetHitMarkMaterial(EHarvestType Type)` — Decal left behind by an axe (wood) or pickaxe (rock) hit.
+- `UStaticMesh* GetToolMesh(EForestTool Tool)` — Mesh of the tool held in first person.
+- `UMaterialInterface* GetBuildGhostMaterial()` — Translucent material for the build placement preview, tinted through the GhostColor parameter.
+- Ayrıca (açıklamasız): `GetDisplayName`
+
+## HarvestableActor.h
+
+**AHarvestableActor** (class) — A tree, rock or big log lying on the ground that the player can hit. Trees topple away from the player and leave a stage 1 log; cutting a big log splits it in two (stage …
+
+- `void InitFrom(const UStaticMeshComponent* Source, EHarvestType InType)` — Copies mesh and materials from a level placed actor and sizes health and drops from it.
+- `void InitLog(int32 InStage, const FVector& Center, const FVector& Direction)` — Lays a big log of the given stage (1 or 2) on the ground, centred at Center along Direction.
+- `bool ApplyHit(float Damage, const FHitResult& Hit, const FVector& HitDirection)` — Returns true when this hit felled the tree, broke the rock or split the log.
+- `bool IsWood() const` — Trees and big logs take the axe, rocks the pickaxe.
+- `EForestItem GetLogItem() const` — Inventory item a big log becomes when picked up.
+- `void BeginDrag(const FVector& Holder)` — Dragging a big log: Grab picks the end nearest Holder as the lifted end.
+- `void DragTo(const FVector& Front)` — Lifted end follows Front, the other end trails on the ground.
+- `void EndDrag()` — Lays the log back on the ground where it is.
+- `void BeginShoulder(USceneComponent* AttachTo, const FTransform& Relative, bool bCastShadow = false)` — Shouldering a big log: attached to the player's view, no collision.
+- `void PlaceOnGround(const FVector& Center, const FVector& Direction)` — Off the shoulder, laid on the ground centred at Center along Direction.
+- Ayrıca (açıklamasız): `AHarvestableActor`, `IsAlive`, `IsTree`, `IsTrunk`, `GetHealthPercent`, `GetDisplayName`, `IsDragged`
+
+## LogConstructionActor.h
+
+**ALogConstructionActor** (class) — A physical, structural log piece based on the 15 technical engineering guides. Supports Underscribing (Chapter 8), 6% Settling rule (Alaska Guide), Kessler shear …
+
+- `void InitializeLog(EForestItem InItemType, ELogMoistureState InMoistureState = ELogMoistureState::Green)` — Initializes the log with a specific type and mesh
+- `float ApplyStructuralDamage(float DamageAmount, const FVector& HitLocation, const FVector& HitDirection)` — Applies damage from axe/saw. If health reaches 0, triggers structural failure
+- `virtual void TriggerChaosCollapse(const FVector& Impulse = FVector::ZeroVector) override` — Triggers dynamic Chaos RigidBody physics so the log falls, rolls and collides
+- `void ApplyChinking()` — Applies chinking/daubing sealant between logs
+- `void ApplyInteriorPlaster()` — Applies interior plaster / lime daubing
+- `void UpdateVisualColor()` — Updates material tint color as value increases (Unchinked -> Chinked -> Plastered)
+- `float GetRequiredSettlingSpace() const` — Calculates required settling space based on the Alaska Guide 6% rule (3/4 inch per foot)
+- `float GetEffectiveRValue() const` — Effective thermal R-value based on BEES standard and chinking seal
+- `float CalculateShearCapacity() const` — Lateral shear capacity based on Kessler & Hahney LBN 32 formula
+- `EForestItem GetItemType() const` — --- Getters & Setters ---
+- Ayrıca (açıklamasız): `ALogConstructionActor`, `IsChinked`, `IsPlastered`, `IsSimulatingPhysics`
+
+## LogWallBlueprint.h
+
+**ALogWallBlueprint** (class) — A planned log wall, Sons of the Forest style: a see-through plan of stacked logs that the player fills one log at a time, bottom row first. Walls started from another …
+
+- `static bool ComputeSlots(const FVector& Start, const FVector& End, float Phase, bool bFitExactly, TArray<FTransform>& OutSlots, FV …` — Lays logs from Start towards End. With bFitExactly the logs are stretched slightly so the wall ends exactly at End (used when closing onto another wall). OutEnd receives …
+- `bool AddLog()` — Puts the next log into the plan. Returns false when the wall is already complete.
+- `void ApplyChinking()` — Applies chinking/daubing between the logs in this wall
+- `void CollapseWall(const FVector& ImpactDirection = FVector::ZeroVector)` — Triggers Chaos physics collapse of all placed logs in this wall
+- Ayrıca (açıklamasız): `ALogWallBlueprint`, `Init`, `IsComplete`, `GetFilled`, `GetTotal`, `GetStart`, `GetEnd`, `GetPhase`, `IsChinked`, `GetGhosts`
+
+## MechanicsDemo.h
+
+**FDemoGoalLine** (struct) — One line of the guided demo checklist, as the HUD shows it.
+
+
+**AMechanicsDemo** (class) — The wood chain: fell a tree, split the trunk into two big logs, split those into four carryable logs, then carve a raw log with every carving tool. Guided (default): the …
+
+- `static void Start(UWorld* World, bool bAuto, bool bQuitWhenDone = false)` — Starts (or restarts) the demo in this world; bAuto plays it by itself, for tests.
+- `bool IsGuiding() const` — Guided mode is running: the HUD draws the checklist.
+- `void GetGuide(TArray<FDemoGoalLine>& OutLines, FString& OutHint) const` — Checklist lines and the hint for the current step.
+- Ayrıca (açıklamasız): `AMechanicsDemo`
+
+## OpeningBuckActor.h
+
+**AOpeningBuckActor** (class) — Window and door buck framework based on Alaska Log Building Guide (Section 8). Manages Log Rough Opening (LRO) vs Commercial Rough Opening (CRO), 6% (3/4" per foot) …
+
+- `void InitializeBuck(EOpeningType InType, float WidthCm, float HeightCm, bool bIsGreenLogWall = true)` — Initializes buck dimensions and opening type
+- `float CalculateSettlingAllowance() const` — Calculates required vertical settling clearance space above the header (in cm)
+- `float GetLogRoughOpeningHeight() const` — Total LRO height required including settling head clearance
+- `float GetLogRoughOpeningWidth() const` — Width required for log opening including keyway splines
+- `EOpeningType GetOpeningType() const` — --- Getters ---
+- Ayrıca (açıklamasız): `AOpeningBuckActor`, `GetClearOpeningWidth`, `GetClearOpeningHeight`, `HasKeywaySpline`
+
+## PickupItem.h
+
+**APickupItem** (class) — A physics item lying in the world. Pickable items go to the player's inventory; cosmetic ones (bark, chips, pebbles) just fall and disappear. Physics is switched off …
+
+- `void BeginCarry(USceneComponent* AttachTo, const FTransform& Relative)` — Held by the player: no physics or collision while attached.
+- `void Drop(const FTransform& Transform)` — Back into the world at Transform, falling under physics until it settles.
+- Ayrıca (açıklamasız): `APickupItem`, `Spawn`, `SpawnCosmetic`, `IsPickable`, `GetItem`, `GetCount`
+
+## StoneMasonryActor.h
+
+**AStoneMasonryActor** (class) — A stone foundation or wall actor implementing the 8 Dry Stone Walling principles from StoneworkPDF24: Grading, Throughstones, Hearting, Batter, Coping, and Crossing …
+
+- `void InitializeStone(EMasonryType InType, bool bWithThroughStones = true, bool bWithHearting = true)` — Initializes stone foundation with specific bond and geometry
+- `void ApplyMortar()` — Adds mortar to a dry stone wall, converting it to mortared masonry
+- `void UpdateVisualColor()` — Updates material tint color as value increases (DryStone -> MortaredStone)
+- `virtual float ApplyDamage(float DamageAmount, const FVector& HitDirection) override` — Deals damage to foundation stone. If damaged enough, foundation crumbles and drops upper structure
+- `virtual void TriggerChaosCollapse(const FVector& Impulse = FVector::ZeroVector) override` — Triggers Chaos physics collapse of this stone block
+- `bool ValidateDryStoneRules() const` — Checks if the wall satisfies the 8 Dry Stone principles
+- `float GetCompressiveCapacity() const` — Maximum vertical compressive load this foundation can carry (in kN)
+- `EMasonryType GetMasonryType() const` — --- Getters ---
+- Ayrıca (açıklamasız): `AStoneMasonryActor`, `HasThroughStones`, `HasHearting`
+
+## StructuralIntegritySubsystem.h
+
+**UStructuralIntegritySubsystem** (class) — World subsystem managing structural integrity, load distribution, and cascading collapse simulations for log, stone, and plaster constructions.
+
+- `void RegisterNode(ABuildingNodeActor* Node)` — Registers a building node with the structural graph
+- `void UnregisterNode(ABuildingNodeActor* Node)` — Unregisters a building node from the graph
+- `void RecalculateLoadNetwork()` — Recomputes support relationships and propagates vertical loads across the network
+- `void TriggerCascadeFailure(ABuildingNodeActor* OriginNode, const FVector& InitialImpulse = FVector::ZeroVector)` — Propagates catastrophic failure upwards from a failed node. Any nodes resting on top that have no remaining grounded support path will collapse.
+- `bool HasPathToGround(ABuildingNodeActor* Node, TSet<ABuildingNodeActor*>& Visited) const` — Checks if a node has a valid structural path to the ground / bedrock
+- Ayrıca (açıklamasız): `UStructuralIntegritySubsystem`
+
+## StructureLink.h
+
+**StructureLink** (namespace) — Bridge between the carvable logs in the world and the structure graph of Wood/WoodStructureLogic. Every anchored log (post, corner log, beam) is a node: its real ends, …
+
+- `WoodStructure::FNode MakeNode(const ACarvableLog* Log, int32 Id, const FTransform* Transform = nullptr)` — The graph node for Log, as it is or as it would be at Transform.
+- `TSet<int32> Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges, TMap<int32, float>* OutSnaps  …` — Support with the beam rules on top of the graph: a beam that is not lying on the ground holds only if its supports (posts, braces, the logs under it) are not further …
+- `const TArray<FFeatureInfo>& Features(UWorld* World)` — What the standing pieces make up. Worked out again only after the structure has changed (Settle, damage, new pieces).
+- `FString NameOf(EWoodFeatureKind Kind)` — Turkish name of a kind of structure.
+- `FString DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log)` — What Log is part of, e.g. "Platform, Korkuluk" (empty if it stands alone).
+- `void MarkChanged()` — Something in the structure changed: the next Features() works it out afresh.
+- `FString Describe(UWorld* World)` — Every standing piece with its role, whether it rests on the ground, and what holds it: for reading what the graph sees.
+- `int32 Settle(UWorld* World)` — Lets every anchored piece that has no path to the ground fall. Returns how many fell.
+- `bool WouldBeSupported(UWorld* World, const ACarvableLog* Piece, const FTransform& Transform)` — Would Piece, anchored at Transform among the pieces already standing, be held up?
+
+**FFeatureInfo** (struct) — A walls, platform, door frame... the standing pieces make up (see WoodStructure::AnalyzeStructure).
+
+
+## StructureManager.h
+
+**AStructureManager** (class) — Holds every piece the player places. Each item type gets one instanced mesh, so a whole wall or log cabin costs a handful of draw calls.
+
+- `const UInstancedStaticMeshComponent* FindPieces(EForestItem Item) const` — Placed pieces of one kind, or null if none were placed yet.
+- Ayrıca (açıklamasız): `AStructureManager`, `AddPiece`
+
+## Wood/WoodCarrierComponent.h
+
+**UWoodCarrierComponent** (class)
+
+- `FVector StackStep = FVector(0.f, 0.f, 12.f)` — Her ek parça için ofsete eklenen kayma.
+- `void SetCarryAttachComponent(USceneComponent* InAttach)` — Taşıma noktasını ayarla (ör. karakter mesh'i veya omuz bileşeni).
+- `UWoodPieceComponent* FindPieceInView(FVector Start, FVector Direction, float Distance = 300.f, float Radius = 15.f) const` — Bakış yönünde küre taramasıyla kütük bul.
+- `bool DropLast()` — En son alınanı bırak.
+- Ayrıca (açıklamasız): `UWoodCarrierComponent`, `FVector`, `GetCarriedLiters`, `CanCarry`, `GetCarried`, `TryPickUp`, `DropPiece`, `DropAll`, `ThrowLast`
+
+## Wood/WoodCutLibrary.h
+
+**UWoodCutLibrary** (class)
+
+- `static int32 SnapToModuleLine(const FWoodPieceData& Data, float DistanceFromEndACm)` — Mekanik 17: A ucundan mesafeyi en yakın modül çizgisine yuvarlar (1..N-1).
+- `static FWoodCutResult CrossCut(const FWoodPieceData& Data, int32 ModuleLine)` — Mekanik 16, 18: enine kesim.
+- `static FWoodCutResult SplitLengthwise(const FWoodPieceData& Data)` — Mekanik 19, 20: yuvarlak kütüğü iki yarım kütüğe ayır.
+- `static FWoodCutResult SplitQuarter(const FWoodPieceData& Data)` — Mekanik 22: yarım kütüğü iki çeyrek parçaya ayır.
+- `static FWoodCutResult MakePlank(const FWoodPieceData& Data)` — Mekanik 21: yarım veya çeyrek parçayı düz tahtaya çevir.
+- `static FWoodCutResult TrimEnd(const FWoodPieceData& Data, bool bEndA)` — Mekanik 23: sivri/pahlı ucu düzelt.
+- `static FWoodCutResult AddNotch(const FWoodPieceData& Data, int32 ModuleLine, EWoodJointType JointType)` — Mekanik 24-27, 29: çentik aç. ModuleLine 0..N.
+- `static FWoodCutResult CutGroove(const FWoodPieceData& Data)` — Mekanik 28: boyuna oluk.
+- `static FWoodCutResult SharpenEnd(const FWoodPieceData& Data, bool bEndA)` — Mekanik 30: ucu sivriltme.
+- `static FWoodCutResult ChamferEnd(const FWoodPieceData& Data, bool bEndA)` — Mekanik 31: pah kırma.
+- `static FWoodCutResult MakeFirewood(const FWoodPieceData& Data)` — Mekanik 32: ateşlik odun. Her modül için kesite göre 4 / 2 / 1 çeyrek parça üretir.
+
+## Wood/WoodCutterComponent.h
+
+**UWoodCutterComponent** (class) — UWoodPieceComponent ile aynı aktöre eklenir. Kesim kuralları UWoodCutLibrary'de; burada sadece sonucu dünyaya uygular. Varsayılan görsel: parçanın ölçeği kesim oranında …
+
+- `FVector LocalLengthAxis = FVector(1.f, 0.f, 0.f)` — Kütüğün uzun ekseni (bileşen yerel uzayı). Varsayılan X.
+- `FVector LocalLateralAxis = FVector(0.f, 1.f, 0.f)` — Yatay eksen: yuvarlak kütük önce bu eksende yarılır. Varsayılan Y. Dikey eksen = Length x Lateral.
+- `TArray<FVector> GetCutLineWorldPositions() const` — Tüm modül çizgilerinin (1..N-1) dünya konumları: kesim çizgilerini göstermek için.
+- `int32 FindNearestCutLine(FVector WorldPoint) const` — Mekanik 17: dünya noktasına en yakın modül çizgisi.
+- `void ReshapeVisual(UWoodPieceComponent* Piece, const FWoodPieceData& NewData, const FWoodSlice& Slice)` — Her sonuç parçası için çağrılır (kesilen parçanın kendisi dahil). Gerçek geometriyi burada üret; varsayılan implementasyon boştur.
+- Ayrıca (açıklamasız): `UWoodCutterComponent`
+
+## Wood/WoodPieceComponent.h
+
+**UWoodPieceComponent** (class) — Herhangi bir aktöre eklenir; o aktörün kök primitive'ini kütük olarak yönetir. Mekanikler: 4 alma, 5 bırakma, 6 düşürme, 7 yuvarlama, 8 sürükleme, 9 itme, 10 çarpışma, …
+
+- `bool PickUp(USceneComponent* AttachTo, FName Socket = NAME_None)` — Mekanik 4
+- `bool Drop()` — Mekanik 5
+- `bool ThrowPiece(FVector Velocity)` — Mekanik 6 / 74: hızla bırak ya da fırlat.
+- `void Roll(FVector Direction, float Strength)` — Mekanik 7: yönde yuvarla.
+- `void DragToward(FVector TargetLocation)` — Mekanik 8: hedefe doğru yerde çek.
+- `void Push(FVector Impulse)` — Mekanik 9: it.
+- `bool Install(AActor* Structure, USceneComponent* AttachTo)` — Yapıya bağla (Installed).
+- `bool Uninstall()` — Mekanik 56: yapıdan sök, serbest kütük yap.
+- Ayrıca (açıklamasız): `UWoodPieceComponent`, `GetState`, `GetInstalledOn`, `GetPrimitive`
+
+## Wood/WoodStructureAnalysis.h
+
+**FFeature** (struct)
+
+- Ayrıca (açıklamasız): `açıklıklarda`
+
+## Wood/WoodStructureGeometry.h
+
+**Geo** (namespace)
+
+- `inline double RawParam(const FVector& P, const FVector& A, const FVector& B)` — Noktanın doğru üzerindeki ham parametresi (kelepçesiz): 0 = A, 1 = B.
+- `inline void ClosestSegSeg(const FVector& P1, const FVector& Q1, const FVector& P2, const FVector& Q2, double& OutS, double& OutT)` — İki doğru parçasının en yakın noktalarının parametreleri (Ericson, Real-Time Collision Detection 5.1.9).
+- Ayrıca (açıklamasız): `ClampD`, `PointAt`, `DistToSegment`
+
+## Wood/WoodStructureLogic.h
+
+**FNode** (struct) — Yapı grafiğindeki bir parça: iki uç noktası olan kalın bir çubuk.
+
+- Ayrıca (açıklamasız): `ucu`, `yıkık`, `Length`
+
+**FEdge** (struct) — İki parça arasındaki bağlantı. Tek yönlüyse (bOneWay) A taşınan, B taşıyan parçadır. Çift yönlüyse (aynı yükseklikte uç uca) yön yoktur; ikisi birbirini destekleyebilir.
+
+
+**FSnap** (struct) — Snap önerisi: Geom parçası Offset kadar kaydırılırsa hedefe oturur.
+
+
+## Wood/WoodStructureSubsystem.h
+
+**UWoodStructureSubsystem** (class) — Dünya başına bir tane. Sadece Game / PIE dünyalarında oluşur. Pivot varsayımı: parçanın pivotu uzunluğun ortasında, uzun eksen WoodCutterComponent::LocalLengthAxis …
+
+- `FWoodSnapResult FindSnap(UWoodPieceComponent* Piece, const FTransform& Proposed)` — Mekanik 53, 12: önerilen konumu snap + zemin ile düzeltir. Hayalet önizleme için her karede çağrılabilir.
+- `bool InstallPiece(UWoodPieceComponent* Piece, const FWoodSnapResult& Snap, AActor* Structure = nullptr)` — Snap sonucuna göre kur. Structure verilirse parça o aktörün köküne bağlanır.
+- `bool PlaceCarried(UWoodCarrierComponent* Carrier, UWoodPieceComponent* Piece, const FTransform& Proposed, AActor* Structure = null …` — Mekanik 12: omuzdaki kütüğü istenen konuma yerleştir (snap + bırak + kur).
+- `bool RemovePiece(UWoodPieceComponent* Piece, bool bForce = false)` — Mekanik 55-57: parçayı yapıdan sök. Taşıdığı parça varsa bForce olmadan reddeder.
+- `TArray<UWoodPieceComponent*> PreviewRemoval(const UWoodPieceComponent* Piece) const` — Mekanik 55, 58: bu parça sökülse hangi parçalar desteğini kaybeder (UI vurgusu için).
+- `bool IsPieceSupported(const UWoodPieceComponent* Piece) const` — Mekanik 54
+- `EWoodOrientation GetPieceOrientation(const UWoodPieceComponent* Piece) const` — Parçanın mevcut dünya yönü.
+- Ayrıca (açıklamasız): `IsPieceInstalledHere`, `GetConnectedPieces`, `GetUnsupportedPieces`, `GetInstalledCount`
+
+## Wood/WoodStructureTypes.h
+
+**FWoodSnapResult** (struct) — FindSnap sonucu: hayalet önizleme ve InstallPiece bununla çalışır.
+
+
+## Wood/WoodTypes.h
+
+**FWoodNotch** (struct) — Modül çizgisi üzerindeki çentik. ModuleLine 0..6 (0 = A ucu, 6 = tam boy).
+
+
+**FWoodPieceData** (struct) — Her kütük parçasının taşıdığı veri (bölüm 2).
+
+- `float GetVolumeLiters() const` — Yaklaşık hacim (litre); taşıma kapasitesi bununla hesaplanır.
+- `float GetLateralCm() const` — Kesit boyutları. Kural: Yatay (Lateral) eksen önce yarılır, Dikey (Vertical) eksen sonra.
+- Ayrıca (açıklamasız): `GetModuleLengthCm`, `GetLengthCm`, `GetVerticalCm`
+
+**FWoodSlice** (struct) — Bir kesim çıktısının, kesimden önceki parçanın kutusu içindeki yeri. S: uzunluk boyunca 0..1 (A ucundan B ucuna). L ve V: -0.5..0.5 (merkezden). Varsayılan değer = …
+
+
+## Açıklaması eksik fonksiyonlar
+
+124 / 308 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
