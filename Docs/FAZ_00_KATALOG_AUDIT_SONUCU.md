@@ -14,22 +14,18 @@
 | Yinelenen ID | 0 |
 | Şema/kimlik/zorunlu kaynak triage alanı hatası | 0 |
 | U0 — denetim gerekli | 64 |
-| U1 — veri/model veya kısmi sistem izi | 88 |\n| U2 — kaynakta yerel davranış izi | 333 |\n| U3–U6 — entegrasyon/test/oyun/kalıcılık kanıtı | 0 |
+| U1 — veri/model veya kısmi sistem izi | 88 |
+| U2 — kaynakta yerel davranış izi | 333 |
+| U3–U6 — entegrasyon/test/oyun/kalıcılık kanıtı | 0 |
 | U0 seviyesinde açık kalan satır | 64 |
 
 Bu rapor “485 mekanik başarısız” anlamına gelmez. Aile eşleştirmelerinde bulunan kaynak-triage durumları 14 Ekim 2026'da kanonik CSV'ye senkronlandı: 333 U2, 88 U1 ve 64 U0. U1/U2 yalnızca kaynak/model veya yerel davranış izini bildirir; oyuncudan dünya sonucuna entegrasyon, olumlu/olumsuz testler, görsel kabul veya kalıcılık kanıtı anlamına gelmez. U0 kayıtları tahminle yükseltilmedi.
 
 `audit_mechanic_catalog.py` birim testleri, katalog satırlarının kanıt seviyesine göre gereken alanları denetler. Ayrı `validate_catalog_mapping.py` testi, ana katalogdaki kimliklerin dokuz aile dosyasına doğru sistemde bire bir eşlendiğini doğrular. Bu Python araçları mekanik davranışını kanıtlamaz; UE 5.8 derlemesi veya oyun içi testi yerine geçmez.
 
-## Sonraki denetim düzeni
+## Faz 14'te yapılacak toplu denetim
 
-Her satır için sırayla:
-1. Mekanik ID'nin sahibi olan sınıf/subsystem ve çağrı zinciri bulunur.
-2. Sonucun otoriter dünya state'inde nerede değiştiği kaydedilir.
-3. Olumlu, olumsuz ve sınır koşulu testleriyle eşleştirilir.
-4. Editör/oyun içi görsel kanıtı ayrı işaretlenir.
-5. Save/load, uzun oturum ve performans gereksinimleri U6 için ölçülür.
-6. Bilinmeyenler tahminle tamamlanmaz; blocker olarak yazılır.
+485 mekanik için ayrıntılı çağrı zinciri, pozitif/negatif/kenar testleri, görsel kabul, save/load ve performans incelemesi geliştirme ön koşulu değil; Faz 14'ün toplu audit girdisidir. Kodlama sırasında kritik belirsizlik çıkarsa uydurmak yerine ilgili satırın blocker'ı kaydedilir ve diğer bağımsız katmanlar ilerletilir.
 
 Katalog denetleyicisinin keşif ve sıkı modları:
 
@@ -50,7 +46,7 @@ Repo dalına `Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv` eklendi. Bu dosya LOG-001�
 - Bazı ihtiyaçlar için kaynak yolu bulundu; bazıları “incelenen akışta bulunmadı” olarak açıkça işaretlendi (ör. zipline hattı, sal/su üstü kullanım, makine yapımı, genel savunma tuzağı). Bunlar tamamlandı olarak sayılmaz.
 - CI dokuz eşleştirme dosyasının her birinde beklenen satır sayısını, 11 sütunlu şemayı, kimlikleri, durum biçimini ve blocker/not alanlarını denetler. Keşif modu U0/U1/U2 durumlarını başarı kanıtına dönüştürmez. En son doğrulanmış Python CI: [run #88](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38510701119), başarılı. Bu Unreal Engine build/editor testi değildir.
 
-Dokuz katalog eşleştirme dosyası artık **485/485 satırı** kapsıyor: LOG 76, INVENTORY 32, RAID 63, WORLD 35, MATERIAL 38, FARMING 57, CORE 12, STONE 96, STICK 76. Kaynak taramasına göre dağılım: **333 U2**, **88 U1**, **64 U0**, **0 U3–U6**. Bu, kaynak/kod izi triage kapsamının tamamlandığı anlamına gelir; satıra özel otomatik test ve editör kanıtı henüz bütün satırlarda kapatılmadığı için Faz 0 çıkış kapısı hâlâ kapalıdır.
+Dokuz katalog eşleştirme dosyası **485/485 satırı** kapsıyor: LOG 76, INVENTORY 32, RAID 63, WORLD 35, MATERIAL 38, FARMING 57, CORE 12, STONE 96, STICK 76. Kaynak triage dağılımı **333 U2**, **88 U1**, **64 U0**, **0 U3–U6**. Bu, katalog ve statik kaynak triage işinin tamamlandığını; davranışların bütünsel entegrasyon denetiminin Faz 14'e bırakıldığını gösterir.
 
 
 ## Yeni kod işi — STICK crafting atomikliği
@@ -80,7 +76,7 @@ Bunlar kaynak kodu ve beş Unreal Automation Test kaydıdır; UE 5.8 build/test 
 
 Son kaynak turunda yapısal hedefe anonim (NAME_None) bağlantı bırakma davranışı kaldırıldı. Yerleştirme kaynak yüzünün/socket'inin yerel kimliğini kaydeder ve hedef AStoneActor üzerindeki yakın, doğru yöne bakan, boş socket bulunmadan yapısal commit yapmaz. UStructuralGraph::ConnectTo reciprocal link'i iki uçta kaydeder; hedef socket doluysa commit reddedilir. Diğer legacy structural actor ailelerine adapter bu değişiklikte eklenmedi ve fail-closed kalıyor.
 
-StonePlacementTests.cpp beş otomasyon senaryosu içeriyor; bunlar UE 5.8 hostunda henüz çalıştırılmadı. Faz 0 açık kalır.
+StonePlacementTests.cpp beş otomasyon senaryosu içeriyor. UE 5.8 çalıştırması Claude Code/UE ortamında yapılacak; bu eksik Faz 0 baseline işini yeniden açmaz, ilgili özellik kabulinin sonraki doğrulama girdisidir.
 
 
 ## Stone Trap P0-025 — ilk kod uygulaması
