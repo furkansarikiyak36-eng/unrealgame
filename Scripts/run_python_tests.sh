@@ -39,7 +39,6 @@ echo "[11/27] Verifying the inventory transfer transaction contract..."
 
 echo "[12/27] Verifying Phase 6 inventory, stick and persistence integration..."
 "$PYTHON" "$ROOT/Scripts/tests/test_phase6_inventory_integration.py" \
-  "$ROOT/Scripts/tests/test_wood_material_integration_contract.py"
 
 echo "[13/27] Verifying Phase 7 wood material/structure integration..."
 "$PYTHON" "$ROOT/Scripts/tests/test_wood_material_integration_contract.py"
@@ -63,7 +62,8 @@ bash -n "$ROOT/Scripts/run_python_tests.sh"
   "$ROOT/Scripts/tests/test_underground_hazard_contract.py" \
   "$ROOT/Scripts/tests/test_carvable_log_contract.py" \
   "$ROOT/Scripts/tests/test_inventory_transfer_contract.py" \
-  "$ROOT/Scripts/tests/test_phase6_inventory_integration.py"
+  "$ROOT/Scripts/tests/test_phase6_inventory_integration.py" \
+  "$ROOT/Scripts/tests/test_wood_material_integration_contract.py"
 
 echo "[15/27] Auditing the 76-row LOG map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv" --expected-count 76
