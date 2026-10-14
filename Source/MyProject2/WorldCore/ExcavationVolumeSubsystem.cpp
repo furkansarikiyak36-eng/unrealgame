@@ -81,7 +81,7 @@ namespace
     {
         const FVector Segment = SegmentEnd - SegmentStart;
         const double SegmentLengthSquared = Segment.SizeSquared();
-        if (SegmentLengthSquared <= UE_SMALL_NUMBER)
+        if (SegmentLengthSquared <= KINDA_SMALL_NUMBER)
         {
             return FVector::DistSquared(Point, SegmentStart);
         }
