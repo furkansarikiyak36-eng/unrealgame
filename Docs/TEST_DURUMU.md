@@ -1,26 +1,26 @@
 # Test durumu
 
-Otomatik üretildi (14 October 2026 05:29) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
+Otomatik üretildi (14 October 2026 14:35) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
 
 ## Mekanik test (grafiksiz, `-MechanicsDemoQuit`)
 
-Son çalıştırma: **101 geçti, 0 kaldı** (14 October 2026 05:29, `mekanik_2026-10-14_0526.log`)
+Son çalıştırma: **119 geçti, 0 kaldı** (14 October 2026 14:25, `mekanik_2026-10-14_142046.log`)
 
-Geçen kontrollerin özeti (101):
+Geçen kontrollerin özeti (119):
 
 - Ağaç 6 balta vuruşunda devrildi (beklenen: çam 6, geniş 8)
 - Ağaç yıkıldı, yerde gövde kaldı (~15.6 m)
 - Gövde ikiye bölündü: 2 büyük kütük (beklenen 2)
 - Büyük kütükler bölündü: 2 taşınabilir kütük düştü (ağaç boyuna göre beklenen 2)
 - Kütük çaprazlama oturdu: açı 90°, eksenler arası 35.7 cm (beklenen 35.7), üstteki kütüğün altına eyer çentiği  -  üçgen 744
-- Tek alt kütük: uçtan geçen kütük tek destekte durmadı, 11° devrildi; alttaki yerinde
+- Tek alt kütük: uçtan geçen kütük tek destekte durmadı, 14° devrildi; alttaki yerinde
 - Omuz hacme göre: tam kütük alındı (yük %96), ikinci tam kütük sığmadı
 - Direk dikildi: dikeylik 1.000, alt uç zeminden 0.5 cm, sabit evet, omuz boş
 - Köşe: iki alt kütüğe çaprazlama kondu, 2 çentik açıldı, kütük duruyor (iki destek)
 - Köşe 2 sn sonra yerinde
 - Direkler için kütük 2M parçalara kesildi: 130, 130, 130 cm
 - Tek direk + kiriş: direk duruyor, kiriş desteksiz, fiziğe bırakıldı
-- Kiriş yere düştü (133 cm aşağı)
+- Kiriş yere düştü (134 cm aşağı)
 - İki direk + kiriş: kiriş duruyor (iki destek)
 - Kiriş 2 sn sonra yerinde
 - Direk söküldü (omuzda): kiriş desteksiz kaldı, düşüyor
@@ -35,7 +35,7 @@ Geçen kontrollerin özeti (101):
 - Üç direk (160 cm arayla) + kiriş: kiriş duruyor
 - Kiriş 2 sn sonra yerinde
 - Orta direk sökülünce (kalan direkler 320 cm arayla, sınır 292 cm) kiriş ortadan kırıldı
-- Kırılan kiriş yere indi (141 cm aşağı)
+- Kırılan kiriş yere indi (124 cm aşağı)
 - Direk geri kondu, kiriş yine üç direkte duruyor
 - Payanda P1 direğine kondu: 45° eğimli, alt ucu 86 cm yüksekte, duruyor
 - Payanda P3 direğine kondu: 45° eğimli, alt ucu 86 cm yüksekte, duruyor
@@ -84,10 +84,10 @@ Geçen kontrollerin özeti (101):
 - Açıklık: yanlarında 1 modül kalmayacak kadar kısa parçada açılmadı
 - Oluk aleti: iki vuruşta kütüğün boyuna oluk açıldı
 - Hareket durumu: serbest parça itildi, yapıdaki parça itilmedi; hafif çarpma hasarsız, sert çarpma %45 hasar
-- İtilen kütük 104 cm gitti; omuzdaki parça (Taşınıyor) itilmiyor
+- İtilen kütük 101 cm gitti; omuzdaki parça (Taşınıyor) itilmiyor
 - El arabası: iki kütük yüklendi (hacim 2967619 cm3 korundu), üçüncüsü sığmadı ve omuzda kaldı
 - Sehpa üçüncüyü aldı (kapasite el arabası < kızak < sehpa), sehpa itilince yerinden oynamadı
-- Araba itildi (227 cm), yükü onunla gitti; boşaltılan parça serbest (Loose) kaldı
+- Araba itildi (228 cm), yükü onunla gitti; boşaltılan parça serbest (Loose) kaldı
 - Taş halkası: 6 taş ateş yeri olmadı; 7. taş halkayı tamamlayınca ateş yeri kuruldu (taşlar toplandı, ateş yanmıyor)
 - Baskın: yönetici başlatıldı (plan, dalga ve düşman tanımları kodda kuruldu)
 - Baskın: dalga başladı, 3 düşman doğdu; baskın durdurulunca hepsi kalktı
@@ -95,6 +95,24 @@ Geçen kontrollerin özeti (101):
 - Düşman yapıya saldırdı: ortadaki direk %100 hasar aldı, eklemleri gevşeyince kiriş kırıldı
 - Savunma: sivri kazığın yanında düşman 1 sn'de 25 can kaybetti; hafif çarpma işlemedi, fırlatılan kütük (sert çarpma) 30 can aldı
 - Canı biten düşman yok oldu
+- Hava: öğlen 11°C, gece 02:00'de 2°C (soğuk iklim); kayalık ormandan soğuk
+- Ateş: 1,5 m ötede +19°C (toplam 21°C), 9 m ötede etkisi yok
+- Çatı: altında +8°C
+- Vücut ısısı: -10°C'de 30 sn'de 40 düştü, giysiyle 8; sıcakta geri geldi; sıfırda donuyor ve can gidiyor
+- Baskın gecesi: 2. gece sakin, 3. gece 22:00'de başladı (6 düşman; 6. gecede 9)
+- Baskın gecesi: 3 düşman geldi; şafakta (06:00) baskın bitti, kalanlar gitti
+- Kaynaklar fiziksel: kaya 1 yapı taşı + 2 küçük taş bıraktı (küçükler çantaya, yapı taşı iki elle taşındı), ağaç 3 çubuk bıraktı (çantaya)
+- Çubuk yapıları: 3 çubukla diken kurulmadı, 4 ile kuruldu (çubuk harcandı); çit ve meşale kuruldu, meşale 1 m'de +8°C
+- Savunma: çubuk diken düşmana 1 sn'de 20 can aldırdı; düşman yolundaki çiti yıprattı (kırıldı)
+- Tarım: yabani tahıldan 6 tohum toplandı; 2 çubukla tarla açıldı, 4 tohum ekildi
+- Tarım: ekin 5 günde olgunlaştı, hasatta 4 tahıl ve tohum geri geldi; tarla yeniden boş
+- Hayvancılık: 5 günde tavuk 5 yumurta, koyun 0 yün verdi; kesilen koyun 4 et, 2 deri, 1 yün
+- Yemek: çiğ et açlığı 35'a, ateş yanında pişmiş et 65'a çıkardı
+- Deri giysi: her parça %40 yalıtım, en çok %80; ip yündan ya da deriden büküldü
+- Nehir: suda ıslak (-8°C), köprü yüksekliğinde ve kıyıda kuru; nehirden su içildi, kurudan içilmedi
+- İp hattı: ipsiz kurulmadı; 1 iple yarın dibinden 4.5 m tepesine gerildi, rota ağında ip yolu, 30 m'den uzun ip olmuyor
+- İpe binildi: oyuncu yarın tepesine çıktı (ayakları 452 cm, tepe 450 cm)
+- Kalıntılar: not okundu ve günlüğe girdi (1/5); ikinci okumada tekrar girmedi
 - Çöküş: kabinin alt kütüğü sökülünce üstündeki 4 parça desteksiz kalıp düştü; öbür alt kütük yerinde
 - Ağaçtan çıkan kütük doğrudan oyulabilir (390 cm, çap 70 cm)
 - Kesim çizgisi (çentik, beklenen ~çap): 1 çizgi, 94 nokta, kütük boyunca 71 cm
@@ -108,22 +126,22 @@ Geçen kontrollerin özeti (101):
 - Enine kesim modül çizgisinde (açık çizgiler: -65 65): 390 -> 130 + 260 cm (2.0M + 4.0M), parça tekrar: 260 -> 130 + 130 cm, çizgi uçtan 4.0M
 - Kesim çizgisi (yarma, beklenen tüm boy): 4 çizgi, 8 nokta, kütük boyunca 132 cm
 - Oyuncu vuruşu 1: kesim izi açıldı, henüz kesmedi
-- Oyuncu vuruşu 2 (1.5 sn sonra, kütük fizikle oturuyorken): boyuna yarıldı  -  parça 108 -> 109
+- Oyuncu vuruşu 2 (1.5 sn sonra, kütük fizikle oturuyorken): boyuna yarıldı  -  parça 110 -> 111
 
 Rehberli demo görevleri otomatik oynatmada tamamlanan: 17
 
 Son çalıştırmalar:
 
-- mekanik_2026-10-14_0512.log: 5 geçti, 3 kaldı
-- mekanik_2026-10-14_0513.log: 6 geçti, 2 kaldı
-- mekanik_2026-10-14_0514.log: 96 geçti, 5 kaldı
-- mekanik_2026-10-14_0518.log: 100 geçti, 1 kaldı
-- mekanik_2026-10-14_0522.log: 101 geçti, 0 kaldı
-- mekanik_2026-10-14_0526.log: 101 geçti, 0 kaldı
+- mekanik_2026-10-14_134759.log: 106 geçti, 1 kaldı
+- mekanik_2026-10-14_135403.log: 105 geçti, 2 kaldı
+- mekanik_2026-10-14_135902.log: 107 geçti, 0 kaldı
+- mekanik_2026-10-14_140440.log: 110 geçti, 0 kaldı
+- mekanik_2026-10-14_141418.log: 115 geçti, 0 kaldı
+- mekanik_2026-10-14_142046.log: 119 geçti, 0 kaldı
 
 ## Wood birim testleri (`MyProject2.Wood`)
 
-Son çalıştırma: **12 geçti, 0 kaldı** (14 October 2026 05:26)
+Son çalıştırma: **12 geçti, 0 kaldı** (14 October 2026 14:21)
 
 - ✅ MyProject2.Wood.Analysis.Cabin
 - ✅ MyProject2.Wood.Analysis.Floors

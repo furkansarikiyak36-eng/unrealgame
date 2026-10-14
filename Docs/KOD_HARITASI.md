@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (14 October 2026 05:29) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (14 October 2026 14:35) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -58,6 +58,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static void GetCrossNotchGuide(const FCrossPlacement& Placement, const ACarvableLog* Upper, TArray<TArray<FVector>>& OutLines, TAr …` — Rim of that saddle notch on the upper log, in its local space (for the dashed guide before it is placed).
 - `static ACarvableLog* PlaceAcross(AActor* Lower, const FCrossPlacement& Placement, ACarvableLog* Upper)` — Lays Upper across Lower as computed: moves it there (off the shoulder), cuts its saddle notch and seats it. Both logs are anchored where they are (a lying log item is …
 - `float GetDamage() const` — 0 sound .. 1 burnt through or broken (wood goes darker as it takes damage). From the Wood structure rules: above 0.6 the joints of a piece let go (it no longer holds or …
+- `void SimulateMaterialEnvironment(float ElapsedDays, float AmbientTemperatureC, bool bRainExposed, float RainfallMm)` — Apply one bounded world-weather interval to this existing wood condition state.
 - `float GetIgniteSeconds() const` — Seconds of full heat it takes this piece to catch: its radius times 0.4, between 2 and 20.
 - `bool ApplyHeat(float Seconds)` — Heat from a lighter, a flame or a fire. True once the piece has caught (this call or before).
 - `bool Ignite()` — Catches fire at once. False if it is charred, or too many pieces already burn (MaxBurning).
@@ -106,6 +107,37 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void GetNotchFrame(float LocalX, float SideAngleDeg, float CrossAngleDeg, float MateRadius, float Depth, FVector& OutCentre, FVect …` — Where the cup's mating log axis runs (local space), for previews.
 - Ayrıca (açıklamasız): `ACarvableLog`, `AddDamage`, `SetDamage`, `GetBurnState`, `IsBurning`, `IsCharred`, `GetHeatShare`, `SetTemporary`, `IsAnchored`, `IsCarried`, `GetLength`, `GetRadius`, `GetCenterX`, `GetDiameter`, `GetMinX`, `GetMaxX`, `GetEnd`, `GetGridOriginX`
 
+## DayLoopSubsystem.h
+
+**FTemperatureReading** (struct) — The air a player feels at a spot, and what made it so.
+
+- Ayrıca (açıklamasız): `Total`
+
+**UDayLoopSubsystem** (class) — The day the player has to get through (Frostpunk, The Long Dark): it reads the shared simulation clock (day, hour, the day's low and high), makes the climate cold, moves …
+
+- `bool IsRaidDay(int32 Day) const` — Night of a raid: the day number is a multiple of RaidEveryNights.
+- `static FString RegionNameAt(const FVector& Where)` — Region names and how much colder (or warmer) each is: rocks colder and windier, the river damp.
+- `static int32 RaidSizeForDay(int32 Day)` — Raiders of a raid night: three plus one per day survived; more at once as the days go by.
+- `void SetTimeForTest(int32 Day, float Hour)` — For the mechanics test: puts the clock at Hour of Day, then runs the day's rules once.
+- `bool IsRaidRunning() const` — For the mechanics test: the raid of the night that is running, if any.
+- Ayrıca (açıklamasız): `Get`, `GetDay`, `GetHour`, `IsNight`, `GetNextRaidDay`, `RegionOffsetAt`, `GetTemperatureAt`, `RaidAtOnceForDay`
+
+## FarmKit.h
+
+**FarmKit** (namespace) — Farming on top of the simulation's crops and animals (PhaseT): a field is sown with seeds from the pack and grows with the days, its grain goes into the pack; animals …
+
+- `UPlantDefinition* WildGrain(UObject* Outer)` — A quick greybox grain: ripe in about six days of the simulation's weather.
+- `ACropFieldActor* MakeField(UWorld* World, const FVector& Ground)` — A bare field, two metres square, on the ground at Ground.
+- `ACropFieldActor* MakeWildPatch(UWorld* World, const FVector& Ground)` — A patch of wild grain, already ripe: where the first seeds come from.
+- `bool Sow(ACropFieldActor* Field, AForestCharacter* Player)` — Sows SeedsPerField seeds from the player's pack.
+- `int32 Harvest(ACropFieldActor* Field, AForestCharacter* Player)` — A ripe field's grain into the pack, with some seed back; the field is bare again. Returns the grain.
+- `AAnimalActor* SpawnAnimal(UWorld* World, const FVector& Location, EAnimalSpecies Species)` — A chicken or a sheep standing at Location, grown up.
+- `int32 CollectProducts(AAnimalActor* Animal, AForestCharacter* Player)` — Eggs, milk and wool the animal has made, into the pack.
+- `bool Butcher(AAnimalActor* Animal, AForestCharacter* Player)` — Killed with the axe: meat, hide (and wool from a sheep) into the pack; the animal is gone.
+- `FString Eat(AForestCharacter* Player)` — Eats the most filling thing in the pack (meat cooked by a fire nearby fills more). Returns what was eaten.
+- `bool MakeHideGarment(AForestCharacter* Player)` — Makes one piece of hide clothing if there are hides and room for more warmth.
+- Ayrıca (açıklamasız): `AnimalOf`, `IsRipe`, `IsSown`
+
 ## FireStone.h
 
 **AFireStone** (class) — One stone laid on the ground for a fire pit. Seven stones close together (a ring) become a fire pit; until then each is just a stone lying where it was put.
@@ -119,7 +151,9 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 **AForestCharacter** (class) — First person survival character: chop trees, break rocks, pick up drops, craft simple materials and place stone blocks. Input is built in code so the prototype needs no …
 
+- `UInventoryComponent* GetInventoryComponent() const` — Canonical stack inventory shared with storage, crafting and persistence.
 - `void GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutSlots) const` — The backpack as slots, in display order: one entry per stack.
+- `USurvivalComponent* GetSurvivalForTest()` — For the mechanics test: the survival values, writable.
 - `EForestItem GetCarriedItem() const` — The log in the player's hands (None when empty; TrunkLog while a trunk is dragged by rope).
 - `bool IsWallTool() const` — The log wall planner is selected (shown as the first build option).
 - `static float GetCarveDepthFraction(int32 Index)` — Round / flat notch depth as a share of the log's thickness: 1/6, 1/3, 1/2.
@@ -141,9 +175,17 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool TestPush(AActor* Target, const FVector& Velocity)` — For the mechanics test: [X] on Target.
 - `void TestToggleTemporary(ACarvableLog* Piece)` — For the mechanics test: [V] on a piece.
 - `ACarvableLog* TestUnload(AHaulCart* Cart)` — For the mechanics test: [E] on a cart (takes the last piece off it onto the shoulder).
+- `bool TestPickUpResource(AActor* Resource)` — For the mechanics test: [E] on a loose stone or stick (a small stone and a stick go into the pack, a building stone into the hands).
+- `AStickStructure* TestBuildStick(uint8 Build, const FHitResult& Hit, bool bGiveSticks)` — For the mechanics test: the stick build chosen and built on Hit (sticks given first when bGiveSticks).
+- `void TestDropStone()` — For the mechanics test: puts a carried stone down, empties the pack of sticks, gives sticks.
+- `int32 TestGiveItem(EForestItem Item, int32 Count)` — For the mechanics test and the farm code: items into and out of the pack.
+- `bool TestCraft(uint8 Entry, const FHitResult& Hit)` — For the mechanics test: [I] entry Entry made (on Hit when it is placed on the ground).
+- `void EatFood()` — [8]: eats the most filling food in the pack.
+- `bool TestReadNote(ARemnantNote* Note)` — For the mechanics test: E on a note, drinking where the player stands, riding a rope from its near end.
+- `bool HasRopeAnchor() const` — The rope line being strung: its first end is set.
 - `void TestLight(AActor* Target, float Seconds)` — For the mechanics test: the lighter held on Target for Seconds.
 - `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
-- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `GetStickModeLabel`
 
 ## ForestOutline.h
 
@@ -164,10 +206,12 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **ForestItems** (namespace)
 
 - `const TArray<EForestItem>& GetAllItems()` — Items in the order they are shown in the HUD.
+- `FName GetInventoryID(EForestItem Item)` — Stable item ID shared by the character inventory and modular InventoryCore.
 - `bool IsLogItem(EForestItem Item)` — Any of the three log stages (trunk, big log, log): they nest when stacked.
 - `bool IsCarriedItem(EForestItem Item)` — Items that never enter the backpack: they are carried or dragged in the world (the three log stages).
 - `UStaticMesh* GetMesh(EForestItem Item, int32 Variant = 0)` — Mesh used when the item lies in the world. Variant picks between pack variations.
 - `FVector GetItemScale(EForestItem Item)` — Scale the item is shown at in the world (pickups, placed pieces, wall plans). Lets a piece read bigger without touching its mesh asset.
+- `float GetItemWeight(EForestItem Item)` — Approximate stack weight used by storage and transfer policies (kg per item).
 - `UStaticMesh* GetLogStageMesh(int32 Stage)` — Big logs left by a felled tree. Stage 1 is the trunk, cutting it gives two stage 2 logs, cutting those gives the carryable Log item (stage 3).
 - `FVector GetLogStageScale(int32 Stage)` — Scale for a big log stage: each stage is twice as long as the next so halves line up exactly.
 - `UStaticMesh* GetDebrisMesh(EHarvestType Type, int32 Variant)` — Small cosmetic pieces thrown off when a tree or rock is hit.
@@ -183,6 +227,8 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void InitFrom(const UStaticMeshComponent* Source, EHarvestType InType)` — Copies mesh and materials from a level placed actor and sizes health and drops from it.
 - `void InitLog(int32 InStage, const FVector& Center, const FVector& Direction)` — Lays a big log of the given stage (1 or 2) on the ground, centred at Center along Direction.
 - `static int32 LogsFromHeight(float TreeHeightCm)` — Whole logs (six modules, 390 cm) a tree of this height gives: 85% of the height is usable trunk, at most four. A trunk or a half trunk carries the number it still holds …
+- `static void DropRockResources(UWorld* World, const FVector& Center, int32 Count)` — A broken rock: one building stone and Count - 1 small stones, lying around Center.
+- `static void DropBranchSticks(UWorld* World, const FVector& Base, const FVector& Direction, float Length)` — A felled tree's branches: raw sticks along the fall line from Base.
 - `bool ApplyHit(float Damage, const FHitResult& Hit, const FVector& HitDirection)` — Returns true when this hit felled the tree, broke the rock or split the log.
 - `bool IsWood() const` — Trees and big logs take the axe, rocks the pickaxe.
 - `EForestItem GetLogItem() const` — Inventory item a big log becomes when picked up.
@@ -230,6 +276,14 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void CollapseWall(const FVector& ImpactDirection = FVector::ZeroVector)` — Triggers Chaos physics collapse of all placed logs in this wall
 - Ayrıca (açıklamasız): `ALogWallBlueprint`, `Init`, `IsComplete`, `GetFilled`, `GetTotal`, `GetStart`, `GetEnd`, `GetPhase`, `IsChinked`, `GetGhosts`
 
+## LooseResources.h
+
+**LooseResources** (namespace) — Physical stones and sticks lying in the world, as a broken rock or a felled tree leaves them (Sons of the Forest: the resource is a thing you pick up, not a number). A …
+
+- `AStoneActor* SpawnStone(UWorld* World, const FVector& Location, bool bBuildingStone)` — A small stone (pocketable, for fire rings) or a building stone (heavy, carried and placed).
+- `AStickActor* SpawnStick(UWorld* World, const FVector& Location, const FRotator& Rotation)` — A raw stick, about half a metre long.
+- `bool IsPocketStone(const AStoneActor* Stone)` — A stone light enough for one hand goes into the pack rather than into the hands.
+
 ## MechanicsDemo.h
 
 **FDemoGoalLine** (struct) — One line of the guided demo checklist, as the HUD shows it.
@@ -273,8 +327,17 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **RaidKit** (struct) — Starts and stops a raid with the plan this game ships with (a night with one wave of raiders).
 
 - `static bool StartDefaultRaid(UWorld* World)` — Builds the plan in code and starts it for the player in the world. False if it could not start.
-- `static void StopRaid(UWorld* World)` — Ends the raid and removes every raider.
+- `static bool StartRaid(UWorld* World, FName EventID, int32 Total, int32 AtOnce)` — One wave of Total raiders, at most AtOnce of them at a time, under the event ID (a raid night).
+- `static void StopRaid(UWorld* World)` — Cancels the active raid and removes only actors owned by its Raid Director.
 - Ayrıca (açıklamasız): `CountEnemies`
+
+## StickStructure.h
+
+**AStickStructure** (class) — A small build made of sticks from the pack: spikes, a fence or a torch. It has a strength like wood (0 sound, 1 broken); raiders hitting it wear it down.
+
+- `static AStickStructure* Build(UWorld* World, EStickBuild Build, const FVector& Ground, float Yaw)` — A build standing on the ground at Ground, its length across Yaw.
+- `void AddDamage(float Amount)` — Wears it down; it falls apart (is destroyed) at 1.
+- Ayrıca (açıklamasız): `AStickStructure`, `SticksFor`, `NameOf`, `GetKind`, `GetDamage`, `IsLitTorch`
 
 ## StoneMasonryActor.h
 
@@ -434,6 +497,28 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **FWoodSlice** (struct) — Bir kesim çıktısının, kesimden önceki parçanın kutusu içindeki yeri. S: uzunluk boyunca 0..1 (A ucundan B ucuna). L ve V: -0.5..0.5 (merkezden). Varsayılan değer = …
 
 
+## WorldFeatures.h
+
+**ARiverStrip** (class) — A river: wading through it is slow and the water is cold (Death Stranding: the world is hard to cross until you build across it). Logs laid over it as a bridge keep the …
+
+- `static ARiverStrip* Spawn(UWorld* World, const FVector& Center, const FVector2D& HalfSize)` — A strip of water HalfSize (x, y) around Center, its surface at the ground's height.
+- `bool Contains(const FVector& Feet) const` — Standing in the water: inside the strip with the feet at most a little above its surface.
+- Ayrıca (açıklamasız): `ARiverStrip`, `IsInWater`
+
+**ARopeLine** (class) — A rope strung between two points: ride along it to the other end (up a cliff, over a river). Each rope is a ropeway in the shared route graph …
+
+- `static ARopeLine* Span(UWorld* World, const FVector& A, const FVector& B)` — A rope from A to B; null if it would be too short or too long.
+- `bool EndNear(const FVector& Where, bool& bOutEndB) const` — The end within reach of Where (true: B), if there is one.
+- Ayrıca (açıklamasız): `ARopeLine`, `GetA`, `GetB`, `GetLinkKey`, `GetNodeKey`, `CountAll`
+
+**ARemnantNote** (class) — A remnant of the people who were here before: a note on a stake, read with E (Subnautica: the story is told by what is left in the world, never by a cutscene).
+
+- Ayrıca (açıklamasız): `ARemnantNote`, `Place`
+
+**ACliffBlock** (class) — A block of rock rising out of the ground: too high to climb without a rope.
+
+- Ayrıca (açıklamasız): `ACliffBlock`, `Spawn`, `GetTopZ`
+
 ## Açıklaması eksik fonksiyonlar
 
-144 / 368 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+185 / 449 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

@@ -504,3 +504,6 @@ Test: mekanik 119/119 (+4). Senaryo ayrıca bir kez grafiksiz oyunla kuruldu, ha
 - Senaryo yerleşimi (otomatik test sırasında değil): batıda **Kayalık** (yar, tepede yapı taşları, dağınık taşlar, −4°C), ortada **Orman** (yanık kulübe), doğuda **Nehir kıyısı** (haritayı boydan geçen nehir, öte yakada yabani tahıl, koyun, tavuk, −2°C).
 - HUD üst satırı: ıslaklık, altyapı (ip ve köprü sayısı), not sayısı.
 - **Yapılmayanlar:** toprak sıkıştırma ve beton (voxel ile birlikte sona bırakıldı); voxel kazı; "günlük seçim" için ayrıca bir arayüz yok (soğuk, yakıt, yemek ve baskın baskısından doğuyor); taş duvarın oyuncu yolunda denenmesi; koyunun beslenmesi; ses.
+
+### 2026-10-14 — Kapsamlı durum raporu (CC)
+- `DURUM_RAPORU.md` baştan yazıldı: referans oyunlara göre özet, nasıl çalıştırılır, bütün tuşlar, oynanır sistemler (kütük, taş/çubuk, ateş, gün döngüsü, baskın, tarım, dünya/altyapı, hikâye), kodu olup oyunda olmayanlar, testler, bilinen sorunlar, kod büyüklüğü, sıradaki işler.
