@@ -2,8 +2,11 @@
 
 #include "ExcavationTerrainChunkActor.h"
 #include "ExcavationFlatBaseDensitySource.h"
+#include "ExcavationLandscapeDensitySource.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "LandscapeProxy.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 
@@ -14,6 +17,7 @@ void UExcavationTerrainChunkSubsystem::Initialize(FSubsystemCollectionBase& Coll
 
     FlatFallbackDensitySource = NewObject<UExcavationFlatBaseDensitySource>(this);
     FlatFallbackDensitySource->SurfaceHeightCm = 0.0f;
+    RegisteredFallbackDensitySource = FlatFallbackDensitySource;
 
     if (UWorld* World = GetWorld())
     {
@@ -38,7 +42,7 @@ void UExcavationTerrainChunkSubsystem::Deinitialize()
                 this, &UExcavationTerrainChunkSubsystem::HandleVolumeChanged);
             Excavation->OnVolumeReset.RemoveDynamic(
                 this, &UExcavationTerrainChunkSubsystem::HandleVolumeReset);
-            Excavation->UnregisterFallbackBaseDensitySource(FlatFallbackDensitySource);
+            Excavation->UnregisterFallbackBaseDensitySource(RegisteredFallbackDensitySource);
         }
     }
 
@@ -62,6 +66,8 @@ void UExcavationTerrainChunkSubsystem::Deinitialize()
 
     RegisteredChunks.Reset();
     FlatFallbackDensitySource = nullptr;
+    LandscapeFallbackDensitySource = nullptr;
+    RegisteredFallbackDensitySource = nullptr;
     Super::Deinitialize();
 }
 
@@ -72,11 +78,20 @@ TStatId UExcavationTerrainChunkSubsystem::GetStatId() const
 
 bool UExcavationTerrainChunkSubsystem::IsTickable() const
 {
-    return bEnableAutomaticStreaming && !IsTemplate();
+    return !IsTemplate();
 }
 
 void UExcavationTerrainChunkSubsystem::Tick(float DeltaTime)
 {
+    LandscapeDiscoveryAccumulatorSeconds += FMath::Max(0.0f, DeltaTime);
+    if (!bDidInitialLandscapeDiscovery
+        || LandscapeDiscoveryAccumulatorSeconds >= FMath::Max(0.1f, LandscapeDiscoveryIntervalSeconds))
+    {
+        LandscapeDiscoveryAccumulatorSeconds = 0.0f;
+        bDidInitialLandscapeDiscovery = true;
+        RefreshLandscapeFallbackProvider();
+    }
+
     if (!bEnableAutomaticStreaming)
     {
         return;
@@ -174,6 +189,71 @@ void UExcavationTerrainChunkSubsystem::RemoveInvalidRegisteredActors()
         {
             It.RemoveCurrent();
         }
+    }
+}
+
+void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
+{
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Excavation =
+        World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!World || !Excavation)
+    {
+        return;
+    }
+
+    TArray<ALandscapeProxy*> Proxies;
+    for (TActorIterator<ALandscapeProxy> It(World); It; ++It)
+    {
+        if (IsValid(*It))
+        {
+            Proxies.Add(*It);
+        }
+    }
+
+    bool bProviderChanged = false;
+    if (!Proxies.IsEmpty())
+    {
+        if (!IsValid(LandscapeFallbackDensitySource))
+        {
+            LandscapeFallbackDensitySource = NewObject<UExcavationLandscapeDensitySource>(this);
+        }
+
+        const bool bProxySetChanged = LandscapeFallbackDensitySource->SetLandscapeProxies(Proxies);
+        if (RegisteredFallbackDensitySource != LandscapeFallbackDensitySource)
+        {
+            if (!Excavation->RegisterFallbackBaseDensitySource(LandscapeFallbackDensitySource))
+            {
+                return;
+            }
+            RegisteredFallbackDensitySource = LandscapeFallbackDensitySource;
+            bProviderChanged = true;
+        }
+
+        bProviderChanged = bProviderChanged || bProxySetChanged;
+    }
+    else
+    {
+        if (IsValid(LandscapeFallbackDensitySource))
+        {
+            bProviderChanged = LandscapeFallbackDensitySource->SetLandscapeProxies(TArray<ALandscapeProxy*>());
+        }
+
+        if (RegisteredFallbackDensitySource != FlatFallbackDensitySource)
+        {
+            if (!Excavation->RegisterFallbackBaseDensitySource(FlatFallbackDensitySource))
+            {
+                return;
+            }
+            RegisteredFallbackDensitySource = FlatFallbackDensitySource;
+            bProviderChanged = true;
+        }
+    }
+
+    // A provider/proxy set change alters density samples even without a cell edit.
+    if (bProviderChanged)
+    {
+        HandleVolumeReset();
     }
 }
 
