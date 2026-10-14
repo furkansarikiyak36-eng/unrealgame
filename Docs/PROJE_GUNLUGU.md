@@ -423,3 +423,13 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Eski UFeedCycleComponent kendi TMap<FName,float> feed stokunu tutan ikinci bir sahip olmaktan çıkarıldı; var olan UFeedStorageComponent üzerine çalışan bir adaptördür. Feed/seed/product ID'leri proje inventory tanımlarına göre sağlanmalıdır.
 - Scripts/tests/test_phase9_farming_integration_contract.py sekiz statik sözleşme kontrolüyle runner'a eklendi. Son GitHub Actions Python tooling CI #837 başarılı (run 38535234996); yeni Faz 9 ve tüm mevcut Python/katalog kontrolleri geçti.
 - Bu CI Unreal Engine 5.8 derlemesi, oyuncu envanteri ve hayvan/bitki actor SaveGame round-trip'i veya gerçek tarım ekonomisi E2E testi değildir. Dinamik actor kalıcılığı, kaynak bilançosu ve uzun oturum ayarı Faz 14'te toplu doğrulanacaktır.
+
+
+### 2026-10-14 — Faz 10: bölge ve lojistik katmanı (uygulama)
+
+- \`URegionLogisticsSubsystem\` eklendi. 8×8 chunk varsayılan bölge kimliği negatif koordinatlarda floor-division ile doğru hesaplanır.
+- Bölge biyokütlesi, soil N/P/K, su hacmi ve çevresel risk özeti mevcut \`UWorldStateSubsystem/UChunkStateStore\` içinden sorgulanır; ikinci bir kaynak/tehlike stoğu yaratılmaz.
+- Trail/road/bridge/ramp/sled-route/ropeway ortak rotalama grafına bağlandı. Mesafe, altyapı tipi, kapasite, operasyon durumu, kondisyon ve hem link hem bölge riski tahmini seyahat süresini etkiler. Arama 2.048 node / 8.192 link ile sınırlıdır.
+- Köprü \`BuildBridge\` ve zipline \`BeginPlay\` akışları, sadece \`LogisticsLinkKey\` ayarlandığında rota grafına opsiyonel kayıt yapar. Ortak junction için aynı node key'leri kullanılır; anahtar verilmezse eski fiziksel davranış sürer.
+- \`UWorldCoreSaveGame\` schema 5 route metadata snapshot'ını saklar. Schema 1–4 geriye uyumlu kalır; eski kayıtlar yeni boş grafla mevcut durumu silmez. Lojistik değişiklikleri ortak world revision/event akışına bildirilir.
+- \`Scripts/tests/test_phase10_region_logistics_contract.py\` ve Python runner bağlantısı eklendi. Son head CI'si ve statik test sonucu ayrıca doğrulanacak; Unreal Engine 5.8 C++ compile/oyun içi rota, köprü/zipline ve save/load E2E bu ortamda çalıştırılmadı. Tam motor ve çapraz-sistem kabulü Faz 14'te.
