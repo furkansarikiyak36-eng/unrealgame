@@ -17,6 +17,8 @@ public:
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult AddItemData(const FInventoryItem& Item);
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult RemoveItem(FName ItemID, int32 Count=1);
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult DropItem(FName ItemID, int32 Count=1);
+    // Atomic in-memory transfer: either both inventories reflect the transfer or source stock is restored.
+    UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") static bool TransferItem(UInventoryComponent* Source, UInventoryComponent* Destination, FName ItemID, int32 Count=1);
     UFUNCTION(BlueprintPure, Category="Inventory") int32 GetItemCount(FName ItemID) const;
     UFUNCTION(BlueprintPure, Category="Inventory") bool HasItem(FName ItemID, int32 Count=1) const;
     UFUNCTION(BlueprintPure, Category="Inventory") bool HasAllItems(const TArray<FInventoryItem>& Required) const;
