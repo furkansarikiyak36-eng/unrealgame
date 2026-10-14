@@ -21,6 +21,7 @@
 | Taşlar tek tek konur, 7 taş halkası ateş yeri olur | Faz 8b |
 | Hareket durumu Loose / Carried / Installed; sert çarpma kütüğe hasar verir | Faz 10 |
 | Düşman duvarı yaparak hasar verir (yapıdaki hasar kuralları aynen); kazık ve çarpan kütük düşmana zarar verir | Faz 14 |
+| **Referans oyunlar:** kütük ve taşla yapılan hemen her şey (kesim, oyma, taşıma, yapı, destek, görsel dil) **Sons of the Forest**'tan; baskın (dalga, horde, üsse saldırı) **7 Days to Die**'dan. 7 Days to Die kazı için referans değil; diğer oyunlar (The Forest, Valheim, Vintage Story, Green Hell, Rust, Factorio) yalnızca benzerlik karşılaştırması | Kullanıcı açıkladı (14 Ekim) |
 | Ateş yerleştirme modu değil, odunun özelliği: her parça yanabilir (tutuşuyor → yanıyor → yanık), yakıt = hacim (tam kütük ~593 sn), hasar yakıt bitince 1'e varır; yanan parça yanındakini ısıtır; aynı anda en çok 12 parça yanar | Faz 8 (13 Ekim planı) |
 | Kamp ateşi 7 taşla kurulur ([C]), odun atmak ateşi yakmaz; çakmak ([F] basılı) ya da yanan odun yakar | Ham madde zinciri; iki ateşleme kaynağı kararı |
 

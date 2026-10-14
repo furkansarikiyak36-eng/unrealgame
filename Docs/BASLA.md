@@ -3,7 +3,7 @@
 Bu sayfayı oku, gerisini ihtiyacın olunca oku. Hepsi `Docs/` altında, `.md`. Kaynak kodu (`.cpp`) okuyamazsın; `KOD_HARITASI.md` kodu senin için özetler.
 
 ## Proje
-`MyProject2`: Unreal Engine 5.8, C++, sanatsız (greybox) hayatta kalma oyunu. Odak: **kütük sistemi** (ağaç kesme, kesme ve oyma, taşıma, yerleştirme, yapı, destek, ateş, hasar). Referans: Sons of the Forest'ın kütük ve yapı mekanikleri, ama fiziksel ve modüler.
+`MyProject2`: Unreal Engine 5.8, C++, sanatsız (greybox) hayatta kalma oyunu. Odak: **kütük sistemi** (ağaç kesme, kesme ve oyma, taşıma, yerleştirme, yapı, destek, ateş, hasar). Referans: kütük ve taş mekanikleri Sons of the Forest'tan (fiziksel ve modüler hâle getirilerek), baskın 7 Days to Die'dan. Diğer oyunlar yalnızca benzerlik karşılaştırmasıdır.
 
 ## Ne nerede
 | Dosya | Ne için | Ne zaman |
