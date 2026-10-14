@@ -48,7 +48,7 @@ void AStoneTrapActor::Trigger(AActor* Victim)
     }
 
     const float Now = GetWorld()->GetTimeSeconds();
-    if (Now - LastTriggerTime < Cooldown)
+    if (LastTriggerTime >= 0.0f && Now - LastTriggerTime < Cooldown)
     {
         return;
     }
@@ -105,5 +105,13 @@ void AStoneTrapActor::Trigger(AActor* Victim)
 
 void AStoneTrapActor::Rearm()
 {
-    bArmed = true;
+    UWorld* World = GetWorld();
+    if (!World || !FMath::IsFinite(Cooldown) || Cooldown < 0.0f)
+    {
+        bArmed = false;
+        return;
+    }
+
+    const float Now = World->GetTimeSeconds();
+    bArmed = LastTriggerTime < 0.0f || Now - LastTriggerTime >= Cooldown;
 }
