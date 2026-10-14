@@ -158,3 +158,10 @@ Satır bazlı eşleştirme dosyaları dokuz katalog ailesinin tamamını kapsıy
 ## Envanter sahipliği engeli
 
 `AForestCharacter` içinde eski `EForestItem` tabanlı 24 slot/20 stack stoğu var; ayrıca generic `UInventoryComponent`, kategori/ağırlık kuralları, ayrı UI/crafting ve save subsystem bulunuyor. Oyuncu karakteri constructor'ında generic komponentlerin yaratıldığı görünmüyor; Blueprint eklemesi de bu oturumda doğrulanmadı. Dolayısıyla çift envanter sahibi olasılığı bir blocker olarak kaydedildi; `Docs/FAZ_00_ENVANTER_KATALOG_ESLESTIRME.csv` her INV satırının kaynak/kanıt durumunu takip ediyor. Bu sahiplik kararı çözülmeden Faz 6 entegrasyonuna başlanmamalı.
+
+
+## Taş/çubuk eşleştirmesi ve ilk kod düzeltmesi
+
+- [Taş/çubuk statik denetimi](./FAZ_00_STONE_STICK_DENETIMI.md) ve iki CSV eşleştirmesi, son 172 satırı kapsar. Böylece 485/485 gereksinim kaynak triage dosyasına girildi; kaynak seviyeleri U2=333, U1=88, U0=64, U3–U6=0.
+- P0-027 (çubuk crafting atomikliği) için kaynak değişikliği yapıldı: duplicate girdiler birleştiriliyor; kapasite tüketim sonrası hesaplanıyor; hata durumunda stok snapshot'ı geri yükleniyor. Üç Unreal Automation Test ve yeni fail-closed log doğrulama yolu eklendi.
+- Bu yeni C++ testleri bu ortamda UE 5.8 altında derlenip çalıştırılmadı. Python CI, doğrulayıcı ve katalog araçlarını sınar; C++ kabulü için Windows/UE host çıktısı gerekir.
