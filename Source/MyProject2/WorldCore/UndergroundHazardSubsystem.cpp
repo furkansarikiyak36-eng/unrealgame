@@ -193,6 +193,14 @@ void UUndergroundHazardSubsystem::UnregisterSupportActor(AUndergroundSupportActo
     OnSupportChanged.Broadcast(Id, false);
 }
 
+void UUndergroundHazardSubsystem::NotifySupportActorChanged(AUndergroundSupportActor* Support)
+{
+    if (IsValid(Support))
+    {
+        OnSupportChanged.Broadcast(Support->GetSupportId(), Support->IsSupportOperational());
+    }
+}
+
 bool UUndergroundHazardSubsystem::HasOperationalSupportNear(const FVector& LocationCm, float RadiusCm) const
 {
     if (!IsFiniteVector3(LocationCm) || !FMath::IsFinite(RadiusCm) || RadiusCm < 0.0f)
