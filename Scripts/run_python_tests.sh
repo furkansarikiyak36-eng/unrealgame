@@ -32,9 +32,13 @@ echo "[9/24] Verifying the underground hazard contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_underground_hazard_contract.py"
 
 echo "[10/24] Verifying the carvable-log damage/recovery contract..."
-"$PYTHON" "$ROOT/Scripts/tests/test_carvable_log_contract.py"
+"$PYTHON" "$ROOT/Scripts/tests/test_carvable_log_contract.py" \
+  "$ROOT/Scripts/tests/test_inventory_transfer_contract.py"
 
-echo "[11/24] Checking Python and shell syntax..."
+echo "[11/25] Verifying the inventory transfer transaction contract..."
+"$PYTHON" "$ROOT/Scripts/tests/test_inventory_transfer_contract.py"
+
+echo "[12/25] Checking Python and shell syntax..."
 bash -n "$ROOT/Scripts/run_tests.sh"
 bash -n "$ROOT/Scripts/run_python_tests.sh"
 "$PYTHON" -m py_compile \
@@ -92,4 +96,4 @@ echo "[23/24] Auditing the canonical 485-row master catalog evidence state..."
 echo "[24/24] Auditing the Phase 0 findings matrix..."
 "$PYTHON" "$ROOT/Scripts/audit_findings_matrix.py" "$ROOT/Docs/FAZ_00_BULGU_MATRISI.csv"
 
-echo "ALL PYTHON TOOL TESTS, INVENTORY DROP CONTRACT, WORLD CORE PERSISTENCE CONTRACT, EXCAVATION TERRAIN ADAPTER CONTRACT, UNDERGROUND HAZARD CONTRACT, CARVABLE LOG REPAIR/SUPPORT CONTRACT, MASTER CATALOG CROSS-MAPPING, NINE ROW MAP AUDITS, EXCAVATION SPIKE AND FINDINGS MATRIX CHECKS PASSED."
+echo "ALL PYTHON TOOL TESTS, INVENTORY DROP CONTRACT, INVENTORY TRANSFER TRANSACTION CONTRACT, WORLD CORE PERSISTENCE CONTRACT, EXCAVATION TERRAIN ADAPTER CONTRACT, UNDERGROUND HAZARD CONTRACT, CARVABLE LOG REPAIR/SUPPORT CONTRACT, MASTER CATALOG CROSS-MAPPING, NINE ROW MAP AUDITS, EXCAVATION SPIKE AND FINDINGS MATRIX CHECKS PASSED."
