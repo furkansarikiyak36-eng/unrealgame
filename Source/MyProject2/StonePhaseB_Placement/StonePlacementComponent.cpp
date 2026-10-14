@@ -461,9 +461,15 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
         else
         {
             float BestAlignment = -1.0f;
+            const UStaticMeshComponent* SourceMesh = StoneToPlace->MeshComponent;
+            if (!SourceMesh)
+            {
+                return false;
+            }
+            const FTransform SourceMeshTransform = SourceMesh->GetComponentTransform();
             for (const int32 FaceIndex : FaceIndices)
             {
-                const FVector WorldNormal = TargetTransform.TransformVectorNoScale(
+                const FVector WorldNormal = SourceMeshTransform.TransformVectorNoScale(
                     MyDefinition->Faces[FaceIndex].LocalNormal.GetSafeNormal()).GetSafeNormal();
                 const float Alignment = FVector::DotProduct(WorldNormal, SourcePortNormal);
                 if (Alignment > BestAlignment)
