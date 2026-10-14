@@ -3,6 +3,7 @@
 #include "ProductionRecipeAsset.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryStorageActor.h"
+#include "ForestCharacter.h"
 #include "WorldCore/WorldPersistenceSubsystem.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -475,6 +476,23 @@ bool UProductionChainComponent::ExportSnapshot(FProductionChainSnapshot& OutSnap
     return true;
 }
 
+bool UProductionChainComponent::UsesCorePersistedInventories() const
+{
+    const UInventoryComponent* InputStore = ResolveInputInventory();
+    const UInventoryComponent* OutputStore = ResolveOutputInventory();
+    if (!IsValid(InputStore) || !IsValid(OutputStore))
+    {
+        return false;
+    }
+    const AActor* InputOwner = InputStore->GetOwner();
+    const AActor* OutputOwner = OutputStore->GetOwner();
+    const auto IsCoreSavedOwner = [](const AActor* Owner)
+    {
+        return IsValid(Owner) && (Cast<AForestCharacter>(Owner) != nullptr || Cast<AInventoryStorageActor>(Owner) != nullptr);
+    };
+    return IsCoreSavedOwner(InputOwner) && IsCoreSavedOwner(OutputOwner);
+}
+
 bool UProductionChainComponent::ValidateSnapshot(const FProductionChainSnapshot& Snapshot) const
 {
     if (Snapshot.SchemaVersion != 1 || Snapshot.StationKey.IsNone()
@@ -502,7 +520,8 @@ bool UProductionChainComponent::ValidateSnapshot(const FProductionChainSnapshot&
     {
         return false;
     }
-    if (ActiveJobs > 0 && (!IsValid(ResolveInputInventory()) || !IsValid(ResolveOutputInventory())))
+    if (ActiveJobs > 0 && (!IsValid(ResolveInputInventory()) || !IsValid(ResolveOutputInventory())
+        || !UsesCorePersistedInventories()))
     {
         return false;
     }
