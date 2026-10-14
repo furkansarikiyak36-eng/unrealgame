@@ -111,8 +111,8 @@ class Phase11ProductionChainContract(unittest.TestCase):
 
     def test_active_queue_requires_inventory_owners_already_saved_by_core_envelope(self):
         ownership = between(CHAIN_CPP, "bool UProductionChainComponent::UsesCorePersistedInventories(", "bool UProductionChainComponent::ValidateSnapshot(")
-        self.assertIn("Cast<AForestCharacter>", ownership)
-        self.assertIn("Cast<AInventoryStorageActor>", ownership)
+        self.assertIn("Owner->IsA<AForestCharacter>()", ownership)
+        self.assertIn("Owner->IsA<AInventoryStorageActor>()", ownership)
         self.assertIn("!UsesCorePersistedInventories()", CHAIN_CPP)
 
     def test_schema_six_persists_station_jobs_and_keeps_legacy_schema_one_through_five(self):
