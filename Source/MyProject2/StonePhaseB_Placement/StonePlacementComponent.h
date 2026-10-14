@@ -1,6 +1,7 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Core/StructuralMaterialTypes.h"
 #include "StonePlacementComponent.generated.h"
 
 class AStoneActor;
@@ -11,6 +12,8 @@ class MYPROJECT2_API UStonePlacementComponent : public UActorComponent
     GENERATED_BODY()
 public:
     UStonePlacementComponent();
+    UFUNCTION(BlueprintCallable) bool BeginPlacement(AStoneActor* Stone);
+    UFUNCTION(BlueprintCallable) bool CancelPlacement();
     UFUNCTION(BlueprintCallable) void EnterAimMode();
     UFUNCTION(BlueprintCallable) void ExitAimMode();
     UFUNCTION(BlueprintCallable) void CycleFace();
@@ -28,6 +31,11 @@ protected:
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) FVector TargetSurfaceNormal = FVector::UpVector;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) FVector TargetSurfacePoint = FVector::ZeroVector;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) float ManualYawDegrees = 0.0f;
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) bool bHasPlacementTarget = false;
+    FTransform OriginalActorTransform;
+    EStructuralNodeState OriginalStructuralState = EStructuralNodeState::Loose;
+    TWeakObjectPtr<USceneComponent> OriginalAttachComponent;
+    FName OriginalAttachSocket = NAME_None;
 
     void ApplySelectedPlacementOption();
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
