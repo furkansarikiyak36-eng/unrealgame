@@ -187,3 +187,10 @@ P0-023 için `UStonePlacementComponent` yüz/socket seçimi ve placement lifecyc
 `AForestCharacter` gerçek fiziksel `AStoneActor` pickup/taşıma/yerleştirme akışını input kontrollerine bağladı. Taş önizlemesi aynı fiziksel aktörü korur; iptal state/transform/attach bilgisini geri yüklemeye çalışır. Yerleştirmeden önce component overlap kontrolü çalışır. Yapısal hedef bir graph sahibiyse, seçilen kaynak socket'i yakındaki boş hedef taşı socket'iyle eşleşmeli ve karşılıklı `UStructuralGraph::ConnectTo` kaydı alınmalıdır; aksi halde taş kurulmuş sayılmaz.
 
 Beş test `Source/MyProject2/Tests/StonePlacementTests.cpp` içine eklendi: yaşam döngüsü, yüz/socket transformu, carry rollback, çarpışma engeli ve reciprocal socket graph bağlantısı/dolu socket reddi. Windows/UE 5.8 çalıştırıcısı bu suite'i ayrı logda zorunlu doğruluyor. **C++ build ve test sonucu hâlâ beklemede**; Python CI sonucu bu kabulün yerine geçmez.
+
+
+## Taş yerleştirme graph sahipliği güncellemesi
+
+Kaynak/face veya socket adı artık hedef AStoneActor'ın yakın, doğru yöne bakan ve boş socket'iyle eşleşmeden yapısal commit yapılmasına izin vermez. UStructuralGraph::ConnectTo iki uçta da kayıt oluşturur; state transition başarısızsa yeni bağlantı geri alınır. Hedefteki doluluk bilgisi shared DataAsset'ten değil actor graph'ından okunur. Bu adapter yalnızca AStoneActor hedefini kapsıyor; eski ahşap yapı graflarıyla genel bağlantı henüz yapılmadı.
+
+Beş Unreal Automation Test source dosyasına eklendi; Unreal Engine 5.8 build/test çalıştırması henüz yok.
