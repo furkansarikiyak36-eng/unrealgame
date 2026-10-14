@@ -3015,7 +3015,18 @@ void AForestCharacter::ApplyCarveHit(ACarvableLog* Log)
 {
 	if (!bCarveSpotValid)
 	{
-		ShowMessage(TEXT("Bu kütükte bu kesim için yer kalmadı"));
+		if (CarveTool == ECarveTool::Groove && Log && Log->GetSplitCount() != 1)
+		{
+			ShowMessage(TEXT("Oluk için önce kütüğü boyuna yarıp yarım kütük oluştur"));
+		}
+		else if (CarveTool == ECarveTool::Groove && Log && Log->GetSplitCount() == 1)
+		{
+			ShowMessage(TEXT("Bu yarım kütükte oluk zaten var veya uygun kanal noktası kalmadı"));
+		}
+		else
+		{
+			ShowMessage(TEXT("Bu kütükte bu kesim için yer kalmadı"));
+		}
 		return;
 	}
 	const float ShapeKey = IsProfileTool(CarveTool) ? CarveWidth * 1000.f + CarveDepth : CarveAngle;
@@ -3073,8 +3084,14 @@ void AForestCharacter::ApplyCarveHit(ACarvableLog* Log)
 		}
 		break;
 	case ECarveTool::Groove:
-		Log->CutGroove(CarveSide);
-		ShowMessage(TEXT("Oluk açıldı"));
+		if (Log->CutGroove(CarveSide))
+		{
+			ShowMessage(TEXT("Yarım kütük boyunca oluk açıldı"));
+		}
+		else
+		{
+			ShowMessage(TEXT("Oluk için önce kütüğü boyuna yarıp yarım kütük oluştur"));
+		}
 		break;
 	case ECarveTool::Dovetail:
 		Log->CutDovetail(CarveX, CarveSide, CarveWidth, FMath::Min(CarveDepth, R));
