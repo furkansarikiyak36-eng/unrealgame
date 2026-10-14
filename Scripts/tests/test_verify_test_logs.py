@@ -170,7 +170,7 @@ class LogVerifierTests(unittest.TestCase):
             "Path={MyProject2.StoneTrap.Damage.DispatchAndCooldown}\\n",
             encoding="utf-8",
         )
-        with self.assertRaisesRegex(ValueError, "expected at least 2"):
+        with self.assertRaisesRegex(ValueError, "expected at least 4"):
             VERIFY.verify_stone_trap(self.stone_trap)
 
     def test_fewer_than_required_mechanics_checks_are_rejected(self):
