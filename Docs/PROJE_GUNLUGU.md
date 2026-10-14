@@ -225,3 +225,9 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - P0-013 durumu yeniden Open yapıldı ve P0-010 severity alanındaki baştaki boşluk temizlendi.
 - Scripts/audit_findings_matrix.py ile şema, alan sayısı, zorunlu hücreler, severity, tek satırlı status, benzersiz/ardışık Finding_ID denetimi eklendi. Dokuz birim test yeni Python CI listesine bağlandı.
 - UE 5.8 C++ derlemesi ve motor otomasyon testleri bu değişiklikle çalıştırılmış sayılmaz; bu matris denetimi yalnızca belge bütünlüğünü doğrular.
+
+### 2026-10-14 — RAID katalog sayımı kanıtı
+
+- Ana RAID başlığı 69 alt mekanik bildiriyor; aynı kaynakta yedi alt bölümün sayıları 6+7+9+12+10+10+9=63 ediyor.
+- Ayrıntılı isimli liste ve repo RAID eşleştirmesi 63 kayıt içeriyor. Altı ek gereksinimin isimleri/ID'leri kaynakta bulunmadığından uydurularak eklenmedi.
+- P0-001, onaylı kaynak kararıyla başlığın 63'e çekilmesi veya eksik altı gereksinimin asıl kaynaktan kurtarılması tamamlanana kadar açık bırakıldı.
