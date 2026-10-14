@@ -3,6 +3,7 @@
 #include "ExcavationVolumeSubsystem.h"
 #include "UndergroundHazardSubsystem.h"
 #include "WorldStateSubsystem.h"
+#include "RegionLogisticsSubsystem.h"
 #include "ForestCharacter.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryStorageActor.h"
@@ -39,6 +40,7 @@ void UWorldPersistenceSubsystem::Initialize(FSubsystemCollectionBase& Collection
     Super::Initialize(Collection);
     Collection.InitializeDependency<UExcavationVolumeSubsystem>();
     Collection.InitializeDependency<UUndergroundHazardSubsystem>();
+    Collection.InitializeDependency<URegionLogisticsSubsystem>();
 
     WorldId = FGuid::NewGuid();
     WorldSeed = static_cast<int32>(
@@ -64,6 +66,10 @@ void UWorldPersistenceSubsystem::Initialize(FSubsystemCollectionBase& Collection
             Hazards->OnRoofCollapse.AddDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundRoofCollapse);
             Hazards->OnSupportChanged.AddDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundSupportChanged);
         }
+        if (URegionLogisticsSubsystem* Logistics = World->GetSubsystem<URegionLogisticsSubsystem>())
+        {
+            Logistics->OnLogisticsChanged.AddDynamic(this, &UWorldPersistenceSubsystem::HandleRegionLogisticsChanged);
+        }
     }
 }
 
@@ -84,6 +90,10 @@ void UWorldPersistenceSubsystem::Deinitialize()
             Hazards->OnWaterSeepage.RemoveDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundWaterSeepage);
             Hazards->OnRoofCollapse.RemoveDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundRoofCollapse);
             Hazards->OnSupportChanged.RemoveDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundSupportChanged);
+        }
+        if (URegionLogisticsSubsystem* Logistics = World->GetSubsystem<URegionLogisticsSubsystem>())
+        {
+            Logistics->OnLogisticsChanged.RemoveDynamic(this, &UWorldPersistenceSubsystem::HandleRegionLogisticsChanged);
         }
     }
 
@@ -247,6 +257,15 @@ void UWorldPersistenceSubsystem::HandleUndergroundSupportChanged(const FGuid& Su
     }
 }
 
+void UWorldPersistenceSubsystem::HandleRegionLogisticsChanged(int64 NewRevision)
+{
+    (void)NewRevision;
+    if (!bApplyingLoadedState)
+    {
+        IncrementWorldRevision();
+    }
+}
+
 void UWorldPersistenceSubsystem::IncrementWorldRevision()
 {
     if (WorldRevision < TNumericLimits<int64>::Max())
@@ -343,6 +362,16 @@ bool UWorldPersistenceSubsystem::SaveCoreStateToSlot(const FString& SlotName, in
     SaveObject->bHasWorldState = true;
     SaveObject->WorldState = MoveTemp(WorldStateSnapshot);
 
+    URegionLogisticsSubsystem* Logistics = World ? World->GetSubsystem<URegionLogisticsSubsystem>() : nullptr;
+    FRegionLogisticsSnapshot RegionLogisticsSnapshot;
+    if (!Logistics || !Logistics->ExportSnapshot(RegionLogisticsSnapshot))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Core save rejected: region-logistics snapshot failed validation."));
+        return false;
+    }
+    SaveObject->bHasRegionLogistics = true;
+    SaveObject->RegionLogistics = MoveTemp(RegionLogisticsSnapshot);
+
     // Preserve the currently playable character's stack inventory in the same
     // versioned envelope. World-piece actors (notably ACarvableLog) stay world-owned.
     if (AForestCharacter* Player = FindWorldSavePlayer(World))
@@ -423,7 +452,7 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     }
 
     const FWorldCoreSaveManifest& Manifest = LoadedSave->Manifest;
-    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2 && Manifest.SchemaVersion != 3 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
+    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2 && Manifest.SchemaVersion != 3 && Manifest.SchemaVersion != 4 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
         || !Manifest.WorldId.IsValid()
         || Manifest.WorldRevision < 0
         || LoadedSave->ProcessedCommandIds.Num() > MaxRetainedLedgerEntries
@@ -459,8 +488,10 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     UWorld* LoadWorld = GetWorld();
     UUndergroundHazardSubsystem* Hazards = LoadWorld ? LoadWorld->GetSubsystem<UUndergroundHazardSubsystem>() : nullptr;
     UWorldStateSubsystem* WorldState = LoadWorld ? LoadWorld->GetSubsystem<UWorldStateSubsystem>() : nullptr;
+    URegionLogisticsSubsystem* Logistics = LoadWorld ? LoadWorld->GetSubsystem<URegionLogisticsSubsystem>() : nullptr;
     if (!Excavation || !Hazards || !Hazards->ValidateSnapshot(LoadedSave->UndergroundHazards) ||
-        (LoadedSave->bHasWorldState && (!WorldState || !WorldState->ValidateSnapshot(LoadedSave->WorldState))))
+        (LoadedSave->bHasWorldState && (!WorldState || !WorldState->ValidateSnapshot(LoadedSave->WorldState))) ||
+        (LoadedSave->bHasRegionLogistics && (!Logistics || !Logistics->ValidateSnapshot(LoadedSave->RegionLogistics))))
     {
         return false;
     }
@@ -601,6 +632,12 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
                 return false;
             }
         }
+    }
+    if (LoadedSave->bHasRegionLogistics && !Logistics->ImportSnapshot(LoadedSave->RegionLogistics))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Core save load: prevalidated region-logistics import failed."));
+        bApplyingLoadedState = false;
+        return false;
     }
     bApplyingLoadedState = false;
 
