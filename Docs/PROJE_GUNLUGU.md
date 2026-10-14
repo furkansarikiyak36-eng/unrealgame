@@ -443,3 +443,9 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - World SaveGame schema 6, kararlı station key ile kuyruk snapshot'larını kaydeder. Envanter stok sahipliği yine player/AInventoryStorageActor/UInventoryComponent'te kalır; aktif queue kaydı için input ve output inventory sahiplerinin core save'da kaydediliyor olması doğrulanır. Schema 1–5 okunmaya devam eder.
 - Repo içinde mevcut shared generator/power-grid sahibi bulunmadığından üretim gücü \`AvailablePowerWatts\` dış girdisidir; güç koşulu var ama generator/grid ekonomisine bağlanmış sayılmaz. Fiziksel kütükten stackable HalfLog üretimini otomatikleştirme, Unreal Engine 5.8 compile ve oyun içi queue/save-load E2E de henüz kabul edilmedi; Faz 14'e bırakıldı.
 - \`Scripts/tests/test_phase11_production_chain_contract.py\` Python runner'a eklendi; CI sonucu son dal başında doğrulanacaktır.
+
+
+### 2026-10-14 — Faz 11: statik CI kanıtı
+
+- GitHub Actions Python tooling CI #938 başarılıdır: https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38537881165
+- Faz 11 üretim zinciri sözleşme testinin 12 kontrolü ve mevcut Python/katalog kontrolleri geçti. Bu iş akışı Unreal Engine C++ derlemesi veya oyun içi üretim/save-load testi değildir; motor kabulü Faz 14'te yapılacak.
