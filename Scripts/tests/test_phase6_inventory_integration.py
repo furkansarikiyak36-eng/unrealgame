@@ -75,7 +75,7 @@ class Phase6InventoryIntegrationTests(unittest.TestCase):
     def test_player_inventory_is_versioned_and_preflighted_before_domain_import(self):
         self.assertIn("bool bHasPlayerInventory = false", SAVE_H)
         self.assertIn("TArray<FInventoryItem> PlayerInventoryItems", SAVE_H)
-        self.assertIn("CurrentSaveSchemaVersion = 5", SAVE_H)
+        self.assertIn("CurrentSaveSchemaVersion = 6", SAVE_H)
         self.assertIn("Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2", SAVE_CPP)
         self.assertIn("SaveObject->PlayerInventoryItems.Add(Slot.Item)", SAVE_CPP)
         self.assertIn("PlayerInventory->CanRestoreFromSavedItems(LoadedSave->PlayerInventoryItems)", SAVE_CPP)
@@ -99,7 +99,7 @@ class Phase6InventoryIntegrationTests(unittest.TestCase):
         self.assertIn("StorageActorsByKey", SAVE_CPP)
         self.assertIn("!(*FoundStorage)->GetInventory()->CanRestoreFromSavedItems(StorageSnapshot.Items)", SAVE_CPP)
         self.assertIn("Storage->GetInventory()->RestoreFromSavedItems(StorageSnapshot.Items)", SAVE_CPP)
-        self.assertIn("CurrentSaveSchemaVersion = 5", SAVE_H)
+        self.assertIn("CurrentSaveSchemaVersion = 6", SAVE_H)
 
     def test_phase6_contract_runs_in_the_python_ci_script(self):
         self.assertIn("test_inventory_transfer_contract.py", RUNNER)
