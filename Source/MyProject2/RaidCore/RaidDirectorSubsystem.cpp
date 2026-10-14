@@ -31,7 +31,46 @@ void URaidDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collection){Su
 void URaidDirectorSubsystem::Deinitialize(){if(Context.bEventActive)CancelRaid(TEXT("WorldSubsystemDeinitialize"));Super::Deinitialize();}
 TStatId URaidDirectorSubsystem::GetStatId()const{RETURN_QUICK_DECLARE_CYCLE_STAT(URaidDirectorSubsystem,STATGROUP_Tickables);}
 void URaidDirectorSubsystem::ConfigureRaidAssets(URaidStageTableAsset*T,const TArray<UHordePlanAsset*>&P,UEnemyGroupLibrary*G,UEnemyLibrary*E){StageTable=T;AvailablePlans.Reset();for(UHordePlanAsset*Plan:P)if(Plan)AvailablePlans.Add(Plan);EnemyGroups=G;Enemies=E;}
-void URaidDirectorSubsystem::Tick(float Dt){Super::Tick(Dt);if(!Context.bEventActive||!GetWorld())return;TimeBudget->BeginTick();FrameBudget->ResetFrame();ElapsedEventTime+=FMath::Clamp(FMath::IsFinite(Dt)?Dt:0.f,0.f,5.f);ProcessWaveTick(Dt);if(TimeBudget->HasTimeRemaining())ProcessSpawns(Dt);}
+bool URaidDirectorSubsystem::SetAutomaticSchedulingEnabled(bool bEnabled,float IntervalSeconds,float JitterMinSeconds,float JitterMaxSeconds,ERaidEventType EventType)
+{
+    if(!FMath::IsFinite(IntervalSeconds)||!FMath::IsFinite(JitterMinSeconds)||!FMath::IsFinite(JitterMaxSeconds)
+        ||IntervalSeconds<30.0f||IntervalSeconds>604800.0f||EventType==ERaidEventType::None)
+    {
+        return false;
+    }
+    bAutomaticSchedulingEnabled=bEnabled;
+    AutoScheduleIntervalSeconds=IntervalSeconds;
+    AutoScheduleJitterMinSeconds=FMath::Clamp(JitterMinSeconds,-86400.0f,86400.0f);
+    AutoScheduleJitterMaxSeconds=FMath::Clamp(JitterMaxSeconds,-86400.0f,86400.0f);
+    AutoScheduleEventType=EventType;
+    if(!bEnabled)
+    {
+        Scheduler->ResetSchedule();
+        return true;
+    }
+    if(!GetWorld()||!Scheduler)return false;
+    Scheduler->ScheduleNextEvent(GetWorld()->GetTimeSeconds()+AutoScheduleIntervalSeconds,AutoScheduleJitterMinSeconds,AutoScheduleJitterMaxSeconds);
+    return true;
+}
+void URaidDirectorSubsystem::Tick(float Dt)
+{
+    Super::Tick(Dt);
+    UWorld* World=GetWorld();
+    if(!World)return;
+    if(!Context.bEventActive)
+    {
+        if(bAutomaticSchedulingEnabled&&Scheduler&&Scheduler->IsEventDue(World->GetTimeSeconds()))
+        {
+            StartRaid(AutoScheduleEventID,AutoScheduleEventType);
+            if(!Context.bEventActive)Scheduler->ScheduleNextEvent(World->GetTimeSeconds()+60.0f,0.0f,0.0f);
+        }
+        return;
+    }
+    TimeBudget->BeginTick();FrameBudget->ResetFrame();
+    ElapsedEventTime+=FMath::Clamp(FMath::IsFinite(Dt)?Dt:0.f,0.f,5.f);
+    ProcessWaveTick(Dt);
+    if(TimeBudget->HasTimeRemaining())ProcessSpawns(Dt);
+}
 void URaidDirectorSubsystem::StartRaid(FName ID,ERaidEventType Type)
 {
     if(!GetWorld()||ID.IsNone()||Type==ERaidEventType::None||Context.bEventActive||!Debouncer->TryAcquireEventLock(ID,60.f))return;
@@ -52,6 +91,7 @@ void URaidDirectorSubsystem::StartRaid(FName ID,ERaidEventType Type)
     WaveStateMachine->Initialize(CurrentPlan->Waves.Num());BudgetWaveIndex=0;
     Budget->Initialize(CurrentPlan->Waves[0].TotalCount);Capacity->WaveCapacity=CurrentPlan->Waves[0].MaxAlive;
     Lifecycle->BeginEvent(Context);OnEventStarted.Broadcast(ID);
+    if(bAutomaticSchedulingEnabled&&Scheduler)Scheduler->ScheduleNextEvent(GetWorld()->GetTimeSeconds()+AutoScheduleIntervalSeconds,AutoScheduleJitterMinSeconds,AutoScheduleJitterMaxSeconds);
     FRaidFeedbackEvent Event;Event.Type=Type;Event.SourceModule=TEXT("Trigger");Event.TargetModule=TEXT("Difficulty");
     Event.NumericData.Add(TEXT("DifficultyScore"),(float)Context.DifficultyScore);FeedbackBus->Publish(TEXT("RaidStarted"),Event);
 }
