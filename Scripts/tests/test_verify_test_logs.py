@@ -18,6 +18,7 @@ class LogVerifierTests(unittest.TestCase):
         self.wood = self.root / "wood.log"
         self.stick_inventory = self.root / "stick_inventory.log"
         self.stone_placement = self.root / "stone_placement.log"
+        self.stone_trap = self.root / "stone_trap.log"
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -134,6 +135,43 @@ class LogVerifierTests(unittest.TestCase):
         self.stone_placement.write_text("Automation suite aborted\\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "no parseable"):
             VERIFY.verify_stone_placement(self.stone_placement)
+
+    def test_valid_stone_trap_log_passes(self):
+        names = ("DamageDispatchAndCooldown", "NullVictimSafety")
+        self.stone_trap.write_text(
+            "".join(
+                f"Test Completed. Result={{Success}} Name={{{name}}} "
+                f"Path={{MyProject2.StoneTrap.{name}}}\\n"
+                for name in names
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(VERIFY.verify_stone_trap(self.stone_trap), (2, 0))
+
+    def test_stone_trap_failure_is_rejected(self):
+        self.stone_trap.write_text(
+            "Test Completed. Result={Success} Name={Damage} "
+            "Path={MyProject2.StoneTrap.DamageDispatchAndCooldown}\\n"
+            "Test Completed. Result={Fail} Name={Cooldown} "
+            "Path={MyProject2.StoneTrap.NullVictimSafety}\\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "1 failed"):
+            VERIFY.verify_stone_trap(self.stone_trap)
+
+    def test_missing_stone_trap_result_is_rejected(self):
+        self.stone_trap.write_text("Automation suite aborted\\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "no parseable"):
+            VERIFY.verify_stone_trap(self.stone_trap)
+
+    def test_stone_trap_minimum_test_count_is_enforced(self):
+        self.stone_trap.write_text(
+            "Test Completed. Result={Success} Name={Damage} "
+            "Path={MyProject2.StoneTrap.DamageDispatchAndCooldown}\\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "expected at least 2"):
+            VERIFY.verify_stone_trap(self.stone_trap)
 
     def test_fewer_than_required_mechanics_checks_are_rejected(self):
         self.mechanics.write_text("SONUÇ: 100 geçti, 0 kaldı\\n", encoding="utf-8")
