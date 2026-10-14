@@ -13,10 +13,10 @@ from pathlib import Path
 
 MECHANICS_RESULT = re.compile(r"SONUÇ:\s*(\d+)\s*geçti,\s*(\d+)\s*kaldı")
 MECHANICS_FAILED = re.compile(r"\[MechanicsDemo\]\s+KALDI\s+(.*)")
-WOOD_SUCCESS = re.compile(
+AUTOMATION_SUCCESS = re.compile(
     r"Test Completed\. Result=\{Success\} Name=\{([^}]+)\} Path=\{([^}]+)\}"
 )
-WOOD_FAILED = re.compile(
+AUTOMATION_FAILED = re.compile(
     r"Test Completed\. Result=\{Fail\} Name=\{([^}]+)\} Path=\{([^}]+)\}"
 )
 
@@ -54,55 +54,87 @@ def verify_mechanics(path: Path, minimum_passed: int = 1) -> tuple[int, int]:
     return passed, failed
 
 
-def verify_wood(path: Path, minimum_tests: int = 1) -> tuple[int, int]:
-    text = read_log(path, "Wood")
-    successes = WOOD_SUCCESS.findall(text)
-    failures = WOOD_FAILED.findall(text)
-    if not successes and not failures:
+def verify_automation_suite(
+    path: Path, label: str, required_prefix: str, minimum_tests: int
+) -> tuple[int, int]:
+    text = read_log(path, label)
+    all_successes = AUTOMATION_SUCCESS.findall(text)
+    all_failures = AUTOMATION_FAILED.findall(text)
+    if not all_successes and not all_failures:
         raise ValueError(
-            f"Wood: no parseable individual Automation Test result found in {path.name}; "
+            f"{label}: no parseable individual Automation Test result found in {path.name}; "
             "the test command may have failed before discovery or the log format changed."
         )
+
+    def is_in_suite(test_path: str) -> bool:
+        return test_path == required_prefix or test_path.startswith(required_prefix + ".")
+
+    successes = [(name, test_path) for name, test_path in all_successes if is_in_suite(test_path)]
+    failures = [(name, test_path) for name, test_path in all_failures if is_in_suite(test_path)]
+    if not successes and not failures:
+        raise ValueError(
+            f"{label}: no test result matched required prefix '{required_prefix}' in {path.name}."
+        )
+
     passed_paths = {test_path for _, test_path in successes}
     failed_paths = {test_path for _, test_path in failures}
     overlap = sorted(passed_paths & failed_paths)
     if overlap:
-        raise ValueError(f"Wood: test paths reported both pass and fail: {', '.join(overlap)}")
+        raise ValueError(f"{label}: test paths reported both pass and fail: {', '.join(overlap)}")
     if failures:
-        details = "; ".join(path for _, path in failures[:8])
+        details = "; ".join(test_path for _, test_path in failures[:8])
         raise ValueError(
-            f"Wood: {len(successes)} passed, {len(failures)} failed. Failed: {details}"
+            f"{label}: {len(successes)} passed, {len(failures)} failed. Failed: {details}"
         )
     if len(successes) < minimum_tests:
         raise ValueError(
-            f"Wood: only {len(successes)} tests passed; expected at least {minimum_tests}."
+            f"{label}: only {len(successes)} tests passed; expected at least {minimum_tests}."
         )
     if len(passed_paths) != len(successes):
         raise ValueError(
-            "Wood: duplicate successful result paths were found; verify the test log was not merged from runs."
+            f"{label}: duplicate successful result paths were found; "
+            "verify the test log was not merged from runs."
         )
     return len(successes), len(failures)
+
+
+def verify_wood(path: Path, minimum_tests: int = 1) -> tuple[int, int]:
+    return verify_automation_suite(path, "Wood", "MyProject2.Wood", minimum_tests)
+
+
+def verify_stick_inventory(path: Path, minimum_tests: int = 3) -> tuple[int, int]:
+    return verify_automation_suite(
+        path, "Stick inventory", "MyProject2.Inventory.StickCraftTransaction", minimum_tests
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mechanics", required=True, type=Path)
     parser.add_argument("--wood", required=True, type=Path)
+    parser.add_argument("--stick-inventory", required=True, type=Path)
     parser.add_argument("--minimum-mechanics-checks", type=int, default=101,
                         help="Fail if fewer than this many MechanicsDemo checks passed (default: 101).")
     parser.add_argument("--minimum-wood-tests", type=int, default=12,
                         help="Fail if fewer than this many unique Wood tests passed (default: 12).")
+    parser.add_argument("--minimum-stick-inventory-tests", type=int, default=3,
+                        help="Fail if fewer than this many unique stick crafting tests passed (default: 3).")
     args = parser.parse_args()
-    if args.minimum_mechanics_checks < 1 or args.minimum_wood_tests < 1:
+    if min(args.minimum_mechanics_checks, args.minimum_wood_tests,
+           args.minimum_stick_inventory_tests) < 1:
         parser.error("minimum test counts must be at least 1")
     try:
         mech_passed, mech_failed = verify_mechanics(args.mechanics, args.minimum_mechanics_checks)
         wood_passed, wood_failed = verify_wood(args.wood, args.minimum_wood_tests)
+        stick_passed, stick_failed = verify_stick_inventory(
+            args.stick_inventory, args.minimum_stick_inventory_tests
+        )
     except ValueError as exc:
         print(f"TEST VERIFICATION FAILED: {exc}", file=sys.stderr)
         return 1
     print(f"MechanicsDemo: {mech_passed} passed, {mech_failed} failed")
     print(f"Wood automation: {wood_passed} passed, {wood_failed} failed")
+    print(f"Stick inventory automation: {stick_passed} passed, {stick_failed} failed")
     print("TEST VERIFICATION PASSED")
     return 0
 
