@@ -46,7 +46,34 @@ struct MYPROJECT2_API FUndergroundSupportSaveRecord
     EUndergroundSupportType Type = EUndergroundSupportType::TimberPost;
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Support")
+    float MaximumIntegrity = 100.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Support")
     float Integrity = 100.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Support")
+    float MoistureDamagePerM3 = 18.0f;
+};
+
+USTRUCT(BlueprintType)
+struct MYPROJECT2_API FUndergroundSurfaceWaterCellSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Water")
+    FIntPoint GlobalWorldCell = FIntPoint::ZeroValue;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Water")
+    float WaterVolumeM3 = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Water")
+    float WaterLevel = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Water")
+    float SoilMoisture = 0.3f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Water")
+    bool bHasWater = false;
 };
 
 /** Domain-owned snapshot appended to the shared core save envelope in Phase 4. */
@@ -63,4 +90,7 @@ struct MYPROJECT2_API FUndergroundHazardSnapshot
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Save")
     TArray<FUndergroundWaterPocket> WaterPockets;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Underground|Save")
+    TArray<FUndergroundSurfaceWaterCellSnapshot> ModifiedSurfaceCells;
 };
