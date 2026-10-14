@@ -16,6 +16,7 @@ class LogVerifierTests(unittest.TestCase):
         self.root = Path(self.tempdir.name)
         self.mechanics = self.root / "mechanics.log"
         self.wood = self.root / "wood.log"
+        self.stick_inventory = self.root / "stick_inventory.log"
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -68,6 +69,42 @@ class LogVerifierTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "expected at least 3"):
             VERIFY.verify_wood(self.wood, minimum_tests=3)
+
+    def test_valid_stick_inventory_log_passes(self):
+        self.stick_inventory.write_text(
+            "Test Completed. Result={Success} Name={Preflight} "
+            "Path={MyProject2.Inventory.StickCraftTransaction.Preflight}\n"
+            "Test Completed. Result={Success} Name={Capacity} "
+            "Path={MyProject2.Inventory.StickCraftTransaction.Capacity}\n"
+            "Test Completed. Result={Success} Name={Success} "
+            "Path={MyProject2.Inventory.StickCraftTransaction.Success}\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(VERIFY.verify_stick_inventory(self.stick_inventory), (3, 0))
+
+    def test_stick_inventory_failure_is_rejected(self):
+        self.stick_inventory.write_text(
+            "Test Completed. Result={Success} Name={Preflight} "
+            "Path={MyProject2.Inventory.StickCraftTransaction.Preflight}\n"
+            "Test Completed. Result={Fail} Name={Capacity} "
+            "Path={MyProject2.Inventory.StickCraftTransaction.Capacity}\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "1 failed"):
+            VERIFY.verify_stick_inventory(self.stick_inventory)
+
+    def test_missing_stick_inventory_result_is_rejected(self):
+        self.stick_inventory.write_text("Automation suite aborted\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "no parseable"):
+            VERIFY.verify_stick_inventory(self.stick_inventory)
+
+    def test_stick_inventory_requires_expected_suite_prefix(self):
+        self.stick_inventory.write_text(
+            "Test Completed. Result={Success} Name={Other} Path={MyProject2.Other.Test}\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "no test result matched"):
+            VERIFY.verify_stick_inventory(self.stick_inventory)
 
     def test_fewer_than_required_mechanics_checks_are_rejected(self):
         self.mechanics.write_text("SONUÇ: 100 geçti, 0 kaldı\\n", encoding="utf-8")
