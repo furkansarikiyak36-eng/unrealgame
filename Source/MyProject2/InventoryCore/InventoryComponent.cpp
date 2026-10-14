@@ -192,9 +192,19 @@ EInventoryResult UInventoryComponent::RemoveItem(FName ID, int32 Count)
     BroadcastChanged();
     return EInventoryResult::Success;
 }
-EInventoryResult UInventoryComponent::DropItem(FName ID,int32 Count)
+bool UInventoryComponent::CanDropItem(FName ID, int32 Count) const
 {
-    UInventoryItemData* D=GetItemData(ID); if(!D||!D->bCanBeDropped) return EInventoryResult::InvalidRequest; return RemoveItem(ID,Count);
+    const UInventoryItemData* Definition = GetItemData(ID);
+    return Count > 0 && !ID.IsNone() && Definition && Definition->bCanBeDropped && HasItem(ID, Count);
+}
+
+EInventoryResult UInventoryComponent::DropItem(FName ID, int32 Count)
+{
+    if (!CanDropItem(ID, Count))
+    {
+        return EInventoryResult::InvalidRequest;
+    }
+    return RemoveItem(ID, Count);
 }
 bool UInventoryComponent::TransferItem(UInventoryComponent* Source, UInventoryComponent* Destination, FName ItemID, int32 Count)
 {
