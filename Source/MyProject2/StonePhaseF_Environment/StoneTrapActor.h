@@ -18,7 +18,7 @@ class MYPROJECT2_API AStoneTrapActor : public AActor
     GENERATED_BODY()
 public:
     AStoneTrapActor();
-    UFUNCTION(BlueprintCallable) void Trigger(AActor* Victim);
+    UFUNCTION(BlueprintCallable) virtual void Trigger(AActor* Victim);
     UFUNCTION(BlueprintCallable) void Rearm();
     UPROPERTY(VisibleAnywhere) TObjectPtr<UBoxComponent> TriggerVolume;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> TrapMesh;
