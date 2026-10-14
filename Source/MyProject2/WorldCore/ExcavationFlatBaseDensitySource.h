@@ -18,4 +18,5 @@ public:
     float SurfaceHeightCm = 0.0f;
 
     virtual float SampleBaseDensityAtWorld_Implementation(const FVector& WorldPositionCm) const override;
+    virtual int32 SampleBaseMaterialIdAtWorld_Implementation(const FVector& WorldPositionCm) const override;
 };
