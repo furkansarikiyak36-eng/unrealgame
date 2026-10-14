@@ -130,6 +130,23 @@ bool UProductionChainComponent::QueueRecipeByID(FName RecipeID, int32 BatchCount
     return Recipe && QueueRecipe(Recipe, BatchCount);
 }
 
+bool UProductionChainComponent::QueueConfiguredRecipe(
+    FName RecipeID,
+    const TArray<FProductionIngredient>& Inputs,
+    const TArray<FProductionOutput>& Outputs,
+    float DurationSeconds,
+    int32 BatchCount,
+    float InRequiredPowerWatts,
+    int32 InRequiredWorkers)
+{
+    if (RecipeID.IsNone())
+    {
+        return false;
+    }
+    return EnqueuePlan(RecipeID, FText::FromName(RecipeID), Inputs, Outputs,
+        DurationSeconds, InRequiredPowerWatts, InRequiredWorkers, BatchCount);
+}
+
 bool UProductionChainComponent::QueueRecipe(UProductionRecipeAsset* Recipe, int32 BatchCount)
 {
     if (!IsValid(Recipe))
