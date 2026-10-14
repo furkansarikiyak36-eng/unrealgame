@@ -220,3 +220,11 @@ P0-025 için test suite iki senaryodan dört senaryoya genişledi: düşman hasa
 - Python CI run #38515014058 başarılıdır. Bu kontrol kodun UE C++ derlemesini veya oyun içi davranışını sınamaz.
 - RAID kaynağındaki 69 başlık / 63 detay sayımı P0-001 olarak açık kalıyor. Sayı kararını kaynak gereksinim sahibi doğrulamadan yeni mekanik ID'leri oluşturulmayacak.
 - Faz 0 kapanışı için 485 mekanik kaydının her birinde kaynak/çağrı zinciri ve test kanıtı, ilgili U0/U1 boşluklarının çözümü, kalan sistem sahipliği kararları ve Windows + UE 5.8 baseline testleri gerekiyor.
+
+
+## Envanter tek-otorite kararı (ADR-001)
+
+- AForestCharacter::Inventory mevcut oynanabilir odun/yapı döngüsünün otoriter stok kaydı olarak kalır; UInventoryComponent ailesinin karaktere bağlı olduğu kanıtlanmamıştır.
+- Depoda incelenen player/Inventory Blueprint'i bulunmadığı için UI, quick-access ve SaveSubsystem bağlantıları varsayılmayacak.
+- Geçiş için Docs/FAZ_00_INVENTORY_OWNERSHIP_ADR.md içinde ID mapping, physical actor state, işlemsel transfer, save/load ve UE 5.8 kabul kapıları tanımlanmıştır. P0-022 açık kalır.
+- Inventory kapasite sınırı ve rollback düzeltmesi ile iki motor Automation Test'i eklendi. Python CI güncel C++ dosyasını derlemez veya çalıştırmaz; UE 5.8 host kapısı bekliyor.
