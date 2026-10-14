@@ -47,12 +47,9 @@ bool UStoneWorkingComponent::CrushBoulder(AStoneActor* Boulder, int32 Pieces)
             return false;
         }
 
-        if (UStoneDefinition* SourceDefinition = Boulder->GetDefinition())
-        {
-            Piece->InitializeFromDefinition(SourceDefinition);
-            // Give the fragment its own shape definition before the source actor is destroyed.
-            Piece->ApplyShape(SourceDefinition->Shape, SourceDefinition->Dimensions);
-        }
+        Piece->InitializeFromDefinition(SourceDefinition);
+        // Give the fragment its own shape definition before the source actor is destroyed.
+        Piece->ApplyShape(SourceDefinition->Shape, SourceDefinition->Dimensions);
         SpawnedPieces.Add(Piece);
     }
 
