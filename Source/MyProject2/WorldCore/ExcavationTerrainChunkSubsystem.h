@@ -10,20 +10,41 @@ class UExcavationFlatBaseDensitySource;
 class UExcavationVolumeSubsystem;
 
 /**
- * Routes excavation change/reset events to the registered 3D mesh adapters.
- * This is a derived renderer registry, not a second world/chunk state owner.
+ * Routes excavation edits to derived mesh adapters and optionally streams those
+ * adapters around the player. It owns neither density values nor simulation cells.
  */
-UCLASS()
-class MYPROJECT2_API UExcavationTerrainChunkSubsystem : public UWorldSubsystem
+UCLASS(Config = Game)
+class MYPROJECT2_API UExcavationTerrainChunkSubsystem : public UTickableWorldSubsystem
 {
     GENERATED_BODY()
 
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
+    virtual void Tick(float DeltaTime) override;
+    virtual TStatId GetStatId() const override;
+    virtual bool IsTickable() const override;
 
     void RegisterChunkActor(AExcavationTerrainChunkActor* Actor);
     void UnregisterChunkActor(AExcavationTerrainChunkActor* Actor);
+
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming")
+    bool bEnableAutomaticStreaming = true;
+
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming", meta = (ClampMin = "0", ClampMax = "8"))
+    int32 HorizontalChunkRadius = 1;
+
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming", meta = (ClampMin = "1", ClampMax = "32"))
+    int32 UndergroundChunkLayers = 4;
+
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming", meta = (ClampMin = "0", ClampMax = "8"))
+    int32 AbovePlayerChunkLayers = 0;
+
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming", meta = (ClampMin = "1", ClampMax = "16"))
+    int32 MaxChunksSpawnedPerTick = 1;
+
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming", meta = (ClampMin = "0.01", ClampMax = "5.0"))
+    float StreamingIntervalSeconds = 0.05f;
 
 protected:
     UFUNCTION()
@@ -32,8 +53,14 @@ protected:
     UFUNCTION()
     void HandleVolumeReset();
 
+    void UpdateStreamedChunks();
+    bool HasLiveRegisteredChunk(const FIntVector& Coordinate);
+    void RemoveInvalidRegisteredActors();
+
     UPROPERTY(Transient)
     TObjectPtr<UExcavationFlatBaseDensitySource> FlatFallbackDensitySource;
 
     TMap<FIntVector, TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>> RegisteredChunks;
+    TMap<FIntVector, TWeakObjectPtr<AExcavationTerrainChunkActor>> ManagedChunkActors;
+    float StreamingAccumulatorSeconds = 0.0f;
 };
