@@ -1,4 +1,5 @@
 #include "ExcavationVolumeSubsystem.h"
+#include "ExcavationBaseDensitySource.h"
 
 #include <cmath>
 
@@ -14,6 +15,19 @@ namespace
     bool IsValidDensity(float Density)
     {
         return FMath::IsFinite(Density) && Density >= 0.0f && Density <= 1.0f;
+    }
+
+    bool IsValidEditType(EExcavationEditType EditType)
+    {
+        return EditType == EExcavationEditType::Carve
+            || EditType == EExcavationEditType::Fill;
+    }
+
+    bool IsValidShapeType(EExcavationShapeType ShapeType)
+    {
+        return ShapeType == EExcavationShapeType::Sphere
+            || ShapeType == EExcavationShapeType::Capsule
+            || ShapeType == EExcavationShapeType::Box;
     }
 
     int32 FloorDivide(int32 Value, int32 PositiveDivisor)
@@ -39,7 +53,9 @@ namespace
 
     bool IsValidCellCoordinate(double WorldCoordinateCm, double CellSizeCm, int32& OutCell)
     {
-        if (!FMath::IsFinite(WorldCoordinateCm) || !FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0)
+        if (!FMath::IsFinite(WorldCoordinateCm)
+            || !FMath::IsFinite(CellSizeCm)
+            || CellSizeCm <= 0.0)
         {
             return false;
         }
@@ -60,11 +76,32 @@ namespace
         OutCell = static_cast<int32>(Floored);
         return true;
     }
+
+    double DistanceSquaredToSegment(const FVector& Point, const FVector& SegmentStart, const FVector& SegmentEnd)
+    {
+        const FVector Segment = SegmentEnd - SegmentStart;
+        const double SegmentLengthSquared = Segment.SizeSquared();
+        if (SegmentLengthSquared <= UE_SMALL_NUMBER)
+        {
+            return FVector::DistSquared(Point, SegmentStart);
+        }
+
+        const double T = FMath::Clamp(
+            FVector::DotProduct(Point - SegmentStart, Segment) / SegmentLengthSquared,
+            0.0,
+            1.0);
+        const FVector ClosestPoint = SegmentStart + Segment * T;
+        return FVector::DistSquared(Point, ClosestPoint);
+    }
 }
 
 bool UExcavationVolumeSubsystem::IsGridConfigurationCompatible() const
 {
-    if (!FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0f || CellsPerChunkAxis < 4)
+    if (!FMath::IsFinite(CellSizeCm)
+        || CellSizeCm <= 0.0f
+        || CellsPerChunkAxis < 4
+        || MaxCellsPerEdit <= 0
+        || !IsValidDensity(DefaultBaseDensity))
     {
         return false;
     }
@@ -85,6 +122,7 @@ void UExcavationVolumeSubsystem::Deinitialize()
 {
     CellOverrides.Reset();
     CellsByChunk.Reset();
+    BaseDensitySourceObject = nullptr;
     LockedCellSizeCm = 0.0f;
     LockedCellsPerChunkAxis = 0;
     Super::Deinitialize();
@@ -155,6 +193,72 @@ bool UExcavationVolumeSubsystem::TryGetDensityOverrideAtCell(
     return true;
 }
 
+bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
+    const FVector& WorldPositionCm,
+    float& OutDensity) const
+{
+    FIntVector Cell;
+    if (!TryWorldToCell(WorldPositionCm, Cell))
+    {
+        return false;
+    }
+
+    if (TryGetDensityOverrideAtCell(Cell, OutDensity))
+    {
+        return true;
+    }
+
+    if (BaseDensitySourceObject != nullptr)
+    {
+        if (!IsValid(BaseDensitySourceObject)
+            || !BaseDensitySourceObject->GetClass()->ImplementsInterface(
+                UExcavationBaseDensitySource::StaticClass()))
+        {
+            return false;
+        }
+
+        const float SampledDensity =
+            IExcavationBaseDensitySource::Execute_SampleBaseDensityAtWorld(
+                BaseDensitySourceObject,
+                WorldPositionCm);
+        if (!IsValidDensity(SampledDensity))
+        {
+            return false;
+        }
+
+        OutDensity = SampledDensity;
+        return true;
+    }
+
+    if (!IsValidDensity(DefaultBaseDensity))
+    {
+        return false;
+    }
+
+    OutDensity = DefaultBaseDensity;
+    return true;
+}
+
+bool UExcavationVolumeSubsystem::RegisterBaseDensitySource(UObject* Source)
+{
+    if (!IsValid(Source)
+        || !Source->GetClass()->ImplementsInterface(UExcavationBaseDensitySource::StaticClass()))
+    {
+        return false;
+    }
+
+    BaseDensitySourceObject = Source;
+    return true;
+}
+
+void UExcavationVolumeSubsystem::UnregisterBaseDensitySource(UObject* Source)
+{
+    if (Source == nullptr || BaseDensitySourceObject == Source)
+    {
+        BaseDensitySourceObject = nullptr;
+    }
+}
+
 bool UExcavationVolumeSubsystem::ResolveDensityAtCell(
     const FIntVector& Cell,
     float BaseDensity,
@@ -166,8 +270,14 @@ bool UExcavationVolumeSubsystem::ResolveDensityAtCell(
     }
 
     const FExcavationCellOverride* Override = CellOverrides.Find(Cell);
-    OutDensity = Override ? Override->Density : BaseDensity;
-    return IsValidDensity(OutDensity);
+    const float ResolvedDensity = Override ? Override->Density : BaseDensity;
+    if (!IsValidDensity(ResolvedDensity))
+    {
+        return false;
+    }
+
+    OutDensity = ResolvedDensity;
+    return true;
 }
 
 bool UExcavationVolumeSubsystem::IsCellOverridden(const FIntVector& Cell) const
@@ -267,22 +377,124 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
     FExcavationEditRecord& OutRecord)
 {
     OutRecord = FExcavationEditRecord();
-
-    if (!IsFiniteVector(CenterCm)
-        || !FMath::IsFinite(RadiusCm)
-        || RadiusCm <= 0.0f
-        || !IsGridConfigurationCompatible()
-        || MaxCellsPerEdit <= 0
-        || (EditType != EExcavationEditType::Carve && EditType != EExcavationEditType::Fill))
+    if (!IsFiniteVector(CenterCm) || !FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
     {
         return false;
     }
 
-    const FVector RadiusVector(RadiusCm, RadiusCm, RadiusCm);
+    const FVector RadiusVector(RadiusCm);
+    return ApplyBoundedEdit(
+        CenterCm - RadiusVector,
+        CenterCm + RadiusVector,
+        EExcavationShapeType::Sphere,
+        CenterCm,
+        FVector::ZeroVector,
+        FVector::ZeroVector,
+        RadiusCm,
+        EditType,
+        OutRecord);
+}
+
+bool UExcavationVolumeSubsystem::ApplyCapsuleEdit(
+    const FVector& StartCm,
+    const FVector& EndCm,
+    float RadiusCm,
+    EExcavationEditType EditType,
+    FExcavationEditRecord& OutRecord)
+{
+    OutRecord = FExcavationEditRecord();
+    if (!IsFiniteVector(StartCm) || !IsFiniteVector(EndCm)
+        || !FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
+    {
+        return false;
+    }
+
+    const FVector RadiusVector(RadiusCm);
+    const FVector MinBounds(
+        FMath::Min(StartCm.X, EndCm.X) - RadiusCm,
+        FMath::Min(StartCm.Y, EndCm.Y) - RadiusCm,
+        FMath::Min(StartCm.Z, EndCm.Z) - RadiusCm);
+    const FVector MaxBounds(
+        FMath::Max(StartCm.X, EndCm.X) + RadiusCm,
+        FMath::Max(StartCm.Y, EndCm.Y) + RadiusCm,
+        FMath::Max(StartCm.Z, EndCm.Z) + RadiusCm);
+
+    return ApplyBoundedEdit(
+        MinBounds,
+        MaxBounds,
+        EExcavationShapeType::Capsule,
+        StartCm,
+        EndCm,
+        FVector::ZeroVector,
+        RadiusCm,
+        EditType,
+        OutRecord);
+}
+
+bool UExcavationVolumeSubsystem::ApplyBoxEdit(
+    const FVector& MinWorldCm,
+    const FVector& MaxWorldCm,
+    EExcavationEditType EditType,
+    FExcavationEditRecord& OutRecord)
+{
+    OutRecord = FExcavationEditRecord();
+    if (!IsFiniteVector(MinWorldCm) || !IsFiniteVector(MaxWorldCm)
+        || MaxWorldCm.X < MinWorldCm.X
+        || MaxWorldCm.Y < MinWorldCm.Y
+        || MaxWorldCm.Z < MinWorldCm.Z)
+    {
+        return false;
+    }
+
+    const FVector Extent = (MaxWorldCm - MinWorldCm) * 0.5;
+    const FVector Center = MinWorldCm + Extent;
+    return ApplyBoundedEdit(
+        MinWorldCm,
+        MaxWorldCm,
+        EExcavationShapeType::Box,
+        Center,
+        FVector::ZeroVector,
+        Extent,
+        0.0f,
+        EditType,
+        OutRecord);
+}
+
+bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
+    const FVector& MinBoundsCm,
+    const FVector& MaxBoundsCm,
+    EExcavationShapeType ShapeType,
+    const FVector& CenterCm,
+    const FVector& EndCm,
+    const FVector& HalfExtentCm,
+    float RadiusCm,
+    EExcavationEditType EditType,
+    FExcavationEditRecord& OutRecord)
+{
+    OutRecord = FExcavationEditRecord();
+
+    if (!IsFiniteVector(MinBoundsCm)
+        || !IsFiniteVector(MaxBoundsCm)
+        || !IsFiniteVector(CenterCm)
+        || !IsFiniteVector(EndCm)
+        || !IsFiniteVector(HalfExtentCm)
+        || !IsValidShapeType(ShapeType)
+        || !IsValidEditType(EditType)
+        || !IsGridConfigurationCompatible()
+        || (ShapeType != EExcavationShapeType::Box && (!FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f))
+        || (ShapeType == EExcavationShapeType::Box
+            && (HalfExtentCm.X < 0.0 || HalfExtentCm.Y < 0.0 || HalfExtentCm.Z < 0.0))
+        || MaxBoundsCm.X < MinBoundsCm.X
+        || MaxBoundsCm.Y < MinBoundsCm.Y
+        || MaxBoundsCm.Z < MinBoundsCm.Z)
+    {
+        return false;
+    }
+
     FIntVector MinCell;
     FIntVector MaxCell;
-    if (!TryWorldToCell(CenterCm - RadiusVector, MinCell)
-        || !TryWorldToCell(CenterCm + RadiusVector, MaxCell))
+    if (!TryWorldToCell(MinBoundsCm, MinCell)
+        || !TryWorldToCell(MaxBoundsCm, MaxCell))
     {
         return false;
     }
@@ -303,14 +515,16 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
     FExcavationEditRecord CandidateRecord;
     CandidateRecord.OperationId = FGuid::NewGuid();
     CandidateRecord.EditType = EditType;
+    CandidateRecord.ShapeType = ShapeType;
     CandidateRecord.CenterCm = CenterCm;
+    CandidateRecord.EndCm = EndCm;
+    CandidateRecord.HalfExtentCm = HalfExtentCm;
     CandidateRecord.RadiusCm = RadiusCm;
     CandidateRecord.Changes.Reserve(static_cast<int32>(FMath::Min<int64>(
         CountX * CountY * CountZ,
         MaxCellsPerEdit)));
 
-    // Build the complete change set before touching the authoritative map.
-    // This makes all validation/cap failures side-effect free.
+    // Build the entire change set first. Invalid/oversized edits never mutate state.
     for (int32 X = MinCell.X; ; ++X)
     {
         for (int32 Y = MinCell.Y; ; ++Y)
@@ -319,16 +533,38 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
             {
                 const FIntVector Cell(X, Y, Z);
                 const FVector CellCenter = CellToWorldCenter(Cell);
-                if (FVector::DistSquared(CellCenter, CenterCm) <= RadiusSquared)
+                bool bInsideShape = false;
+
+                switch (ShapeType)
+                {
+                    case EExcavationShapeType::Sphere:
+                        bInsideShape = FVector::DistSquared(CellCenter, CenterCm) <= RadiusSquared;
+                        break;
+
+                    case EExcavationShapeType::Capsule:
+                        bInsideShape = DistanceSquaredToSegment(CellCenter, CenterCm, EndCm) <= RadiusSquared;
+                        break;
+
+                    case EExcavationShapeType::Box:
+                    {
+                        const FVector Delta = CellCenter - CenterCm;
+                        bInsideShape = FMath::Abs(Delta.X) <= HalfExtentCm.X
+                            && FMath::Abs(Delta.Y) <= HalfExtentCm.Y
+                            && FMath::Abs(Delta.Z) <= HalfExtentCm.Z;
+                        break;
+                    }
+
+                    default:
+                        return false;
+                }
+
+                if (bInsideShape)
                 {
                     const FExcavationCellOverride* Existing = CellOverrides.Find(Cell);
-                    // Even if the density is unchanged, this edit takes ownership
-                    // of the cell. That preserves correct LIFO rollback semantics
-                    // for overlapping/repeated edits of the same shape.
                     FExcavationCellChange Change;
                     Change.Cell = Cell;
                     Change.bHadPreviousOverride = Existing != nullptr;
-                    Change.PreviousDensity = Existing ? Existing->Density : 1.0f;
+                    Change.PreviousDensity = Existing ? Existing->Density : DefaultBaseDensity;
                     Change.PreviousOperationId = Existing ? Existing->LastOperationId : FGuid();
                     Change.NewDensity = TargetDensity;
                     CandidateRecord.Changes.Add(Change);
@@ -341,15 +577,15 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
         if (X == MaxCell.X) break;
     }
 
-    if (CellOverrides.Num() == 0 && CandidateRecord.Changes.Num() > 0)
-    {
-        LockedCellSizeCm = CellSizeCm;
-        LockedCellsPerChunkAxis = CellsPerChunkAxis;
-    }
-
     if (CandidateRecord.Changes.IsEmpty())
     {
         return false;
+    }
+
+    if (CellOverrides.Num() == 0)
+    {
+        LockedCellSizeCm = CellSizeCm;
+        LockedCellsPerChunkAxis = CellsPerChunkAxis;
     }
 
     for (const FExcavationCellChange& Change : CandidateRecord.Changes)
@@ -361,7 +597,6 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
         CellsByChunk.FindOrAdd(ChunkForCellAtSize(Change.Cell, LockedCellsPerChunkAxis)).Add(Change.Cell);
     }
 
-    // An idempotent edit that changes no cells is still a valid committed operation.
     CandidateRecord.bCommitted = true;
     OutRecord = MoveTemp(CandidateRecord);
     return true;
@@ -369,8 +604,11 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
 
 bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Record)
 {
-    if (!Record.bCommitted || !Record.OperationId.IsValid()
-        || Record.SchemaVersion != 1 || Record.Changes.IsEmpty() || !IsGridConfigurationCompatible())
+    if (!Record.bCommitted
+        || !Record.OperationId.IsValid()
+        || Record.SchemaVersion != 1
+        || Record.Changes.IsEmpty()
+        || !IsGridConfigurationCompatible())
     {
         return false;
     }
@@ -378,8 +616,8 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
     TSet<FIntVector> SeenCells;
     SeenCells.Reserve(Record.Changes.Num());
 
-    // Validate every cell first so rollback is all-or-nothing. If a later edit
-    // owns even one affected cell, this older edit cannot overwrite that work.
+    // Validate every cell before changing anything. Newer edits own their cells
+    // even when they happened to write the same density as an older edit.
     for (const FExcavationCellChange& Change : Record.Changes)
     {
         if (SeenCells.Contains(Change.Cell)
@@ -391,7 +629,8 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
         SeenCells.Add(Change.Cell);
 
         const FExcavationCellOverride* Current = CellOverrides.Find(Change.Cell);
-        if (!Current || Current->LastOperationId != Record.OperationId
+        if (!Current
+            || Current->LastOperationId != Record.OperationId
             || !FMath::IsNearlyEqual(Current->Density, Change.NewDensity))
         {
             return false;
@@ -400,20 +639,22 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
 
     for (const FExcavationCellChange& Change : Record.Changes)
     {
+        const int32 IndexChunkSize = LockedCellsPerChunkAxis > 0
+            ? LockedCellsPerChunkAxis
+            : CellsPerChunkAxis;
+        const FIntVector Chunk = ChunkForCellAtSize(Change.Cell, IndexChunkSize);
+
         if (Change.bHadPreviousOverride)
         {
             FExcavationCellOverride Restored;
             Restored.Density = Change.PreviousDensity;
             Restored.LastOperationId = Change.PreviousOperationId;
             CellOverrides.Add(Change.Cell, Restored);
+            CellsByChunk.FindOrAdd(Chunk).Add(Change.Cell);
         }
         else
         {
             CellOverrides.Remove(Change.Cell);
-            const int32 ChunkSizeForIndex = LockedCellsPerChunkAxis > 0
-                ? LockedCellsPerChunkAxis
-                : CellsPerChunkAxis;
-            const FIntVector Chunk = ChunkForCellAtSize(Change.Cell, ChunkSizeForIndex);
             if (TSet<FIntVector>* IndexedCells = CellsByChunk.Find(Chunk))
             {
                 IndexedCells->Remove(Change.Cell);
