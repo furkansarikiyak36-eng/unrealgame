@@ -45,6 +45,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="Production|Queue")
     bool QueueRecipeByID(FName RecipeID, int32 BatchCount = 1);
 
+    UFUNCTION(BlueprintCallable, Category="Production|Queue")
+    bool QueueConfiguredRecipe(FName RecipeID, const TArray<FProductionIngredient>& Inputs, const TArray<FProductionOutput>& Outputs, float DurationSeconds, int32 BatchCount = 1, float RequiredPowerWatts = 0.0f, int32 RequiredWorkers = 0);
+
     /** Built-in example route: 1 HalfLog -> 2 Plank; 5 seconds, 100 W, one worker per batch. */
     UFUNCTION(BlueprintCallable, Category="Production|Sawmill")
     bool QueueStandardPlankBatch(int32 BatchCount = 1);
