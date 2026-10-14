@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestCharacter.h"
+#include "InventoryCore/InventoryComponent.h"
+#include "InventoryCore/InventoryItem.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
 #include "LogConstructionActor.h"
@@ -83,6 +85,9 @@ AForestCharacter::AForestCharacter()
 	GetCharacterMovement()->AirControl = 0.3f;
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
+	CoreInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("CoreInventory"));
+	CoreInventory->MaxSlots = InventorySlots;
+	CoreInventory->bIgnoreWeight = true; // Preserve the playable character's existing 24-slot rule.
 	StoneCarry = CreateDefaultSubobject<UStoneCarryComponent>(TEXT("StoneCarry"));
 	StonePlacement = CreateDefaultSubobject<UStonePlacementComponent>(TEXT("StonePlacement"));
 
@@ -143,6 +148,7 @@ AForestCharacter::AForestCharacter()
 void AForestCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	InitializeCoreInventoryDefinitions();
 
 	Structures = GetWorld()->SpawnActor<AStructureManager>();
 	RespawnTransform = GetActorTransform();
@@ -162,6 +168,65 @@ void AForestCharacter::BeginPlay()
 		WallPreview->SetMaterial(Slot, GhostMaterial);
 	}
 	ShowMessage(TEXT("Ormana hoş geldin. Ağaçları kes, kayaları kır."));
+}
+
+void AForestCharacter::InitializeCoreInventoryDefinitions()
+{
+	if (!CoreInventory)
+	{
+		return;
+	}
+
+	for (const EForestItem Item : ForestItems::GetAllItems())
+	{
+		// Trunk, big-log and carried-log stages are physical actors, never stack entries.
+		if (Item == EForestItem::None || ForestItems::IsCarriedItem(Item))
+		{
+			continue;
+		}
+
+		const FName ItemID = ForestItems::GetInventoryID(Item);
+		if (ItemID.IsNone())
+		{
+			continue;
+		}
+
+		bool bHasDefinition = false;
+		for (UInventoryItemData* Existing : CoreInventory->ItemDefinitions)
+		{
+			if (Existing && Existing->ItemID == ItemID)
+			{
+				bHasDefinition = true; // Respect a project's configured definition.
+				break;
+			}
+		}
+		if (bHasDefinition)
+		{
+			continue;
+		}
+
+		const FName ObjectName(*FString::Printf(TEXT("RuntimeItem_%s"), *ItemID.ToString()));
+		UInventoryItemData* Definition = NewObject<UInventoryItemData>(CoreInventory, ObjectName);
+		if (!Definition)
+		{
+			continue;
+		}
+		Definition->ItemID = ItemID;
+		Definition->DisplayName = FText::FromString(ForestItems::GetDisplayName(Item));
+		Definition->Description = FText::FromString(FString::Printf(
+			TEXT("Stackable survival resource: %s"), *ForestItems::GetDisplayName(Item)));
+		Definition->Category = EInventoryCategory::Resource;
+		Definition->Rarity = EItemRarity::Common;
+		Definition->MaxStack = StackSize;
+		Definition->Weight = ForestItems::GetItemWeight(Item);
+		Definition->bCanBeDropped = true;
+		Definition->bStackable = true;
+		Definition->bCanBeIngredient = true;
+		CoreInventory->ItemDefinitions.Add(Definition);
+	}
+
+	// The component may have begun play before this actor populated its runtime definitions.
+	CoreInventory->InitializeRuntimeInventory();
 }
 
 UInputAction* AForestCharacter::MakeAction(const TCHAR* Name, EInputActionValueType Type)
@@ -1836,8 +1901,14 @@ void AForestCharacter::Interact()
 		ShowMessage(TEXT("\u00C7anta dolu"));
 		return;
 	}
-	AddItem(Pickup->GetItem(), Pickup->GetCount());
-	ShowMessage(FString::Printf(TEXT("+%d %s"), Pickup->GetCount(), *ForestItems::GetDisplayName(Pickup->GetItem())));
+	const int32 PickupCount = Pickup->GetCount();
+	const int32 AddedCount = AddItem(Pickup->GetItem(), PickupCount);
+	if (AddedCount != PickupCount)
+	{
+		ShowMessage(TEXT("Alım tamamlanamadı; dünyadaki kaynak korunuyor."));
+		return;
+	}
+	ShowMessage(FString::Printf(TEXT("+%d %s"), PickupCount, *ForestItems::GetDisplayName(Pickup->GetItem())));
 	Pickup->Destroy();
 	FocusedPickup = nullptr;
 }
@@ -1858,63 +1929,35 @@ int32 AForestCharacter::GetItemCount(EForestItem Item) const
 		}
 		return Item == EForestItem::TrunkLog ? 0 : (CarriedItem == Item ? GetCarriedCount() : 0);
 	}
-	const int32* Count = Inventory.Find(Item);
-	return Count ? *Count : 0;
-}
 
-namespace
-{
-	int32 SlotsFor(int32 Count, int32 Stack)
-	{
-		return Count > 0 ? (Count + Stack - 1) / Stack : 0;
-	}
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory && !ItemID.IsNone() ? CoreInventory->GetItemCount(ItemID) : 0;
 }
 
 int32 AForestCharacter::GetUsedSlots() const
 {
-	int32 Used = 0;
-	for (const TPair<EForestItem, int32>& Entry : Inventory)
-	{
-		Used += SlotsFor(Entry.Value, StackSize);
-	}
-	return Used;
+	return CoreInventory ? CoreInventory->GetUsedSlotCount() : 0;
 }
 
-bool AForestCharacter::CanAddItem(EForestItem Item, int32 Count, EForestItem FreedItem, int32 Freed) const
+bool AForestCharacter::CanAddItem(EForestItem Item, int32 Count) const
 {
-	int32 Used = 0;
-	for (const TPair<EForestItem, int32>& Entry : Inventory)
+	if (!CoreInventory || Count <= 0 || Item == EForestItem::None ||
+		ForestItems::IsCarriedItem(Item))
 	{
-		int32 Amount = Entry.Value;
-		if (Entry.Key == FreedItem)
-		{
-			Amount = FMath::Max(0, Amount - Freed);
-		}
-		if (Entry.Key == Item)
-		{
-			Amount += Count;
-		}
-		Used += SlotsFor(Amount, StackSize);
+		return false;
 	}
-	if (!Inventory.Contains(Item))
-	{
-		Used += SlotsFor(Count, StackSize);
-	}
-	return Used <= InventorySlots;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return !ItemID.IsNone() && CoreInventory->CanAddItem(ItemID, Count);
 }
 
 int32 AForestCharacter::AddItem(EForestItem Item, int32 Count)
 {
-	int32 Added = 0;
-	while (Added < Count && CanAddItem(Item, Added + 1))
+	if (!CanAddItem(Item, Count))
 	{
-		++Added;
+		return 0;
 	}
-	if (Added > 0)
-	{
-		Inventory.FindOrAdd(Item) += Added;
-	}
-	return Added;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory->AddItem(ItemID, Count) == EInventoryResult::Success ? Count : 0;
 }
 
 void AForestCharacter::GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutSlots) const
@@ -1922,8 +1965,12 @@ void AForestCharacter::GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutS
 	OutSlots.Reset();
 	for (const EForestItem Item : ForestItems::GetAllItems())
 	{
-		const int32* Count = Inventory.Find(Item);
-		for (int32 Left = Count ? *Count : 0; Left > 0; Left -= StackSize)
+		if (ForestItems::IsCarriedItem(Item))
+		{
+			continue;
+		}
+		const int32 Count = GetItemCount(Item);
+		for (int32 Left = Count; Left > 0; Left -= StackSize)
 		{
 			OutSlots.Emplace(Item, FMath::Min(Left, StackSize));
 		}
@@ -1937,34 +1984,68 @@ void AForestCharacter::ToggleInventory()
 
 bool AForestCharacter::RemoveItem(EForestItem Item, int32 Count)
 {
+	if (Count <= 0 || Item == EForestItem::None)
+	{
+		return false;
+	}
 	if (ForestItems::IsCarriedItem(Item))
 	{
 		return ConsumeCarried(Item, Count);
 	}
-	int32* Current = Inventory.Find(Item);
-	if (!Current || *Current < Count)
-	{
-		return false;
-	}
-	*Current -= Count;
-	return true;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory && !ItemID.IsNone() &&
+		CoreInventory->RemoveItem(ItemID, Count) == EInventoryResult::Success;
 }
 
 void AForestCharacter::Craft(EForestItem Input, int32 InputCount, EForestItem Output, int32 OutputCount)
 {
-	if (GetItemCount(Input) < InputCount)
+	if (InputCount <= 0 || OutputCount <= 0 || GetItemCount(Input) < InputCount)
 	{
-		ShowMessage(FString::Printf(TEXT("Yetersiz malzeme: %d %s gerekli"), InputCount, *ForestItems::GetDisplayName(Input)));
+		ShowMessage(FString::Printf(TEXT("Yetersiz malzeme: %d %s gerekli"),
+			InputCount, *ForestItems::GetDisplayName(Input)));
 		return;
 	}
-	if (!CanAddItem(Output, OutputCount, Input, ForestItems::IsCarriedItem(Input) ? 0 : InputCount))
+	if (!CoreInventory || !CanAddItem(Output, OutputCount) && ForestItems::IsCarriedItem(Input))
 	{
-		ShowMessage(TEXT("\u00C7anta dolu"));
+		ShowMessage(TEXT("Çanta dolu"));
 		return;
 	}
-	RemoveItem(Input, InputCount);
-	AddItem(Output, OutputCount);
-	ShowMessage(FString::Printf(TEXT("%d %s -> %d %s"), InputCount, *ForestItems::GetDisplayName(Input), OutputCount, *ForestItems::GetDisplayName(Output)));
+
+	if (ForestItems::IsCarriedItem(Input))
+	{
+		// Physical log consumption is separate from stack inventory. Preflight the
+		// output first; no callback is emitted between preflight and the synchronous
+		// actor removal/addition on this game-thread transaction.
+		if (!CanAddItem(Output, OutputCount))
+		{
+			ShowMessage(TEXT("Çanta dolu"));
+			return;
+		}
+		if (!ConsumeCarried(Input, InputCount))
+		{
+			ShowMessage(TEXT("Kütük işlemi tamamlanamadı; malzeme korunuyor."));
+			return;
+		}
+		if (AddItem(Output, OutputCount) != OutputCount)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Phase 6: output inventory preflight drifted while consuming physical wood."));
+			ShowMessage(TEXT("Üretim işlemi durduruldu; envanter durumu kontrol edilmeli."));
+			return;
+		}
+	}
+	else
+	{
+		const FName InputID = ForestItems::GetInventoryID(Input);
+		const FName OutputID = ForestItems::GetInventoryID(Output);
+		if (InputID.IsNone() || OutputID.IsNone() ||
+			!CoreInventory->ExchangeItems(InputID, InputCount, OutputID, OutputCount))
+		{
+			ShowMessage(TEXT("Üretim reddedildi: kapasite veya kaynak durumu değişti."));
+			return;
+		}
+	}
+	ShowMessage(FString::Printf(TEXT("%d %s -> %d %s"), InputCount,
+		*ForestItems::GetDisplayName(Input), OutputCount, *ForestItems::GetDisplayName(Output)));
 }
 
 void AForestCharacter::CraftBeam()
