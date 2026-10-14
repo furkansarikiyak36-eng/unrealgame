@@ -164,6 +164,24 @@ void UStonePlacementComponent::ExitAimMode()
     ManualYawDegrees = 0.0f;
 }
 
+bool UStonePlacementComponent::UpdatePlacementTarget(FVector SurfacePoint, FVector SurfaceNormal)
+{
+    if (!IsValid(PreviewStone) || !bAiming || SurfacePoint.ContainsNaN() ||
+        SurfaceNormal.ContainsNaN() || SurfaceNormal.IsNearlyZero())
+    {
+        bHasPlacementTarget = false;
+        return false;
+    }
+
+    TargetSurfacePoint = SurfacePoint;
+    TargetSurfaceNormal = SurfaceNormal.GetSafeNormal();
+    TargetTransform.SetLocation(TargetSurfacePoint);
+    TargetTransform.SetRotation(FRotationMatrix::MakeFromZ(TargetSurfaceNormal).ToQuat());
+    bHasPlacementTarget = true;
+    ApplySelectedPlacementOption();
+    return true;
+}
+
 void UStonePlacementComponent::CycleFace()
 {
     if (!PreviewStone)
@@ -316,17 +334,7 @@ void UStonePlacementComponent::TickComponent(
 
     if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
     {
-        TargetSurfacePoint = Hit.ImpactPoint;
-        TargetSurfaceNormal = Hit.ImpactNormal.GetSafeNormal();
-        if (TargetSurfaceNormal.IsNearlyZero())
-        {
-            TargetSurfaceNormal = FVector::UpVector;
-        }
-
-        bHasPlacementTarget = true;
-        TargetTransform.SetLocation(TargetSurfacePoint);
-        TargetTransform.SetRotation(FRotationMatrix::MakeFromZ(TargetSurfaceNormal.GetSafeNormal()).ToQuat());
-        ApplySelectedPlacementOption();
+        UpdatePlacementTarget(Hit.ImpactPoint, Hit.ImpactNormal);
     }
     else
     {
