@@ -32,6 +32,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Materials")
     TArray<FExcavationLandscapeMaterialMapping> LandscapeMaterialMappings;
 
+    /** Optional Blueprint subclass can provide the project's default terrain and material profile. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Renderer")
+    TSubclassOf<AExcavationTerrainChunkActor> TerrainChunkActorClass;
+
     UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming")
     bool bEnableAutomaticStreaming = true;
 
