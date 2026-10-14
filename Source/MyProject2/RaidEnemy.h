@@ -70,6 +70,8 @@ struct MYPROJECT2_API RaidKit
 {
 	/** Builds the plan in code and starts it for the player in the world. False if it could not start. */
 	static bool StartDefaultRaid(UWorld* World);
+	/** One wave of Total raiders, at most AtOnce of them at a time, under the event ID (a raid night). */
+	static bool StartRaid(UWorld* World, FName EventID, int32 Total, int32 AtOnce);
 	/** Cancels the active raid and removes only actors owned by its Raid Director. */
 	static void StopRaid(UWorld* World);
 	static int32 CountEnemies(UWorld* World);

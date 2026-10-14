@@ -20,6 +20,9 @@
 #include "HaulCart.h"
 #include "FireStone.h"
 #include "RaidEnemy.h"
+#include "DayLoopSubsystem.h"
+#include "LooseResources.h"
+#include "StickStructure.h"
 #include "Components/LineBatchComponent.h"
 #include "MechanicsDemo.h"
 #include "StructureManager.h"
@@ -158,6 +161,10 @@ void AForestCharacter::BeginPlay()
 	Structures = GetWorld()->SpawnActor<AStructureManager>();
 	RespawnTransform = GetActorTransform();
 	Survival->OnDeath = [this]() { HandleDeath(); };
+	if (UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld()))
+	{
+		Loop->OnAnnouncement.AddUObject(this, &AForestCharacter::ShowMessage);
+	}
 	if (UMaterialInterface* Ghost = ForestItems::GetBuildGhostMaterial())
 	{
 		GhostMaterial = UMaterialInstanceDynamic::Create(Ghost, this);
@@ -351,6 +358,9 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UInputAction* FirePitAction = MakeAction(TEXT("IA_FirePit"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(FirePitAction, EKeys::C);
 	Input->BindAction(FirePitAction, ETriggerEvent::Started, this, &AForestCharacter::PlaceFireStone);
+	UInputAction* StickAction = MakeAction(TEXT("IA_StickMode"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(StickAction, EKeys::I);
+	Input->BindAction(StickAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleStickMode);
 	UInputAction* TempAction = MakeAction(TEXT("IA_Temporary"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(TempAction, EKeys::V);
 	Input->BindAction(TempAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleTemporary);
@@ -384,6 +394,10 @@ void AForestCharacter::Tick(float DeltaSeconds)
 	DrawPreviewLines();
 
 	UpdateTool(DeltaSeconds);
+	if (const UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld()))
+	{
+		Survival->SetAmbientTemperature(Loop->GetTemperatureAt(GetActorLocation()).Total());
+	}
 	if (bLighterHeld && !bBuildMode)
 	{
 		FHitResult Aim;
@@ -409,6 +423,21 @@ void AForestCharacter::DrawPreviewLines()
 {
 	PreviewLines->Flush();
 	const FLinearColor PlanColor = bGhostValid ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
+
+	// Stick building: the footprint of the chosen build where it would stand.
+	if (bStickMode && !IsHandsBusy())
+	{
+		FHitResult Spot;
+		if (StickBuildSpot(Spot))
+		{
+			const EStickBuild Kind = static_cast<EStickBuild>(StickBuildIndex);
+			const bool bAfford = GetItemCount(EForestItem::Stick) >= AStickStructure::SticksFor(Kind);
+			const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+			const FVector Half = Kind == EStickBuild::Torch ? FVector(10.f, 10.f, 80.f) : (Kind == EStickBuild::Fence ? FVector(8.f, 100.f, 60.f) : FVector(30.f, 75.f, 35.f));
+			ForestOutline::DrawBox(PreviewLines, FTransform(Forward.Rotation(), Spot.ImpactPoint + FVector(0.f, 0.f, Half.Z)), FBox(-Half, Half),
+				bAfford ? ForestOutline::ValidColor() : ForestOutline::InvalidColor());
+		}
+	}
 
 	if (BuildPreview->IsVisible())
 	{
@@ -1282,6 +1311,121 @@ void AForestCharacter::OpenAimed()
 	}
 }
 
+void AForestCharacter::ToggleStickMode()
+{
+	bStickMode = !bStickMode;
+	ShowMessage(bStickMode ? GetStickModeLabel() : FString(TEXT("Çubuk modu kapandı")));
+}
+
+FString AForestCharacter::GetStickModeLabel() const
+{
+	const EStickBuild Kind = static_cast<EStickBuild>(StickBuildIndex);
+	return FString::Printf(TEXT("Çubuk: %s (%d çubuk, çantada %d)  —  [Q] değiştir, [Sol tık] kur, [I] kapat"),
+		*AStickStructure::NameOf(Kind), AStickStructure::SticksFor(Kind), GetItemCount(EForestItem::Stick));
+}
+
+bool AForestCharacter::StickBuildSpot(FHitResult& OutHit) const
+{
+	return TraceFromView(500.f, OutHit, true) && OutHit.ImpactNormal.Z > 0.7f && OutHit.GetActor() && !OutHit.GetActor()->IsA<ACarvableLog>();
+}
+
+bool AForestCharacter::BuildStickAt(const FHitResult& Hit)
+{
+	const EStickBuild Kind = static_cast<EStickBuild>(StickBuildIndex);
+	const int32 Cost = AStickStructure::SticksFor(Kind);
+	if (GetItemCount(EForestItem::Stick) < Cost)
+	{
+		ShowMessage(FString::Printf(TEXT("%s için %d çubuk gerek (%d var)"), *AStickStructure::NameOf(Kind), Cost, GetItemCount(EForestItem::Stick)));
+		return false;
+	}
+	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	if (!AStickStructure::Build(GetWorld(), Kind, Hit.ImpactPoint, Forward.Rotation().Yaw))
+	{
+		return false;
+	}
+	RemoveItem(EForestItem::Stick, Cost);
+	ShowMessage(FString::Printf(TEXT("%s kuruldu (-%d çubuk)"), *AStickStructure::NameOf(Kind), Cost));
+	return true;
+}
+
+AStickStructure* AForestCharacter::TestBuildStick(uint8 Build, const FHitResult& Hit, bool bGiveSticks)
+{
+	StickBuildIndex = Build;
+	if (bGiveSticks)
+	{
+		AddItem(EForestItem::Stick, AStickStructure::SticksFor(static_cast<EStickBuild>(Build)));
+	}
+	const int32 Before = GetItemCount(EForestItem::Stick);
+	if (!BuildStickAt(Hit))
+	{
+		return nullptr;
+	}
+	AStickStructure* Newest = nullptr;
+	for (TActorIterator<AStickStructure> It(GetWorld()); It; ++It)
+	{
+		Newest = *It;
+	}
+	(void)Before;
+	return Newest;
+}
+
+void AForestCharacter::TestDropStone()
+{
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		StoneCarry->Drop();
+		RefreshToolVisibility();
+	}
+}
+
+void AForestCharacter::TestUseUpSticks()
+{
+	RemoveItem(EForestItem::Stick, GetItemCount(EForestItem::Stick));
+}
+
+void AForestCharacter::TestGiveSticks(int32 Count)
+{
+	AddItem(EForestItem::Stick, Count);
+}
+
+bool AForestCharacter::IsCarryingStone() const
+{
+	return StoneCarry && StoneCarry->IsCarrying();
+}
+
+bool AForestCharacter::TestPickUpResource(AActor* Resource)
+{
+	if (!Resource)
+	{
+		return false;
+	}
+	if (AStoneActor* Stone = Cast<AStoneActor>(Resource))
+	{
+		if (LooseResources::IsPocketStone(Stone))
+		{
+			if (AddItem(EForestItem::Stone, 1) != 1)
+			{
+				return false;
+			}
+			Stone->Destroy();
+			return true;
+		}
+		const UStoneDefinition* Definition = Stone->GetDefinition();
+		const EStoneCarryMode Mode = Definition && Definition->Mass <= StoneCarry->MaxSingleHandMass ? EStoneCarryMode::SingleHand : EStoneCarryMode::TwoHands;
+		return CarriedItem == EForestItem::None && StoneCarry && !StoneCarry->IsCarrying() && StoneCarry->PickUp(Stone, Mode);
+	}
+	if (AStickActor* Stick = Cast<AStickActor>(Resource))
+	{
+		if (AddItem(EForestItem::Stick, 1) != 1)
+		{
+			return false;
+		}
+		Stick->Destroy();
+		return true;
+	}
+	return false;
+}
+
 void AForestCharacter::DebugRaid()
 {
 	if (RequireAdmin())
@@ -1592,6 +1736,19 @@ void AForestCharacter::UpdateFocus()
 
 void AForestCharacter::PrimaryAction()
 {
+	if (bStickMode && !IsHandsBusy())
+	{
+		FHitResult Spot;
+		if (StickBuildSpot(Spot))
+		{
+			BuildStickAt(Spot);
+		}
+		else
+		{
+			ShowMessage(TEXT("Çubuk yapısı düz zemine kurulur  —  yere bak"));
+		}
+		return;
+	}
 	// Physical-stone placement takes priority over legacy log/build placement input.
 	if (StonePlacement && StonePlacement->IsPlacing())
 	{
@@ -1816,6 +1973,18 @@ void AForestCharacter::Interact()
 			if (AStoneActor* Stone = Cast<AStoneActor>(StoneHit.GetActor()))
 			{
 				UStoneDefinition* Definition = Stone->GetDefinition();
+				// A small stone goes into the pack (fire rings, stone blocks); a building stone is carried and placed.
+				if (Definition && LooseResources::IsPocketStone(Stone))
+				{
+					if (!CanAddItem(EForestItem::Stone, 1) || AddItem(EForestItem::Stone, 1) != 1)
+					{
+						ShowMessage(TEXT("Çanta dolu; taş yerde kaldı."));
+						return;
+					}
+					Stone->Destroy();
+					ShowMessage(FString::Printf(TEXT("+1 Taş (%d)"), GetItemCount(EForestItem::Stone)));
+					return;
+				}
 				if (!Definition)
 				{
 					ShowMessage(TEXT("Bu taşın tanımı eksik; güvenli biçimde alınamıyor."));
@@ -2588,6 +2757,12 @@ void AForestCharacter::CycleBuildItem(const FInputActionValue& Value)
 		{
 			StonePlacement->CycleFace();
 		}
+		return;
+	}
+	if (bStickMode && !FMath::IsNearlyZero(Axis))
+	{
+		StickBuildIndex = static_cast<uint8>((StickBuildIndex + (Axis > 0.f ? 1 : static_cast<uint8>(EStickBuild::Count) - 1)) % static_cast<uint8>(EStickBuild::Count));
+		ShowMessage(GetStickModeLabel());
 		return;
 	}
 	if (bBuildMode && !FMath::IsNearlyZero(Axis))

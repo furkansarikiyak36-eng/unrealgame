@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestHUD.h"
+#include "DayLoopSubsystem.h"
 #include "ForestCharacter.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
@@ -315,6 +316,7 @@ void AForestHUD::DrawHUD()
 			{ TEXT("Dayan\u0131kl\u0131l\u0131k"), Survival->GetStamina(), FLinearColor(0.95f, 0.8f, 0.25f) },
 			{ TEXT("A\u00E7l\u0131k"),        Survival->GetHunger(),  FLinearColor(0.85f, 0.5f, 0.2f) },
 			{ TEXT("Susuzluk"),               Survival->GetThirst(),  FLinearColor(0.3f, 0.6f, 0.95f) },
+			{ TEXT("Vücut ısısı"),            Survival->GetBodyHeat(), FLinearColor(0.95f, 0.45f, 0.75f) },
 		};
 		const float BarW = 180.f, BarH = 10.f, RowH = 24.f;
 		const float X = Canvas->ClipX - BarW - 40.f;
@@ -331,6 +333,40 @@ void AForestHUD::DrawHUD()
 		}
 	}
 
+	if (Player->IsStickMode())
+	{
+		const FString Label = Player->GetStickModeLabel();
+		float LabelW = 0.f, LabelH = 0.f;
+		GetTextSize(Label, LabelW, LabelH, SmallFont);
+		DrawPanel(Canvas->ClipX * 0.5f - LabelW * 0.5f - 10.f, Canvas->ClipY - 150.f, LabelW + 20.f, LabelH + 10.f);
+		DrawText(Label, FLinearColor(1.f, 0.85f, 0.5f), Canvas->ClipX * 0.5f - LabelW * 0.5f, Canvas->ClipY - 145.f, SmallFont);
+	}
+
+	// The day, top centre: day and hour, the air here and why, and the next raid night.
+	if (const UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld()))
+	{
+		const FVector Where = Player->GetActorLocation();
+		const FTemperatureReading Air = Loop->GetTemperatureAt(Where);
+		const float Hour = Loop->GetHour();
+		FString Line = FString::Printf(TEXT("Gün %d  %02d:%02d  %s  |  %s  %.0f°C"), Loop->GetDay(), FMath::FloorToInt(Hour),
+			FMath::FloorToInt(FMath::Fmod(Hour, 1.f) * 60.f), Loop->IsNight() ? TEXT("gece") : TEXT("gündüz"),
+			*UDayLoopSubsystem::RegionNameAt(Where), Air.Total());
+		if (Air.Fire > 0.5f)
+		{
+			Line += FString::Printf(TEXT(" (ateş +%.0f)"), Air.Fire);
+		}
+		if (Air.Shelter > 0.5f)
+		{
+			Line += FString::Printf(TEXT(" (çatı +%.0f)"), Air.Shelter);
+		}
+		const int32 NextRaid = Loop->GetNextRaidDay();
+		Line += Loop->IsRaidRunning() ? FString(TEXT("  |  BASKIN")) : FString::Printf(TEXT("  |  baskın: %d. gece"), NextRaid);
+		float LineW = 0.f, LineH = 0.f;
+		GetTextSize(Line, LineW, LineH, SmallFont);
+		DrawPanel(Canvas->ClipX * 0.5f - LineW * 0.5f - 10.f, 10.f, LineW + 20.f, LineH + 10.f);
+		DrawText(Line, Loop->IsRaidRunning() ? FLinearColor(1.f, 0.4f, 0.3f) : White, Canvas->ClipX * 0.5f - LineW * 0.5f, 15.f, SmallFont);
+	}
+
 	// Controls, top left
 	static const TArray<FString> Help = {
 		TEXT("WASD hareket  |  Shift koş  |  Space zıpla"),
@@ -340,7 +376,7 @@ void AForestHUD::DrawHUD()
 		TEXT("[P] Admin modu: [G] malzeme, [H] oda, [J] kes, [N] aç, [M] hasar, [K] oyma kütüğü, [L] demo, [Y] hasar"),
 		TEXT("[B] İnşa modu  |  Tekerlek / [Q]: seç  |  [R] döndür  |  Sağ tık: iptal"),
 		TEXT("Kütük Duvar: köşelere tıkla, plana bakıp [E] ile kütük ekle"),
-		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik / eğik  |  [F] çakmak (basılı tut)  |  [C] taş koy (7 taş = ateş yeri)  |  [X] it  |  [O] açıklık aç  |  [V] iskele işareti"),
+		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik / eğik  |  [F] çakmak (basılı tut)  |  [C] taş koy (7 taş = ateş yeri)  |  [X] it  |  [O] açıklık aç  |  [V] iskele işareti  |  [I] çubuk yapımı"),
 		TEXT("Oyma: [R] alet (çentik, enine kesim, yarma, oval, düz, sivri uç, pah, uç düzeltme, kırlangıç)  |  [E] parçayı omza al"),
 	};
 	DrawPanel(20.f, 20.f, 620.f, 16.f + 20.f * Help.Num());

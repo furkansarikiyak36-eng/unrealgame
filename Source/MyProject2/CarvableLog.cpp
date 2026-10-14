@@ -511,7 +511,10 @@ void ACarvableLog::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimit
 		HitEnemy(Enemy, NormalImpulse.Size());
 		return;
 	}
-	AddImpactDamage(NormalImpulse.Size());
+	if (ImpactGrace <= 0.f)
+	{
+		AddImpactDamage(NormalImpulse.Size());
+	}
 }
 
 bool ACarvableLog::ComputeSlopePlacement(const FVector& LowEnd, const FVector& Forward, float AngleDeg, const ACarvableLog* Piece, FTransform& Out)
@@ -597,6 +600,7 @@ void ACarvableLog::Tick(float DeltaSeconds)
 		return;
 	}
 	SettleTime += DeltaSeconds;
+	ImpactGrace = FMath::Max(0.f, ImpactGrace - DeltaSeconds);
 	const bool bStill = MeshComponent->GetPhysicsLinearVelocity().SizeSquared() < 25.f
 		&& MeshComponent->GetPhysicsAngularVelocityInDegrees().SizeSquared() < 25.f;
 	StillTime = bStill ? StillTime + DeltaSeconds : 0.f;

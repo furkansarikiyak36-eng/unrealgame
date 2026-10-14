@@ -3,6 +3,7 @@
 #include "HarvestableActor.h"
 #include "PickupItem.h"
 #include "CarvableLog.h"
+#include "LooseResources.h"
 #include "Components/DecalComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
@@ -282,6 +283,28 @@ void AHarvestableActor::StartFall(const FVector& Direction)
 	SetActorTickEnabled(true);
 }
 
+void AHarvestableActor::DropRockResources(UWorld* World, const FVector& Center, int32 Count)
+{
+	// The stones fall round the rock, a little apart so they do not land on each other.
+	for (int32 Index = 0; Index < FMath::Max(1, Count); ++Index)
+	{
+		const float Angle = 2.f * PI * Index / FMath::Max(1, Count) + FMath::FRand() * 0.4f;
+		const FVector Location = Center + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * (90.f + 25.f * Index) + FVector(0.f, 0.f, 40.f);
+		LooseResources::SpawnStone(World, Location, Index == 0);
+	}
+}
+
+void AHarvestableActor::DropBranchSticks(UWorld* World, const FVector& Base, const FVector& Direction, float Length)
+{
+	const FVector Along = FVector(Direction.X, Direction.Y, 0.f).GetSafeNormal();
+	const FVector Across = FVector::CrossProduct(FVector::UpVector, Along);
+	for (int32 Index = 0; Index < SticksPerTree; ++Index)
+	{
+		const FVector Location = Base + Along * Length * (0.55f + 0.15f * Index) + Across * (Index % 2 == 0 ? 160.f : -160.f) + FVector(0.f, 0.f, 40.f);
+		LooseResources::SpawnStick(World, Location, FRotator(0.f, FMath::FRand() * 360.f, 0.f));
+	}
+}
+
 int32 AHarvestableActor::LogsFromHeight(float TreeHeightCm)
 {
 	return FMath::Clamp(FMath::FloorToInt(TreeHeightCm * 0.85f / (6.f * ACarvableLog::ModuleLength)), 1, 4);
@@ -300,6 +323,7 @@ void AHarvestableActor::FinishFall()
 		{
 			Trunk->InitLog(1, Center, FallDirection);
 			Trunk->LogCount = LogsFromHeight(Height);
+			DropBranchSticks(World, BaseLocation, FallDirection, Length);
 		}
 		for (int32 Index = 0; Index < 4; ++Index)
 		{
@@ -368,13 +392,7 @@ void AHarvestableActor::BreakRock()
 	UWorld* World = GetWorld();
 	const FBoxSphereBounds Bounds = Mesh->Bounds;
 
-	for (int32 Index = 0; Index < DropCount; ++Index)
-	{
-		const FVector Offset = FMath::VRand() * Bounds.BoxExtent * 0.4f;
-		const FVector Location = Bounds.Origin + FVector(Offset.X, Offset.Y, FMath::Abs(Offset.Z));
-		const FVector Impulse = FVector(Offset.X, Offset.Y, 0.f).GetSafeNormal() * 180.f + FVector(0, 0, 250.f);
-		APickupItem::Spawn(World, EForestItem::Stone, 1, FTransform(FRotator(0, FMath::FRand() * 360.f, 0), Location), Impulse);
-	}
+	DropRockResources(World, Bounds.Origin, DropCount);
 	SpawnDebris(Bounds.Origin, FVector::UpVector, 4);
 	Destroy();
 }

@@ -167,6 +167,8 @@ private:
 	void AddDamageScript(class AForestCharacter* Character);
 	void AddBurnScript(class AForestCharacter* Character);
 	void AddPhaseScript(class AForestCharacter* Character);
+	void AddDayLoopScript(class AForestCharacter* Character);
+	void AddStoneStickScript(class AForestCharacter* Character);
 	int32 ExpectedTreeLogs = 4;
 	FVector PushStart = FVector::ZeroVector;
 	FVector HaulStart = FVector::ZeroVector;

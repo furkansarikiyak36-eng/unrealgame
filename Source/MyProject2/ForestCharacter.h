@@ -23,6 +23,8 @@ class AStoneMasonryActor;
 class ACampfire;
 class AHaulCart;
 class AFireStone;
+class AStickStructure;
+enum class EStickBuild : uint8;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UCableComponent;
@@ -64,6 +66,8 @@ public:
 	bool IsAdminMode() const { return bAdminMode; }
 	EForestTool GetCurrentTool() const { return CurrentTool; }
 	const USurvivalComponent* GetSurvival() const { return Survival; }
+	/** For the mechanics test: the survival values, writable. */
+	USurvivalComponent* GetSurvivalForTest() { return Survival; }
 	/** The log in the player's hands (None when empty; TrunkLog while a trunk is dragged by rope). */
 	EForestItem GetCarriedItem() const { return CarriedItem; }
 	int32 GetCarriedCount() const { return CarriedItem == EForestItem::Log ? CarriedLogs.Num() : (CarriedItem != EForestItem::None ? 1 : 0); }
@@ -233,6 +237,17 @@ public:
 	void TestToggleTemporary(ACarvableLog* Piece);
 	/** For the mechanics test: [E] on a cart (takes the last piece off it onto the shoulder). */
 	ACarvableLog* TestUnload(AHaulCart* Cart);
+	/** For the mechanics test: [E] on a loose stone or stick (a small stone and a stick go into the pack, a building stone into the hands). */
+	bool TestPickUpResource(AActor* Resource);
+	/** For the mechanics test: the stick build chosen and built on Hit (sticks given first when bGiveSticks). */
+	AStickStructure* TestBuildStick(uint8 Build, const FHitResult& Hit, bool bGiveSticks);
+	bool IsCarryingStone() const;
+	/** For the mechanics test: puts a carried stone down, empties the pack of sticks, gives sticks. */
+	void TestDropStone();
+	void TestUseUpSticks();
+	void TestGiveSticks(int32 Count);
+	bool IsStickMode() const { return bStickMode; }
+	FString GetStickModeLabel() const;
 	/** For the mechanics test: the lighter held on Target for Seconds. */
 	void TestLight(AActor* Target, float Seconds);
 
@@ -385,6 +400,13 @@ private:
 	float SlopeAngle = 45.f;
 	/** [F] held. */
 	bool bLighterHeld = false;
+	/** [I]: stick building on/off; Q / the wheel picks what, left click builds it where the ground is aimed at. */
+	bool bStickMode = false;
+	uint8 StickBuildIndex = 0;
+	void ToggleStickMode();
+	/** Builds the chosen stick build on the aimed ground, paying its sticks from the pack. */
+	bool BuildStickAt(const FHitResult& Hit);
+	bool StickBuildSpot(FHitResult& OutHit) const;
 	void LighterPressed();
 	void LighterReleased();
 	/** Heats the target in sight for Seconds. */

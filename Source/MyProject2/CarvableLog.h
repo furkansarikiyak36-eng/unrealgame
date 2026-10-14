@@ -411,6 +411,8 @@ private:
 
 	EBurnState BurnState = EBurnState::Intact;
 	float HeatSeconds = 0.f;
+	/** A piece just made (spawned, cut) lands without impact damage for this many seconds. */
+	float ImpactGrace = 2.f;
 	bool bHeatedSinceStep = false;
 	float BurnLeft = 0.f;
 	float BurnTotal = 0.f;

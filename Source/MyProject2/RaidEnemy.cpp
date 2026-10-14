@@ -3,6 +3,7 @@
 #include "RaidEnemy.h"
 #include "CarvableLog.h"
 #include "ForestCharacter.h"
+#include "StickStructure.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
@@ -93,6 +94,19 @@ void ARaidEnemy::StepAI(float Dt)
 		if (FVector::Dist2D(Here, Centre) - Radius - BodyRadius < StakeReachCm)
 		{
 			TakeHit(StakeDps * Dt);
+			if (Health <= 0.f)
+			{
+				return;
+			}
+		}
+	}
+
+	// Stick spikes hurt the same way.
+	for (TActorIterator<AStickStructure> It(World); It; ++It)
+	{
+		if (It->GetKind() == EStickBuild::Spikes && FVector::Dist2D(Here, It->GetActorLocation()) - BodyRadius < AStickStructure::SpikeReachCm)
+		{
+			TakeHit(AStickStructure::SpikeDps * Dt);
 			if (Health <= 0.f)
 			{
 				return;
@@ -205,6 +219,11 @@ void ARaidEnemy::StepAI(float Dt)
 		{
 			Blocker->AddDamage(WoodDps * Dt);
 		}
+		else if (AStickStructure* Fence = Cast<AStickStructure>(BlockerActor))
+		{
+			// A stick build is weaker than a log wall.
+			Fence->AddDamage(WoodDps * 3.f * Dt);
+		}
 		else if (DamageResolver && IsValid(BlockerActor))
 		{
 			DamageResolver->ApplyDamageToBlock(BlockerActor, WoodDps * Dt * 100.0f);
@@ -223,6 +242,11 @@ void ARaidEnemy::StepAI(float Dt)
 
 bool RaidKit::StartDefaultRaid(UWorld* World)
 {
+	return StartRaid(World, TEXT("Night1"), 6, 3);
+}
+
+bool RaidKit::StartRaid(UWorld* World, FName EventID, int32 Total, int32 AtOnce)
+{
 	URaidDirectorSubsystem* Director = World ? World->GetSubsystem<URaidDirectorSubsystem>() : nullptr;
 	if (!Director)
 	{
@@ -232,8 +256,8 @@ bool RaidKit::StartDefaultRaid(UWorld* World)
 	FRaidStageConfig Stage;
 	Stage.StageIndex = 0;
 	Stage.Threshold = 0;
-	Stage.Budget.ConcurrentPopulation = 4;
-	Stage.Budget.TotalBudget = 8;
+	Stage.Budget.ConcurrentPopulation = FMath::Max(1, AtOnce + 1);
+	Stage.Budget.TotalBudget = FMath::Max(1, Total + 2);
 	Stage.Budget.RaidDuration = 120.f;
 	Stage.PlanID = TEXT("Night1");
 	Stages->Stages.Add(Stage);
@@ -243,8 +267,8 @@ bool RaidKit::StartDefaultRaid(UWorld* World)
 	Plan->StageIndex = 0;
 	FWavePlan Wave;
 	Wave.GroupID = TEXT("Raiders");
-	Wave.TotalCount = 6;
-	Wave.MaxAlive = 3;
+	Wave.TotalCount = FMath::Max(1, Total);
+	Wave.MaxAlive = FMath::Max(1, AtOnce);
 	Wave.Duration = 60.f;
 	Wave.Intermission = 5.f;
 	Plan->Waves.Add(Wave);
@@ -265,7 +289,7 @@ bool RaidKit::StartDefaultRaid(UWorld* World)
 	Enemies->Enemies.Add(Definition);
 
 	Director->ConfigureRaidAssets(Stages, { Plan }, Groups, Enemies);
-	Director->StartRaid(TEXT("Night1"), ERaidEventType::HordeNight);
+	Director->StartRaid(EventID, ERaidEventType::HordeNight);
 	return Director->GetContext().bEventActive;
 }
 

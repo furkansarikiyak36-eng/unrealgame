@@ -35,6 +35,12 @@ public:
 	 * A trunk or a half trunk carries the number it still holds until it is cut up.
 	 */
 	static int32 LogsFromHeight(float TreeHeightCm);
+
+	/** A broken rock: one building stone and Count - 1 small stones, lying around Center. */
+	static void DropRockResources(UWorld* World, const FVector& Center, int32 Count);
+	/** A felled tree's branches: raw sticks along the fall line from Base. */
+	static void DropBranchSticks(UWorld* World, const FVector& Base, const FVector& Direction, float Length);
+	static constexpr int32 SticksPerTree = 3;
 	int32 GetLogCount() const { return LogCount; }
 	float GetTreeHeight() const { return Height; }
 	void SetLogCount(int32 Count) { LogCount = Count; }

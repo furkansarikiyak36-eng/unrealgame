@@ -9,6 +9,12 @@
 #include "HaulCart.h"
 #include "FireStone.h"
 #include "RaidEnemy.h"
+#include "DayLoopSubsystem.h"
+#include "SurvivalComponent.h"
+#include "LooseResources.h"
+#include "StickStructure.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StickPhaseS1_Core/StickActor.h"
 #include "ForestTypes.h"
 #include "HarvestableActor.h"
 #include "PickupItem.h"
@@ -782,6 +788,7 @@ bool AMechanicsDemo::RunFrameStage(AForestCharacter* Character)
 			Wait(0.5f);
 			return true;
 		}
+		Info(FString::Printf(TEXT("Köşe alt kütükleri: hasar A %.2f, B %.2f, üst %.2f"), LowerA->GetDamage(), FrameLogs[1]->GetDamage(), Upper->GetDamage()));
 		Info(FString::Printf(TEXT("Köşe alt kütükleri bırakıldıkları yerden kaydı: A %.0f cm, B %.0f cm (aralarında %.0f cm, hedef %.0f)"),
 			FVector::Dist2D(LowerA->GetActorLocation(), FrameArea), FVector::Dist2D(FrameLogs[1]->GetActorLocation(), FrameArea + FVector(4.f * ACarvableLog::ModuleLength, 0.f, 0.f)),
 			FVector::Dist2D(LowerA->GetActorLocation(), FrameLogs[1]->GetActorLocation()), 4.f * ACarvableLog::ModuleLength));
@@ -1910,6 +1917,237 @@ void AMechanicsDemo::AddPhaseScript(AForestCharacter* Character)
 	});
 }
 
+void AMechanicsDemo::AddDayLoopScript(AForestCharacter* Character)
+{
+	const FVector Area(600.f, 2600.f, 0.f);
+
+	// The day's cold: night is colder than noon, the rocks colder than the forest; a fire and a roof warm a spot.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(World);
+		if (!Loop)
+		{
+			Report(false, TEXT("Gün döngüsü yok"));
+			return 0.1f;
+		}
+		const FVector Ground = GroundAt(World, Area).ImpactPoint;
+		Loop->SetTimeForTest(1, 12.f);
+		const float Noon = Loop->GetTemperatureAt(Ground).Air;
+		Loop->SetTimeForTest(1, 2.f);
+		const float Night = Loop->GetTemperatureAt(Ground).Air;
+		const bool bRocksColder = UDayLoopSubsystem::RegionOffsetAt(FVector(-2000.f, 0.f, 0.f)) < UDayLoopSubsystem::RegionOffsetAt(FVector::ZeroVector);
+		Report(Night < Noon - 3.f && Loop->IsNight() && bRocksColder,
+			FString::Printf(TEXT("Hava: öğlen %.0f°C, gece 02:00'de %.0f°C (soğuk iklim); kayalık ormandan soğuk"), Noon, Night));
+
+		// A fire pit with a log on it, lit: within reach the air is much warmer.
+		ACampfire* Pit = Character->TestBuildFirePit(GroundAt(World, Area), true);
+		ACarvableLog* Fuel = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Ground + FVector(0.f, 600.f, 70.f)));
+		const bool bLit = Pit && Pit->AddFuel(Fuel) && Pit->Ignite();
+		const FTemperatureReading ByFire = Loop->GetTemperatureAt(Ground + FVector(150.f, 0.f, 50.f));
+		const FTemperatureReading FarAway = Loop->GetTemperatureAt(Ground + FVector(0.f, -900.f, 50.f));
+		Report(bLit && ByFire.Fire > 15.f && FarAway.Fire == 0.f,
+			FString::Printf(TEXT("Ateş: 1,5 m ötede +%.0f°C (toplam %.0f°C), 9 m ötede etkisi yok"), ByFire.Fire, ByFire.Total()));
+
+		// A log held up overhead: a roof keeps some cold off.
+		ACarvableLog* Roof = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Ground + FVector(-900.f, 0.f, 70.f)));
+		Roof->PlaceAt(FTransform(FRotator::ZeroRotator, Ground + FVector(-900.f, 0.f, 300.f) - FVector(Roof->GetCenterX(), 0.f, 0.f)), true);
+		const FTemperatureReading Under = Loop->GetTemperatureAt(Ground + FVector(-900.f, 0.f, 50.f));
+		Report(Under.Shelter > 5.f, FString::Printf(TEXT("Çatı: altında +%.0f°C"), Under.Shelter));
+		return 0.2f;
+	});
+
+	// Body heat: the cold takes it, clothes slow that down, warmth brings it back, and at zero the player freezes.
+	Script.Add([this, Character]()
+	{
+		USurvivalComponent* Body = Character->GetSurvivalForTest();
+		Body->ResetAll();
+		Body->Insulation = 0.f;
+		Body->SetAmbientTemperature(-10.f);
+		Body->StepWarmth(30.f);
+		const float Bare = Body->GetMax() - Body->GetBodyHeat();
+		Body->ResetAll();
+		Body->Insulation = 0.8f;
+		Body->StepWarmth(30.f);
+		const float Dressed = Body->GetMax() - Body->GetBodyHeat();
+		Body->SetAmbientTemperature(30.f);
+		Body->StepWarmth(10.f);
+		const bool bWarmedUp = Body->GetBodyHeat() > Body->GetMax() - Dressed;
+		Body->Insulation = 0.f;
+		Body->SetAmbientTemperature(-20.f);
+		Body->StepWarmth(200.f);
+		const float HealthBefore = Body->GetHealth();
+		Body->StepWarmth(10.f);
+		const bool bFreezing = Body->IsFreezing() && Body->GetHealth() < HealthBefore;
+		Report(Bare > 30.f && Dressed < Bare * 0.3f && bWarmedUp && bFreezing,
+			FString::Printf(TEXT("Vücut ısısı: -10°C'de 30 sn'de %.0f düştü, giysiyle %.0f; sıcakta geri geldi; sıfırda donuyor ve can gidiyor"), Bare, Dressed));
+		Body->ResetAll();
+		Body->Insulation = 0.f;
+		return 0.1f;
+	});
+
+	// Raid nights: every third night at 22:00 the raiders come, more each time; at dawn they are gone.
+	Script.Add([this]()
+	{
+		UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld());
+		Loop->SetTimeForTest(2, 23.f);
+		const bool bQuietNight = !Loop->IsRaidRunning();
+		Loop->SetTimeForTest(3, 21.f);
+		const bool bNotYet = !Loop->IsRaidRunning() && Loop->GetNextRaidDay() == 3;
+		Loop->SetTimeForTest(3, 22.5f);
+		Report(bQuietNight && bNotYet && Loop->IsRaidRunning() && UDayLoopSubsystem::RaidSizeForDay(6) > UDayLoopSubsystem::RaidSizeForDay(3),
+			FString::Printf(TEXT("Baskın gecesi: 2. gece sakin, 3. gece 22:00'de başladı (%d düşman; 6. gecede %d)"),
+				UDayLoopSubsystem::RaidSizeForDay(3), UDayLoopSubsystem::RaidSizeForDay(6)));
+		return 3.f;
+	});
+	Script.Add([this]()
+	{
+		UWorld* World = GetWorld();
+		UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(World);
+		const int32 Raiders = RaidKit::CountEnemies(World);
+		Loop->SetTimeForTest(4, 6.5f);
+		Report(Raiders >= 1 && !Loop->IsRaidRunning() && RaidKit::CountEnemies(World) == 0,
+			FString::Printf(TEXT("Baskın gecesi: %d düşman geldi; şafakta (06:00) baskın bitti, kalanlar gitti"), Raiders));
+		Loop->SetTimeForTest(1, 10.f);
+		return 0.1f;
+	});
+}
+
+void AMechanicsDemo::AddStoneStickScript(AForestCharacter* Character)
+{
+	const FVector Area(2700.f, -1400.f, 0.f);
+
+	// A broken rock leaves physical stones, a felled tree leaves sticks.
+	Script.Add([this, Area]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Ground = GroundAt(World, Area).ImpactPoint;
+		AHarvestableActor::DropRockResources(World, Ground, 3);
+		AHarvestableActor::DropBranchSticks(World, Ground + FVector(-600.f, 300.f, 0.f), FVector(1.f, 0.f, 0.f), 800.f);
+		return 3.f;
+	});
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Ground = GroundAt(World, Area).ImpactPoint;
+		TArray<AStoneActor*> Small;
+		AStoneActor* Big = nullptr;
+		for (TActorIterator<AStoneActor> It(World); It; ++It)
+		{
+			if (FVector::Dist2D(It->GetActorLocation(), Ground) < 450.f)
+			{
+				if (LooseResources::IsPocketStone(*It))
+				{
+					Small.Add(*It);
+				}
+				else
+				{
+					Big = *It;
+				}
+			}
+		}
+		TArray<AStickActor*> Sticks;
+		for (TActorIterator<AStickActor> It(World); It; ++It)
+		{
+			if (FVector::Dist2D(It->GetActorLocation(), Ground) < 1200.f)
+			{
+				Sticks.Add(*It);
+			}
+		}
+		const int32 StonesBefore = Character->GetItemCount(EForestItem::Stone);
+		const int32 SticksBefore = Character->GetItemCount(EForestItem::Stick);
+		bool bPocketed = Small.Num() == 2;
+		for (AStoneActor* Stone : Small)
+		{
+			bPocketed &= Character->TestPickUpResource(Stone);
+		}
+		bool bGathered = Sticks.Num() == AHarvestableActor::SticksPerTree;
+		for (AStickActor* Stick : Sticks)
+		{
+			bGathered &= Character->TestPickUpResource(Stick);
+		}
+		const bool bCarried = Big && Character->TestPickUpResource(Big) && Character->IsCarryingStone();
+		Character->TestDropStone();
+		Report(bPocketed && bGathered && bCarried && Character->GetItemCount(EForestItem::Stone) == StonesBefore + 2
+			&& Character->GetItemCount(EForestItem::Stick) == SticksBefore + AHarvestableActor::SticksPerTree && !Character->IsCarryingStone(),
+			FString::Printf(TEXT("Kaynaklar fiziksel: kaya 1 yapı taşı + 2 küçük taş bıraktı (küçükler çantaya, yapı taşı iki elle taşındı), ağaç %d çubuk bıraktı (çantaya)"),
+				AHarvestableActor::SticksPerTree));
+		return 0.2f;
+	});
+
+	// Stick builds: spikes, a fence, a torch, paid in sticks from the pack.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		Face(Character, World, Area + FVector(-400.f, 600.f, 0.f), 0.f);
+		auto Spot = [&](const FVector& Offset)
+		{
+			FHitResult Hit = GroundAt(World, Area + Offset);
+			return Hit;
+		};
+		// Spend the sticks there are, so that four are too few.
+		Character->TestUseUpSticks();
+		Character->TestGiveSticks(3);
+		const bool bTooFew = Character->TestBuildStick(static_cast<uint8>(EStickBuild::Spikes), Spot(FVector(0.f, 600.f, 0.f)), false) == nullptr;
+		AStickStructure* Spikes = Character->TestBuildStick(static_cast<uint8>(EStickBuild::Spikes), Spot(FVector(0.f, 600.f, 0.f)), true);
+		const int32 Left = Character->GetItemCount(EForestItem::Stick);
+		AStickStructure* Fence = Character->TestBuildStick(static_cast<uint8>(EStickBuild::Fence), Spot(FVector(0.f, 1200.f, 0.f)), true);
+		AStickStructure* Torch = Character->TestBuildStick(static_cast<uint8>(EStickBuild::Torch), Spot(FVector(-300.f, 900.f, 0.f)), true);
+		const UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(World);
+		const float TorchWarmth = Torch && Loop ? Loop->GetTemperatureAt(Torch->GetActorLocation() + FVector(100.f, 0.f, 50.f)).Fire : 0.f;
+		Report(bTooFew && Spikes && Left == 3 && Fence && Torch && TorchWarmth > 5.f,
+			FString::Printf(TEXT("Çubuk yapıları: 3 çubukla diken kurulmadı, 4 ile kuruldu (çubuk harcandı); çit ve meşale kuruldu, meşale 1 m'de +%.0f°C"), TorchWarmth));
+		return 0.2f;
+	});
+
+	// Raiders: spikes hurt them; a fence in their way is worn down.
+	Script.Add([this, Area, Character]()
+	{
+		UWorld* World = GetWorld();
+		AStickStructure* Spikes = nullptr;
+		AStickStructure* Fence = nullptr;
+		for (TActorIterator<AStickStructure> It(World); It; ++It)
+		{
+			if (It->GetKind() == EStickBuild::Spikes) { Spikes = *It; }
+			if (It->GetKind() == EStickBuild::Fence) { Fence = *It; }
+		}
+		if (!Spikes || !Fence)
+		{
+			Report(false, TEXT("Çubuk yapıları bulunamadı"));
+			return 0.1f;
+		}
+		ARaidEnemy* Pricked = World->SpawnActor<ARaidEnemy>(ARaidEnemy::StaticClass(), FTransform(Spikes->GetActorLocation() + FVector(40.f, 0.f, 92.f)));
+		Pricked->SetTarget(Character);
+		const float Start = Pricked->Health;
+		Pricked->StepAI(1.f);
+		const float Hurt = Start - (IsValid(Pricked) ? Pricked->Health : 0.f);
+		if (IsValid(Pricked))
+		{
+			Pricked->Destroy();
+		}
+
+		// A post behind the fence; the raider comes from the front and runs into the fence.
+		const FVector FenceAt = Fence->GetActorLocation();
+		ACarvableLog* Post = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, FenceAt + FVector(300.f, 0.f, 70.f)));
+		Post->PlaceAt(Post->GetStandTransform(GroundAt(World, FenceAt + FVector(300.f, 0.f, 0.f)).ImpactPoint, 0.f), true);
+		ARaidEnemy* Breaker = World->SpawnActor<ARaidEnemy>(ARaidEnemy::StaticClass(), FTransform(FenceAt + FVector(-300.f, 0.f, 92.f)));
+		Breaker->SetTarget(Post);
+		for (int32 Step = 0; Step < 120 && IsValid(Breaker); ++Step)
+		{
+			Breaker->StepAI(0.25f);
+		}
+		const bool bWorn = !IsValid(Fence) || Fence->GetDamage() > 0.2f;
+		Report(Hurt > 15.f && bWorn,
+			FString::Printf(TEXT("Savunma: çubuk diken düşmana 1 sn'de %.0f can aldırdı; düşman yolundaki çiti yıprattı (%s)"),
+				Hurt, IsValid(Fence) ? *FString::Printf(TEXT("%%%.0f"), Fence->GetDamage() * 100.f) : TEXT("kırıldı")));
+		if (IsValid(Breaker))
+		{
+			Breaker->Destroy();
+		}
+		return 0.2f;
+	});
+}
+
 void AMechanicsDemo::AddCollapseScript(AForestCharacter* Character)
 {
 	// Take the first log of the cabin out from under the rest: what rested on it only through it falls too.
@@ -1941,6 +2179,8 @@ void AMechanicsDemo::BuildScript(AForestCharacter* Character)
 	AddDamageScript(Character);
 	AddBurnScript(Character);
 	AddPhaseScript(Character);
+	AddDayLoopScript(Character);
+	AddStoneStickScript(Character);
 	AddCollapseScript(Character);
 }
 

@@ -473,3 +473,17 @@ Web Claude'un dalı UE'de hiç derlenmemişti. Yerel `integrate/web-plan` dalın
 - **Davranış düzeltmeleri:** web dalının onarım kuralı yedek parçanın omuzda olmasını reddediyordu → oyuncu hiç onarım yapamıyordu (bizim onarım testi 2 kontrolüyle kaldı); bu tek koşul kaldırıldı, diğer sıkılaştırmalar (yanmamış, çentiksiz, aynı kesit) korundu. `FStoneSocket` başlangıç değerleri eksikti (her Unreal sürecinde hata). Taş yerleştirmede kök bileşenin "göreli" dönüşümü (aslında dünya konumu) yuva hizasını kaydırıyordu.
 - **Test düzeltmeleri:** üç yeni Unreal test dosyası dünyayı iki kez başlatıp çöküyordu; envanter test kurulumu `World->BeginPlay`'e güveniyordu (oyun modu yok); beklenen hata kaydı bildirilmemişti. Python sözleşme testi eski `GetWorld()` metnini ve onarımı bozan `IsCarried` koşulunu arıyordu, güncellendi.
 - **Kalan:** `StonePlacement.Validation.CollisionClearance` — engelle çakışan yerleştirme reddedilmiyor (çakışma sorgusu engeli bulmuyor). Web dalının yeni sistemlerinin (kazı, yeraltı, üretim, lojistik, kayıt) oyunda bir karşılığı/girişi yok; yalnızca birim düzeyinde test edildi.
+
+### 2026-10-14 — Günlük döngü ve gece baskınları (Frostpunk / The Long Dark / 7 Days to Die) (CC)
+Test: mekanik 107/107 (+5). Kullanıcı istedi: "voxel kazıyı sona bırak, diğer mekanikleri tamamla".
+- **`UDayLoopSubsystem` (yeni):** ortak simülasyon saatini (`USimulationSubsystem`: gün, saat, günün en düşük/en yüksek sıcaklığı) okur; ikinci bir saat yok. Soğuk iklim (−14°C kaydırma), gece 20:00–06:00, ilk gün 08:00'de başlar, güneşi döndürür (hareketli ışıksa). `GetTemperatureAt(yer)`: hava + bölge (kayalık −4, nehir kıyısı −2) + çatı (+8, üstte yapıdaki kütük) + ateş (yanan ateş yeri/kütük, 5 m'de sıfıra iner, en çok +28).
+- **Vücut ısısı (`USurvivalComponent`):** 12°C altında düşer (derece başına 0,06/sn, giysi yalıtımı azaltır), üstünde döner; sıfırda donma 0,5 can/sn — yalnızca sıfırda geçen süre için (ilk sürümde bütün adıma uygulanıyordu, uzun adımda oyuncu bir anda ölüyordu).
+- **Gece baskınları:** her 3. gece 22:00'de (`RaidKit::StartRaid`, düşman sayısı 3 + gün, aynı anda 2 + gün/3), 18:00'de uyarı, şafakta (06:00) kalanlar gider. `RaidKit::StartRaid` parametrik oldu.
+- HUD: üstte gün, saat, gece/gündüz, bölge, sıcaklık (ateş/çatı katkısı), sıradaki baskın gecesi; altta vücut ısısı çubuğu.
+- Köşe testi bir kez rastgele kaldı; yeni doğan/kesilen parçalara 2 sn çarpma muafiyeti eklendi (`ImpactGrace`), sonraki koşuda hasar 0 ve geçti.
+
+### 2026-10-14 — Taş ve çubuk oynanır (Sons of the Forest) (CC)
+Test: mekanik 110/110 (+3).
+- Kaya kırılınca fiziksel taşlar düşer (1 yapı taşı 40 kg + küçük taşlar; `AHarvestableActor::DropRockResources`, `LooseResources`). Küçük taş [E] ile çantaya (ateş halkası, taş blok), yapı taşı iki elle taşınır ve web Claude'un yerleştirme önizlemesiyle konur.
+- Devrilen ağaç 3 ham çubuk bırakır (`DropBranchSticks`); [E] ile çantaya.
+- **[I] çubuk yapımı** (`AStickStructure`): diken (4 çubuk; düşmana 20 can/sn), çit (6 çubuk; yolu kapatır, düşman yıpratır), meşale (2 çubuk; ışık, 3 m'de +12°C). [Q]/tekerlek seçer, sol tık kurar, yerde yeşil/kırmızı çerçeve önizleme.
