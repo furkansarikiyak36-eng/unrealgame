@@ -185,10 +185,14 @@ class LogVerifierTests(unittest.TestCase):
             "Test Completed. Result={Success} Name={ShrinkRollsBack} "
             "Path={MyProject2.Inventory.Core.Capacity.ShrinkRollsBack}\n"
             "Test Completed. Result={Success} Name={ValidAdd} "
-            "Path={MyProject2.Inventory.Core.Capacity.ValidAdd}\n",
+            "Path={MyProject2.Inventory.Core.Capacity.ValidAdd}\n"
+            "Test Completed. Result={Success} Name={RestoreFailurePreservesCurrent} "
+            "Path={MyProject2.Inventory.Core.Capacity.RestoreFailurePreservesCurrent}\n"
+            "Test Completed. Result={Success} Name={RestoreInvalidEntryPreservesCurrent} "
+            "Path={MyProject2.Inventory.Core.Capacity.RestoreInvalidEntryPreservesCurrent}\n",
             encoding="utf-8",
         )
-        self.assertEqual(VERIFY.verify_inventory_capacity(self.inventory_capacity), (2, 0))
+        self.assertEqual(VERIFY.verify_inventory_capacity(self.inventory_capacity), (4, 0))
 
     def test_inventory_capacity_failure_is_rejected(self):
         self.inventory_capacity.write_text(
@@ -204,6 +208,15 @@ class LogVerifierTests(unittest.TestCase):
     def test_missing_inventory_capacity_results_are_rejected(self):
         self.inventory_capacity.write_text("Automation suite aborted\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "no parseable"):
+            VERIFY.verify_inventory_capacity(self.inventory_capacity)
+
+    def test_inventory_capacity_minimum_test_count_is_enforced(self):
+        self.inventory_capacity.write_text(
+            "Test Completed. Result={Success} Name={ShrinkRollsBack} "
+            "Path={MyProject2.Inventory.Core.Capacity.ShrinkRollsBack}\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "expected at least 4"):
             VERIFY.verify_inventory_capacity(self.inventory_capacity)
 
 if __name__ == "__main__":

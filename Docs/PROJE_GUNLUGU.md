@@ -256,3 +256,7 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - Negatif count/weight veya geçersiz stack metadata içeren kayıtlar fail-closed reddedilir.
 - InventoryCapacityTests.cpp içine oversized save verisinin reddedilmesini ve eski stoğun korunmasını sınayan üçüncü UE Automation testi eklendi.
 - Unreal Engine 5.8 build/Automation bu ortamda çalıştırılmadı; motor doğrulaması beklemede.
+
+
+- Ek doğrulama: FInventoryItem::IsEmpty() negatif Count değerleri için de true döndürdüğünden, restore döngüsünde Count < 0 kontrolü IsEmpty() sonrasındaydı ve bozuk negatif kayıt sessizce atlanabiliyordu. Kontrol sırası düzeltildi, NaN/sonsuz/negatif ağırlık da reddediliyor.
+- Inventory.Core.Capacity altında negatif Count girdisini reddedip mevcut stoğu koruyan dördüncü UE Automation testi eklendi; log parser minimumu 4 benzersiz teste çıkarıldı.

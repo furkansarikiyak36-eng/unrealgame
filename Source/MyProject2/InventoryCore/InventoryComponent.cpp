@@ -144,21 +144,37 @@ bool UInventoryComponent::RestoreFromSavedItems(const TArray<FInventoryItem>& Sa
     bSuppressInventoryEvents = true;
     ClearAll();
 
+    auto RejectRestore = [this, &OriginalSlots, bWasSuppressingEvents]() -> bool
+    {
+        Slots = OriginalSlots;
+        NormalizeSlotIndexes();
+        bSuppressInventoryEvents = bWasSuppressingEvents;
+        BroadcastChanged();
+        return false;
+    };
+
     float Weight = 0.0f;
     int32 Needed = 0;
     for (const FInventoryItem& Item : Saved)
     {
-        if (Item.IsEmpty()) continue;
-        if (Item.Count < 0 || Item.MaxStack <= 0 || Item.Weight < 0.0f)
+        // Check negative counts before the empty-item shortcut: IsEmpty() returns true
+        // for Count <= 0, which would otherwise silently ignore corrupted negative records.
+        if (Item.Count < 0)
         {
-            Slots = OriginalSlots;
-            NormalizeSlotIndexes();
-            bSuppressInventoryEvents = bWasSuppressingEvents;
-            BroadcastChanged();
-            return false;
+            return RejectRestore();
         }
+        if (Item.Count == 0)
+        {
+            continue;
+        }
+        if (Item.ItemID.IsNone() || Item.MaxStack <= 0 ||
+            !FMath::IsFinite(Item.Weight) || Item.Weight < 0.0f)
+        {
+            return RejectRestore();
+        }
+
         Weight += Item.Weight * Item.Count;
-        Needed += FMath::DivideAndRoundUp(Item.Count, FMath::Max(1, Item.MaxStack));
+        Needed += FMath::DivideAndRoundUp(Item.Count, Item.MaxStack);
     }
 
     const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
@@ -170,23 +186,15 @@ bool UInventoryComponent::RestoreFromSavedItems(const TArray<FInventoryItem>& Sa
 
     if (Needed > Free || (!bIgnoreWeight && Weight > MaxWeight + KINDA_SMALL_NUMBER))
     {
-        Slots = OriginalSlots;
-        NormalizeSlotIndexes();
-        bSuppressInventoryEvents = bWasSuppressingEvents;
-        BroadcastChanged();
-        return false;
+        return RejectRestore();
     }
 
     for (const FInventoryItem& Item : Saved)
     {
-        if (Item.IsEmpty()) continue;
+        if (Item.Count == 0) continue;
         if (AddItemData(Item) != EInventoryResult::Success)
         {
-            Slots = OriginalSlots;
-            NormalizeSlotIndexes();
-            bSuppressInventoryEvents = bWasSuppressingEvents;
-            BroadcastChanged();
-            return false;
+            return RejectRestore();
         }
     }
 

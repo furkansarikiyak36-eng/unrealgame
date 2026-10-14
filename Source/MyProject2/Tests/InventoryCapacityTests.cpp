@@ -159,4 +159,44 @@ bool FInventoryRestoreFailurePreservesCurrentTest::RunTest(const FString& Parame
     return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FInventoryRestoreInvalidEntryPreservesCurrentTest,
+    "MyProject2.Inventory.Core.Capacity.RestoreInvalidEntryPreservesCurrent",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInventoryRestoreInvalidEntryPreservesCurrentTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateInventoryCapacityTestWorld();
+    if (!TestNotNull(TEXT("Test world created"), World)) return false;
+    AActor* Owner = nullptr;
+    UInventoryComponent* Inventory = nullptr;
+    UInventoryItemData* Existing = nullptr;
+    UInventoryItemData* NewItem = nullptr;
+    const bool bValid = CreateInventoryFixture(World, Owner, Inventory, Existing, NewItem);
+    TestTrue(TEXT("Inventory fixture created and slots initialized"), bValid);
+    if (!bValid) { DestroyInventoryCapacityTestWorld(World); return false; }
+
+    TestTrue(TEXT("Current inventory is seeded"),
+        Inventory->AddItem(Existing->ItemID, 1) == EInventoryResult::Success);
+
+    FInventoryItem InvalidSavedItem;
+    InvalidSavedItem.ItemID = FName(TEXT("CorruptItem"));
+    InvalidSavedItem.Count = -1;
+    InvalidSavedItem.MaxStack = 1;
+    InvalidSavedItem.Weight = 0.1f;
+    TArray<FInventoryItem> InvalidSave;
+    InvalidSave.Add(InvalidSavedItem);
+
+    TestFalse(TEXT("Negative saved-item count is rejected"),
+        Inventory->RestoreFromSavedItems(InvalidSave));
+    TestEqual(TEXT("Rejected corrupt save preserves current inventory"),
+        Inventory->GetItemCount(Existing->ItemID), 1);
+    TestEqual(TEXT("Corrupt saved item was not inserted"),
+        Inventory->GetItemCount(InvalidSavedItem.ItemID), 0);
+
+    DestroyInventoryCapacityTestWorld(World);
+    return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
