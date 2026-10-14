@@ -1991,6 +1991,17 @@ void AForestCharacter::CraftPlank()
 
 void AForestCharacter::ToggleBuildMode()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		ShowMessage(TEXT("Önce taş yerleştirmesini onayla veya iptal et."));
+		return;
+	}
+	if (!bBuildMode && StoneCarry && StoneCarry->IsCarrying())
+	{
+		ShowMessage(TEXT("Fiziksel taşı yerleştirme modundayken klasik inşa moduna geçemezsin."));
+		return;
+	}
+
 	bBuildMode = !bBuildMode;
 	BuildPreview->SetVisibility(false);
 	RefreshToolVisibility();
