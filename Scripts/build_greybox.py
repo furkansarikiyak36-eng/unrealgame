@@ -225,6 +225,11 @@ def build_meshes(m):
     append_log(mesh, 45.0, 14.0, steps=10)
     made['Firewood'] = save_mesh('SM_GB_Firewood', mesh, [bark, cut])
 
+    # A separate small physical stick; the countable item is not a log cutout.
+    mesh = new_mesh()
+    append_log(mesh, 55.0, 2.8, steps=8)
+    made['Stick'] = save_mesh('SM_GB_Stick', mesh, [bark, cut])
+
     # Wood chips thrown off by axe hits.
     mesh = new_mesh()
     prim.append_box(mesh, opts(0), xf(), 12.0, 6.0, 2.5, 0, 0, 0, unreal.GeometryScriptPrimitiveOriginMode.CENTER)
