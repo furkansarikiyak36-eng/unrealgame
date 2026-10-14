@@ -116,3 +116,17 @@ Gözlenen gerçekler:
 - Blueprint tarafında bu modüler bileşenlerin karaktere eklenmiş olma olasılığı dışlanamaz; bu oturumda ilgili asset wiring/editör başlangıcı doğrulanmadığı için entegrasyon "yok" diye kesinlenmiyor, **kanıtlanmamış** olarak işaretleniyor.
 
 **Karar:** Faz 6'dan önce tek canonical inventory authority seçilmeli. Legacy `AForestCharacter` map'i ile modüler `UInventoryComponent` arasında iki yönlü sync yazmak yerine tek owner veya açık adapter tercih edilmeli. Pickup, craft, drop, quick access, physical bridge ve save/load aynı stok kaynağını kullanmalı. Testler full inventory, invalid spawn, craft rollback, cancel ve round-trip resource conservation koşullarını kapsamalı.
+
+
+## 7. Çubuk craft işlemi — atomiklik düzeltmesi (kaynak kodu güncellendi)
+
+İncelenen `UCraftingComponent::Craft` yolu için şu değişiklikler çalışma dalına eklendi:
+
+- `UStickInventoryComponent::CanApplyCraftTransaction` aynı öğenin birden çok ingredient satırındaki miktarlarını toplar; var olan sayıyı yalnızca ayrı satırlarla karşılaştırmaz.
+- Çıktı kapasitesi girdiler düşüldükten sonraki toplam üzerinden kontrol edilir; tüketilen girdilerin açtığı kapasite çıktı için kullanılabilir.
+- `ApplyCraftTransaction` eski `Bundles` dizisinin snapshot'ını saklar. Beklenmeyen herhangi bir input removal/output add hatasında snapshot geri yüklenir.
+- `UCraftingComponent` gerekli aletin mevcut olmasını kontrol eder; `RequiredShape` dolu tarifleri, mevcut stok biçimi şekil saklamadığı için yanlışlıkla geçerli saymak yerine reddeder.
+- `Source/MyProject2/Tests/StickCraftingTransactionTests.cpp` içine üç Unreal Automation Test eklendi: duplicate ingredient preflight, kapasite sınırı/başarısızlıkta korunma ve başarılı işlem bilançosu.
+- `Scripts/run_tests.sh` yeni test grubunu ayrı logla çalıştıracak; `Scripts/verify_test_logs.py` üç testin doğru suite prefix'i altında raporlanmasını ve minimum üç başarılı sonuç olmasını zorunlu kılıyor.
+
+**Doğrulama sınırı:** Python tooling testleri yeni log doğrulama yollarını kontrol edebilir, fakat bu C++/UObject testleri ancak UE 5.8 Windows hostunda derlenip çalıştırılınca geçerli sayılır. Bu ortamda Unreal build henüz çalıştırılmadı; P0-027 bu yüzden “düzeltildi” değil, **kod + otomasyon testi eklendi; motor doğrulaması bekliyor** durumundadır.
