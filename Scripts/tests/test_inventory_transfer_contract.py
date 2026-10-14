@@ -38,12 +38,14 @@ class InventoryTransferContractTests(unittest.TestCase):
         self.assertIn("OriginalSlots", exchange)
         self.assertIn("RemoveItem(InputID, InputCount)", exchange)
         self.assertIn("AddItem(OutputID, OutputCount)", exchange)
+        self.assertIn("InputID == OutputID", exchange)
         self.assertIn("Slots = OriginalSlots", exchange)
         self.assertIn("bSuppressInventoryEvents = true", exchange)
 
     def test_does_not_create_resources_or_allow_drop_bypass(self):
         self.assertIn("Source->HasItem(ItemID, Count)", CPP)
         self.assertIn("Definition->bCanBeDropped", CPP)
+        self.assertIn("if (!CanDropItem(ID, Count))", CPP)
         self.assertIn("if (!CanDropItem(ID, Count))", CPP)
 
 
