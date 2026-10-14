@@ -28,6 +28,7 @@ struct FChunkSimulationMetadata
     GENERATED_BODY()
     UPROPERTY(SaveGame, BlueprintReadWrite) float LastUpdateDay = 1.0f;
     UPROPERTY(SaveGame, BlueprintReadWrite) float LastWeatherUpdateDay = 1.0f;
+    UPROPERTY(SaveGame, BlueprintReadWrite) float LastObservedWorldDay = 1.0f;
     UPROPERTY(SaveGame, BlueprintReadWrite) double LastSimulationTime = 0.0;
     UPROPERTY(SaveGame, BlueprintReadWrite) float AccumulatedDeltaDays = 0.0f;
     UPROPERTY(SaveGame, BlueprintReadWrite) EChunkActivationMode ActivationMode = EChunkActivationMode::Passive;
