@@ -16,26 +16,44 @@
 namespace
 {
     void CollectValidPlacementOptions(
-        const UStoneDefinition* Definition,
+        const AStoneActor* Stone,
         TArray<int32>& OutFaceIndices,
         TArray<int32>& OutSocketIndices)
     {
         OutFaceIndices.Reset();
         OutSocketIndices.Reset();
+
+        const UStoneDefinition* Definition = Stone ? Stone->GetDefinition() : nullptr;
         if (!Definition)
         {
             return;
         }
 
+        TSet<FName> OccupiedLocalSockets;
+        TSet<FName> OccupiedLocalFaces;
+        if (Stone->ConnectionGraph)
+        {
+            for (const FStructuralConnection& Connection : Stone->ConnectionGraph->Connections)
+            {
+                // Connections are stored on both endpoints; MySocket is the socket local to this actor.
+                if (Connection.MySocket.IsNone())
+                {
+                    continue;
+                }
+                OccupiedLocalSockets.Add(Connection.MySocket);
+                OccupiedLocalFaces.Add(Connection.MySocket);
+            }
+        }
+
         for (int32 Index = 0; Index < Definition->Faces.Num(); ++Index)
         {
             const FStoneFace& Face = Definition->Faces[Index];
-            if (Face.FaceName.IsNone() || Face.LocalNormal.ContainsNaN() || Face.LocalNormal.IsNearlyZero())
+            if (Face.FaceName.IsNone() || Face.LocalNormal.ContainsNaN() ||
+                Face.LocalNormal.IsNearlyZero() || OccupiedLocalFaces.Contains(Face.FaceName))
             {
                 continue;
             }
-            // Occupancy is runtime actor/graph state. UStoneDefinition is a shared data asset,
-            // so its transient OccupiedBy field is not safe as a per-stone placement authority.
+            // Per-actor occupancy comes from the canonical graph, never the shared data asset.
             OutFaceIndices.Add(Index);
         }
 
@@ -44,12 +62,10 @@ namespace
             const FStoneSocket& Socket = Definition->Sockets[Index];
             if (Socket.SocketName.IsNone() || Socket.LocalPosition.ContainsNaN() ||
                 Socket.LocalRotation.ContainsNaN() || !FMath::IsFinite(Socket.SocketRadius) ||
-                Socket.SocketRadius <= 0.0f)
+                Socket.SocketRadius <= 0.0f || OccupiedLocalSockets.Contains(Socket.SocketName))
             {
                 continue;
             }
-            // Do not infer socket availability from the shared data asset. The connection graph
-            // must validate actual socket occupancy before a structural connection is committed.
             OutSocketIndices.Add(Index);
         }
     }
@@ -202,7 +218,7 @@ void UStonePlacementComponent::CycleFace()
 
     TArray<int32> FaceIndices;
     TArray<int32> SocketIndices;
-    CollectValidPlacementOptions(PreviewStone->GetDefinition(), FaceIndices, SocketIndices);
+    CollectValidPlacementOptions(PreviewStone, FaceIndices, SocketIndices);
 
     const int32 OptionCount = FaceIndices.Num() + SocketIndices.Num();
     if (OptionCount <= 0)
@@ -239,7 +255,7 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
     UStoneDefinition* Definition = PreviewStone->GetDefinition();
     TArray<int32> FaceIndices;
     TArray<int32> SocketIndices;
-    CollectValidPlacementOptions(Definition, FaceIndices, SocketIndices);
+    CollectValidPlacementOptions(PreviewStone, FaceIndices, SocketIndices);
 
     const int32 OptionCount = FaceIndices.Num() + SocketIndices.Num();
     if (OptionCount > 0 && PlacementOptionIndex != INDEX_NONE &&
@@ -400,7 +416,7 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
 
     TArray<int32> FaceIndices;
     TArray<int32> SocketIndices;
-    CollectValidPlacementOptions(MyDefinition, FaceIndices, SocketIndices);
+    CollectValidPlacementOptions(StoneToPlace, FaceIndices, SocketIndices);
     const int32 SocketOffset = PlacementOptionIndex - FaceIndices.Num();
     const bool bSelectedSocket = PlacementOptionIndex != INDEX_NONE &&
         SocketOffset >= 0 && SocketOffset < SocketIndices.Num();
@@ -424,6 +440,20 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
             if (Candidate.SocketName.IsNone() || Candidate.LocalPosition.ContainsNaN() ||
                 Candidate.LocalRotation.ContainsNaN() || !FMath::IsFinite(Candidate.SocketRadius) ||
                 Candidate.SocketRadius <= 0.0f)
+            {
+                continue;
+            }
+
+            bool bSocketOccupied = false;
+            for (const FStructuralConnection& Existing : TargetGraph->Connections)
+            {
+                if (Existing.MySocket == Candidate.SocketName)
+                {
+                    bSocketOccupied = true;
+                    break;
+                }
+            }
+            if (bSocketOccupied)
             {
                 continue;
             }
