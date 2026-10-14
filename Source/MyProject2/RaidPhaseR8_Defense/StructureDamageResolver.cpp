@@ -1,5 +1,6 @@
 #include "StructureDamageResolver.h"
 #include "Phase1_Physical/LogActor.h"
+#include "WorldCore/RegionLogisticsSubsystem.h"
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "StickPhaseS1_Core/StickActor.h"
 #include "Phase5_Structural/DamageComponent.h"
@@ -43,6 +44,14 @@ bool UStructureDamageResolver::ApplyDamageToBlock(AActor* Block,float Damage)
             if(UNavigationSystemV1* Navigation=FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
             {
                 if(PreviousBounds.IsValid)Navigation->AddDirtyArea(PreviousBounds.ExpandBy(100.f),ENavigationDirtyFlag::All);
+            }
+            if(const ALogActor* Log=Cast<ALogActor>(Block);Log&&!Log->InfrastructureLinkKey.IsNone())
+            {
+                if(URegionLogisticsSubsystem* Logistics=World->GetSubsystem<URegionLogisticsSubsystem>())
+                {
+                    // A destroyed piece means this bridge segment cannot be trusted for hauling until repaired/re-registered.
+                    Logistics->SetInfrastructureStatus(Log->InfrastructureLinkKey,false,0.0f,1.0f);
+                }
             }
         }
     }
