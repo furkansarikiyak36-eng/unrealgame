@@ -45,5 +45,6 @@ protected:
 
     void ApplySelectedPlacementOption();
     bool IsPlacementClear(const FTransform& CandidateTransform) const;
+    bool TryConnectStructuralTarget(AStoneActor* StoneToPlace, bool& bOutCreatedConnection);
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 };
