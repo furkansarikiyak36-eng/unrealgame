@@ -9,7 +9,7 @@
 | Faz | Başlık | Zorunlu çıktı | Kabul kapısı |
 |---|---|---|---|
 | 0 | Baseline, katalog ve sahiplik denetimi | ID bazlı gereksinim kataloğu; kaynak/çağrı zinciri; U0–U6 durum; eski test ve gerçek test ayrımı | Kapsamdaki her satır bir sahibi, gerçek davranış durumu, test/kanıt ve açık riske sahip |
-| 1 | Kazı teknolojisi spike'ı | En az iki hacim/mesh yaklaşımının aynı çukur+tünel+oda+chunk-sınırı+save/load senaryosunda karşılaştırması | Ölçüm tablosu, UE 5.8 derleme/çarpışma/kayıt kanıtı ve gerekçeli teknoloji kararı |
+| 1 | Kazı teknolojisi spike'ı | [Spike şartnamesi](./FAZ_01_KAZI_TECHNOLOJI_SPIKE.md), [ölçüm matrisi](./FAZ_01_KAZI_SPIKE_SABLONU.csv); en az iki hacim/mesh yaklaşımının aynı çukur+tünel+oda+chunk-sınırı+save/load senaryosunda karşılaştırması | Ölçüm tablosu, UE 5.8 derleme/çarpışma/kayıt kanıtı ve gerekçeli teknoloji kararı |
 | 2 | Core contract ve kalıcı dünya verisi | Kanonik kimlik, sahiplik, olay, işlem/idempotency, sparse delta ve sürümlü kayıt sözleşmeleri | Çift otorite yok; eski kayıt/bozuk veri/tekrarlanan olay testleri geçer |
 | 3 | Kazılabilir arazi | V1 iç test haritası; lokal hacim değişimi; chunk seam; collision; kalıcı delta | Dikey çukur, yatay tünel, oda, seam, tekrar kazı/doldurma, save/load testleri |
 | 4 | Yeraltı yapısı ve tehlikeleri | Destek/çökme; toprak-kaya profili; su girişi; tuzak ve tünel etkileşimi | Aynı geometri ve dünya durumunda deterministik sonuç; kayıt sonrası durum korunur |
