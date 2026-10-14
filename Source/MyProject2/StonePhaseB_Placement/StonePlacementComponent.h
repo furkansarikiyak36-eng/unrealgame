@@ -27,7 +27,6 @@ public:
     UFUNCTION(BlueprintCallable) bool ConfirmPlacement();
     UFUNCTION(BlueprintCallable) bool UndoLastPlacement();
     UPROPERTY(EditAnywhere, BlueprintReadWrite) float ReachDistance = 250.0f;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) float FaceSnapRadius = 25.0f;
 protected:
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) bool bAiming = false;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) TObjectPtr<AStoneActor> PreviewStone = nullptr;
