@@ -9,6 +9,7 @@
 #include "StoneCore/StoneDefinition.h"
 #include "StonePhaseB_Placement/StonePlacementComponent.h"
 #include "StonePhaseB_Placement/StoneCarryComponent.h"
+#include "StoneCore/StoneConnectionGraph.h"
 
 namespace
 {
@@ -342,6 +343,83 @@ bool FStonePlacementCollisionClearanceTest::RunTest(const FString& Parameters)
         Stone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
 
     Placement->CancelPlacement();
+    DestroyStonePlacementTestWorld(World);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FStonePlacementStructuralConnectionTest,
+    "MyProject2.StonePlacement.Structure.SocketConnection",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FStonePlacementStructuralConnectionTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateStonePlacementTestWorld();
+    if (!TestNotNull(TEXT("Test world created"), World))
+    {
+        return false;
+    }
+
+    AActor* Owner = nullptr;
+    AStoneActor* Stone = nullptr;
+    UStonePlacementComponent* Placement = nullptr;
+    const bool bFixtureValid = CreatePlacementFixture(World, Owner, Stone, Placement);
+    TestTrue(TEXT("Placement fixture created"), bFixtureValid);
+    if (!bFixtureValid)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+
+    AStoneActor* SupportStone = World->SpawnActor<AStoneActor>(
+        FVector(80.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
+    TestNotNull(TEXT("Support stone created"), SupportStone);
+    if (!SupportStone)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+
+    UStoneDefinition* SupportDefinition = NewObject<UStoneDefinition>(SupportStone);
+    TestNotNull(TEXT("Support definition created"), SupportDefinition);
+    if (!SupportDefinition)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+    SupportDefinition->StoneName = FName(TEXT("SupportStone"));
+    SupportDefinition->Dimensions = FVector(30.0f, 20.0f, 20.0f);
+    SupportDefinition->Mesh = TSoftObjectPtr<UStaticMesh>(
+        FSoftObjectPath(TEXT("/Engine/BasicShapes/Cube.Cube")));
+    FStoneSocket SupportSocket;
+    SupportSocket.SocketName = FName(TEXT("TopSocket"));
+    SupportSocket.LocalPosition = FVector(0.0f, 0.0f, 50.0f);
+    SupportSocket.LocalRotation = FRotator::ZeroRotator;
+    SupportSocket.SocketRadius = 12.0f;
+    SupportDefinition->Sockets.Add(SupportSocket);
+    SupportStone->InitializeFromDefinition(SupportDefinition);
+    TestTrue(TEXT("Support stone can be installed"),
+        SupportStone->SetStructuralState_Implementation(EStructuralNodeState::Installed));
+
+    TestTrue(TEXT("New stone begins placement"), Placement->BeginPlacement(Stone));
+    TestTrue(TEXT("Target identifies the support stone"),
+        Placement->UpdatePlacementTarget(
+            FVector(80.0f, 0.0f, 50.0f), FVector::UpVector, SupportStone));
+
+    // Fixture provides two authored faces followed by one source socket.
+    Placement->CycleFace();
+    Placement->CycleFace();
+    Placement->CycleFace();
+
+    TestTrue(TEXT("Socket-aligned stone commits"), Placement->ConfirmPlacement());
+    TestTrue(TEXT("Placed stone is connected to its support"),
+        Stone->ConnectionGraph->GetConnectedNodes().Contains(SupportStone));
+    TestTrue(TEXT("Support graph receives reciprocal connection"),
+        SupportStone->ConnectionGraph->GetConnectedNodes().Contains(Stone));
+    TestTrue(TEXT("Both graph records contain exactly one connection"),
+        Stone->ConnectionGraph->Connections.Num() == 1 &&
+        SupportStone->ConnectionGraph->Connections.Num() == 1);
+
     DestroyStonePlacementTestWorld(World);
     return true;
 }
