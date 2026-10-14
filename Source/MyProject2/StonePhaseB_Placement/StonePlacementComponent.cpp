@@ -231,7 +231,8 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
     CollectValidPlacementOptions(Definition, FaceIndices, SocketIndices);
 
     const int32 OptionCount = FaceIndices.Num() + SocketIndices.Num();
-    if (OptionCount > 0 && (PlacementOptionIndex < 0 || PlacementOptionIndex >= OptionCount))
+    if (OptionCount > 0 && PlacementOptionIndex != INDEX_NONE &&
+        (PlacementOptionIndex < 0 || PlacementOptionIndex >= OptionCount))
     {
         PlacementOptionIndex = 0;
     }
