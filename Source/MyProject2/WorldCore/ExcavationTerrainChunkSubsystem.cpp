@@ -220,6 +220,7 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
         }
 
         const bool bProxySetChanged = LandscapeFallbackDensitySource->SetLandscapeProxies(Proxies);
+        const bool bMaterialMappingsChanged = LandscapeFallbackDensitySource->SetMaterialMappings(LandscapeMaterialMappings);
         if (RegisteredFallbackDensitySource != LandscapeFallbackDensitySource)
         {
             if (!Excavation->RegisterFallbackBaseDensitySource(LandscapeFallbackDensitySource))
@@ -230,7 +231,7 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
             bProviderChanged = true;
         }
 
-        bProviderChanged = bProviderChanged || bProxySetChanged;
+        bProviderChanged = bProviderChanged || bProxySetChanged || bMaterialMappingsChanged;
     }
     else
     {
