@@ -34,6 +34,10 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneDefinition.h"
+#include "StonePhaseB_Placement/StoneCarryComponent.h"
+#include "StonePhaseB_Placement/StonePlacementComponent.h"
 
 namespace
 {
@@ -79,6 +83,8 @@ AForestCharacter::AForestCharacter()
 	GetCharacterMovement()->AirControl = 0.3f;
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
+	StoneCarry = CreateDefaultSubobject<UStoneCarryComponent>(TEXT("StoneCarry"));
+	StonePlacement = CreateDefaultSubobject<UStonePlacementComponent>(TEXT("StonePlacement"));
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
