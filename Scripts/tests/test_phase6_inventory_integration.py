@@ -14,6 +14,8 @@ INVENTORY_CPP = (ROOT / "Source/MyProject2/InventoryCore/InventoryComponent.cpp"
 SAVE_H = (ROOT / "Source/MyProject2/WorldCore/WorldPersistenceSubsystem.h").read_text(encoding="utf-8")
 SAVE_CPP = (ROOT / "Source/MyProject2/WorldCore/WorldPersistenceSubsystem.cpp").read_text(encoding="utf-8")
 RUNNER = (ROOT / "Scripts/run_python_tests.sh").read_text(encoding="utf-8")
+STORAGE_H = (ROOT / "Source/MyProject2/InventoryCore/InventoryStorageActor.h").read_text(encoding="utf-8")
+STORAGE_CPP = (ROOT / "Source/MyProject2/InventoryCore/InventoryStorageActor.cpp").read_text(encoding="utf-8")
 
 
 def section(source: str, start: str, end: str) -> str:
@@ -82,6 +84,22 @@ class Phase6InventoryIntegrationTests(unittest.TestCase):
             SAVE_CPP.index("Excavation->ImportSnapshot(LoadedSave->Excavation, true)"),
         )
         self.assertIn("bool UInventoryComponent::CanRestoreFromSavedItems", INVENTORY_CPP)
+
+    def test_storage_actor_uses_same_transfer_policy(self):
+        self.assertIn("TObjectPtr<UInventoryComponent> Inventory", STORAGE_H)
+        self.assertIn("UInventoryComponent::TransferItem(Source, Inventory, ItemID, Count)", STORAGE_CPP)
+        self.assertIn("UInventoryComponent::TransferItem(Inventory, Destination, ItemID, Count)", STORAGE_CPP)
+        self.assertIn("MaxSlots = 80", STORAGE_CPP)
+        self.assertIn("MaxWeight = 2000.0f", STORAGE_CPP)
+
+    def test_storage_snapshots_are_saved_preflighted_and_restored(self):
+        self.assertIn("TArray<FInventoryStorageSnapshot> StorageInventories", SAVE_H)
+        self.assertIn("SaveObject->bHasStorageInventories = true", SAVE_CPP)
+        self.assertIn("StorageSnapshot.Items.Add(Slot.Item)", SAVE_CPP)
+        self.assertIn("StorageActorsByKey", SAVE_CPP)
+        self.assertIn("Storage->GetInventory()->CanRestoreFromSavedItems(StorageSnapshot.Items)", SAVE_CPP)
+        self.assertIn("Storage->GetInventory()->RestoreFromSavedItems(StorageSnapshot.Items)", SAVE_CPP)
+        self.assertIn("CurrentSaveSchemaVersion = 3", SAVE_H)
 
     def test_phase6_contract_runs_in_the_python_ci_script(self):
         self.assertIn("test_inventory_transfer_contract.py", RUNNER)
