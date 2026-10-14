@@ -19,6 +19,16 @@
 
 `Dynamic Mesh CSG` alternatif olarak not edilir, fakat ikinci sistemi şimdiden tam implemente ederek eforu ikiye bölmeyiz. İki backend'in değiştirilmesini kolaylaştıracak sınır korunur; seçeneklerin kapsamlı karşılaştırması Faz 14'te yapılabilir.
 
+## İlk kod katmanı — branch'teki API
+
+Kaynak koduna şu başlangıç veri katmanı eklendi:
+
+- `WorldCore/ExcavationTypes.h`: edit türü, hücre override/change ve rollback receipt veri tipleri.
+- `WorldCore/ExcavationVolumeSubsystem.h/.cpp`: dünya cm koordinatını 3B cell'e çevirme; sparse density override sorgusu; sınırlı aday hacmiyle küresel carve/fill işlemi; işlem ID'siyle güvenli rollback; negatif koordinatlarda floor-based chunk hesabı; chunk başına override cell indeksi ve mesh seam yenilemesi için komşu chunk listesi.
+- Aktif override varken cellSize/chunkSize ayarı değiştirilmiyor; aynı hücreyi etkileyen tekrarlı işlemler sahiplik zincirini koruyor.
+
+Bu ilk katman veri otoritesi ve değişiklik günlüğü sınırıdır. Henüz yüzey mesh'i, collision mesh'i, navmesh, procedural base-density provider veya save-game serializer üretmez. Bunlar sonraki katmanlardan bağlanacaktır; olmayan işlevler varmış gibi kabul edilmez.
+
 ## Karşılaştırılacak adaylar
 
 ### A — Sparse 3D yoğunluk/SDF alanı + yüzey çıkarımı
