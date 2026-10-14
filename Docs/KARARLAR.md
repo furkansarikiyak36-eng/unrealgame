@@ -17,14 +17,16 @@
 | Her mekanik değişikliği için `AMechanicsDemo` otomatik testine kontrol eklenir | Grafiksiz doğrulama |
 | Dosyalar web Claude ile **zip + not** ile paylaşılır; tünel ve yazma yetkisi verilmez | Güvenlik, kota |
 | Editör, uzun derleme ve test işlerinde kapalı tutulur, iş bitince `Demo_WoodChain` açık yeniden başlatılır | Derleme ve test aynı DLL'i kullanır |
+| Ağaçtan çıkan kütük sayısı ağaç boyundan (boyun %85'i, en çok 4); tarif tuşları (1,2,4–7) yok, odun yalnızca kesilerek hazırlanır | Faz 9 |
+| Taşlar tek tek konur, 7 taş halkası ateş yeri olur | Faz 8b |
+| Hareket durumu Loose / Carried / Installed; sert çarpma kütüğe hasar verir | Faz 10 |
+| Düşman duvarı yaparak hasar verir (yapıdaki hasar kuralları aynen); kazık ve çarpan kütük düşmana zarar verir | Faz 14 |
 | Ateş yerleştirme modu değil, odunun özelliği: her parça yanabilir (tutuşuyor → yanıyor → yanık), yakıt = hacim (tam kütük ~593 sn), hasar yakıt bitince 1'e varır; yanan parça yanındakini ısıtır; aynı anda en çok 12 parça yanar | Faz 8 (13 Ekim planı) |
 | Kamp ateşi 7 taşla kurulur ([C]), odun atmak ateşi yakmaz; çakmak ([F] basılı) ya da yanan odun yakar | Ham madde zinciri; iki ateşleme kaynağı kararı |
 
 ## Bekleyen kararlar
 
-1. **Tarif tuşları (1–7) ve envanter:** "1 kütük → 4 odun" gibi tarifler hâlâ var, fiziksel kesim fikriyle çelişiyor. Öneri: ahşap parçalar fiziksel kalsın, tarif tuşları kalksın, B inşa modu yalnızca taş gibi ahşap olmayanlar için kalsın.
-2. **Gövde boyu:** Devrilen ağaçtan hep 15,6 m × 95 cm gövde çıkıyor; 11 m'lik ince çamdan bile. Öneri: ağacın boyuna ve kalınlığına bağlansın, 65 cm'nin katına yuvarlansın.
-3. **İki kütük sistemi:** Wood paketinin bileşen sistemi (`WoodPieceComponent` vb.) ile `ACarvableLog` yan yana. Öneri: `ACarvableLog` ana sistem kalsın, Wood'dan yalnızca mantık kullanılsın.
-4. **Eski yapı sistemi** (`StructuralIntegritySubsystem`, `LogConstructionActor`, 🔵 denenmemiş): yeni destek hesabıyla aynı işi yapıyor. Öneri: dondur.
-5. **Sıradaki iş (Faz 8 bitti, kalanlar):** (a) oyuncunun kurabilmesi için eğik parça yerleştirme, platform üstüne direk, geçici işaretleme; (b) kapı/pencere açma; (c) lojistik (el arabası, kızak); (d) ağaç boyu bağlama.
-6. **Web Claude erişimi:** zip akışı kullanılıyor; zip'i otomatik entegre eden `Scripts/apply_zip.py` yazılsın mı?
+1. **İki kütük sistemi / eski yapı sistemi:** `ACarvableLog` ana sistem; Wood paketinin bileşenleri ve eski `StructuralIntegritySubsystem`/`LogConstructionActor` kullanılmıyor. Öneri: dondur, ileride sil.
+2. **Yapılmayanlar (öneri sırasıyla):** (a) ses, (b) halat hattı ve su üstü taşıma, sal, (c) uzun parçayı sürükleme ve bir ucu kaldırma, (d) açıklık önizleme çizgisi ve açılır kapı, (e) düşman görseli ve yol bulma, otomatik gece baskını, (f) arabanın odundan yapılması, (g) kütük tuzağı mekanizması.
+3. **Paketin kullanılmayan sistemleri** (Inventory, Stone, Stick, Farming, World, Material): derleniyor ama hiçbir şeye bağlı değil. Hangisi oyuna alınacak?
+4. **Web Claude erişimi:** zip akışı kullanılıyor; zip'i otomatik entegre eden `Scripts/apply_zip.py` yazılsın mı?

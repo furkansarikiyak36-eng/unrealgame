@@ -456,7 +456,13 @@ namespace WoodStructure
 						}
 					}
 				}
-				Features.Add(MakeFeature(C, EWoodFeatureKind::Platform, Ids, Extent(C, Ids)));
+				// Legs shorter than a metre make a table (a workbench), taller ones a platform.
+				bool bShortLegs = Posts.Num() > 0;
+				for (const int32 PostId : Posts)
+				{
+					bShortLegs &= (**C.ById.Find(PostId)).Length() < 100.0;
+				}
+				Features.Add(MakeFeature(C, bShortLegs ? EWoodFeatureKind::Table : EWoodFeatureKind::Platform, Ids, Extent(C, Ids)));
 				Claimed.Append(Ids);
 			}
 		}
@@ -466,7 +472,7 @@ namespace WoodStructure
 			TSet<int32> PlatformIds;
 			for (const FFeature& F : Features)
 			{
-				if (F.Kind == EWoodFeatureKind::Platform)
+				if (F.Kind == EWoodFeatureKind::Platform || F.Kind == EWoodFeatureKind::Table)
 				{
 					PlatformIds.Append(F.NodeIds);
 				}

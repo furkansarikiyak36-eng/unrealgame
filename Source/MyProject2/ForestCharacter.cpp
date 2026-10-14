@@ -10,6 +10,9 @@
 #include "ForestOutline.h"
 #include "StructureLink.h"
 #include "Campfire.h"
+#include "HaulCart.h"
+#include "FireStone.h"
+#include "RaidEnemy.h"
 #include "Components/LineBatchComponent.h"
 #include "MechanicsDemo.h"
 #include "StructureManager.h"
@@ -173,13 +176,7 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UInputAction* SprintAction = MakeAction(TEXT("IA_Sprint"), EInputActionValueType::Boolean);
 	UInputAction* PrimaryInput = MakeAction(TEXT("IA_Primary"), EInputActionValueType::Boolean);
 	UInputAction* InteractAction = MakeAction(TEXT("IA_Interact"), EInputActionValueType::Boolean);
-	UInputAction* CraftBeamAction = MakeAction(TEXT("IA_CraftBeam"), EInputActionValueType::Boolean);
-	UInputAction* CraftFirewoodAction = MakeAction(TEXT("IA_CraftFirewood"), EInputActionValueType::Boolean);
 	UInputAction* CraftBlockAction = MakeAction(TEXT("IA_CraftBlock"), EInputActionValueType::Boolean);
-	UInputAction* CraftHalfAction = MakeAction(TEXT("IA_CraftHalfLog"), EInputActionValueType::Boolean);
-	UInputAction* CraftShortAction = MakeAction(TEXT("IA_CraftShortLog"), EInputActionValueType::Boolean);
-	UInputAction* CraftHollowAction = MakeAction(TEXT("IA_CraftHollowLog"), EInputActionValueType::Boolean);
-	UInputAction* CraftPlankAction = MakeAction(TEXT("IA_CraftPlank"), EInputActionValueType::Boolean);
 	UInputAction* InventoryAction = MakeAction(TEXT("IA_Inventory"), EInputActionValueType::Boolean);
 	UInputAction* BuildAction = MakeAction(TEXT("IA_Build"), EInputActionValueType::Boolean);
 	UInputAction* RotateAction = MakeAction(TEXT("IA_Rotate"), EInputActionValueType::Boolean);
@@ -209,13 +206,7 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	MappingContext->MapKey(SprintAction, EKeys::LeftShift);
 	MappingContext->MapKey(PrimaryInput, EKeys::LeftMouseButton);
 	MappingContext->MapKey(InteractAction, EKeys::E);
-	MappingContext->MapKey(CraftBeamAction, EKeys::One);
-	MappingContext->MapKey(CraftFirewoodAction, EKeys::Two);
 	MappingContext->MapKey(CraftBlockAction, EKeys::Three);
-	MappingContext->MapKey(CraftHalfAction, EKeys::Four);
-	MappingContext->MapKey(CraftShortAction, EKeys::Five);
-	MappingContext->MapKey(CraftHollowAction, EKeys::Six);
-	MappingContext->MapKey(CraftPlankAction, EKeys::Seven);
 	MappingContext->MapKey(InventoryAction, EKeys::Tab);
 	MappingContext->MapKey(BuildAction, EKeys::B);
 	MappingContext->MapKey(RotateAction, EKeys::R);
@@ -240,13 +231,7 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	Input->BindAction(SprintAction, ETriggerEvent::Completed, this, &AForestCharacter::StopSprint);
 	Input->BindAction(PrimaryInput, ETriggerEvent::Started, this, &AForestCharacter::PrimaryAction);
 	Input->BindAction(InteractAction, ETriggerEvent::Started, this, &AForestCharacter::Interact);
-	Input->BindAction(CraftBeamAction, ETriggerEvent::Started, this, &AForestCharacter::CraftBeam);
-	Input->BindAction(CraftFirewoodAction, ETriggerEvent::Started, this, &AForestCharacter::CraftFirewood);
 	Input->BindAction(CraftBlockAction, ETriggerEvent::Started, this, &AForestCharacter::CraftStoneBlock);
-	Input->BindAction(CraftHalfAction, ETriggerEvent::Started, this, &AForestCharacter::CraftHalfLog);
-	Input->BindAction(CraftShortAction, ETriggerEvent::Started, this, &AForestCharacter::CraftShortLog);
-	Input->BindAction(CraftHollowAction, ETriggerEvent::Started, this, &AForestCharacter::CraftHollowLog);
-	Input->BindAction(CraftPlankAction, ETriggerEvent::Started, this, &AForestCharacter::CraftPlank);
 	Input->BindAction(InventoryAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleInventory);
 	UInputAction* ToggleTrowelAction = MakeAction(TEXT("IA_ToggleTrowel"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(ToggleTrowelAction, EKeys::T);
@@ -289,7 +274,22 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	Input->BindAction(LighterAction, ETriggerEvent::Completed, this, &AForestCharacter::LighterReleased);
 	UInputAction* FirePitAction = MakeAction(TEXT("IA_FirePit"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(FirePitAction, EKeys::C);
-	Input->BindAction(FirePitAction, ETriggerEvent::Started, this, &AForestCharacter::BuildFirePit);
+	Input->BindAction(FirePitAction, ETriggerEvent::Started, this, &AForestCharacter::PlaceFireStone);
+	UInputAction* TempAction = MakeAction(TEXT("IA_Temporary"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(TempAction, EKeys::V);
+	Input->BindAction(TempAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleTemporary);
+	UInputAction* PushAction = MakeAction(TEXT("IA_Push"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(PushAction, EKeys::X);
+	Input->BindAction(PushAction, ETriggerEvent::Started, this, &AForestCharacter::PushAimed);
+	UInputAction* OpeningAction = MakeAction(TEXT("IA_Opening"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(OpeningAction, EKeys::O);
+	Input->BindAction(OpeningAction, ETriggerEvent::Started, this, &AForestCharacter::OpenAimed);
+	UInputAction* RaidAction = MakeAction(TEXT("IA_DebugRaid"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(RaidAction, EKeys::Z);
+	Input->BindAction(RaidAction, ETriggerEvent::Started, this, &AForestCharacter::DebugRaid);
+	UInputAction* HaulerAction = MakeAction(TEXT("IA_DebugHaulers"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(HaulerAction, EKeys::U);
+	Input->BindAction(HaulerAction, ETriggerEvent::Started, this, &AForestCharacter::DebugHaulers);
 	Input->BindAction(DemoAction, ETriggerEvent::Started, this, &AForestCharacter::DebugMechanicsDemo);
 #endif
 }
@@ -774,6 +774,12 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		CarryPlace = ECarryPlace::Fuel;
 		return;
 	}
+	// A cart, sled or rack takes whatever fits on it.
+	if (AHaulCart* Cart = Cast<AHaulCart>(Hit.GetActor()))
+	{
+		CarryPlace = Cart->CanLoad(Piece) ? ECarryPlace::Load : ECarryPlace::None;
+		return;
+	}
 	if (ACarvableLog* Damaged = Cast<ACarvableLog>(Hit.GetActor()); Damaged && ACarvableLog::CanReplace(Damaged, Piece))
 	{
 		CarryPlace = ECarryPlace::Repair;
@@ -833,6 +839,29 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	}
 	// A split piece onto a lying log: a floor board, flat face up, resting on it.
 	AActor* Lower = Hit.GetActor();
+	// A post stood on the top of an installed lying log (a platform beam): its foot rests on it.
+	if ((bPlaceStanding || bPlaceSlope) && Lower && Hit.ImpactNormal.Z > 0.6f && !Piece->IsSplit())
+	{
+		FVector BaseCentre, BaseAxis;
+		float BaseRadius, BaseHalf;
+		const ACarvableLog* Base = Cast<ACarvableLog>(Lower);
+		if (Base && Base->IsAnchored() && ACarvableLog::GetLogAxis(Base, BaseCentre, BaseAxis, BaseRadius, BaseHalf) && FMath::Abs(BaseAxis.Z) < 0.3f)
+		{
+			const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+			if (bPlaceSlope)
+			{
+				ACarvableLog::ComputeSlopePlacement(Hit.ImpactPoint, Facing, SlopeAngle, Piece, PlaceTransform);
+				CarryPlace = ECarryPlace::Slope;
+			}
+			else
+			{
+				PlaceTransform = Piece->GetStandTransform(Hit.ImpactPoint, Facing.Rotation().Yaw);
+				CarryPlace = ECarryPlace::Stand;
+			}
+			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+			return;
+		}
+	}
 	if (Lower && Lower->IsA<ACarvableLog>() && ACarvableLog::ComputeFloorPlacement(Lower, Hit.ImpactPoint, GetActorLocation(), Piece, PlaceTransform))
 	{
 		CarryPlace = ECarryPlace::Floor;
@@ -854,6 +883,15 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		return;
 	}
 	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	if (bPlaceSlope)
+	{
+		if (ACarvableLog::ComputeSlopePlacement(Hit.ImpactPoint, Forward, SlopeAngle, Piece, PlaceTransform))
+		{
+			CarryPlace = ECarryPlace::Slope;
+			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+		}
+		return;
+	}
 	const float Yaw = bPlaceStanding ? Forward.Rotation().Yaw : Forward.Rotation().Yaw + 90.f;
 	PlaceTransform = bPlaceStanding ? Piece->GetStandTransform(Hit.ImpactPoint, Yaw) : Piece->GetLayTransform(Hit.ImpactPoint, Yaw);
 	CarryPlace = bPlaceStanding ? ECarryPlace::Stand : ECarryPlace::Lay;
@@ -897,6 +935,25 @@ bool AForestCharacter::PlaceCarried()
 		ShowMessage(TEXT("Döşeme tahtası kondu"));
 		SettleStructure();
 		break;
+	case ECarryPlace::Slope:
+		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		ShowMessage(FString::Printf(TEXT("Eğik parça kondu (%.0f°)"), SlopeAngle));
+		SettleStructure();
+		break;
+	case ECarryPlace::Load:
+	{
+		AHaulCart* Cart = Cast<AHaulCart>(PlaceTarget.Get());
+		if (Cart && Cart->Load(Piece))
+		{
+			ShowMessage(FString::Printf(TEXT("%s: yüklendi (%d parça)  —  indirmek için [E]"), *AHaulCart::KindName(Cart->GetKind()), Cart->GetLoadCount()));
+		}
+		else
+		{
+			CarriedLogs.Add(Piece);
+			ShowMessage(TEXT("Sığmıyor"));
+		}
+		break;
+	}
 	case ECarryPlace::Fuel:
 	{
 		ACampfire* Fire = Cast<ACampfire>(PlaceTarget.Get());
@@ -963,8 +1020,16 @@ ACampfire* AForestCharacter::TestBuildFirePit(const FHitResult& Hit, bool bGiveS
 	{
 		return nullptr;
 	}
-	RemoveItem(EForestItem::Stone, FirePitStones);
-	return ACampfire::Build(GetWorld(), Hit.ImpactPoint);
+	// Seven stones, one after another, round the spot.
+	ACampfire* Pit = nullptr;
+	for (int32 Index = 0; Index < FirePitStones; ++Index)
+	{
+		const float Angle = 2.f * PI * Index / FirePitStones;
+		FHitResult Spot = Hit;
+		Spot.ImpactPoint = Hit.ImpactPoint + FVector(FMath::Cos(Angle) * 45.f, FMath::Sin(Angle) * 45.f, 0.f);
+		Pit = TestPlaceStone(Spot, false);
+	}
+	return Pit;
 }
 
 void AForestCharacter::TestLight(AActor* Target, float Seconds)
@@ -1002,30 +1067,177 @@ void AForestCharacter::LighterReleased()
 	bLighterHeld = false;
 }
 
-void AForestCharacter::BuildFirePit()
+void AForestCharacter::PlaceFireStone()
 {
 	if (IsHandsBusy())
 	{
-		ShowMessage(TEXT("Ateş yeri için elin boş olmalı"));
+		ShowMessage(TEXT("Taş koymak için elin boş olmalı"));
 		return;
 	}
-	if (GetItemCount(EForestItem::Stone) < FirePitStones)
+	if (GetItemCount(EForestItem::Stone) < 1)
 	{
-		ShowMessage(FString::Printf(TEXT("Ateş yeri için %d taş gerek (%d var)"), FirePitStones, GetItemCount(EForestItem::Stone)));
+		ShowMessage(FString::Printf(TEXT("Ateş yeri için %d taş gerek: taş topla, düz zemine [C] ile tek tek koy"), FirePitStones));
 		return;
 	}
 	FHitResult Hit;
 	if (!TraceFromView(500.f, Hit, true) || Hit.ImpactNormal.Z < 0.7f || Hit.GetActor()->IsA<ACarvableLog>())
 	{
-		ShowMessage(TEXT("Ateş yeri düz zemine kurulur  —  yere bak"));
+		ShowMessage(TEXT("Taş düz zemine konur  —  yere bak"));
 		return;
 	}
-	TestBuildFirePit(Hit, false);
-	ShowMessage(TEXT("Ateş yeri kuruldu  —  odun at, [F] çakmakla yak"));
+	if (ACampfire* Pit = TestPlaceStone(Hit, false))
+	{
+		ShowMessage(TEXT("Ateş yeri tamam  —  odun at, [F] çakmakla yak"));
+		(void)Pit;
+	}
+	else
+	{
+		ShowMessage(FString::Printf(TEXT("Taş koyuldu (%d / %d)"), AFireStone::CountNear(GetWorld(), Hit.ImpactPoint), FirePitStones));
+	}
+}
+
+ACampfire* AForestCharacter::TestPlaceStone(const FHitResult& Hit, bool bGiveStone)
+{
+	if (bGiveStone)
+	{
+		AddItem(EForestItem::Stone, 1);
+	}
+	if (GetItemCount(EForestItem::Stone) < 1)
+	{
+		return nullptr;
+	}
+	RemoveItem(EForestItem::Stone, 1);
+	AFireStone* Stone = AFireStone::Place(GetWorld(), Hit.ImpactPoint);
+	return AFireStone::TryForm(GetWorld(), Stone);
+}
+
+void AForestCharacter::TakeEnemyHit(float Amount)
+{
+	Survival->ApplyDamage(Amount);
+}
+
+void AForestCharacter::ToggleTemporary()
+{
+	ACarvableLog* Piece = FocusedCarvable.Get();
+	if (!Piece || !Piece->IsAnchored())
+	{
+		ShowMessage(TEXT("İskele işareti yapıdaki bir parçaya bakınca konur"));
+		return;
+	}
+	TestToggleTemporary(Piece);
+	ShowMessage(Piece->IsTemporary() ? TEXT("Geçici (iskele) işaretlendi") : TEXT("İskele işareti kaldırıldı"));
+}
+
+void AForestCharacter::TestToggleTemporary(ACarvableLog* Piece)
+{
+	if (Piece)
+	{
+		Piece->SetTemporary(!Piece->IsTemporary());
+		StructureLink::MarkChanged();
+	}
+}
+
+void AForestCharacter::PushAimed()
+{
+	FHitResult Hit;
+	if (!TraceFromView(350.f, Hit, true) || !Hit.GetActor())
+	{
+		return;
+	}
+	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	if (TestPush(Hit.GetActor(), Forward * 300.f))
+	{
+		ShowMessage(TEXT("İtildi"));
+	}
+	else
+	{
+		ShowMessage(TEXT("İtilmez: yapıda ya da omuzda"));
+	}
+}
+
+bool AForestCharacter::TestPush(AActor* Target, const FVector& Velocity)
+{
+	if (ACarvableLog* Piece = Cast<ACarvableLog>(Target))
+	{
+		return Piece->Push(Velocity);
+	}
+	if (AHaulCart* Cart = Cast<AHaulCart>(Target))
+	{
+		return Cart->Shove(Velocity);
+	}
+	return false;
+}
+
+ACarvableLog* AForestCharacter::TestUnload(AHaulCart* Cart)
+{
+	ACarvableLog* Piece = Cart ? Cart->Unload() : nullptr;
+	if (Piece)
+	{
+		StartCarry(Piece);
+	}
+	return Piece;
+}
+
+void AForestCharacter::OpenAimed()
+{
+	FHitResult Hit;
+	ACarvableLog* Piece = TraceFromView(500.f, Hit, true) ? Cast<ACarvableLog>(Hit.GetActor()) : nullptr;
+	if (!Piece || !Piece->IsAnchored())
+	{
+		ShowMessage(TEXT("Açıklık, duvardaki yatay bir kütüğe bakınca açılır"));
+		return;
+	}
+	const float LocalX = Piece->GetActorTransform().InverseTransformPosition(Hit.ImpactPoint).X;
+	if (Piece->CutOpening(LocalX, 2))
+	{
+		ShowMessage(TEXT("Açıklık açıldı (2 modül)"));
+		SettleStructure();
+	}
+	else
+	{
+		ShowMessage(TEXT("Burada açıklık açılmaz: iki yanında da en az 1 modül kalmalı"));
+	}
+}
+
+void AForestCharacter::DebugRaid()
+{
+	if (RequireAdmin())
+	{
+		ShowMessage(RaidKit::StartDefaultRaid(GetWorld()) ? TEXT("Baskın başladı") : TEXT("Baskın başlamadı"));
+	}
+}
+
+void AForestCharacter::DebugHaulers()
+{
+	if (!RequireAdmin())
+	{
+		return;
+	}
+	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward);
+	const FVector Base = GetActorLocation() - FVector(0.f, 0.f, 90.f) + Forward * 450.f;
+	const EHaulKind Kinds[] = { EHaulKind::Cart, EHaulKind::Sled, EHaulKind::Rack };
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		AHaulCart::Spawn(GetWorld(), Base + Right * (Index - 1) * 380.f, Forward.Rotation().Yaw + 90.f, Kinds[Index]);
+	}
+	ShowMessage(TEXT("El arabası, kızak ve sehpa konuldu  —  parçayla bakıp [Sol tık], indirmek için [E], itmek için [X]"));
+}
+
+bool AForestCharacter::TestPlaceSlope(const FHitResult& Hit, float AngleDeg)
+{
+	bPlaceStanding = false;
+	bPlaceSlope = true;
+	SlopeAngle = AngleDeg;
+	UpdateCarryPlacementAt(Hit, true);
+	const bool bPlaced = PlaceCarried();
+	bPlaceSlope = false;
+	return bPlaced;
 }
 
 bool AForestCharacter::TestPlace(bool bStanding, const FHitResult& Hit)
 {
+	bPlaceSlope = false;
 	bPlaceStanding = bStanding;
 	UpdateCarryPlacementAt(Hit, true);
 	return PlaceCarried();
@@ -1349,6 +1561,12 @@ void AForestCharacter::PerformHit()
 		ApplyCarveHit(Carvable);
 		return;
 	}
+	if (ARaidEnemy* Enemy = Cast<ARaidEnemy>(Hit.GetActor()))
+	{
+		Enemy->TakeHit(25.f);
+		ShowMessage(Enemy->IsAlive() ? TEXT("Düşmana vuruldu") : TEXT("Düşman öldü"));
+		return;
+	}
 	if (CurrentTool == EForestTool::Trowel)
 	{
 		// Trowel applies chinking sealant to log walls, interior plaster, or mortar to stone foundations
@@ -1444,6 +1662,19 @@ void AForestCharacter::Interact()
 	{
 		StopRopeDrag();
 		return;
+	}
+	// A loaded cart, sled or rack in sight: E takes the last piece off it.
+	if (CarriedItem == EForestItem::None)
+	{
+		FHitResult CartHit;
+		if (TraceFromView(400.f, CartHit, true))
+		{
+			if (AHaulCart* Cart = Cast<AHaulCart>(CartHit.GetActor()); Cart && Cart->GetLoadCount() > 0)
+			{
+				TestUnload(Cart);
+				return;
+			}
+		}
 	}
 	// Any piece of wood onto the shoulder, as long as its weight fits (a log item lying about becomes a piece first).
 	if (CarriedItem == EForestItem::None || CarriedItem == EForestItem::Log)
@@ -1935,8 +2166,23 @@ void AForestCharacter::RotateBuild()
 	}
 	else if (CarriedItem == EForestItem::Log)
 	{
-		bPlaceStanding = !bPlaceStanding;
-		ShowMessage(bPlaceStanding ? TEXT("Koyma: dik (direk)") : TEXT("Koyma: yatır"));
+		// Lay -> stand -> lean -> lay.
+		if (bPlaceSlope)
+		{
+			bPlaceSlope = false;
+			bPlaceStanding = false;
+		}
+		else if (bPlaceStanding)
+		{
+			bPlaceStanding = false;
+			bPlaceSlope = true;
+		}
+		else
+		{
+			bPlaceStanding = true;
+		}
+		ShowMessage(bPlaceSlope ? FString::Printf(TEXT("Koyma: eğik %.0f°  (tekerlek: açı)"), SlopeAngle)
+			: bPlaceStanding ? FString(TEXT("Koyma: dik (direk)")) : FString(TEXT("Koyma: yatır")));
 	}
 	else if (FocusedCarvable.IsValid())
 	{
@@ -1953,6 +2199,11 @@ void AForestCharacter::CycleBuildItem(const FInputActionValue& Value)
 	if (bBuildMode && !FMath::IsNearlyZero(Axis))
 	{
 		SelectNextAvailable(Axis > 0.f ? 1 : -1);
+	}
+	else if (!bBuildMode && CarriedItem == EForestItem::Log && bPlaceSlope && !FMath::IsNearlyZero(Axis))
+	{
+		SlopeAngle = FMath::Clamp(SlopeAngle + (Axis > 0.f ? 15.f : -15.f), 15.f, 75.f);
+		ShowMessage(FString::Printf(TEXT("Eğim: %.0f°"), SlopeAngle));
 	}
 	else if (!bBuildMode && FocusedCarvable.IsValid() && IsProfileTool(CarveTool) && !FMath::IsNearlyZero(Axis))
 	{
@@ -2427,6 +2678,10 @@ void AForestCharacter::ApplyCarveHit(ACarvableLog* Log)
 			ShowMessage(CarveTool == ECarveTool::Point ? TEXT("Uç sivriltildi") : CarveTool == ECarveTool::Chamfer ? TEXT("Uç pahlandı") : TEXT("Uç düzeltildi"));
 		}
 		break;
+	case ECarveTool::Groove:
+		Log->CutGroove(CarveSide);
+		ShowMessage(TEXT("Oluk açıldı"));
+		break;
 	case ECarveTool::Dovetail:
 		Log->CutDovetail(CarveX, CarveSide, CarveWidth, FMath::Min(CarveDepth, R));
 		ShowMessage(FString::Printf(TEXT("Kırlangıç kuyruğu açıldı: %.0f cm geniş, %.1f cm derin"), CarveWidth, FMath::Min(CarveDepth, R)));
@@ -2457,6 +2712,7 @@ const TCHAR* AForestCharacter::GetCarveToolName(ECarveTool Tool)
 	case ECarveTool::Chamfer:    return TEXT("Pah");
 	case ECarveTool::Trim:       return TEXT("Uç düzeltme");
 	case ECarveTool::Dovetail:   return TEXT("Kırlangıç");
+	case ECarveTool::Groove:     return TEXT("Oluk");
 	default:                     return TEXT("");
 	}
 }

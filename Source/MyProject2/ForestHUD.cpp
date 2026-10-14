@@ -88,6 +88,10 @@ void AForestHUD::DrawHUD()
 		{
 			Detail += FString::Printf(TEXT("  |  hasar %%%.0f"), Player->GetFocusedCarvable()->GetDamage() * 100.f);
 		}
+		if (Player->GetFocusedCarvable()->IsTemporary())
+		{
+			Detail += TEXT("  |  geçici (iskele)");
+		}
 		if (Player->GetFocusedCarvable()->IsBurning())
 		{
 			Detail += FString::Printf(TEXT("  |  YANIYOR %.0f sn"), Player->GetFocusedCarvable()->GetBurnSecondsLeft());
@@ -331,15 +335,12 @@ void AForestHUD::DrawHUD()
 	static const TArray<FString> Help = {
 		TEXT("WASD hareket  |  Shift koş  |  Space zıpla"),
 		TEXT("Sol tık: vur / blok koy  |  E: topla  |  [T]: Mala (Chinking/Harç)"),
-		TEXT("[1] 1 Kütük -> 2 Kiriş"),
-		TEXT("[2] 1 Kütük -> 4 Odun"),
 		TEXT("[3] 3 Taş -> 1 Taş Blok"),
-		TEXT("[4] 1 Kütük -> 2 Yarım Kütük  |  [5] -> 3 Kısa Kütük  |  [6] -> 1 Oyuk Kütük"),
-		TEXT("[7] 1 Yarım Kütük -> 2 Kalas  |  [Tab] Çanta"),
+		TEXT("Odun tarifle değil, kesilerek yapılır (kütük -> kiriş, yarım, kısa, kalas...)  |  [Tab] Çanta"),
 		TEXT("[P] Admin modu: [G] malzeme, [H] oda, [J] kes, [N] aç, [M] hasar, [K] oyma kütüğü, [L] demo, [Y] hasar"),
 		TEXT("[B] İnşa modu  |  Tekerlek / [Q]: seç  |  [R] döndür  |  Sağ tık: iptal"),
 		TEXT("Kütük Duvar: köşelere tıkla, plana bakıp [E] ile kütük ekle"),
-		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik  |  [F] çakmak (basılı tut)  |  [C] 7 taşla ateş yeri"),
+		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik / eğik  |  [F] çakmak (basılı tut)  |  [C] taş koy (7 taş = ateş yeri)  |  [X] it  |  [O] açıklık aç  |  [V] iskele işareti"),
 		TEXT("Oyma: [R] alet (çentik, enine kesim, yarma, oval, düz, sivri uç, pah, uç düzeltme, kırlangıç)  |  [E] parçayı omza al"),
 	};
 	DrawPanel(20.f, 20.f, 620.f, 16.f + 20.f * Help.Num());
@@ -379,6 +380,8 @@ void AForestHUD::DrawHUD()
 		case AForestCharacter::ECarryPlace::Floor:  Label = TEXT("[Sol tık] Döşeme tahtası koy (düz yüz üstte)"); break;
 		case AForestCharacter::ECarryPlace::Fuel:   Label = TEXT("[Sol tık] Ateşe odun at"); break;
 		case AForestCharacter::ECarryPlace::Repair: Label = TEXT("[Sol tık] Hasarlı parçayı bununla değiştir"); break;
+		case AForestCharacter::ECarryPlace::Slope:  Label = FString::Printf(TEXT("[Sol tık] Eğik koy (%.0f°)   [Tekerlek] açı   [R] yatır"), Player->GetSlopeAngle()); break;
+		case AForestCharacter::ECarryPlace::Load:   Label = TEXT("[Sol tık] Yükle"); break;
 		default:                                    Label = TEXT("Yere ya da yerdeki bir kütüğe bak"); break;
 		}
 		if (Player->GetCarryPlace() != AForestCharacter::ECarryPlace::None && !Player->IsPlaceSupported())

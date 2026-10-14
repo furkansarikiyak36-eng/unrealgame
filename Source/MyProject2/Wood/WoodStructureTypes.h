@@ -48,7 +48,8 @@ enum class EWoodFeatureKind : uint8
 	Stairs,         // 47 basamaklı eğik taşıyıcı
 	Bridge,         // 48 iki zemin noktası arasında açıklık
 	Railing,        // 50 platform üstünde direk + tırabzan
-	Scaffold        // 49, 52 geçici iskele
+	Scaffold,       // 49, 52 geçici iskele
+	Table           // 72 kısa bacaklı platform: tezgâh, masa
 };
 
 USTRUCT(BlueprintType)

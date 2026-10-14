@@ -33,6 +33,8 @@ enum class ECarveTool : uint8
 	Trim,
 	/** A flat notch that narrows towards the surface, so what sits in it cannot be pulled out. */
 	Dovetail,
+	/** A lengthwise channel along the top or bottom of the whole log (a trough, a gutter). */
+	Groove,
 	Count UMETA(Hidden),
 };
 
@@ -45,6 +47,9 @@ enum class ELogEnd : uint8
 };
 
 class ACarvableLog;
+class ARaidEnemy;
+/** Where a piece is: lying loose in the world, on a shoulder or cart, or part of a structure. */
+enum class ELogMotion : uint8 { Loose, Carried, Installed };
 /** Fired after every successful cut on any carvable log (the log that was cut, the tool that cut it). */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnLogCarved, ACarvableLog*, ECarveTool);
 /** Fired when a log has been laid across another and seated in its saddle notch (the upper log). */
@@ -195,6 +200,32 @@ public:
 	const TArray<FVector2f>& GetCutSpans() const { return CutSpans; }
 	bool IsAnchored() const { return bAnchored; }
 
+	/** Loose (free to roll and slide), Carried (shoulder, cart) or Installed (part of a structure). */
+	ELogMotion GetMotion() const { return bCarried ? ELogMotion::Carried : (bAnchored ? ELogMotion::Installed : ELogMotion::Loose); }
+	/** A shove: a loose piece takes Velocity (cm/s) and rolls or slides until it rests. False for carried or installed pieces. */
+	bool Push(const FVector& Velocity);
+	/** A hard landing or hit hurts wood. ImpulseSize is the normal impulse of the hit (kg cm/s); small knocks do nothing. */
+	void AddImpactDamage(float ImpulseSize);
+	static constexpr float ImpactThreshold = 1200000.f;
+	/** A moving piece that strikes an enemy hurts it, by the impulse of the blow. */
+	static void HitEnemy(ARaidEnemy* Enemy, float ImpulseSize);
+
+	/**
+	 * A piece leaning at AngleDeg (10..80) with its lower end on the ground at LowEnd, rising in the direction of Forward
+	 * (flattened): a ramp, a rafter, a stair stringer. False if Forward points straight up or down.
+	 */
+	static bool ComputeSlopePlacement(const FVector& LowEnd, const FVector& Forward, float AngleDeg, const ACarvableLog* Piece, FTransform& Out);
+
+	/**
+	 * Cuts a gap Modules wide (an even number, at least 2) out of this piece, on the module lines nearest CentreX, leaving a
+	 * piece on each side: a door or window opening in a wall course. At least one module must stay on each side. Pieces of an
+	 * installed log stay installed. Returns the piece to the right of the gap, or null if there is no room.
+	 */
+	ACarvableLog* CutOpening(float CentreX, int32 Modules);
+
+	/** Cuts a channel along the whole log, opening towards SideAngleDeg (0 = top). */
+	bool CutGroove(float SideAngleDeg);
+
 	/** Any cut on any log; the mechanics demo ticks off its carving goals with it. */
 	static FOnLogCarved OnLogCarved;
 	static FOnLogPlacedAcross OnLogPlacedAcross;
@@ -326,6 +357,8 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp, bool bSelfMoved,
+		FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit) override;
 
 	/**
 	 * Lets the log fall into place (after spawning or a cut), then freezes it once it rests, so it does not keep

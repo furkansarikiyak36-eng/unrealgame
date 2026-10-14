@@ -30,6 +30,15 @@ public:
 	/** Lays a big log of the given stage (1 or 2) on the ground, centred at Center along Direction. */
 	void InitLog(int32 InStage, const FVector& Center, const FVector& Direction);
 
+	/**
+	 * Whole logs (six modules, 390 cm) a tree of this height gives: 85% of the height is usable trunk, at most four.
+	 * A trunk or a half trunk carries the number it still holds until it is cut up.
+	 */
+	static int32 LogsFromHeight(float TreeHeightCm);
+	int32 GetLogCount() const { return LogCount; }
+	float GetTreeHeight() const { return Height; }
+	void SetLogCount(int32 Count) { LogCount = Count; }
+
 	/** Returns true when this hit felled the tree, broke the rock or split the log. */
 	bool ApplyHit(float Damage, const FHitResult& Hit, const FVector& HitDirection);
 
@@ -96,6 +105,8 @@ private:
 
 	float Health = 100.f;
 	float Height = 1000.f;
+	/** Whole logs still inside this trunk (or half trunk). */
+	int32 LogCount = 4;
 
 	bool bFalling = false;
 	float FallTime = 0.f;

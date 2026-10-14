@@ -21,6 +21,8 @@ class ALogWallBlueprint;
 class ALogConstructionActor;
 class AStoneMasonryActor;
 class ACampfire;
+class AHaulCart;
+class AFireStone;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UCableComponent;
@@ -83,16 +85,21 @@ public:
 	bool CanPlaceAcross() const { return CarryPlace == ECarryPlace::Across; }
 
 	/** What a left click does with the carried piece where the player is looking. */
-	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair };
+	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load };
 	ECarryPlace GetCarryPlace() const { return CarryPlace; }
 	/** The piece would be held up where it is about to go (the structure graph says so); false: it would fall. */
 	bool IsPlaceSupported() const { return bPlaceSupported; }
 	/** R while carrying: lay pieces down or stand them up as posts. */
 	bool IsPlacingStanding() const { return bPlaceStanding; }
+	/** R again: a piece leaning at an angle, a ramp or rafter; the wheel changes the angle. */
+	bool IsPlacingSlope() const { return bPlaceSlope; }
+	float GetSlopeAngle() const { return SlopeAngle; }
 	/** F held: the lighter heats what is in sight (a piece of wood or a fire pit). */
 	bool IsLighterHeld() const { return bLighterHeld; }
 	/** Stones it takes to ring a fire pit. */
 	static constexpr int32 FirePitStones = 7;
+	/** An enemy hit on the player. */
+	void TakeEnemyHit(float Amount);
 	/** Shoulder load, 1 = full (one whole log). */
 	float GetCarryLoad() const;
 	static bool IsProfileTool(ECarveTool Tool)
@@ -206,8 +213,18 @@ public:
 	bool TestPickUp(ACarvableLog* Piece);
 	/** For the mechanics test: a left click with the carried piece aimed at Hit (true if it was placed). */
 	bool TestPlace(bool bStanding, const FHitResult& Hit);
+	/** For the mechanics test: the lean mode chosen (angle in degrees) and the carried piece placed where the ground is aimed at. */
+	bool TestPlaceSlope(const FHitResult& Hit, float AngleDeg);
 	/** For the mechanics test: [C] with the stones given first when bGiveStones. Returns the pit, or null. */
 	ACampfire* TestBuildFirePit(const FHitResult& Hit, bool bGiveStones);
+	/** For the mechanics test: [C] once, with a stone given first. Returns the fire pit if this stone completed the ring. */
+	ACampfire* TestPlaceStone(const FHitResult& Hit, bool bGiveStone);
+	/** For the mechanics test: [X] on Target. */
+	bool TestPush(AActor* Target, const FVector& Velocity);
+	/** For the mechanics test: [V] on a piece. */
+	void TestToggleTemporary(ACarvableLog* Piece);
+	/** For the mechanics test: [E] on a cart (takes the last piece off it onto the shoulder). */
+	ACarvableLog* TestUnload(AHaulCart* Cart);
 	/** For the mechanics test: the lighter held on Target for Seconds. */
 	void TestLight(AActor* Target, float Seconds);
 
@@ -344,14 +361,25 @@ private:
 	 */
 	ECarryPlace CarryPlace = ECarryPlace::None;
 	bool bPlaceStanding = false;
+	bool bPlaceSlope = false;
+	float SlopeAngle = 45.f;
 	/** [F] held. */
 	bool bLighterHeld = false;
 	void LighterPressed();
 	void LighterReleased();
 	/** Heats the target in sight for Seconds. */
 	void HeatTarget(AActor* Target, float Seconds);
-	/** [C]: rings a fire pit out of FirePitStones stones where the ground is aimed at. */
-	void BuildFirePit();
+	/** [C]: lays a stone where the ground is aimed at; seven close together make a fire pit. */
+	void PlaceFireStone();
+	/** [V]: marks the piece in sight as scaffolding (temporary) or not. */
+	void ToggleTemporary();
+	/** [X]: shoves the loose piece, cart or sled in sight. */
+	void PushAimed();
+	/** [O]: cuts a door-wide gap (two modules) out of the installed piece in sight. */
+	void OpenAimed();
+	/** Admin [Z]: starts a raid. Admin [U]: sets a cart, a sled and a rack down in front. */
+	void DebugRaid();
+	void DebugHaulers();
 	bool bPlaceSupported = true;
 	TWeakObjectPtr<AActor> PlaceTarget;
 	/** Re-checks the structure after a piece went in or came out; says how many pieces fell. */

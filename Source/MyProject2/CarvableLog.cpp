@@ -10,6 +10,7 @@
 #include "PickupItem.h"
 #include "Campfire.h"
 #include "BurnSubsystem.h"
+#include "RaidEnemy.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/DynamicMeshComponent.h"
@@ -107,6 +108,7 @@ ACarvableLog::ACarvableLog()
 	// A round log on flat ground rolls at the slightest push; damping lets it come to rest quickly.
 	MeshComponent->SetAngularDamping(3.f);
 	MeshComponent->SetLinearDamping(0.3f);
+	MeshComponent->SetNotifyRigidBodyCollision(true);
 	RootComponent = MeshComponent;
 }
 
@@ -352,6 +354,111 @@ bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
 	return true;
 }
 
+bool ACarvableLog::Push(const FVector& Velocity)
+{
+	if (bAnchored || bCarried)
+	{
+		return false;
+	}
+	Resettle();
+	MeshComponent->SetPhysicsLinearVelocity(Velocity);
+	return true;
+}
+
+void ACarvableLog::AddImpactDamage(float ImpulseSize)
+{
+	if (ImpulseSize > ImpactThreshold)
+	{
+		AddDamage(FMath::Min(0.5f, (ImpulseSize - ImpactThreshold) / 4000000.f));
+	}
+}
+
+void ACarvableLog::HitEnemy(ARaidEnemy* Enemy, float ImpulseSize)
+{
+	if (Enemy && ImpulseSize > 50000.f)
+	{
+		Enemy->TakeHit(ImpulseSize / 10000.f);
+	}
+}
+
+void ACarvableLog::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp, bool bSelfMoved,
+	FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit)
+{
+	Super::NotifyHit(MyComp, Other, OtherComp, bSelfMoved, HitLocation, HitNormal, NormalImpulse, Hit);
+	if (bAnchored || bCarried || !MeshComponent->IsSimulatingPhysics())
+	{
+		return;
+	}
+	if (ARaidEnemy* Enemy = Cast<ARaidEnemy>(Other))
+	{
+		HitEnemy(Enemy, NormalImpulse.Size());
+		return;
+	}
+	AddImpactDamage(NormalImpulse.Size());
+}
+
+bool ACarvableLog::ComputeSlopePlacement(const FVector& LowEnd, const FVector& Forward, float AngleDeg, const ACarvableLog* Piece, FTransform& Out)
+{
+	const FVector Flat(Forward.X, Forward.Y, 0.f);
+	if (!Piece || Flat.IsNearlyZero())
+	{
+		return false;
+	}
+	const float Angle = FMath::DegreesToRadians(FMath::Clamp(AngleDeg, 10.f, 80.f));
+	const FVector Direction = Flat.GetSafeNormal() * FMath::Cos(Angle) + FVector::UpVector * FMath::Sin(Angle);
+	const FQuat Rotation = FRotationMatrix::MakeFromX(Direction).ToQuat();
+	// The lower end's centre is lifted just enough for the bark to touch the ground.
+	const FVector EndCentre = LowEnd + FVector(0.f, 0.f, Piece->Radius * FMath::Cos(Angle) + 0.5f);
+	Out = FTransform(Rotation, EndCentre - Rotation.RotateVector(FVector(Piece->MinX, 0.f, 0.f)));
+	return true;
+}
+
+ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
+{
+	TArray<float> Lines;
+	GetModuleLines(Lines);
+	Modules = FMath::Max(2, Modules + (Modules % 2));
+	const float OneModule = ModuleLength - 1.f;
+	const float Wanted = CentreX - Modules * ModuleLength * 0.5f;
+	float X0 = TNumericLimits<float>::Max();
+	for (const float Line : Lines)
+	{
+		if (FMath::Abs(Line - Wanted) < FMath::Abs(X0 - Wanted))
+		{
+			X0 = Line;
+		}
+	}
+	const float X1 = X0 + Modules * ModuleLength;
+	if (Lines.Num() == 0 || bCarried || X0 - MinX < OneModule || MaxX - X1 < OneModule)
+	{
+		return nullptr;
+	}
+	const bool bWasAnchored = bAnchored;
+	ACarvableLog* Middle = CrossCut(X0);
+	if (!Middle)
+	{
+		return nullptr;
+	}
+	ACarvableLog* Right = Middle->CrossCut(X1);
+	Middle->Destroy();
+	if (bWasAnchored)
+	{
+		Anchor();
+		if (Right)
+		{
+			Right->Anchor();
+		}
+	}
+	StructureLink::MarkChanged();
+	StructureLink::Settle(GetWorld());
+	return Right;
+}
+
+bool ACarvableLog::CutGroove(float SideAngleDeg)
+{
+	return Notch(GetCenterX(), SideAngleDeg, 0.f, Radius, Radius * 0.3f);
+}
+
 void ACarvableLog::LetFall()
 {
 	bAnchored = false;
@@ -547,6 +654,12 @@ void ACarvableLog::GetSnapPoints(ECarveTool Tool, float Width, TArray<float>& Ou
 		}
 		break;
 	}
+	case ECarveTool::Groove:
+		if (CutSpans.Num() == 0)
+		{
+			OutX.Add(GetCenterX());
+		}
+		break;
 	case ECarveTool::Trim:
 		if (EndMin != ELogEnd::Flat)
 		{
@@ -975,6 +1088,9 @@ void ACarvableLog::GetCutGuide(ECarveTool Tool, float LocalX, float SideAngleDeg
 		CylinderRim(Centre, Direction, R * CupFit, R, MinX, MaxX, Side, OutLines, OutClosed);
 		break;
 	}
+	case ECarveTool::Groove:
+		GetCutGuide(ECarveTool::Notch, GetCenterX(), SideAngleDeg, 0.f, Width, Depth, OutLines, OutClosed);
+		break;
 	case ECarveTool::NotchRound:
 	{
 		FVector Centre, Out, Across;

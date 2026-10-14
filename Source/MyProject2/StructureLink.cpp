@@ -201,6 +201,7 @@ FString StructureLink::NameOf(EWoodFeatureKind Kind)
 	case EWoodFeatureKind::Bridge:         return TEXT("Köprü");
 	case EWoodFeatureKind::Railing:        return TEXT("Korkuluk");
 	case EWoodFeatureKind::Scaffold:       return TEXT("İskele");
+	case EWoodFeatureKind::Table:          return TEXT("Tezgâh");
 	default:                               return TEXT("");
 	}
 }

@@ -282,6 +282,11 @@ void AHarvestableActor::StartFall(const FVector& Direction)
 	SetActorTickEnabled(true);
 }
 
+int32 AHarvestableActor::LogsFromHeight(float TreeHeightCm)
+{
+	return FMath::Clamp(FMath::FloorToInt(TreeHeightCm * 0.85f / (6.f * ACarvableLog::ModuleLength)), 1, 4);
+}
+
 void AHarvestableActor::FinishFall()
 {
 	UWorld* World = GetWorld();
@@ -294,6 +299,7 @@ void AHarvestableActor::FinishFall()
 		if (AHarvestableActor* Trunk = World->SpawnActor<AHarvestableActor>(AHarvestableActor::StaticClass(), FTransform(Center)))
 		{
 			Trunk->InitLog(1, Center, FallDirection);
+			Trunk->LogCount = LogsFromHeight(Height);
 		}
 		for (int32 Index = 0; Index < 4; ++Index)
 		{
@@ -326,13 +332,24 @@ void AHarvestableActor::SplitLog()
 		const FVector HalfCenter = Center + Along * Side * Quarter;
 		if (LogStage == 1)
 		{
+			// The logs inside are shared between the halves; a short tree leaves one half empty.
+			const int32 Share = Side < 0.f ? (LogCount + 1) / 2 : LogCount / 2;
+			if (Share <= 0)
+			{
+				continue;
+			}
 			if (AHarvestableActor* Half = World->SpawnActor<AHarvestableActor>(AHarvestableActor::StaticClass(), FTransform(HalfCenter)))
 			{
 				Half->InitLog(2, HalfCenter, Along);
+				Half->LogCount = Share;
 			}
 		}
 		else
 		{
+			if (LogCount < 2 && Side < 0.f)
+			{
+				continue;
+			}
 			// Last split: carryable logs. The two halves exactly fill the big log, so spawned end to end they would
 			// touch each other and the next log and the physics would throw one away. They fall apart sideways
 			// instead, a little short of the ends.

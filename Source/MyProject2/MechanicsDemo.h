@@ -166,6 +166,11 @@ private:
 	void AddFireScript(class AForestCharacter* Character);
 	void AddDamageScript(class AForestCharacter* Character);
 	void AddBurnScript(class AForestCharacter* Character);
+	void AddPhaseScript(class AForestCharacter* Character);
+	int32 ExpectedTreeLogs = 4;
+	FVector PushStart = FVector::ZeroVector;
+	FVector HaulStart = FVector::ZeroVector;
+	FVector LoadStart = FVector::ZeroVector;
 	void AddCollapseScript(class AForestCharacter* Character);
 	ACarvableLog* Piece(FName Name) const;
 	int32 FrameStage = 0;

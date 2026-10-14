@@ -6,6 +6,9 @@
 #include "StructureLink.h"
 #include "Campfire.h"
 #include "BurnSubsystem.h"
+#include "HaulCart.h"
+#include "FireStone.h"
+#include "RaidEnemy.h"
 #include "ForestTypes.h"
 #include "HarvestableActor.h"
 #include "PickupItem.h"
@@ -1561,6 +1564,352 @@ void AMechanicsDemo::AddBurnScript(AForestCharacter* Character)
 	});
 }
 
+void AMechanicsDemo::AddPhaseScript(AForestCharacter* Character)
+{
+	const float M = ACarvableLog::ModuleLength;
+	const FVector ZoneA(-2800.f, -3000.f, 0.f);  // leaning pieces
+	const FVector ZoneB(-2000.f, -3000.f, 0.f);  // a post on a beam, scaffolding
+	const FVector ZoneC(-1200.f, -3000.f, 0.f);  // openings, grooves
+	const FVector ZoneD(-400.f, -3000.f, 0.f);   // pushing, impacts
+	const FVector ZoneE(400.f, -3000.f, 0.f);    // carts
+	const FVector ZoneF(1200.f, -3000.f, 0.f);   // stone ring
+	const FVector ZoneG(2000.f, -3000.f, 0.f);   // a raider against a wall
+	const FVector ZoneH(2000.f, -2200.f, 0.f);   // stakes
+
+	// --- Faz 9: how many logs a tree gives follows from its height. ---
+	Script.Add([this, M]()
+	{
+		const int32 Small = AHarvestableActor::LogsFromHeight(600.f);
+		const int32 Normal = AHarvestableActor::LogsFromHeight(1000.f);
+		const int32 Tall = AHarvestableActor::LogsFromHeight(1500.f);
+		const int32 Huge = AHarvestableActor::LogsFromHeight(3000.f);
+		bool bFits = true;
+		for (const float Height : { 500.f, 800.f, 1000.f, 1500.f, 2000.f, 3000.f })
+		{
+			bFits &= AHarvestableActor::LogsFromHeight(Height) * 6.f * M <= Height || AHarvestableActor::LogsFromHeight(Height) == 1;
+		}
+		Report(Small == 1 && Normal == 2 && Tall == 3 && Huge == 4 && bFits,
+			FString::Printf(TEXT("Ağaç boyu kütük sayısını belirliyor: 6 m ağaç %d, 10 m %d, 15 m %d, 30 m %d kütük (en çok 4); toplam boy ağaç boyunu aşmıyor"), Small, Normal, Tall, Huge));
+		return 0.1f;
+	});
+
+	// --- Faz 7: a piece leaning at an angle is a ramp. ---
+	Script.Add([this, ZoneA]()
+	{
+		UWorld* World = GetWorld();
+		Named.Add(TEXT("SL1"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneA + FVector(0.f, 0.f, 70.f))));
+		Named.Add(TEXT("SL2"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneA + FVector(0.f, 300.f, 70.f))));
+		return 4.5f;
+	});
+	Script.Add([this, Character, ZoneA]()
+	{
+		UWorld* World = GetWorld();
+		Face(Character, World, ZoneA + FVector(-400.f, 0.f, 0.f), 0.f);
+		auto Elevation = [](ACarvableLog* Log)
+		{
+			FVector Centre, Axis;
+			float Radius, Half;
+			ACarvableLog::GetLogAxis(Log, Centre, Axis, Radius, Half);
+			return FMath::RadiansToDegrees(FMath::Asin(FMath::Clamp(FMath::Abs(Axis.Z), 0.f, 1.f)));
+		};
+		ACarvableLog* A = Piece(TEXT("SL1"));
+		ACarvableLog* B = Piece(TEXT("SL2"));
+		const bool bA = Character->TestPickUp(A) && Character->TestPlaceSlope(GroundAt(World, ZoneA), 30.f);
+		StructureLink::MarkChanged();
+		const FString NameA = StructureLink::DescribeFeaturesOf(World, A);
+		const bool bB = Character->TestPickUp(B) && Character->TestPlaceSlope(GroundAt(World, ZoneA + FVector(0.f, 300.f, 0.f)), 45.f);
+		Report(bA && A->IsAnchored() && FMath::Abs(Elevation(A) - 30.f) < 3.f && NameA.Contains(TEXT("Rampa")),
+			FString::Printf(TEXT("Eğik parça 30° kondu (açı %.0f°), yapı tanıma: %s"), Elevation(A), *NameA));
+		Report(bB && B->IsAnchored() && FMath::Abs(Elevation(B) - 45.f) < 3.f,
+			FString::Printf(TEXT("Eğik parça 45° kondu (açı %.0f°), zemine basıyor: yerinde duruyor"), Elevation(B)));
+		return 0.2f;
+	});
+
+	// --- Faz 7: a post on a beam, scaffolding. ---
+	Script.Add([this, ZoneB]()
+	{
+		UWorld* World = GetWorld();
+		Named.Add(TEXT("PB"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneB + FVector(0.f, 0.f, 70.f))));
+		Named.Add(TEXT("PP"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneB + FVector(0.f, 400.f, 70.f))));
+		return 4.5f;
+	});
+	Script.Add([this, Character, ZoneB, M]()
+	{
+		UWorld* World = GetWorld();
+		Face(Character, World, ZoneB + FVector(-400.f, 200.f, 0.f), 0.f);
+		ACarvableLog* Beam = Piece(TEXT("PB"));
+		Beam->PlaceAt(Beam->GetLayTransform(GroundAt(World, ZoneB).ImpactPoint, 0.f), true);
+		ACarvableLog* Post = Piece(TEXT("PP"));
+		Post->CrossCut(Post->GetMinX() + 2.f * M);
+		FVector BeamCentre, BeamAxis;
+		float BeamRadius, BeamHalf;
+		ACarvableLog::GetLogAxis(Beam, BeamCentre, BeamAxis, BeamRadius, BeamHalf);
+		const bool bPlaced = Character->TestPickUp(Post) && Character->TestPlace(true, AimAt(Beam, BeamCentre + FVector(0.f, 0.f, BeamRadius)));
+		StructureLink::Settle(World);
+		FVector PostCentre, PostAxis;
+		float PostRadius, PostHalf;
+		ACarvableLog::GetLogAxis(Post, PostCentre, PostAxis, PostRadius, PostHalf);
+		const float Foot = PostCentre.Z - PostHalf;
+		Report(bPlaced && Post->IsAnchored() && FMath::Abs(Foot - (BeamCentre.Z + BeamRadius)) < 4.f,
+			FString::Printf(TEXT("Platform üstüne direk: yatan kirişin üstüne dikildi (ayağı kiriş üstünden %.1f cm), destekli: yerinde duruyor"), Foot - (BeamCentre.Z + BeamRadius)));
+
+		Character->TestToggleTemporary(Beam);
+		Character->TestToggleTemporary(Post);
+		const FString Name = StructureLink::DescribeFeaturesOf(World, Post);
+		Report(Beam->IsTemporary() && Post->IsTemporary() && Name.Contains(TEXT("İskele")),
+			FString::Printf(TEXT("Geçici işaretleme: iki parça iskele sayıldı (%s)"), *Name));
+		return 0.2f;
+	});
+
+	// --- Faz 11: an opening cut out of a wall course; a groove along a log. ---
+	Script.Add([this, ZoneC]()
+	{
+		UWorld* World = GetWorld();
+		Named.Add(TEXT("OW"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneC + FVector(0.f, 0.f, 70.f))));
+		Named.Add(TEXT("GR"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneC + FVector(0.f, 350.f, 70.f))));
+		return 4.5f;
+	});
+	Script.Add([this, Character, ZoneC, M]()
+	{
+		UWorld* World = GetWorld();
+		ACarvableLog* Wall = Piece(TEXT("OW"));
+		Wall->PlaceAt(Wall->GetLayTransform(GroundAt(World, ZoneC).ImpactPoint, 0.f), true);
+		ACarvableLog* Right = Wall->CutOpening(Wall->GetCenterX(), 2);
+		FVector LeftCentre, RightCentre, Axis;
+		float Radius, Half;
+		bool bGap = false;
+		if (Right)
+		{
+			ACarvableLog::GetLogAxis(Wall, LeftCentre, Axis, Radius, Half);
+			ACarvableLog::GetLogAxis(Right, RightCentre, Axis, Radius, Half);
+			// Two pieces of two modules with two modules between them: their centres are six modules apart... minus the gap's half.
+			bGap = FMath::Abs(FVector::Dist(LeftCentre, RightCentre) - 4.f * M) < 3.f;
+		}
+		Report(Right && FMath::IsNearlyEqual(Wall->GetLength(), 2.f * M, 1.f) && FMath::IsNearlyEqual(Right->GetLength(), 2.f * M, 1.f)
+			&& Wall->IsAnchored() && Right->IsAnchored() && bGap,
+			TEXT("Açıklık: 6 modüllük duvar kütüğünden ortadan 2 modül (130 cm) kesildi, iki yanda 2'şer modül kaldı, ikisi de yapıda duruyor"));
+		Report(Right && !Right->CutOpening(Right->GetCenterX(), 2), TEXT("Açıklık: yanlarında 1 modül kalmayacak kadar kısa parçada açılmadı"));
+
+		ACarvableLog* Trough = Piece(TEXT("GR"));
+		Trough->Anchor();
+		const int32 Before = Trough->GetTriangleCount();
+		const FVector Top = Trough->GetActorTransform().TransformPosition(FVector(Trough->GetCenterX(), 0.f, Trough->GetRadius()));
+		Character->TestCarveHit(Trough, ECarveTool::Groove, Top, FVector::UpVector);
+		Character->TestCarveHit(Trough, ECarveTool::Groove, Top, FVector::UpVector);
+		Report(Trough->GetTriangleCount() > Before, TEXT("Oluk aleti: iki vuruşta kütüğün boyuna oluk açıldı"));
+		return 0.2f;
+	});
+
+	// --- Faz 10: a loose piece can be pushed, an installed or carried one cannot; hard knocks hurt. ---
+	Script.Add([this, ZoneD]()
+	{
+		Named.Add(TEXT("MV"), ACarvableLog::SpawnLog(GetWorld(), FTransform(FRotator::ZeroRotator, ZoneD + FVector(0.f, 0.f, 70.f))));
+		return 4.5f;
+	});
+	Script.Add([this, Character, ZoneD]()
+	{
+		ACarvableLog* Loose = Piece(TEXT("MV"));
+		const bool bLoose = Loose->GetMotion() == ELogMotion::Loose;
+		const bool bInstalled = Piece(TEXT("PB"))->GetMotion() == ELogMotion::Installed && !Character->TestPush(Piece(TEXT("PB")), FVector(300.f, 0.f, 0.f));
+		PushStart = Loose->GetActorLocation();
+		const bool bPushed = Character->TestPush(Loose, FVector(0.f, 300.f, 0.f));
+		const float Before = Loose->GetDamage();
+		Loose->AddImpactDamage(100000.f);
+		const bool bSoft = Loose->GetDamage() == Before;
+		Loose->AddImpactDamage(3000000.f);
+		Report(bLoose && bInstalled && bPushed && bSoft && Loose->GetDamage() > 0.3f,
+			FString::Printf(TEXT("Hareket durumu: serbest parça itildi, yapıdaki parça itilmedi; hafif çarpma hasarsız, sert çarpma %%%.0f hasar"), Loose->GetDamage() * 100.f));
+		return 1.5f;
+	});
+	Script.Add([this, Character]()
+	{
+		ACarvableLog* Loose = Piece(TEXT("MV"));
+		const float Moved = FVector::Dist(Loose->GetActorLocation(), PushStart);
+		const bool bCarried = Character->TestPickUp(Loose) && Loose->GetMotion() == ELogMotion::Carried && !Character->TestPush(Loose, FVector(0.f, 300.f, 0.f));
+		Report(Moved > 40.f && bCarried, FString::Printf(TEXT("İtilen kütük %.0f cm gitti; omuzdaki parça (Taşınıyor) itilmiyor"), Moved));
+		Character->TestPlace(false, GroundAt(GetWorld(), FVector(-400.f, -2500.f, 0.f)));
+		return 0.2f;
+	});
+
+	// --- Faz 12: cart, sled, rack. ---
+	Script.Add([this, ZoneE]()
+	{
+		UWorld* World = GetWorld();
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			Named.Add(*FString::Printf(TEXT("CL%d"), Index + 1), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneE + FVector(600.f, 300.f * Index, 70.f))));
+		}
+		return 4.5f;
+	});
+	Script.Add([this, Character, ZoneE]()
+	{
+		UWorld* World = GetWorld();
+		Face(Character, World, ZoneE + FVector(-300.f, 0.f, 0.f), 0.f);
+		const FVector Ground = GroundAt(World, ZoneE).ImpactPoint;
+		AHaulCart* Cart = AHaulCart::Spawn(World, Ground, 0.f, EHaulKind::Cart);
+		AHaulCart* Sled = AHaulCart::Spawn(World, Ground + FVector(0.f, 400.f, 0.f), 0.f, EHaulKind::Sled);
+		AHaulCart* Rack = AHaulCart::Spawn(World, Ground + FVector(0.f, -450.f, 0.f), 0.f, EHaulKind::Rack);
+		auto OnTop = [](AActor* Thing)
+		{
+			FHitResult Hit;
+			Hit.HitObjectHandle = FActorInstanceHandle(Thing);
+			Hit.ImpactPoint = Thing->GetActorLocation() + FVector(0.f, 0.f, 50.f);
+			Hit.ImpactNormal = FVector::UpVector;
+			return Hit;
+		};
+		const bool bOne = Character->TestPickUp(Piece(TEXT("CL1"))) && Character->TestPlace(false, OnTop(Cart)) && Cart->GetLoadCount() == 1;
+		const bool bTwo = Character->TestPickUp(Piece(TEXT("CL2"))) && Character->TestPlace(false, OnTop(Cart)) && Cart->GetLoadCount() == 2;
+		const bool bFull = Character->TestPickUp(Piece(TEXT("CL3"))) && !Character->TestPlace(false, OnTop(Cart)) && Cart->GetLoadCount() == 2 && Character->GetCarriedCount() == 1;
+		const float Volume = Piece(TEXT("CL1"))->GetVolume() + Piece(TEXT("CL2"))->GetVolume();
+		Report(bOne && bTwo && bFull && FMath::Abs(Cart->GetLoadVolume() - Volume) < 1.f && Piece(TEXT("CL1"))->GetMotion() == ELogMotion::Carried,
+			FString::Printf(TEXT("El arabası: iki kütük yüklendi (hacim %.0f cm3 korundu), üçüncüsü sığmadı ve omuzda kaldı"), Cart->GetLoadVolume()));
+		const bool bRack = Character->TestPlace(false, OnTop(Rack)) && Rack->GetLoadCount() == 1;
+		Report(bRack && Sled->GetCapacity() > Cart->GetCapacity() && Rack->GetCapacity() > Sled->GetCapacity() && !Character->TestPush(Rack, FVector(300.f, 0.f, 0.f)),
+			TEXT("Sehpa üçüncüyü aldı (kapasite el arabası < kızak < sehpa), sehpa itilince yerinden oynamadı"));
+		HaulStart = Cart->GetActorLocation();
+		LoadStart = Piece(TEXT("CL1"))->GetActorLocation();
+		Cart->Shove(FVector(0.f, 0.f, 0.f));
+		Character->TestPush(Cart, FVector(0.f, 300.f, 0.f));
+		return 2.f;
+	});
+	Script.Add([this, Character]()
+	{
+		UWorld* World = GetWorld();
+		AHaulCart* Cart = nullptr;
+		for (TActorIterator<AHaulCart> It(World); It; ++It)
+		{
+			if (It->GetKind() == EHaulKind::Cart)
+			{
+				Cart = *It;
+			}
+		}
+		const FVector Moved = Cart->GetActorLocation() - HaulStart;
+		const FVector LoadMoved = Piece(TEXT("CL1"))->GetActorLocation() - LoadStart;
+		ACarvableLog* Off = Cart->Unload();
+		Report(Moved.Size() > 50.f && (LoadMoved - Moved).Size() < 10.f && Off && Off->GetMotion() == ELogMotion::Loose && Cart->GetLoadCount() == 1,
+			FString::Printf(TEXT("Araba itildi (%.0f cm), yükü onunla gitti; boşaltılan parça serbest (Loose) kaldı"), Moved.Size()));
+		(void)Character;
+		return 0.2f;
+	});
+
+	// --- Faz 8b: seven stones, laid one by one, make a fire pit. ---
+	Script.Add([this, Character, ZoneF]()
+	{
+		UWorld* World = GetWorld();
+		Face(Character, World, ZoneF + FVector(-400.f, 0.f, 0.f), 0.f);
+		const FVector Ground = GroundAt(World, ZoneF).ImpactPoint;
+		ACampfire* Pit = nullptr;
+		int32 Early = 0;
+		for (int32 Index = 0; Index < AFireStone::StonesPerPit; ++Index)
+		{
+			const float Angle = 2.f * PI * Index / AFireStone::StonesPerPit;
+			FHitResult Spot;
+			Spot.ImpactPoint = Ground + FVector(FMath::Cos(Angle) * 45.f, FMath::Sin(Angle) * 45.f, 0.f);
+			Pit = Character->TestPlaceStone(Spot, true);
+			Early += (Pit && Index < AFireStone::StonesPerPit - 1) ? 1 : 0;
+		}
+		Report(Early == 0 && Pit && !Pit->IsBurning() && AFireStone::CountNear(World, Ground) == 0,
+			TEXT("Taş halkası: 6 taş ateş yeri olmadı; 7. taş halkayı tamamlayınca ateş yeri kuruldu (taşlar toplandı, ateş yanmıyor)"));
+		return 0.2f;
+	});
+
+	// --- Faz 14: the raid director sends raiders; a raider hits a wall down; stakes and blows hurt it. ---
+	Script.Add([this]()
+	{
+		const bool bStarted = RaidKit::StartDefaultRaid(GetWorld());
+		Report(bStarted, TEXT("Baskın: yönetici başlatıldı (plan, dalga ve düşman tanımları kodda kuruldu)"));
+		return 3.f;
+	});
+	Script.Add([this]()
+	{
+		UWorld* World = GetWorld();
+		const int32 Count = RaidKit::CountEnemies(World);
+		RaidKit::StopRaid(World);
+		Report(Count >= 1 && RaidKit::CountEnemies(World) == 0,
+			FString::Printf(TEXT("Baskın: dalga başladı, %d düşman doğdu; baskın durdurulunca hepsi kalktı"), Count));
+		return 0.1f;
+	});
+	Script.Add([this, ZoneG, M]()
+	{
+		UWorld* World = GetWorld();
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			Named.Add(*FString::Printf(TEXT("EA%d"), Index), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneG + FVector(700.f, 350.f * Index, 70.f))));
+		}
+		ACarvableLog* Log = Piece(TEXT("EA0"));
+		Named.Add(TEXT("EB0"), Log->CrossCut(Log->GetMinX() + 2.f * M));
+		Named.Add(TEXT("EC0"), Piece(TEXT("EB0"))->CrossCut(Piece(TEXT("EB0"))->GetMinX() + 2.f * M));
+		Named.Add(TEXT("EBeam"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, ZoneG + FVector(700.f, 1200.f, 70.f))));
+		return 4.5f;
+	});
+	Script.Add([this, Character, ZoneG]()
+	{
+		UWorld* World = GetWorld();
+		Face(Character, World, ZoneG + FVector(-400.f, 0.f, 0.f), 0.f);
+		bool bOk = true;
+		int32 Index = 0;
+		for (const TCHAR* Name : { TEXT("EA0"), TEXT("EB0"), TEXT("EC0") })
+		{
+			bOk &= Character->TestPickUp(Piece(Name)) && Character->TestPlace(true, GroundAt(World, ZoneG + FVector(160.f * Index++, 0.f, 0.f)));
+		}
+		bOk &= Character->TestPickUp(Piece(TEXT("EBeam"))) && Character->TestPlace(false, AimAtTop(Piece(TEXT("EA0"))));
+		bOk &= Piece(TEXT("EBeam"))->IsAnchored();
+		Report(bOk, TEXT("Düşman testi: üç direk + kiriş duruyor"));
+
+		ACarvableLog* Middle = Piece(TEXT("EB0"));
+		const FVector Ground = GroundAt(World, ZoneG + FVector(160.f, 450.f, 0.f)).ImpactPoint;
+		ARaidEnemy* Raider = World->SpawnActor<ARaidEnemy>(ARaidEnemy::StaticClass(), FTransform(Ground + FVector(0.f, 0.f, 92.f)));
+		Raider->SetTarget(Middle);
+		const bool bEarly = Piece(TEXT("EBeam"))->IsAnchored();
+		for (int32 Step = 0; Step < 160 && IsValid(Raider); ++Step)
+		{
+			Raider->StepAI(0.25f);
+		}
+		Report(bEarly && Middle->GetDamage() > 0.6f && !Piece(TEXT("EBeam"))->IsAnchored(),
+			FString::Printf(TEXT("Düşman yapıya saldırdı: ortadaki direk %%%.0f hasar aldı, eklemleri gevşeyince kiriş kırıldı"), Middle->GetDamage() * 100.f));
+		if (IsValid(Raider))
+		{
+			Info(FString::Printf(TEXT("Düşman şurada: %s, direk şurada: %s, can %.0f, kiriş %s"), *Raider->GetActorLocation().ToString(), *Middle->GetActorLocation().ToString(),
+				Raider->Health, Piece(TEXT("EBeam"))->IsAnchored() ? TEXT("duruyor") : TEXT("düştü")));
+		}
+		if (IsValid(Raider))
+		{
+			Raider->Destroy();
+		}
+		return 0.2f;
+	});
+	Script.Add([this, ZoneH]()
+	{
+		Named.Add(TEXT("EStake"), ACarvableLog::SpawnLog(GetWorld(), FTransform(FRotator::ZeroRotator, ZoneH + FVector(0.f, 0.f, 70.f))));
+		return 4.5f;
+	});
+	Script.Add([this, ZoneH, M]()
+	{
+		UWorld* World = GetWorld();
+		ACarvableLog* Stake = Piece(TEXT("EStake"));
+		Stake->CrossCut(Stake->GetMinX() + 2.f * M);
+		const bool bPointed = Stake->ShapeEnd(true, ECarveTool::Point);
+		const FVector Ground = GroundAt(World, ZoneH + FVector(-300.f, 0.f, 0.f)).ImpactPoint;
+		Stake->PlaceAt(Stake->GetStandTransform(Ground, 0.f), true);
+		ARaidEnemy* Raider = World->SpawnActor<ARaidEnemy>(ARaidEnemy::StaticClass(), FTransform(Ground + FVector(70.f, 0.f, 92.f)));
+		Raider->SetTarget(Stake);
+		// Next to a stake it takes damage whether it hits the stake or not; next to nothing it takes none.
+		const float Start = Raider->Health;
+		Raider->StepAI(1.f);
+		const float Hurt = Start - Raider->Health;
+		ACarvableLog::HitEnemy(Raider, 20000.f);
+		const bool bSoft = FMath::IsNearlyEqual(Raider->Health, Start - Hurt, 0.01f);
+		ACarvableLog::HitEnemy(Raider, 300000.f);
+		const bool bThrown = Raider->Health < Start - Hurt - 20.f;
+		Report(bPointed && Hurt > 15.f && bSoft && bThrown,
+			FString::Printf(TEXT("Savunma: sivri kazığın yanında düşman 1 sn'de %.0f can kaybetti; hafif çarpma işlemedi, fırlatılan kütük (sert çarpma) %.0f can aldı"),
+				Hurt, Start - Hurt - Raider->Health));
+		Raider->TakeHit(1000.f);
+		Report(!IsValid(Raider), TEXT("Canı biten düşman yok oldu"));
+		return 0.2f;
+	});
+}
+
 void AMechanicsDemo::AddCollapseScript(AForestCharacter* Character)
 {
 	// Take the first log of the cabin out from under the rest: what rested on it only through it falls too.
@@ -1591,6 +1940,7 @@ void AMechanicsDemo::BuildScript(AForestCharacter* Character)
 	AddFireScript(Character);
 	AddDamageScript(Character);
 	AddBurnScript(Character);
+	AddPhaseScript(Character);
 	AddCollapseScript(Character);
 }
 
@@ -1985,6 +2335,7 @@ void AMechanicsDemo::Tick(float DeltaSeconds)
 			return;
 		}
 		Tree = Best;
+		ExpectedTreeLogs = AHarvestableActor::LogsFromHeight(Best->GetTreeHeight());
 		TreeBase = Best->GetActorLocation();
 		LookAt(TreeBase + FVector(0, 0, 150.f), 220.f);
 		ChopDirection = (TreeBase - Player->GetActorLocation()).GetSafeNormal2D();
@@ -2109,8 +2460,13 @@ void AMechanicsDemo::Tick(float DeltaSeconds)
 				UE_LOG(LogMechanicsDemo, Display, TEXT("[MechanicsDemo]   bir kütük yok oldu (Destroy edildi)"));
 			}
 		}
-		Report(Logs == 4, FString::Printf(TEXT("Büyük kütükler bölündü: %d taşınabilir kütük düştü (beklenen 4)"), Logs));
-		NextStep(EStep::PlaceAcross, 0.5f);
+		Report(Logs == ExpectedTreeLogs, FString::Printf(TEXT("Büyük kütükler bölündü: %d taşınabilir kütük düştü (ağaç boyuna göre beklenen %d)"), Logs, ExpectedTreeLogs));
+		// The next steps need four logs; a short tree gives fewer, so the test brings the rest.
+		for (int32 Extra = Logs; Extra < 4; ++Extra)
+		{
+			ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, TreeBase + FVector(0.f, -500.f - 300.f * Extra, 100.f)));
+		}
+		NextStep(EStep::PlaceAcross, Logs < 4 ? 3.5f : 0.5f);
 		return;
 	}
 	case EStep::PlaceAcross:

@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (14 October 2026 04:54) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (14 October 2026 05:29) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -72,6 +72,13 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void LetFall()` — No longer held up: anchoring is dropped and physics takes over, so it tips or falls where it is.
 - `ACarvableLog* SnapAt(float LocalX)` — A beam that cannot carry its own span: it lets go and snaps in two at LocalX, both halves left to physics.
 - `const TArray<FVector2f>& GetCutSpans() const` — Joints cut into this log, as local X ranges.
+- `ELogMotion GetMotion() const` — Loose (free to roll and slide), Carried (shoulder, cart) or Installed (part of a structure).
+- `bool Push(const FVector& Velocity)` — A shove: a loose piece takes Velocity (cm/s) and rolls or slides until it rests. False for carried or installed pieces.
+- `void AddImpactDamage(float ImpulseSize)` — A hard landing or hit hurts wood. ImpulseSize is the normal impulse of the hit (kg cm/s); small knocks do nothing.
+- `static void HitEnemy(ARaidEnemy* Enemy, float ImpulseSize)` — A moving piece that strikes an enemy hurts it, by the impulse of the blow.
+- `static bool ComputeSlopePlacement(const FVector& LowEnd, const FVector& Forward, float AngleDeg, const ACarvableLog* Piece, FTrans …` — A piece leaning at AngleDeg (10..80) with its lower end on the ground at LowEnd, rising in the direction of Forward (flattened): a ramp, a rafter, a stair stringer. …
+- `ACarvableLog* CutOpening(float CentreX, int32 Modules)` — Cuts a gap Modules wide (an even number, at least 2) out of this piece, on the module lines nearest CentreX, leaving a piece on each side: a door or window opening in a …
+- `bool CutGroove(float SideAngleDeg)` — Cuts a channel along the whole log, opening towards SideAngleDeg (0 = top).
 - `float GetVolume() const` — Wood in this piece (cm3); what it weighs on the shoulder.
 - `static float GetShoulderCapacity()` — How much wood fits on the shoulder: one whole log (390 x 70 cm), or two halves, or six one-module pieces.
 - `bool IsSplit() const` — Split lengthwise at some point (a half, a quarter): not a round log any more.
@@ -99,6 +106,15 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void GetNotchFrame(float LocalX, float SideAngleDeg, float CrossAngleDeg, float MateRadius, float Depth, FVector& OutCentre, FVect …` — Where the cup's mating log axis runs (local space), for previews.
 - Ayrıca (açıklamasız): `ACarvableLog`, `AddDamage`, `SetDamage`, `GetBurnState`, `IsBurning`, `IsCharred`, `GetHeatShare`, `SetTemporary`, `IsAnchored`, `IsCarried`, `GetLength`, `GetRadius`, `GetCenterX`, `GetDiameter`, `GetMinX`, `GetMaxX`, `GetEnd`, `GetGridOriginX`
 
+## FireStone.h
+
+**AFireStone** (class) — One stone laid on the ground for a fire pit. Seven stones close together (a ring) become a fire pit; until then each is just a stone lying where it was put.
+
+- `static AFireStone* Place(UWorld* World, const FVector& Ground)` — A stone on the ground at Ground.
+- `static int32 CountNear(UWorld* World, const FVector& Where)` — Stones lying within ring reach of Where.
+- `static ACampfire* TryForm(UWorld* World, const AFireStone* New)` — If StonesPerPit stones lie together around New, they are taken up and a fire pit is built in the middle of them. Null while the ring is not complete.
+- Ayrıca (açıklamasız): `AFireStone`
+
 ## ForestCharacter.h
 
 **AForestCharacter** (class) — First person survival character: chop trees, break rocks, pick up drops, craft simple materials and place stone blocks. Input is built in code so the prototype needs no …
@@ -111,16 +127,23 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool CanPlaceAcross() const` — E would lay the carried log across the log in sight.
 - `bool IsPlaceSupported() const` — The piece would be held up where it is about to go (the structure graph says so); false: it would fall.
 - `bool IsPlacingStanding() const` — R while carrying: lay pieces down or stand them up as posts.
+- `bool IsPlacingSlope() const` — R again: a piece leaning at an angle, a ramp or rafter; the wheel changes the angle.
 - `bool IsLighterHeld() const` — F held: the lighter heats what is in sight (a piece of wood or a fire pit).
+- `void TakeEnemyHit(float Amount)` — An enemy hit on the player.
 - `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
 - `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
 - `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
 - `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).
 - `bool TestPlace(bool bStanding, const FHitResult& Hit)` — For the mechanics test: a left click with the carried piece aimed at Hit (true if it was placed).
+- `bool TestPlaceSlope(const FHitResult& Hit, float AngleDeg)` — For the mechanics test: the lean mode chosen (angle in degrees) and the carried piece placed where the ground is aimed at.
 - `ACampfire* TestBuildFirePit(const FHitResult& Hit, bool bGiveStones)` — For the mechanics test: [C] with the stones given first when bGiveStones. Returns the pit, or null.
+- `ACampfire* TestPlaceStone(const FHitResult& Hit, bool bGiveStone)` — For the mechanics test: [C] once, with a stone given first. Returns the fire pit if this stone completed the ring.
+- `bool TestPush(AActor* Target, const FVector& Velocity)` — For the mechanics test: [X] on Target.
+- `void TestToggleTemporary(ACarvableLog* Piece)` — For the mechanics test: [V] on a piece.
+- `ACarvableLog* TestUnload(AHaulCart* Cart)` — For the mechanics test: [E] on a cart (takes the last piece off it onto the shoulder).
 - `void TestLight(AActor* Target, float Seconds)` — For the mechanics test: the lighter held on Target for Seconds.
 - `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
-- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`
 
 ## ForestOutline.h
 
@@ -159,6 +182,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 - `void InitFrom(const UStaticMeshComponent* Source, EHarvestType InType)` — Copies mesh and materials from a level placed actor and sizes health and drops from it.
 - `void InitLog(int32 InStage, const FVector& Center, const FVector& Direction)` — Lays a big log of the given stage (1 or 2) on the ground, centred at Center along Direction.
+- `static int32 LogsFromHeight(float TreeHeightCm)` — Whole logs (six modules, 390 cm) a tree of this height gives: 85% of the height is usable trunk, at most four. A trunk or a half trunk carries the number it still holds …
 - `bool ApplyHit(float Damage, const FHitResult& Hit, const FVector& HitDirection)` — Returns true when this hit felled the tree, broke the rock or split the log.
 - `bool IsWood() const` — Trees and big logs take the axe, rocks the pickaxe.
 - `EForestItem GetLogItem() const` — Inventory item a big log becomes when picked up.
@@ -167,7 +191,18 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void EndDrag()` — Lays the log back on the ground where it is.
 - `void BeginShoulder(USceneComponent* AttachTo, const FTransform& Relative, bool bCastShadow = false)` — Shouldering a big log: attached to the player's view, no collision.
 - `void PlaceOnGround(const FVector& Center, const FVector& Direction)` — Off the shoulder, laid on the ground centred at Center along Direction.
-- Ayrıca (açıklamasız): `AHarvestableActor`, `IsAlive`, `IsTree`, `IsTrunk`, `GetHealthPercent`, `GetDisplayName`, `IsDragged`
+- Ayrıca (açıklamasız): `AHarvestableActor`, `GetLogCount`, `GetTreeHeight`, `SetLogCount`, `IsAlive`, `IsTree`, `IsTrunk`, `GetHealthPercent`, `GetDisplayName`, `IsDragged`
+
+## HaulCart.h
+
+**AHaulCart** (class) — Something wood is loaded on: a cart, a sled or a rack. Pieces keep their volume on it (a load never exceeds the capacity in wood) and are Carried while on it; unloading …
+
+- `static AHaulCart* Spawn(UWorld* World, const FVector& Ground, float Yaw, EHaulKind Kind)` — A cart, sled or rack standing on Ground, facing Yaw.
+- `float GetCapacity() const` — Wood the thing holds (cm3): this many shoulder loads of one whole log each.
+- `bool Load(ACarvableLog* Piece)` — Puts the piece on the load (off the shoulder). False if it does not fit.
+- `ACarvableLog* Unload()` — Takes the last piece off and sets it down loose beside the cart; null if empty.
+- `bool Shove(const FVector& Velocity)` — A push: carts and sleds glide a while and stop; a rack does not move.
+- Ayrıca (açıklamasız): `AHaulCart`, `KindName`, `GetKind`, `GetLoadVolume`, `GetLoadCount`, `CanLoad`
 
 ## LogConstructionActor.h
 
@@ -225,6 +260,21 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void BeginCarry(USceneComponent* AttachTo, const FTransform& Relative)` — Held by the player: no physics or collision while attached.
 - `void Drop(const FTransform& Transform)` — Back into the world at Transform, falling under physics until it settles.
 - Ayrıca (açıklamasız): `APickupItem`, `Spawn`, `SpawnCosmetic`, `IsPickable`, `GetItem`, `GetCount`
+
+## RaidEnemy.h
+
+**ARaidEnemy** (class) — A raider. It walks to the player, or to the nearest installed wood when it has no one in reach, hits what is in its way (a wall is damaged like by a fire: past 60% the …
+
+- `void SetTarget(AActor* Target)` — What the enemy goes for instead of looking for a target.
+- `void StepAI(float Dt)` — Thinks and moves for Dt seconds. The tick does this; the mechanics test calls it to skip time.
+- `void TakeHit(float Amount)` — Hurts the enemy; destroyed at zero.
+- Ayrıca (açıklamasız): `ARaidEnemy`, `IsAlive`
+
+**RaidKit** (struct) — Starts and stops a raid with the plan this game ships with (a night with one wave of raiders).
+
+- `static bool StartDefaultRaid(UWorld* World)` — Builds the plan in code and starts it for the player in the world. False if it could not start.
+- `static void StopRaid(UWorld* World)` — Ends the raid and removes every raider.
+- Ayrıca (açıklamasız): `CountEnemies`
 
 ## StoneMasonryActor.h
 
@@ -386,4 +436,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-130 / 326 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+144 / 368 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

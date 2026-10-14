@@ -170,6 +170,30 @@ bool FWoodAnalysisFloorsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWoodAnalysisTableTest, "MyProject2.Wood.Analysis.Table",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FWoodAnalysisTableTest::RunTest(const FString& Parameters)
+{
+	// Aynı yapı, ama bacaklar 65 cm: platform değil, tezgâh.
+	TArray<FNode> Ns;
+	int32 Id = 0;
+	for (const float Y : { 0.f, 195.f })
+	{
+		Ns.Add(Mk(Id++, FVector(0.f, Y, 0.f), FVector(0.f, Y, 65.f), EWoodRole::Post, true));
+		Ns.Add(Mk(Id++, FVector(240.f, Y, 0.f), FVector(240.f, Y, 65.f), EWoodRole::Post, true));
+	}
+	for (const float Y : { 0.f, 195.f })
+	{
+		Ns.Add(Mk(Id++, FVector(-35.f, Y, 80.f), FVector(355.f, Y, 80.f), EWoodRole::Beam, false));
+	}
+	Ns.Add(Mk(Id++, FVector(60.f, -60.f, 105.f), FVector(60.f, 255.f, 105.f), EWoodRole::Floor, false));
+	Ns.Add(Mk(Id++, FVector(140.f, -60.f, 105.f), FVector(140.f, 255.f, 105.f), EWoodRole::Floor, false));
+	const TArray<FFeature> F = AnalyzeStructure(Ns, Wire(Ns));
+	TestTrue(TEXT("kısa bacaklı platform tezgâh"), Has(F, EWoodFeatureKind::Table, 8));
+	TestFalse(TEXT("tezgâh platform değil"), Has(F, EWoodFeatureKind::Platform));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWoodAnalysisCabinTest, "MyProject2.Wood.Analysis.Cabin",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FWoodAnalysisCabinTest::RunTest(const FString& Parameters)
