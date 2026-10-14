@@ -274,7 +274,8 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
     const FQuat FinalRotation = YawRotation * BaseRotation;
     if (bSelectedSocket && SelectedSocket)
     {
-        PlacementLocation = TargetSurfacePoint - FinalRotation.RotateVector(SelectedSocket->LocalPosition);
+        const FVector ScaledSocketPosition = TargetTransform.GetScale3D() * SelectedSocket->LocalPosition;
+        PlacementLocation = TargetSurfacePoint - FinalRotation.RotateVector(ScaledSocketPosition);
     }
 
     TargetTransform.SetLocation(PlacementLocation);
@@ -332,6 +333,7 @@ void UStonePlacementComponent::TickComponent(
     const FVector End = Start + GetOwner()->GetActorForwardVector() * ReachDistance;
     FHitResult Hit;
     FCollisionQueryParams Params(SCENE_QUERY_STAT(StonePlacementTrace), false, GetOwner());
+    Params.AddIgnoredActor(PreviewStone);
 
     if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
     {
