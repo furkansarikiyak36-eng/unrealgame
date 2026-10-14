@@ -217,3 +217,11 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - StoneTrap C++ testleri 4'e yükseltildi: düşman/cooldown, null victim, taş health, CarvableLog normalized damage.
 - Log verifier ve sentetik Python testleri artık en az dört ayrı StoneTrap Automation Test path'i gerektiriyor.
 - UE 5.8 derleme ve gerçek Automation Test koşusu henüz yapılmadı; Python CI sadece log verifier/katalog/araç testlerini çalıştırır.
+
+### 2026-10-14 — Faz 0 bulgu matrisi bütünlük kontrolü
+
+- Docs/FAZ_00_BULGU_MATRISI.csv satır bazında tarandı; P0-012 ayrı bulgu satırı olarak eksikti, kimliği P0-013 durum alanına \nP0-012 metniyle karışmıştı.
+- P0-012 ilk matris commit'inin geçmişinden geri kuruldu; teslimat kararı güncellendi: V1–V4 yalnızca iç doğrulama, kullanıcının tek Windows demo paketi Faz 0–14 ve release gate'leri tamamlandıktan sonra.
+- P0-013 durumu yeniden Open yapıldı ve P0-010 severity alanındaki baştaki boşluk temizlendi.
+- Scripts/audit_findings_matrix.py ile şema, alan sayısı, zorunlu hücreler, severity, tek satırlı status, benzersiz/ardışık Finding_ID denetimi eklendi. Dokuz birim test yeni Python CI listesine bağlandı.
+- UE 5.8 C++ derlemesi ve motor otomasyon testleri bu değişiklikle çalıştırılmış sayılmaz; bu matris denetimi yalnızca belge bütünlüğünü doğrular.
