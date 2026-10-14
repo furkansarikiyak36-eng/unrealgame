@@ -55,7 +55,7 @@ public:
     UFUNCTION(BlueprintPure, Category = "Excavation")
     FVector CellToWorldCenter(const FIntVector& Cell) const;
 
-    /** Edge length of a cell in Unreal centimeters. Keep stable across load/save. */
+    /** Edge length of a cell in Unreal centimeters. It is locked while overrides exist. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Config", meta = (ClampMin = "1.0"))
     float CellSizeCm = 50.0f;
 
@@ -64,6 +64,9 @@ public:
     int32 MaxCellsPerEdit = 250000;
 
 protected:
+    /** Captures the grid size used by live overrides so changing config cannot remap them. */
+    float LockedCellSizeCm = 0.0f;
+
     /** Sparse explicit overrides only; missing cells are sampled from the base-world provider. */
     UPROPERTY(Transient)
     TMap<FIntVector, FExcavationCellOverride> CellOverrides;
