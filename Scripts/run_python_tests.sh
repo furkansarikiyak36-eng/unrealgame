@@ -38,7 +38,7 @@ echo "[11/27] Verifying the inventory transfer transaction contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_inventory_transfer_contract.py"
 
 echo "[12/27] Verifying Phase 6 inventory, stick and persistence integration..."
-"$PYTHON" "$ROOT/Scripts/tests/test_phase6_inventory_integration.py" \
+"$PYTHON" "$ROOT/Scripts/tests/test_phase6_inventory_integration.py"
 
 echo "[13/27] Verifying Phase 7 wood material/structure integration..."
 "$PYTHON" "$ROOT/Scripts/tests/test_wood_material_integration_contract.py"
