@@ -68,6 +68,10 @@ bool FStoneTrapDamageAndCooldownTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Trigger volume generates overlap events"), Trap->TriggerVolume->GetGenerateOverlapEvents());
     TestTrue(TEXT("Trigger volume is query-only"),
         Trap->TriggerVolume->GetCollisionEnabled() == ECollisionEnabled::QueryOnly);
+    TestTrue(TEXT("Pawn overlaps activate the trigger"),
+        Trap->TriggerVolume->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Overlap);
+    TestTrue(TEXT("Physical stone/log bodies activate the trigger"),
+        Trap->TriggerVolume->GetCollisionResponseToChannel(ECC_PhysicsBody) == ECR_Overlap);
 
     Trap->Trigger(Enemy);
     TestTrue(TEXT("First trigger applies configured damage"),
