@@ -46,8 +46,8 @@ python Scripts/audit_mechanic_catalog.py <katalog.csv> --expected-count 485 --st
 Repo dalına `Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv` eklendi. Bu dosya LOG-001–LOG-076 kayıtlarının her biri için katalog ID'sini, kaynak yolu/adayı, satır özelindeki blocker'ı ve eksik test/editör kanıtını ayrı satırda tutar.
 
 - LOG satırları: **76/76 kaynak denetim tablosuna eşlendi**.
-- Doğrulama seviyesi: **76/76 hâlâ U0 — denetim gerekli**; satır-özel otomasyon sonucu ve Unreal Editor/oyun içi kanıtı henüz her kayıt için eşlenmedi.
+- Kanıt seviyesi: **59 satır U2** (kaynakta yerel davranış izi var) ve **17 satır U0** (bu incelemede uygulanmış davranış zinciri bulunamadı ya da özellik ayrı geliştirme gerektiriyor). U2, otomatik test veya editör kabulü değildir; 59 U2 satırının da row-specific test/editör kanıtı bekliyor.
 - Bazı ihtiyaçlar için kaynak yolu bulundu; bazıları “incelenen akışta bulunmadı” olarak açıkça işaretlendi (ör. zipline hattı, sal/su üstü kullanım, makine yapımı, genel savunma tuzağı). Bunlar tamamlandı olarak sayılmaz.
-- CI artık bu 76 satırlı dosyayı **discovery mode** ile denetliyor: beklenen satır sayısı/şema/ID biçimi ve boş blocker/not alanları görünür; bilinen U0 durumları hata gibi gizlenmeden raporlanır.
+- CI bu 76 satırlı dosyayı **discovery mode** ile denetliyor: beklenen satır sayısı, şema, ID biçimi ve metadata boşlukları görünür. 17 U0 satırı bilinen audit boşluğu olarak raporlanır; keşif modu bunları test başarısı diye göstermiyor.
 
 Bu eşleştirme yalnızca LOG ailesi için ilerlemedir. Diğer sekiz katalog ailesi henüz aynı düzeyde satır bazında işlenmediğinden Faz 0 çıkış kapısı kapalıdır.
