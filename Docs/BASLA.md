@@ -12,7 +12,8 @@ Bu sayfayı oku, gerisini ihtiyacın olunca oku. Hepsi `Docs/` altında, `.md`. 
 | `KARARLAR.md` | Verilmiş kararlar ve bekleyenler | Tasarım önermeden önce |
 | `PROJE_GUNLUGU.md` | Yapılan her işin kaydı (en sondaki girişler en yeni) | Bir şeyin neden yapıldığını merak edince |
 | `KOD_HARITASI.md` | Her sınıfın genel fonksiyonları ve açıklamaları | Kod yazmadan önce, hangi fonksiyon var diye |
-| `TEST_DURUMU.md` | Son test sonucu, hangi kontroller geçiyor | Bir şeyin çalıştığından emin olmak için |
+| `TEST_DURUMU.md` | Son kaydedilmiş test sonucu, hangi kontroller geçiyor | Bir şeyin çalıştığından emin olmak için |
+| `DEMO_CONTEXTUAL_01.md` | Oynanabilir bağlam sahnesi, istasyonlar ve gerçek mekanik önkoşulları | Demo sahnesini kurarken/doğrularken |
 | `KUTUK_SISTEMI_PLANI.md` | Fazlar ve tasarım ilkesi | Plan konuşurken |
 
 ## Tasarım ilkesi (özet)
