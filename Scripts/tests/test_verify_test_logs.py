@@ -137,7 +137,7 @@ class LogVerifierTests(unittest.TestCase):
             VERIFY.verify_stone_placement(self.stone_placement)
 
     def test_valid_stone_trap_log_passes(self):
-        names = ("DamageDispatchAndCooldown", "NullVictimSafety", "PhysicalStone", "CarvableLog")
+        names = ("DispatchAndCooldown", "NullVictimSafety", "PhysicalStone", "CarvableLog")
         self.stone_trap.write_text(
             "".join(
                 f"Test Completed. Result={{Success}} Name={{{name}}} "
