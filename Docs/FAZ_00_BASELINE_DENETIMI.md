@@ -146,3 +146,10 @@ Sistem entegrasyonu taraması: [FAZ_00_SISTEM_ENTEGRASYON_DENETIMI.md](./FAZ_00_
 - runtime 3B kazı geometrisi/çarpışma delta'sı için bu kaynaklarda uçtan uca pipeline bulunmaması.
 
 Bu bulgular kodu doğrudan yeniden yazmak için değil, fazlar arası sahiplik sözleşmesini netleştirmek ve yanlışlıkla birden fazla otoriter sistem üretmemek için kaydedildi. Kaynakları bulunmayan ya da çağrı zinciri kanıtlanmamış mekanikler U0 olarak kalır. Faz 0 kapısı, 485 satırın her biri için ID bazlı durum + kanıt/test/engel eşleştirmesi tamamlanana kadar açıktır.
+ 
+
+## Satır bazlı kapsam ilerlemesi
+
+`Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv`, LOG-001–LOG-076 için ilk 76 satırlı kaynak/kanıt eşleştirmesini içerir. Her satırda kaynak zinciri veya “bu incelemede bulunmadı” sınırı, eksik test/editör kanıtı ve açık blocker yazılmıştır. Hiçbir kayıt yalnızca statik kod taraması nedeniyle U1–U6 seviyesine yükseltilmedi. LOG grubundaki 76 satırın tamamı U0 kalır; 409 diğer mekanik ve LOG grubundaki satır-özel otomasyon/editör kanıtları Faz 0 iş listesindedir.
+
+`Scripts/run_python_tests.sh` artık bu dosyayı beklenen 76 satırla keşif modunda kontrol eder. Bu, katalog formatını/kimliklerini ve kanıt metaverisini denetler; UE 5.8 derlemesi veya editör kabulünün yerine geçmez.
