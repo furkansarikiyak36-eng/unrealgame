@@ -32,6 +32,20 @@ bool UStoneCarryComponent::Drop()
     CarriedStone = nullptr; return true;
 }
 
+bool UStoneCarryComponent::ReleaseForPlacement(AStoneActor* Stone)
+{
+    if (!IsValid(Stone) || CarriedStone != Stone)
+    {
+        return false;
+    }
+
+    // Placement has already transitioned this same physical stone to Installed.
+    // Do not detach or mutate its state here; only clear the carry owner's reference.
+    CarriedStone = nullptr;
+    CurrentMode = EStoneCarryMode::SingleHand;
+    return true;
+}
+
 int32 UStoneCarryComponent::AddToStack(AStoneActor* SmallStone)
 {
     if (!SmallStone || StackedStones.Num() >= MaxStackSize || !GetOwner()) return StackedStones.Num();
