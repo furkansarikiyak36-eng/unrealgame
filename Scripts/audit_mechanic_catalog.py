@@ -27,8 +27,8 @@ REQUIRED_COLUMNS = (
 )
 EVIDENCE_BY_LEVEL = {
     0: (),
-    1: (),
-    2: (),
+    1: ("Kod_Kaniti_ve_Cagri_Zinciri",),
+    2: ("Kod_Kaniti_ve_Cagri_Zinciri",),
     3: ("Kod_Kaniti_ve_Cagri_Zinciri",),
     4: ("Kod_Kaniti_ve_Cagri_Zinciri", "Otomatik_Test_ID_ve_Sonuc"),
     5: ("Kod_Kaniti_ve_Cagri_Zinciri", "Otomatik_Test_ID_ve_Sonuc", "Editor_Test_Kaniti"),
@@ -95,7 +95,12 @@ def audit_rows(rows: list[dict[str, str]], headers: list[str]) -> dict[str, Any]
         if level == 0 or status.startswith("U0"):
             item_warnings.append("Denetim gerekli: mekanik tamamlandı kabul edilemez")
 
+        # Every catalog row must explicitly record its blocker/dependency state
+        # and a note; U1+ also requires a traceable source/model location.
         missing_evidence = []
+        for column in ("Bagimlilik_Bloker", "Acik_Notlar"):
+            if not _text(row.get(column)):
+                missing_evidence.append(column)
         if level is not None:
             for column in EVIDENCE_BY_LEVEL[level]:
                 if not _text(row.get(column)):
