@@ -407,5 +407,3 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - LastObservedWorldDay ile AccumulatedDeltaDays birbirinden ayrıldı. Her simülasyon adımı en fazla bir gün, pending catch-up en fazla 365 gün; tarihsel yağış tekrar üretimi en fazla 365 günle sınırlı. Daha eski pasif geçmiş performans için yaklaşık ele alınır, eksiksiz tarihsel replay garantisi verilmez.
 - FChunkStateSnapshot / FWorldStateSnapshot ve schema-4 UWorldCoreSaveGame bağlantısı eklendi. Saat/hava/seed ve chunk/cell state doğrulanır; chunk-store için yeni map kurulmadan mevcut map değiştirilmez. Schema 1–3 kayıtlar geriye dönük okunabilir; bu kayıtlarda world-state snapshot yoksa mevcut hücre durumu otomatik silinmez.
 - Statik sözleşme testi Scripts/tests/test_phase8_world_state_integration_contract.py eklendi ve Python runner'a bağlandı. CI/UE doğrulama sonucu ayrıca kaydedilecek; burada Unreal Engine 5.8 derlemesi veya oyun içi save/load koşturulmuş kabul edilmiyor. Daha derin cross-domain rollback ve performans ölçümü Faz 14'te.
-
-<!-- phase8-ci-trigger -->
