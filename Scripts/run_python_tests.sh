@@ -4,52 +4,55 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PYTHON="${PYTHON:-python}"
 
-echo "[2/29] Verifying the UE-log parser test suite..."
+echo "[2/30] Verifying the UE-log parser test suite..."
 "$PYTHON" "$ROOT/Scripts/tests/test_verify_test_logs.py"
 
-echo "[3/29] Verifying the mechanic-catalog auditor test suite..."
+echo "[3/30] Verifying the mechanic-catalog auditor test suite..."
 "$PYTHON" "$ROOT/Scripts/tests/test_audit_mechanic_catalog.py"
 
-echo "[4/29] Verifying the excavation spike matrix validator..."
+echo "[4/30] Verifying the excavation spike matrix validator..."
 "$PYTHON" "$ROOT/Scripts/tests/test_validate_excavation_spike.py"
 
-echo "[5/29] Testing canonical catalog cross-mapping validator..."
+echo "[5/30] Testing canonical catalog cross-mapping validator..."
 "$PYTHON" "$ROOT/Scripts/tests/test_validate_catalog_mapping.py"
 
-echo "[6/29] Testing fail-closed documentation update gate..."
+echo "[6/30] Testing fail-closed documentation update gate..."
 "$PYTHON" "$ROOT/Scripts/tests/test_runner_fail_closed.py"
 
-echo "[7/29] Verifying the inventory drop bridge contract..."
+echo "[7/30] Verifying the inventory drop bridge contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_inventory_drop_bridge_contract.py"
 
-echo "[8/29] Verifying the world-core persistence contract..."
+echo "[8/30] Verifying the world-core persistence contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_world_persistence_contract.py"
 
-echo "[9/29] Verifying the excavation terrain adapter contract..."
+echo "[9/30] Verifying the excavation terrain adapter contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_excavation_terrain_adapter_contract.py"
 
-echo "[10/29] Verifying the underground hazard contract..."
+echo "[10/30] Verifying the underground hazard contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_underground_hazard_contract.py"
 
-echo "[11/29] Verifying the carvable-log damage/recovery contract..."
+echo "[11/30] Verifying the carvable-log damage/recovery contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_carvable_log_contract.py"
 
-echo "[12/29] Verifying the inventory transfer transaction contract..."
+echo "[12/30] Verifying the inventory transfer transaction contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_inventory_transfer_contract.py"
 
-echo "[13/29] Verifying Phase 6 inventory, stick and persistence integration..."
+echo "[13/30] Verifying Phase 6 inventory, stick and persistence integration..."
 "$PYTHON" "$ROOT/Scripts/tests/test_phase6_inventory_integration.py"
 
-echo "[14/29] Verifying Phase 7 wood material/structure integration..."
+echo "[14/30] Verifying Phase 7 wood material/structure integration..."
 "$PYTHON" "$ROOT/Scripts/tests/test_wood_material_integration_contract.py"
 
-echo "[14/29] Verifying Phase 8 world-state integration and persistence..."
+echo "[14/30] Verifying Phase 8 world-state integration and persistence..."
 "$PYTHON" "$ROOT/Scripts/tests/test_phase8_world_state_integration_contract.py"
 
-echo "[15/29] Verifying Phase 9 farming, animal feed, products and manure integration..."
+echo "[15/30] Verifying Phase 9 farming, animal feed, products and manure integration..."
 "$PYTHON" "$ROOT/Scripts/tests/test_phase9_farming_integration_contract.py"
 
-echo "[16/29] Checking Python and shell syntax..."
+echo "[16/30] Verifying Phase 10 region, infrastructure and weighted route integration..."
+"$PYTHON" "$ROOT/Scripts/tests/test_phase10_region_logistics_contract.py"
+
+echo "[17/30] Checking Python and shell syntax..."
 bash -n "$ROOT/Scripts/run_tests.sh"
 bash -n "$ROOT/Scripts/run_python_tests.sh"
 "$PYTHON" -m py_compile \
@@ -71,45 +74,46 @@ bash -n "$ROOT/Scripts/run_python_tests.sh"
   "$ROOT/Scripts/tests/test_phase6_inventory_integration.py" \
   "$ROOT/Scripts/tests/test_wood_material_integration_contract.py" \
   "$ROOT/Scripts/tests/test_phase8_world_state_integration_contract.py" \
-  "$ROOT/Scripts/tests/test_phase9_farming_integration_contract.py"
+  "$ROOT/Scripts/tests/test_phase9_farming_integration_contract.py" \
+  "$ROOT/Scripts/tests/test_phase10_region_logistics_contract.py"
 
-echo "[17/29] Auditing the 76-row LOG map..."
+echo "[18/30] Auditing the 76-row LOG map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv" --expected-count 76
 
-echo "[18/29] Auditing the 32-row INVENTORY map..."
+echo "[19/30] Auditing the 32-row INVENTORY map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_ENVANTER_KATALOG_ESLESTIRME.csv" --expected-count 32
 
-echo "[19/29] Auditing the 63-row RAID map..."
+echo "[20/30] Auditing the 63-row RAID map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_RAID_KATALOG_ESLESTIRME.csv" --expected-count 63
 
-echo "[20/29] Auditing the 35-row WORLD map..."
+echo "[21/30] Auditing the 35-row WORLD map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_WORLD_KATALOG_ESLESTIRME.csv" --expected-count 35
 
-echo "[21/29] Auditing the 38-row MATERIAL map..."
+echo "[22/30] Auditing the 38-row MATERIAL map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_MATERIAL_KATALOG_ESLESTIRME.csv" --expected-count 38
 
-echo "[22/29] Auditing the 57-row FARMING map..."
+echo "[23/30] Auditing the 57-row FARMING map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_FARMING_KATALOG_ESLESTIRME.csv" --expected-count 57
 
-echo "[23/29] Auditing the 12-row CORE map..."
+echo "[24/30] Auditing the 12-row CORE map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_CORE_KATALOG_ESLESTIRME.csv" --expected-count 12
 
-echo "[24/29] Auditing the 96-row STONE map..."
+echo "[25/30] Auditing the 96-row STONE map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_STONE_KATALOG_ESLESTIRME.csv" --expected-count 96
 
-echo "[25/29] Auditing the 76-row STICK map..."
+echo "[26/30] Auditing the 76-row STICK map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_STICK_KATALOG_ESLESTIRME.csv" --expected-count 76
 
-echo "[26/29] Validating Phase 1 excavation benchmark matrix..."
+echo "[27/30] Validating Phase 1 excavation benchmark matrix..."
 "$PYTHON" "$ROOT/Scripts/validate_excavation_spike.py" "$ROOT/Docs/FAZ_01_KAZI_SPIKE_SABLONU.csv"
 
-echo "[27/29] Reconciling the canonical catalog against its nine detailed mappings..."
+echo "[28/30] Reconciling the canonical catalog against its nine detailed mappings..."
 "$PYTHON" "$ROOT/Scripts/validate_catalog_mapping.py" --master "$ROOT/Docs/MEKANIK_KATALOG_TAKIP_CSV.csv" --mapping-dir "$ROOT/Docs"
 
-echo "[28/29] Auditing the canonical 485-row master catalog evidence state..."
+echo "[29/30] Auditing the canonical 485-row master catalog evidence state..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/MEKANIK_KATALOG_TAKIP_CSV.csv" --expected-count 485
 
-echo "[29/29] Auditing the Phase 0 findings matrix..."
+echo "[30/30] Auditing the Phase 0 findings matrix..."
 "$PYTHON" "$ROOT/Scripts/audit_findings_matrix.py" "$ROOT/Docs/FAZ_00_BULGU_MATRISI.csv"
 
-echo "ALL PYTHON TOOL TESTS, INVENTORY DROP CONTRACT, INVENTORY TRANSFER TRANSACTION CONTRACT, PHASE 6 INVENTORY/STICK/SAVE CONTRACT, PHASE 7 WOOD MATERIAL/STRUCTURE CONTRACT, PHASE 8 WORLD-STATE INTEGRATION CONTRACT, PHASE 9 FARMING/ANIMAL/FEED/MANURE CONTRACT, WORLD CORE PERSISTENCE CONTRACT, EXCAVATION TERRAIN ADAPTER CONTRACT, UNDERGROUND HAZARD CONTRACT, CARVABLE LOG REPAIR/SUPPORT CONTRACT, MASTER CATALOG CROSS-MAPPING, NINE ROW MAP AUDITS, EXCAVATION SPIKE AND FINDINGS MATRIX CHECKS PASSED."
+echo "ALL PYTHON TOOL TESTS, INVENTORY DROP CONTRACT, INVENTORY TRANSFER TRANSACTION CONTRACT, PHASE 6 INVENTORY/STICK/SAVE CONTRACT, PHASE 7 WOOD MATERIAL/STRUCTURE CONTRACT, PHASE 8 WORLD-STATE INTEGRATION CONTRACT, PHASE 9 FARMING/ANIMAL/FEED/MANURE CONTRACT, PHASE 10 REGION/LOGISTICS CONTRACT, WORLD CORE PERSISTENCE CONTRACT, EXCAVATION TERRAIN ADAPTER CONTRACT, UNDERGROUND HAZARD CONTRACT, CARVABLE LOG REPAIR/SUPPORT CONTRACT, MASTER CATALOG CROSS-MAPPING, NINE ROW MAP AUDITS, EXCAVATION SPIKE AND FINDINGS MATRIX CHECKS PASSED."
