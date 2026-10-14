@@ -26,6 +26,19 @@ struct FInventoryItem
     bool IsEmpty() const { return Count <= 0 || ItemID.IsNone(); }
 };
 
+/** Canonical saved stack payload for one placed inventory storage actor. */
+USTRUCT(BlueprintType)
+struct FInventoryStorageSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadOnly)
+    FName StorageKey = NAME_None;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly)
+    TArray<FInventoryItem> Items;
+};
+
 USTRUCT(BlueprintType)
 struct FInventorySlot
 {
