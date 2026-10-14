@@ -5,8 +5,23 @@ UInventoryComponent::UInventoryComponent() { PrimaryComponentTick.bCanEverTick=f
 void UInventoryComponent::BeginPlay()
 {
     Super::BeginPlay();
-    MaxSlots=FMath::Max(1,MaxSlots); Slots.SetNum(MaxSlots);
-    for (int32 i=0;i<Slots.Num();++i) Slots[i].SlotIndex=i;
+    InitializeRuntimeInventory();
+}
+
+void UInventoryComponent::InitializeRuntimeInventory()
+{
+    MaxSlots = FMath::Max(1, MaxSlots);
+    // This can be called again by the owning character after injecting its canonical
+    // item definitions. Never resize a live inventory here and risk truncating items.
+    if (Slots.Num() == 0)
+    {
+        Slots.SetNum(MaxSlots);
+    }
+    for (int32 i = 0; i < Slots.Num(); ++i)
+    {
+        Slots[i].SlotIndex = i;
+    }
+
     for (UInventoryItemData* D : ItemDefinitions)
     {
         if (!D) continue;
@@ -144,13 +159,38 @@ EInventoryResult UInventoryComponent::AddItemData(const FInventoryItem& Item)
     }
     BroadcastChanged(); return EInventoryResult::Success;
 }
-EInventoryResult UInventoryComponent::RemoveItem(FName ID,int32 Count)
+EInventoryResult UInventoryComponent::RemoveItem(FName ID, int32 Count)
 {
-    if (Count<=0 || ID.IsNone()) return EInventoryResult::InvalidRequest;
-    if (!HasItem(ID,Count)) return EInventoryResult::NotEnoughItems;
-    int32 Left=Count;
-    for (int32 i=Slots.Num()-1;i>=0&&Left>0;--i) { FInventorySlot& S=Slots[i]; if(S.bLocked||!S.IsOccupied()||S.Item.ItemID!=ID) continue; const int32 N=FMath::Min(S.Item.Count,Left); S.Item.Count-=N; Left-=N; if(S.Item.Count<=0) { S.Item=FInventoryItem(); S.SlotIndex=i; } }
-    if(OnItemRemoved.IsBound()) OnItemRemoved.Broadcast(ID,GetItemCount(ID)); BroadcastChanged(); return EInventoryResult::Success;
+    if (Count <= 0 || ID.IsNone())
+    {
+        return EInventoryResult::InvalidRequest;
+    }
+    if (!HasItem(ID, Count))
+    {
+        return EInventoryResult::NotEnoughItems;
+    }
+
+    int32 Left = Count;
+    for (int32 i = Slots.Num() - 1; i >= 0 && Left > 0; --i)
+    {
+        FInventorySlot& Slot = Slots[i];
+        if (Slot.bLocked || !Slot.IsOccupied() || Slot.Item.ItemID != ID) continue;
+        const int32 Removed = FMath::Min(Slot.Item.Count, Left);
+        Slot.Item.Count -= Removed;
+        Left -= Removed;
+        if (Slot.Item.Count <= 0)
+        {
+            Slot.Item = FInventoryItem();
+            Slot.SlotIndex = i;
+        }
+    }
+
+    if (!bSuppressInventoryEvents && OnItemRemoved.IsBound())
+    {
+        OnItemRemoved.Broadcast(ID, GetItemCount(ID));
+    }
+    BroadcastChanged();
+    return EInventoryResult::Success;
 }
 EInventoryResult UInventoryComponent::DropItem(FName ID,int32 Count)
 {
@@ -164,8 +204,6 @@ bool UInventoryComponent::TransferItem(UInventoryComponent* Source, UInventoryCo
         return false;
     }
 
-    // Preserve the source item's canonical payload rather than constructing a second
-    // definition for stone, sticks, or other physical resources.
     FInventoryItem Payload;
     bool bFoundPayload = false;
     for (const FInventorySlot& Slot : Source->Slots)
@@ -185,8 +223,8 @@ bool UInventoryComponent::TransferItem(UInventoryComponent* Source, UInventoryCo
     Payload.Count = Count;
     if (!Destination->CanAddItem(ItemID, Count))
     {
-        // CanAddItem requires a registered definition. Save-derived items without a
-        // definition are still transferable through the same bounded slot/weight checks.
+        // Save-derived item rows without a definition can transfer only if their
+        // payload fits the destination's same weight/slot policy.
         if (Destination->GetItemData(ItemID) != nullptr ||
             !Destination->CanFitItem(Payload, Count))
         {
@@ -194,25 +232,91 @@ bool UInventoryComponent::TransferItem(UInventoryComponent* Source, UInventoryCo
         }
     }
 
+    // Preserve both exact slot layouts. Suppress delegates until both sides commit;
+    // a consumer must never observe the temporary debit between Remove and Add.
+    const TArray<FInventorySlot> OriginalSourceSlots = Source->Slots;
+    const TArray<FInventorySlot> OriginalDestinationSlots = Destination->Slots;
+    const bool bWasSuppressingSourceEvents = Source->bSuppressInventoryEvents;
+    const bool bWasSuppressingDestinationEvents = Destination->bSuppressInventoryEvents;
+    Source->bSuppressInventoryEvents = true;
+    Destination->bSuppressInventoryEvents = true;
+
     const EInventoryResult Removed = Source->RemoveItem(ItemID, Count);
-    if (Removed != EInventoryResult::Success)
+    const EInventoryResult Added = Removed == EInventoryResult::Success
+        ? Destination->AddItemData(Payload)
+        : EInventoryResult::InvalidRequest;
+
+    if (Removed != EInventoryResult::Success || Added != EInventoryResult::Success)
+    {
+        Source->Slots = OriginalSourceSlots;
+        Destination->Slots = OriginalDestinationSlots;
+        Source->NormalizeSlotIndexes();
+        Destination->NormalizeSlotIndexes();
+        Source->bSuppressInventoryEvents = bWasSuppressingSourceEvents;
+        Destination->bSuppressInventoryEvents = bWasSuppressingDestinationEvents;
+        return false;
+    }
+
+    Source->bSuppressInventoryEvents = bWasSuppressingSourceEvents;
+    Destination->bSuppressInventoryEvents = bWasSuppressingDestinationEvents;
+    if (!bWasSuppressingSourceEvents)
+    {
+        if (Source->OnItemRemoved.IsBound())
+        {
+            Source->OnItemRemoved.Broadcast(ItemID, Source->GetItemCount(ItemID));
+        }
+        Source->BroadcastChanged();
+    }
+    if (!bWasSuppressingDestinationEvents)
+    {
+        if (Destination->OnItemAdded.IsBound())
+        {
+            Destination->OnItemAdded.Broadcast(ItemID, Destination->GetItemCount(ItemID));
+        }
+        Destination->BroadcastChanged();
+    }
+    return true;
+}
+
+bool UInventoryComponent::ExchangeItems(FName InputID, int32 InputCount, FName OutputID, int32 OutputCount)
+{
+    if (InputID.IsNone() || OutputID.IsNone() || InputCount <= 0 || OutputCount <= 0 ||
+        !HasItem(InputID, InputCount) || !GetItemData(InputID) || !GetItemData(OutputID))
     {
         return false;
     }
 
-    const EInventoryResult Added = Destination->AddItemData(Payload);
-    if (Added == EInventoryResult::Success)
+    const TArray<FInventorySlot> OriginalSlots = Slots;
+    const bool bWasSuppressingEvents = bSuppressInventoryEvents;
+    bSuppressInventoryEvents = true;
+
+    const EInventoryResult Removed = RemoveItem(InputID, InputCount);
+    const EInventoryResult Added = Removed == EInventoryResult::Success
+        ? AddItem(OutputID, OutputCount)
+        : EInventoryResult::InvalidRequest;
+
+    if (Removed != EInventoryResult::Success || Added != EInventoryResult::Success)
     {
-        return true;
+        Slots = OriginalSlots;
+        NormalizeSlotIndexes();
+        bSuppressInventoryEvents = bWasSuppressingEvents;
+        return false;
     }
 
-    // Destination rejected after preflight; restore the source before reporting failure.
-    const EInventoryResult Restored = Source->AddItemData(Payload);
-    if (Restored != EInventoryResult::Success)
+    bSuppressInventoryEvents = bWasSuppressingEvents;
+    if (!bWasSuppressingEvents)
     {
-        UE_LOG(LogTemp, Error, TEXT("Inventory transfer rollback failed for '%s' (%d items)."), *ItemID.ToString(), Count);
+        if (OnItemRemoved.IsBound())
+        {
+            OnItemRemoved.Broadcast(InputID, GetItemCount(InputID));
+        }
+        if (OnItemAdded.IsBound())
+        {
+            OnItemAdded.Broadcast(OutputID, GetItemCount(OutputID));
+        }
+        BroadcastChanged();
     }
-    return false;
+    return true;
 }
 int32 UInventoryComponent::GetItemCount(FName ID) const { int32 N=0; for(const FInventorySlot& S:Slots) if(S.IsOccupied()&&S.Item.ItemID==ID) N+=S.Item.Count; return N; }
 bool UInventoryComponent::HasItem(FName ID,int32 Count) const { return Count>=0 && GetItemCount(ID)>=Count; }
@@ -231,8 +335,94 @@ void UInventoryComponent::SortByCategory() { Slots.Sort([](const FInventorySlot&
 void UInventoryComponent::SortByName() { Slots.Sort([](const FInventorySlot&A,const FInventorySlot&B){if(A.IsOccupied()!=B.IsOccupied())return A.IsOccupied();return A.Item.DisplayName.ToString()<B.Item.DisplayName.ToString();}); NormalizeSlotIndexes(); BroadcastChanged(); }
 void UInventoryComponent::SortByRarity() { Slots.Sort([](const FInventorySlot&A,const FInventorySlot&B){if(A.IsOccupied()!=B.IsOccupied())return A.IsOccupied();return (uint8)A.Item.Rarity>(uint8)B.Item.Rarity;}); NormalizeSlotIndexes(); BroadcastChanged(); }
 void UInventoryComponent::ClearAll() { for(int32 i=0;i<Slots.Num();++i){ if(!Slots[i].bLocked){Slots[i].Item=FInventoryItem();Slots[i].SlotIndex=i;} } BroadcastChanged(); }
+bool UInventoryComponent::CanRestoreFromSavedItems(const TArray<FInventoryItem>& Saved) const
+{
+    float TotalWeight = 0.0f;
+    int64 NeededSlots = 0;
+    TMap<FName, int64> DefinedCounts;
+    TMap<FName, int32> DefinedStackSizes;
+
+    const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
+    int32 AvailableSlots = 0;
+    for (int32 i = 0; i < ActiveSlotCount; ++i)
+    {
+        const FInventorySlot& Slot = Slots[i];
+        if (!Slot.bLocked)
+        {
+            // Restore clears all unlocked slots before filling the snapshot.
+            ++AvailableSlots;
+        }
+        else if (Slot.IsOccupied())
+        {
+            TotalWeight += Slot.Item.Weight * Slot.Item.Count;
+        }
+    }
+
+    for (const FInventoryItem& Item : Saved)
+    {
+        if (Item.Count < 0)
+        {
+            return false;
+        }
+        if (Item.Count == 0)
+        {
+            continue;
+        }
+        if (Item.ItemID.IsNone() || Item.MaxStack <= 0 ||
+            !FMath::IsFinite(Item.Weight) || Item.Weight < 0.0f)
+        {
+            return false;
+        }
+
+        UInventoryItemData* Definition = GetItemData(Item.ItemID);
+        if (Definition)
+        {
+            FString ValidationError;
+            if (!Definition->ValidateData(ValidationError))
+            {
+                return false;
+            }
+            int64& CombinedCount = DefinedCounts.FindOrAdd(Item.ItemID);
+            if (CombinedCount > TNumericLimits<int64>::Max() - Item.Count)
+            {
+                return false;
+            }
+            CombinedCount += Item.Count;
+            DefinedStackSizes.Add(Item.ItemID,
+                Definition->bStackable ? FMath::Max(1, Definition->MaxStack) : 1);
+            TotalWeight += Definition->Weight * Item.Count;
+        }
+        else
+        {
+            NeededSlots += (static_cast<int64>(Item.Count) + Item.MaxStack - 1) / Item.MaxStack;
+            TotalWeight += Item.Weight * Item.Count;
+        }
+
+        if (NeededSlots > AvailableSlots || !FMath::IsFinite(TotalWeight))
+        {
+            return false;
+        }
+    }
+
+    for (const TPair<FName, int64>& Entry : DefinedCounts)
+    {
+        const int32 StackSize = DefinedStackSizes.FindRef(Entry.Key);
+        NeededSlots += (Entry.Value + StackSize - 1) / StackSize;
+        if (NeededSlots > AvailableSlots)
+        {
+            return false;
+        }
+    }
+
+    return bIgnoreWeight || TotalWeight <= MaxWeight + KINDA_SMALL_NUMBER;
+}
+
 bool UInventoryComponent::RestoreFromSavedItems(const TArray<FInventoryItem>& Saved)
 {
+    if (!CanRestoreFromSavedItems(Saved))
+    {
+        return false;
+    }
     const TArray<FInventorySlot> OriginalSlots = Slots;
     const bool bWasSuppressingEvents = bSuppressInventoryEvents;
     bSuppressInventoryEvents = true;
