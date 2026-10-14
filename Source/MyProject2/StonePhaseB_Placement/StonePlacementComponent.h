@@ -15,7 +15,7 @@ public:
     UStonePlacementComponent();
     UFUNCTION(BlueprintCallable) bool BeginPlacement(AStoneActor* Stone);
     UFUNCTION(BlueprintCallable) bool CancelPlacement();
-    UFUNCTION(BlueprintCallable) bool UpdatePlacementTarget(FVector SurfacePoint, FVector SurfaceNormal);
+    UFUNCTION(BlueprintCallable) bool UpdatePlacementTarget(FVector SurfacePoint, FVector SurfaceNormal, AActor* SurfaceActor = nullptr);
     UFUNCTION(BlueprintPure) FTransform GetTargetTransform() const { return TargetTransform; }
     UFUNCTION(BlueprintPure) int32 GetPlacementOptionIndex() const { return PlacementOptionIndex; }
     UFUNCTION(BlueprintPure) AStoneActor* GetPreviewStone() const { return PreviewStone; }
@@ -37,11 +37,13 @@ protected:
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) FVector TargetSurfacePoint = FVector::ZeroVector;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) float ManualYawDegrees = 0.0f;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) bool bHasPlacementTarget = false;
+    TWeakObjectPtr<AActor> TargetSurfaceActor;
     FTransform OriginalActorTransform;
     EStructuralNodeState OriginalStructuralState = EStructuralNodeState::Loose;
     TWeakObjectPtr<USceneComponent> OriginalAttachComponent;
     FName OriginalAttachSocket = NAME_None;
 
     void ApplySelectedPlacementOption();
+    bool IsPlacementClear(const FTransform& CandidateTransform) const;
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 };
