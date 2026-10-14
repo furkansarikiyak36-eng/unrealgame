@@ -111,7 +111,7 @@ class Phase12RaidDirectorContract(unittest.TestCase):
     def test_structural_damage_is_finite_and_invalidates_navmesh_after_destruction(self):
         self.assertIn("FMath::IsFinite(Damage)", DAMAGE_CPP)
         self.assertIn("Damage<=0.f", DAMAGE_CPP)
-        self.assertIn("DamageComponent->ApplyDamage", DAMAGE_CPP)
+        self.assertIn("Component->ApplyDamage", DAMAGE_CPP)
         self.assertIn("Navigation->AddDirtyArea", DAMAGE_CPP)
         self.assertIn("Logistics->SetInfrastructureStatus(Log->InfrastructureLinkKey,false,0.0f,1.0f)", DAMAGE_CPP)
         self.assertIn("DamageResolver->ApplyDamageToBlock", ENEMY_CPP)
