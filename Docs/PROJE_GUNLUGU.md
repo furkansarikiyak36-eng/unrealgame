@@ -367,3 +367,10 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - `AInventoryStorageActor` aynı envanter ve transfer API'sini kullanır. World save schema 3 oyuncu stack stoğuna ek olarak her depoyu benzersiz anahtarla sıralı snapshot'a alır; load sırasında tüm depoların anahtarı/miktarı/kapasitesi önceden doğrulanır. Schema 1/2 kayıtları geriye dönük desteklenir.
 - Statik kontratlara fiziksel kaynak, storage ve schema-3 doğrulamaları eklendi. CI #675'te görülen tek hata test beklentisinin eski `CanDropItem(ItemID, Count)` metnini aramasıydı; gerçek API `CanDropItem(ID, Count)` olduğundan test bu sözleşmeye düzeltildi. Son dal head'i için temiz CI koşusu henüz doğrulanmış değil. Unreal Engine 5.8 C++ build/Automation bu ortamda çalıştırılmadı.
 - **Açık:** gerçek UE E2E'de depo transferi, processing, physical drop/pickup, build/salvage ve save/load turları. Bu fazlar arası bilanço ve tam çapraz-sistem audit Faz 14'e ayrıldı; bu log ara demo/paket teslimi anlamına gelmez.
+
+
+### 2026-10-14 — Faz 6: statik CI doğrulaması
+
+- Güncel dal head'i için Python tooling CI **#696 başarılı** (run `38530520494`). `InventoryTransferContract` ve `Phase6InventoryIntegration` içindeki iki assertion uyuşmazlığı düzeltilerek tekrar çalıştırıldı.
+- Bu sonuç yalnızca Python tooling/statik kaynak sözleşmelerinin geçtiğini gösterir; Unreal Engine 5.8 C++ derlemesi, Automation, Blueprint/oyun içi akışlar veya görsel kabul çalıştırılmadı.
+- **Faz 6 durumu:** kod + statik CI hazır; depo transferi, işleme, physical drop/pickup, build/salvage ve en az iki save/load turunun UE E2E kabulü bekliyor. Bu nedenle faz takipte In Progress kalır; Faz 14 toplu 485 mekanik denetimi daha sonra.
