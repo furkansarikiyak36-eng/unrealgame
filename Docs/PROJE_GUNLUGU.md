@@ -374,3 +374,10 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Güncel dal head'i için Python tooling CI **#696 başarılı** (run `38530520494`). `InventoryTransferContract` ve `Phase6InventoryIntegration` içindeki iki assertion uyuşmazlığı düzeltilerek tekrar çalıştırıldı.
 - Bu sonuç yalnızca Python tooling/statik kaynak sözleşmelerinin geçtiğini gösterir; Unreal Engine 5.8 C++ derlemesi, Automation, Blueprint/oyun içi akışlar veya görsel kabul çalıştırılmadı.
 - **Faz 6 durumu:** kod + statik CI hazır; depo transferi, işleme, physical drop/pickup, build/salvage ve en az iki save/load turunun UE E2E kabulü bekliyor. Bu nedenle faz takipte In Progress kalır; Faz 14 toplu 485 mekanik denetimi daha sonra.
+
+
+### 2026-10-14 — Faz 6: uygulama katmanı kapatıldı
+
+- Faz 6 tracker'ı artık `Implemented` durumunda: tek envanter sahibi, atomik transfer/tarif dönüşümü, fiziksel taş/çubuk drop/salvage köprüsü, storage aktörü ve schema-3 oyuncu/depo snapshot'ları kodlandı.
+- Python tooling CI #696 başarılıdır (run [38530520494](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38530520494)); source sözleşmelerinin geçtiğini doğrular, UE C++ build veya oyun testi değildir.
+- Kalan motor kabulü Faz 14'e taşındı; sonraki kod fazına geçişi bloke etmez. Demo/paket yalnızca son bütünsel denetimden sonra.
