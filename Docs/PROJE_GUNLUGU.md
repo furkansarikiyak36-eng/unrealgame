@@ -194,3 +194,12 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - Kullanılmış local socket/face adları actor graph'ından türetiliyor; hedefte kullanılan socket ikinci bağlantı için sunulmuyor.
 - StonePlacementTests.cpp beş C++ Automation Test içeriyor: begin/cancel, face/socket hizalama, carry/confirm rollback, collision clearance ve reciprocal graph/occupied-socket testleri. verify_test_logs.py en az beş başarılı benzersiz sonuç ister.
 - Son Python tooling CI kaynak dosyalarını derlemez. UE 5.8 Windows build, beş C++ otomasyon testi ve görsel editor testi henüz çalıştırılmadı; P0-023/P0-030/P0-032/P0-033 In Progress olarak kalır.
+
+
+### 2026-10-14 — Stone Trap damage dispatch
+
+- StoneTrapActor TriggerVolume artık QueryOnly/Pawn-overlap yapılandırmasına sahip ve BeginOverlap ile Victim dispatch çağırıyor.
+- Trigger hedef hasarını mevcut alıcı metotlarına yönlendiriyor: ARaidEnemy::TakeHit, AForestCharacter::TakeEnemyHit, AStoneActor::ApplyDamage, ACarvableLog::AddDamage. Diğer aktörlerde UGameplayStatics::ApplyDamage fallback kullanılıyor.
+- Kütük hasarı için configurable raw-damage-to-normalized-fraction çarpanı eklendi.
+- Rearm, cooldown süresi tamamlanmadan tuzağı tekrar aktif hale getirmiyor.
+- İki UE Automation Test eklendi; Scripts/run_tests.sh ve log verifier güncelleniyor. UE 5.8 build/test henüz çalıştırılmadı.
