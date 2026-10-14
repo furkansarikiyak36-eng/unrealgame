@@ -70,6 +70,22 @@ class CatalogAuditTests(unittest.TestCase):
         self.assertEqual(report["level_counts"]["Unclassified"], 1)
         self.assertEqual(report["summary"]["unmapped_or_unproven"], 1)
 
+    def test_u1_requires_traceable_source_location(self):
+        report = audit_rows([row(
+            Durum="U1 — veri/model",
+            Kod_Kaniti_ve_Cagri_Zinciri="",
+            Otomatik_Test_ID_ve_Sonuc="",
+            Editor_Test_Kaniti="",
+        )], list(REQUIRED_COLUMNS))
+        self.assertEqual(report["summary"]["evidence_gaps"], 1)
+        self.assertEqual(report["summary"]["unmapped_or_unproven"], 1)
+
+    def test_blocker_and_notes_must_be_explicit(self):
+        report = audit_rows([row(Bagimlilik_Bloker="", Acik_Notlar="")],
+                            list(REQUIRED_COLUMNS))
+        self.assertEqual(report["summary"]["evidence_gaps"], 2)
+        self.assertTrue(report["errors"])
+
     def test_duplicate_ids_in_different_systems_still_fail(self):
         report = audit_rows([
             row(Mechanic_ID="CORE-001", Sistem="CORE"),
