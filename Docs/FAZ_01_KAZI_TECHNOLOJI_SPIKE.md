@@ -1,9 +1,9 @@
 # Faz 1 — Runtime kazı teknolojisi spike şartnamesi
 
-**Durum:** Deney planı hazır; gerçek UE 5.8 ölçümü/teknoloji seçimi bekliyor.  
+**Durum:** Faz 1 geliştirmesi başladı — veri sözleşmesi ve ilk sparse 3B delta backend'i önce kuruluyor.  
 **Kapsam:** Yalnızca geliştirici iç test haritası. Kullanıcıya ara demo teslimi değildir.  
 **Bağımlılık:** Faz 0 kaynak triage tamamlandı; açık motor doğrulama/entegrasyon engelleri sürüyor.  
-**Kural:** Bu belge iki adayın ölçüm metodunu tanımlar; ölçüm olmadan teknoloji seçilmiş sayılmaz.
+**Kural:** Başlangıç kodu için A/Sparse 3D delta yaklaşımı kullanılır ve görsel mesh/collision üretiminden ayrılır. İki adayın ağır benchmark karşılaştırması kodlamayı bloke etmez; gerekiyorsa Faz 14'te nihai performans analizi yapılır.
 
 ## Mevcut repo zemini
 
@@ -12,6 +12,12 @@
 - `WorldCore/ChunkState.h` terrain height/deformation ve water/soil/chemistry/biomass hücrelerini tutuyor; kaynak denetiminde runtime 3B kazı hacmi + collision + delta-persistence zinciri bulunmadı.
 - `WorldPersistence` world/chunk state'i serileştiriyor, ancak bu metotlarda canlı kazı hacmi geometrisi serileştirme pipeline'ı gösterilmedi.
 - Yalnız heightmap deformasyonu reddediliyor: dikey çukur üretse bile gerçek yatay tünel, alttan oyma ve kapalı oda gereksinimini karşılayamaz.
+
+## Veri backend kararı ve genişletilebilirlik
+
+İlk uygulama seyrek yerel 3B hücre/density override katmanıdır. Bu katman dünya koordinatını cell kimliğine dönüştürür, yerel hacim işlemlerini transaction olarak uygular ve rollback çakışmasını engeller. Mesh üretimi, collision yenileme, nav ve persistence ayrı adaptör/sorumluluklardır; bu backend bunların yerine geçmez.
+
+`Dynamic Mesh CSG` alternatif olarak not edilir, fakat ikinci sistemi şimdiden tam implemente ederek eforu ikiye bölmeyiz. İki backend'in değiştirilmesini kolaylaştıracak sınır korunur; seçeneklerin kapsamlı karşılaştırması Faz 14'te yapılabilir.
 
 ## Karşılaştırılacak adaylar
 
@@ -78,7 +84,7 @@ Her aday/çözünürlük koşusunda şu alanlar doldurulacak:
 - Performans yalnızca ortalama frame time ile değil, kazı başına worst spike ve collision rebuild ölçümüyle raporlanmalı.
 - Ölçüm sonucu, seçilmeyen yöntemin neden elendiğini ve kalan riskleri açıkça belgelemeli.
 
-**Seçim:** Beklemede — UE 5.8 host üzerinde gerçek ölçüm alınmadı.
+**Başlangıç seçimi:** Sparse 3D delta backend'i ilk veri katmanı olarak kullanılacak. Bu, nihai performans kazananı ilanı değildir; mimariyi ilerletmek için değiştirilebilir bir uygulama tercihidir.
 
 ## Unreal Engine 5.8 kaynakları
 
