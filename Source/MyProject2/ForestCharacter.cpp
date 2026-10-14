@@ -576,7 +576,14 @@ void AForestCharacter::HandleDeath()
 float AForestCharacter::CarrySpeed() const
 {
 	float Speed = WalkSpeed;
-	if (CarriedItem == EForestItem::TrunkLog)
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		const AStoneActor* Stone = StoneCarry->GetCarried();
+		const UStoneDefinition* Definition = Stone ? Stone->GetDefinition() : nullptr;
+		const float Mass = Definition ? FMath::Max(0.0f, Definition->Mass) : 20.0f;
+		Speed = FMath::Clamp(WalkSpeed - Mass * 1.5f, 180.0f, WalkSpeed);
+	}
+	else if (CarriedItem == EForestItem::TrunkLog)
 	{
 		Speed = 150.f;
 	}
@@ -598,7 +605,7 @@ float AForestCharacter::CarrySpeed() const
 
 bool AForestCharacter::IsHandsBusy() const
 {
-	return CarriedItem != EForestItem::None;
+	return CarriedItem != EForestItem::None || (StoneCarry && StoneCarry->IsCarrying());
 }
 
 void AForestCharacter::RefreshToolVisibility()
@@ -1520,6 +1527,8 @@ void AForestCharacter::PrimaryAction()
 	{
 		if (StonePlacement->ConfirmPlacement())
 		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
 			ShowMessage(TEXT("Taş yerleştirildi."));
 		}
 		else
@@ -1701,6 +1710,8 @@ void AForestCharacter::Interact()
 	{
 		if (StoneCarry->Drop())
 		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
 			ShowMessage(TEXT("Taş yere bırakıldı."));
 		}
 		return;
@@ -1746,6 +1757,8 @@ void AForestCharacter::Interact()
 					: EStoneCarryMode::TwoHands;
 				if (StoneCarry->PickUp(Stone, Mode))
 				{
+					RefreshToolVisibility();
+					GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
 					ShowMessage(TEXT("Taş alındı. Sol tıkla yerleştirme önizlemesini başlat."));
 				}
 				else
@@ -2142,6 +2155,8 @@ void AForestCharacter::CancelBuild()
 	{
 		if (StonePlacement->CancelPlacement())
 		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
 			ShowMessage(TEXT("Taş yerleştirme iptal edildi; taş eski konumuna döndü."));
 		}
 		else
