@@ -6,6 +6,8 @@
 #include "Engine/SaveGame.h"
 #include "WorldPersistenceSubsystem.generated.h"
 
+class UExcavationVolumeSubsystem;
+
 UENUM(BlueprintType)
 enum class EWorldCoreCommandResult : uint8
 {
