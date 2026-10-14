@@ -11,3 +11,9 @@ float UExcavationFlatBaseDensitySource::SampleBaseDensityAtWorld_Implementation(
 
     return WorldPositionCm.Z <= SurfaceHeightCm ? 1.0f : 0.0f;
 }
+
+int32 UExcavationFlatBaseDensitySource::SampleBaseMaterialIdAtWorld_Implementation(
+    const FVector& WorldPositionCm) const
+{
+    return 0;
+}
