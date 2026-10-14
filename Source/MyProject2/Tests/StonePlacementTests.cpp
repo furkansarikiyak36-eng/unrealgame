@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
+#include "Components/BoxComponent.h"
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "StoneCore/StoneDefinition.h"
 #include "StonePhaseB_Placement/StonePlacementComponent.h"
@@ -22,7 +23,7 @@ namespace
         UWorld::InitializationValues Values;
         Values.AllowAudioPlayback(false);
         Values.RequiresHitProxies(false);
-        Values.CreatePhysicsScene(false);
+        Values.CreatePhysicsScene(true);
         Values.CreateNavigation(false);
         Values.CreateAISystem(false);
         Values.ShouldSimulatePhysics(false);
@@ -255,6 +256,69 @@ bool FStonePlacementConfirmGateTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Carry owner releases the stone after placement"), Carry->IsCarrying());
     TestTrue(TEXT("Carry owner no longer owns the installed stone"), Carry->GetCarried() == nullptr);
 
+    DestroyStonePlacementTestWorld(World);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FStonePlacementCollisionClearanceTest,
+    "MyProject2.StonePlacement.Validation.CollisionClearance",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FStonePlacementCollisionClearanceTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateStonePlacementTestWorld();
+    if (!TestNotNull(TEXT("Test world created"), World))
+    {
+        return false;
+    }
+
+    AActor* Owner = nullptr;
+    AStoneActor* Stone = nullptr;
+    UStonePlacementComponent* Placement = nullptr;
+    const bool bFixtureValid = CreatePlacementFixture(World, Owner, Stone, Placement);
+    TestTrue(TEXT("Placement fixture created"), bFixtureValid);
+    if (!bFixtureValid)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+
+    AActor* Blocker = World->SpawnActor<AActor>(
+        FVector(200.0f, 0.0f, 50.0f), FRotator::ZeroRotator);
+    TestNotNull(TEXT("Blocking actor created"), Blocker);
+    if (!Blocker)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+
+    UBoxComponent* BlockerBox = NewObject<UBoxComponent>(Blocker, TEXT("PlacementBlocker"));
+    TestNotNull(TEXT("Blocking collision component created"), BlockerBox);
+    if (!BlockerBox)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+
+    Blocker->SetRootComponent(BlockerBox);
+    BlockerBox->SetBoxExtent(FVector(20.0f, 20.0f, 20.0f));
+    BlockerBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    BlockerBox->SetCollisionObjectType(ECC_WorldStatic);
+    BlockerBox->SetCollisionResponseToAllChannels(ECR_Block);
+    BlockerBox->RegisterComponent();
+
+    TestTrue(TEXT("Placement begins"), Placement->BeginPlacement(Stone));
+    TestTrue(TEXT("Surface target accepted"),
+        Placement->UpdatePlacementTarget(FVector(200.0f, 0.0f, 0.0f), FVector::UpVector));
+    TestFalse(TEXT("Placement refuses a physical overlap"),
+        Placement->ConfirmPlacement());
+    TestTrue(TEXT("Blocked placement keeps preview active"),
+        Placement->GetPreviewStone() == Stone);
+    TestTrue(TEXT("Blocked placement preserves carried state"),
+        Stone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
+
+    Placement->CancelPlacement();
     DestroyStonePlacementTestWorld(World);
     return true;
 }
