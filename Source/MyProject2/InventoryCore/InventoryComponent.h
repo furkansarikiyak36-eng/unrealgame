@@ -13,12 +13,16 @@ class MYPROJECT2_API UInventoryComponent : public UActorComponent
 public:
     UInventoryComponent();
     virtual void BeginPlay() override;
+    /** Idempotently prepares runtime slots and registers current item definitions. */
+    void InitializeRuntimeInventory();
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult AddItem(FName ItemID, int32 Count=1);
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult AddItemData(const FInventoryItem& Item);
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult RemoveItem(FName ItemID, int32 Count=1);
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult DropItem(FName ItemID, int32 Count=1);
     // Atomic in-memory transfer: either both inventories reflect the transfer or source stock is restored.
     UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") static bool TransferItem(UInventoryComponent* Source, UInventoryComponent* Destination, FName ItemID, int32 Count=1);
+    /** Atomically consumes inputs and adds outputs, restoring the exact slot state on failure. */
+    UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") bool ExchangeItems(FName InputID, int32 InputCount, FName OutputID, int32 OutputCount);
     UFUNCTION(BlueprintPure, Category="Inventory") int32 GetItemCount(FName ItemID) const;
     UFUNCTION(BlueprintPure, Category="Inventory") bool HasItem(FName ItemID, int32 Count=1) const;
     UFUNCTION(BlueprintPure, Category="Inventory") bool HasAllItems(const TArray<FInventoryItem>& Required) const;
@@ -33,6 +37,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="Inventory") void SortByName();
     UFUNCTION(BlueprintCallable, Category="Inventory") void SortByRarity();
     UFUNCTION(BlueprintCallable, Category="Inventory") void ClearAll();
+    UFUNCTION(BlueprintPure, Category="Save") bool CanRestoreFromSavedItems(const TArray<FInventoryItem>& SavedItems) const;
     UFUNCTION(BlueprintCallable, Category="Save") bool RestoreFromSavedItems(const TArray<FInventoryItem>& SavedItems);
     UPROPERTY(BlueprintAssignable, Category="Events") FOnInventoryChanged OnInventoryChanged;
     UPROPERTY(BlueprintAssignable, Category="Events") FOnItemAdded OnItemAdded;
