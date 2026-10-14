@@ -71,12 +71,12 @@ class UndergroundHazardContractTests(unittest.TestCase):
 
     def test_shared_save_envelope_persists_underground_state_and_tracks_dirty_changes(self):
         self.assertIn("FUndergroundHazardSnapshot UndergroundHazards", PERSIST_H)
-        self.assertIn("CurrentSaveSchemaVersion = 2", PERSIST_H)
+        self.assertIn("CurrentSaveSchemaVersion = 3", PERSIST_H)
         self.assertIn("Hazards->ExportSnapshot(HazardSnapshot)", PERSIST_CPP)
         self.assertIn("Hazards->ImportSnapshot(LoadedSave->UndergroundHazards)", PERSIST_CPP)
         self.assertIn("HandleUndergroundWaterSeepage", PERSIST_CPP)
         self.assertIn("HandleUndergroundSupportChanged", PERSIST_CPP)
-        self.assertIn("Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != CurrentSaveSchemaVersion", PERSIST_CPP)
+        self.assertIn("Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2 && Manifest.SchemaVersion != CurrentSaveSchemaVersion", PERSIST_CPP)
 
     def test_underground_trap_reuses_stone_trap_damage_but_requires_open_cavity(self):
         self.assertIn("class MYPROJECT2_API AUndergroundTrapActor : public AStoneTrapActor", TRAP_H)
