@@ -51,3 +51,10 @@ Repo dalına `Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv` eklendi. Bu dosya LOG-001�
 - CI dokuz eşleştirme dosyasının her birinde beklenen satır sayısını, 11 sütunlu şemayı, kimlikleri, durum biçimini ve blocker/not alanlarını denetler. Keşif modu U0/U1/U2 durumlarını başarı kanıtına dönüştürmez. En son doğrulanmış Python CI: [run #88](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38510701119), başarılı. Bu Unreal Engine build/editor testi değildir.
 
 Dokuz katalog eşleştirme dosyası artık **485/485 satırı** kapsıyor: LOG 76, INVENTORY 32, RAID 63, WORLD 35, MATERIAL 38, FARMING 57, CORE 12, STONE 96, STICK 76. Kaynak taramasına göre dağılım: **333 U2**, **88 U1**, **64 U0**, **0 U3–U6**. Bu, kaynak/kod izi triage kapsamının tamamlandığı anlamına gelir; satıra özel otomatik test ve editör kanıtı henüz bütün satırlarda kapatılmadığı için Faz 0 çıkış kapısı hâlâ kapalıdır.
+
+
+## Yeni kod işi — STICK crafting atomikliği
+
+P0-027 için kaynak düzeltmesi ve testler branch'e eklendi. `UCraftingComponent` artık `UStickInventoryComponent::ApplyCraftTransaction` kullanır. Üç motor otomasyon testi duplicate girdiler, kapasite başarısızlığı ve başarılı girdi/çıktı bilançosunu kapsar. `Scripts/run_tests.sh` bunları ayrı `StickInventoryTests.log` içinde çalıştırıp `Scripts/verify_test_logs.py` üzerinden en az 3 benzersiz test sonucu istemektedir.
+
+**Bu düzeltme UE 5.8 üzerinde henüz çalıştırılmadı.** Kod düzeyi ilerleme tamamlandı; engine build ve motor automation geçmeden P0-027 kapanmış sayılamaz.
