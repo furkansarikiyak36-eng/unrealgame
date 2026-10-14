@@ -43,6 +43,8 @@ bool UStoneWorkingComponent::CrushBoulder(AStoneActor* Boulder, int32 Pieces)
         if (UStoneDefinition* SourceDefinition = Boulder->GetDefinition())
         {
             Piece->InitializeFromDefinition(SourceDefinition);
+            // Give the fragment its own shape definition before the source actor is destroyed.
+            Piece->ApplyShape(SourceDefinition->Shape, SourceDefinition->Dimensions);
         }
         SpawnedPieces.Add(Piece);
     }
@@ -70,14 +72,14 @@ bool UStoneWorkingComponent::ProduceBuildingStone(AStoneActor* Boulder)
 
 bool UStoneWorkingComponent::ProduceFlatStone(AStoneActor* Stone)
 {
-    if (!Stone) return false;
+    if (!Stone || !Stone->GetDefinition()) return false;
     Stone->ApplyShape(EStoneShape::Flat, FVector(40, 40, 10));
     return true;
 }
 
 bool UStoneWorkingComponent::CarveSurface(AStoneActor* Stone)
 {
-    if (!Stone) return false;
+    if (!Stone || !Stone->GetDefinition()) return false;
     Stone->ApplyShape(EStoneShape::Carved, FVector(35, 25, 20));
     return true;
 }
