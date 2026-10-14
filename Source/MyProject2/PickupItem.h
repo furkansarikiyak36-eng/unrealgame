@@ -22,6 +22,7 @@ class MYPROJECT2_API APickupItem : public AActor
 public:
 	APickupItem();
 
+	UFUNCTION(BlueprintCallable, Category = "Demo")
 	static APickupItem* Spawn(UWorld* World, EForestItem Item, int32 Count, const FTransform& Transform, const FVector& Impulse);
 	static APickupItem* SpawnCosmetic(UWorld* World, UStaticMesh* Mesh, const FTransform& Transform, const FVector& Impulse);
 
