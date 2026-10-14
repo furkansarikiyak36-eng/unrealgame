@@ -75,6 +75,7 @@ bool FStoneTrapDamageAndCooldownTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Trap disarms after the first trigger"), Trap->bArmed);
 
     Trap->Rearm();
+    TestFalse(TEXT("Rearm is rejected while cooldown is active"), Trap->bArmed);
     Trap->Trigger(Enemy);
     TestTrue(TEXT("Cooldown prevents immediate repeated damage"),
         FMath::IsNearlyEqual(Enemy->Health, 50.0f, 0.01f));
@@ -118,9 +119,9 @@ bool FStoneTrapNullVictimSafetyTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Trap safely disarms without a victim"), Trap->bArmed);
 
     Trap->Rearm();
-    TestTrue(TEXT("Rearm does not erase cooldown bookkeeping"), Trap->bArmed);
+    TestFalse(TEXT("Rearm remains blocked before cooldown expires"), Trap->bArmed);
     Trap->Trigger(nullptr);
-    TestTrue(TEXT("Null victim remains safe during cooldown"), Trap->bArmed);
+    TestFalse(TEXT("Null victim remains safe and trap stays disarmed"), Trap->bArmed);
 
     DestroyStoneTrapTestWorld(World);
     return true;
