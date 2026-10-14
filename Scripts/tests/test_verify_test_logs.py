@@ -189,10 +189,12 @@ class LogVerifierTests(unittest.TestCase):
             "Test Completed. Result={Success} Name={RestoreFailurePreservesCurrent} "
             "Path={MyProject2.Inventory.Core.Capacity.RestoreFailurePreservesCurrent}\n"
             "Test Completed. Result={Success} Name={RestoreInvalidEntryPreservesCurrent} "
-            "Path={MyProject2.Inventory.Core.Capacity.RestoreInvalidEntryPreservesCurrent}\n",
+            "Path={MyProject2.Inventory.Core.Capacity.RestoreInvalidEntryPreservesCurrent}\n"
+            "Test Completed. Result={Success} Name={InvalidMetadataRejected} "
+            "Path={MyProject2.Inventory.Core.Capacity.InvalidMetadataRejected}\n",
             encoding="utf-8",
         )
-        self.assertEqual(VERIFY.verify_inventory_capacity(self.inventory_capacity), (4, 0))
+        self.assertEqual(VERIFY.verify_inventory_capacity(self.inventory_capacity), (5, 0))
 
     def test_inventory_capacity_failure_is_rejected(self):
         self.inventory_capacity.write_text(
@@ -216,7 +218,7 @@ class LogVerifierTests(unittest.TestCase):
             "Path={MyProject2.Inventory.Core.Capacity.ShrinkRollsBack}\n",
             encoding="utf-8",
         )
-        with self.assertRaisesRegex(ValueError, "expected at least 4"):
+        with self.assertRaisesRegex(ValueError, "expected at least 5"):
             VERIFY.verify_inventory_capacity(self.inventory_capacity)
 
 if __name__ == "__main__":

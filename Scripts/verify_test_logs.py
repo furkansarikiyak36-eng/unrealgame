@@ -119,7 +119,7 @@ def verify_stone_trap(path: Path, minimum_tests: int = 4) -> tuple[int, int]:
     )
 
 
-def verify_inventory_capacity(path: Path, minimum_tests: int = 4) -> tuple[int, int]:
+def verify_inventory_capacity(path: Path, minimum_tests: int = 5) -> tuple[int, int]:
     return verify_automation_suite(
         path, "Inventory capacity", "MyProject2.Inventory.Core.Capacity", minimum_tests
     )

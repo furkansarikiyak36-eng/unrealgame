@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryItem.h"
+#include <limits>
 
 namespace
 {
@@ -194,6 +195,45 @@ bool FInventoryRestoreInvalidEntryPreservesCurrentTest::RunTest(const FString& P
         Inventory->GetItemCount(Existing->ItemID), 1);
     TestEqual(TEXT("Corrupt saved item was not inserted"),
         Inventory->GetItemCount(InvalidSavedItem.ItemID), 0);
+
+    DestroyInventoryCapacityTestWorld(World);
+    return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FInventoryInvalidMetadataRejectedTest,
+    "MyProject2.Inventory.Core.Capacity.InvalidMetadataRejected",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInventoryInvalidMetadataRejectedTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateInventoryCapacityTestWorld();
+    if (!TestNotNull(TEXT("Test world created"), World)) return false;
+    AActor* Owner = nullptr;
+    UInventoryComponent* Inventory = nullptr;
+    UInventoryItemData* Existing = nullptr;
+    UInventoryItemData* NewItem = nullptr;
+    const bool bValid = CreateInventoryFixture(World, Owner, Inventory, Existing, NewItem);
+    TestTrue(TEXT("Inventory fixture created and slots initialized"), bValid);
+    if (!bValid) { DestroyInventoryCapacityTestWorld(World); return false; }
+
+    Existing->Weight = std::numeric_limits<float>::quiet_NaN();
+    FString ValidationError;
+    TestFalse(TEXT("NaN weight fails item definition validation"), Existing->ValidateData(ValidationError));
+    TestFalse(TEXT("CanAddItem rejects invalid item definition"), Inventory->CanAddItem(Existing->ItemID, 1));
+    TestTrue(TEXT("AddItem rejects invalid item definition"),
+        Inventory->AddItem(Existing->ItemID, 1) == EInventoryResult::InvalidRequest);
+    TestEqual(TEXT("Invalid definition inserted no items"), Inventory->GetItemCount(Existing->ItemID), 0);
+
+    FInventoryItem RawPayload;
+    RawPayload.ItemID = FName(TEXT("UnregisteredNaNWeight"));
+    RawPayload.Count = 1;
+    RawPayload.MaxStack = 1;
+    RawPayload.Weight = std::numeric_limits<float>::quiet_NaN();
+    TestTrue(TEXT("AddItemData rejects NaN payload"),
+        Inventory->AddItemData(RawPayload) == EInventoryResult::InvalidRequest);
+    TestEqual(TEXT("Invalid raw payload inserted no items"), Inventory->GetItemCount(RawPayload.ItemID), 0);
 
     DestroyInventoryCapacityTestWorld(World);
     return true;

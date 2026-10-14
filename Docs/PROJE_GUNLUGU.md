@@ -260,3 +260,12 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 
 - Ek doğrulama: FInventoryItem::IsEmpty() negatif Count değerleri için de true döndürdüğünden, restore döngüsünde Count < 0 kontrolü IsEmpty() sonrasındaydı ve bozuk negatif kayıt sessizce atlanabiliyordu. Kontrol sırası düzeltildi, NaN/sonsuz/negatif ağırlık da reddediliyor.
 - Inventory.Core.Capacity altında negatif Count girdisini reddedip mevcut stoğu koruyan dördüncü UE Automation testi eklendi; log parser minimumu 4 benzersiz teste çıkarıldı.
+
+
+### 2026-10-14 — Inventory item definition validation fail-closed
+
+- UInventoryItemData::ValidateData artık NaN/sonsuz ağırlığı da reddediyor; negatif kontrolü tek başına NaN için yeterli değildi.
+- BeginPlay item definitions'ı kaydetmeden önce doğruluyor; global item registry de invalid tanımları kaydetmiyor.
+- CanAddItem, AddItem ve AddItemData geçersiz data/payload'ı reddediyor; tanımsız raw payload için MaxStack ve finite/non-negative Weight kontrolü de eklendi.
+- InventoryCapacityTests.cpp içine NaN weight için definition validation, CanAddItem/AddItem ve tanımsız AddItemData reject testleri eklendi. Inventory.Core.Capacity minimumu 5 benzersiz UE automation sonucuna çıkarıldı.
+- Bu testler UE 5.8'de henüz çalıştırılmadı; Python CI sadece log parser ve scriptleri doğrular.

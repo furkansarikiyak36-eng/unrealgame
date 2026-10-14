@@ -7,7 +7,18 @@ void UInventoryComponent::BeginPlay()
     Super::BeginPlay();
     MaxSlots=FMath::Max(1,MaxSlots); Slots.SetNum(MaxSlots);
     for (int32 i=0;i<Slots.Num();++i) Slots[i].SlotIndex=i;
-    for (UInventoryItemData* D : ItemDefinitions) UInventoryItemLibrary::RegisterItemData(D);
+    for (UInventoryItemData* D : ItemDefinitions)
+    {
+        if (!D) continue;
+        FString ValidationError;
+        if (!D->ValidateData(ValidationError))
+        {
+            UE_LOG(LogTemp, Error, TEXT("Inventory item definition '%s' rejected on owner '%s': %s"),
+                *D->GetName(), *GetNameSafe(GetOwner()), *ValidationError);
+            continue;
+        }
+        UInventoryItemLibrary::RegisterItemData(D);
+    }
 }
 UInventoryItemData* UInventoryComponent::GetItemData(FName ID) const
 {
@@ -50,13 +61,24 @@ bool UInventoryComponent::CanFitItem(const FInventoryItem& Item, int32 Count) co
 }
 bool UInventoryComponent::CanAddItem(FName ID, int32 Count) const
 {
-    UInventoryItemData* D=GetItemData(ID); if (!D) return false;
+    UInventoryItemData* D = GetItemData(ID);
+    if (!D) return false;
+    FString ValidationError;
+    if (!D->ValidateData(ValidationError)) return false;
     return CanFitItem(D->ToInventoryItem(1), Count);
 }
 EInventoryResult UInventoryComponent::AddItem(FName ID, int32 Count)
 {
     if (Count<=0 || ID.IsNone()) return EInventoryResult::InvalidRequest;
-    UInventoryItemData* Data=GetItemData(ID); if (!Data) return EInventoryResult::NoRecipeMatch;
+    UInventoryItemData* Data=GetItemData(ID);
+    if (!Data) return EInventoryResult::NoRecipeMatch;
+    FString ValidationError;
+    if (!Data->ValidateData(ValidationError))
+    {
+        UE_LOG(LogTemp, Error, TEXT("AddItem rejected invalid definition '%s': %s"),
+            *Data->GetName(), *ValidationError);
+        return EInventoryResult::InvalidRequest;
+    }
     const FInventoryItem Prototype=Data->ToInventoryItem(1);
     if (!bIgnoreWeight && GetTotalWeight()+Prototype.Weight*Count > MaxWeight+KINDA_SMALL_NUMBER) return EInventoryResult::TooHeavy;
     if (!CanFitItem(Prototype,Count)) return EInventoryResult::InventoryFull;
@@ -85,9 +107,23 @@ EInventoryResult UInventoryComponent::AddItem(FName ID, int32 Count)
 }
 EInventoryResult UInventoryComponent::AddItemData(const FInventoryItem& Item)
 {
-    if (Item.Count<=0 || Item.ItemID.IsNone()) return EInventoryResult::InvalidRequest;
+    if (Item.Count<=0 || Item.ItemID.IsNone() || Item.MaxStack <= 0 ||
+        !FMath::IsFinite(Item.Weight) || Item.Weight < 0.0f)
+    {
+        return EInventoryResult::InvalidRequest;
+    }
     UInventoryItemData* D=GetItemData(Item.ItemID);
-    if (D) return AddItem(Item.ItemID,Item.Count);
+    if (D)
+    {
+        FString ValidationError;
+        if (!D->ValidateData(ValidationError))
+        {
+            UE_LOG(LogTemp, Error, TEXT("AddItemData rejected invalid definition '%s': %s"),
+                *D->GetName(), *ValidationError);
+            return EInventoryResult::InvalidRequest;
+        }
+        return AddItem(Item.ItemID,Item.Count);
+    }
     // Fallback permits save/load of item records only when the slot has room; it does not invent definitions.
     if (!bIgnoreWeight && GetTotalWeight()+Item.Weight*Item.Count>MaxWeight+KINDA_SMALL_NUMBER) return EInventoryResult::TooHeavy;
     const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
