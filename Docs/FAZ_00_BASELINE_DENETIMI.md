@@ -165,3 +165,13 @@ Satır bazlı eşleştirme dosyaları dokuz katalog ailesinin tamamını kapsıy
 - [Taş/çubuk statik denetimi](./FAZ_00_STONE_STICK_DENETIMI.md) ve iki CSV eşleştirmesi, son 172 satırı kapsar. Böylece 485/485 gereksinim kaynak triage dosyasına girildi; kaynak seviyeleri U2=333, U1=88, U0=64, U3–U6=0.
 - P0-027 (çubuk crafting atomikliği) için kaynak değişikliği yapıldı: duplicate girdiler birleştiriliyor; kapasite tüketim sonrası hesaplanıyor; hata durumunda stok snapshot'ı geri yükleniyor. Üç Unreal Automation Test ve yeni fail-closed log doğrulama yolu eklendi.
 - Bu yeni C++ testleri bu ortamda UE 5.8 altında derlenip çalıştırılmadı. Python CI, doğrulayıcı ve katalog araçlarını sınar; C++ kabulü için Windows/UE host çıktısı gerekir.
+
+
+## Faz 1 hazırlığı — kazı teknolojisi ölçüm kapısı
+
+- [Faz 1 kazı spike şartnamesi](./FAZ_01_KAZI_TECHNOLOJI_SPIKE.md) ve [boş ölçüm matrisi](./FAZ_01_KAZI_SPIKE_SABLONU.csv) oluşturuldu.
+- Karşılaştırılacak adaylar: **A — sparse 3B density/SDF delta + yüzey çıkarımı** ve **B — Dynamic Mesh üzerinde lokal CSG/boolean kesileri**. Bunlar adaydır; hiçbirini proje için doğru teknoloji diye henüz seçmedik.
+- Sabit benchmark kümesi: 2×2 m / 5 m kuyu, 2×2 m / 12 m tünel (chunk sınırını geçen), 6×5×3 m oda, kesişen tünel, collision, save/close/load, kısmi işlem rollback.
+- Ölçüm matrisi 25 cm ve 50 cm çözünürlükleriyle dört koşu ister. Game-thread/mesh/collision süreleri, worst spike, RAM ve save boyutu kanıtla yazılmadan teknoloji kararı verilmez.
+- `Scripts/validate_excavation_spike.py` ve testleri, matrisin dört A/B×çözünürlük koşusunu tutmasını ve “Seçildi/Tamamlandı” gibi kararların bütün ölçüm/kanıt alanları dolmadan yazılmamasını kontrol edecek şekilde eklendi.
+- Bu yalnızca Faz 1 hazırlığıdır. Faz 0 henüz UE 5.8 C++ build/automation ve diğer kabul kanıtlarıyla kapanmadı; bu ortamda geometri/collision benchmark çalıştırılmadı.
