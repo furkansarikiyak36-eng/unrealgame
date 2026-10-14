@@ -70,6 +70,12 @@ public:
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
     TArray<FInventoryItem> PlayerInventoryItems;
 
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    bool bHasStorageInventories = false;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    TArray<FInventoryStorageSnapshot> StorageInventories;
+
     /** Bounded rolling command ledger used to reject duplicate client retries after reload. */
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
     TArray<FGuid> ProcessedCommandIds;
