@@ -1026,7 +1026,16 @@ void AMechanicsDemo::RunShaping(AForestCharacter* Character)
 	const float HalfVolumeAfter = HalfForGroove->GetVolume();
 	TArray<float> DuplicateGroovePoints;
 	HalfForGroove->GetSnapPoints(ECarveTool::Groove, 0.f, DuplicateGroovePoints);
-	Report(OppositeHalf && HalfGroovePoints.Num() == 1 && HalfGuide.Num() == 2 && bHalfCut
+	bool bGuideSpansFullLength = HalfGuide.Num() == 2;
+	for (const TArray<FVector>& Line : HalfGuide)
+	{
+		bGuideSpansFullLength &= Line.Num() == 2
+			&& Line[0].X < HalfForGroove->GetMinX()
+			&& Line.Last().X > HalfForGroove->GetMaxX();
+	}
+	Report(bGuideSpansFullLength,
+		TEXT("Oluk önizlemesi: iki kılavuz çizgisi yarım kütüğün düz yüzünde baştan sona uzanıyor"));
+	Report(OppositeHalf && HalfGroovePoints.Num() == 1 && bGuideSpansFullLength && bHalfCut
 			&& HalfVolumeAfter < HalfVolumeBefore && DuplicateGroovePoints.IsEmpty(),
 		FString::Printf(TEXT("Oluk doğru bağlamda: yarım kütüğün tamamı boyunca kanal açıldı, hacim %.0f -> %.0f cm3; ikinci oluk kapatıldı"),
 			HalfVolumeBefore, HalfVolumeAfter));
