@@ -94,3 +94,25 @@ Gözlenen gerçekler:
 ## Faz 0'a etkisi
 
 Bu statik incelemeyle repo içinde somut olarak **entegrasyon engelleri** doğrulandı; sistemlerin varlığı, aralarında uçtan uca akış olduğu anlamına gelmiyor. Faz 0, katalog satırlarını bu kaynak yollarına ve belirli testlere bağlamak için açık kalır. Kod/derleme/oyun içi kanıtı henüz olmayan maddeler U5/U6 seviyesine yükseltilmez.
+
+
+## 6. Oyuncu envanteri ve modüler Inventory stack'i
+
+Kaynaklar:
+- [ForestCharacter.cpp](../Source/MyProject2/ForestCharacter.cpp)
+- [ForestCharacter.h](../Source/MyProject2/ForestCharacter.h)
+- [InventoryComponent.cpp](../Source/MyProject2/InventoryCore/InventoryComponent.cpp)
+- [InventoryUIComponent.cpp](../Source/MyProject2/InventoryUI/InventoryUIComponent.cpp)
+- [CraftingUIComponent.cpp](../Source/MyProject2/InventoryUI/CraftingUIComponent.cpp)
+- [InventorySaveSubsystem.cpp](../Source/MyProject2/InventoryCore/InventorySaveSubsystem.cpp)
+- [FAZ_00_ENVANTER_KATALOG_ESLESTIRME.csv](./FAZ_00_ENVANTER_KATALOG_ESLESTIRME.csv)
+
+Gözlenen gerçekler:
+- `AForestCharacter` kendi `TMap<EForestItem, int32> Inventory` stoğunu ve 24 slot/20 stack kurallarını tutuyor; pickup/drop/craft fonksiyonlarının ana akışı bu temsil üzerinde.
+- `AForestCharacter` constructor'ı `USurvivalComponent`, kamera ve preview bileşenlerini oluşturuyor; incelenen C++ constructor'ında `UInventoryComponent`, `UInventoryUIComponent`, `UCraftingUIComponent` veya `UQuickAccessComponent` oluşturulmuyor.
+- Paralel modüler `UInventoryComponent`, kategori ve ağırlık kontrolü, `InventoryUIComponent`, `CraftingUIComponent`, `RecipeValidator` ve `InventorySaveSubsystem` mevcut.
+- Crafting UI tarafındaki `ConfirmCraft` consumed ingredient'ları bir map'te birleştiriyor, kaldırma veya çıktı ekleme başarısız olursa rollback deniyor; ama bu sistemin oynanabilir karakterdeki legacy inventory ile aynı stok otoritesini kullandığı gösterilmedi.
+- `UInventoryComponent::DropItem` yalnızca `RemoveItem` çağırıyor. Ayrı inventory-to-physical bridge generic `ALogActor/AStoneActor/AStickActor` sınıflarını spawn ediyor; ana oynanıştaki `ACarvableLog` dönüşümü yok.
+- Blueprint tarafında bu modüler bileşenlerin karaktere eklenmiş olma olasılığı dışlanamaz; bu oturumda ilgili asset wiring/editör başlangıcı doğrulanmadığı için entegrasyon "yok" diye kesinlenmiyor, **kanıtlanmamış** olarak işaretleniyor.
+
+**Karar:** Faz 6'dan önce tek canonical inventory authority seçilmeli. Legacy `AForestCharacter` map'i ile modüler `UInventoryComponent` arasında iki yönlü sync yazmak yerine tek owner veya açık adapter tercih edilmeli. Pickup, craft, drop, quick access, physical bridge ve save/load aynı stok kaynağını kullanmalı. Testler full inventory, invalid spawn, craft rollback, cancel ve round-trip resource conservation koşullarını kapsamalı.
