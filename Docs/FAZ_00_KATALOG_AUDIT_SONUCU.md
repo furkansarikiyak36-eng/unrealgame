@@ -48,6 +48,6 @@ Repo dalına `Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv` eklendi. Bu dosya LOG-001�
 - LOG satırları: **76/76 kaynak denetim tablosuna eşlendi**.
 - Kanıt seviyesi: **59 satır U2** (kaynakta yerel davranış izi var) ve **17 satır U0** (bu incelemede uygulanmış davranış zinciri bulunamadı ya da özellik ayrı geliştirme gerektiriyor). U2, otomatik test veya editör kabulü değildir; 59 U2 satırının da row-specific test/editör kanıtı bekliyor.
 - Bazı ihtiyaçlar için kaynak yolu bulundu; bazıları “incelenen akışta bulunmadı” olarak açıkça işaretlendi (ör. zipline hattı, sal/su üstü kullanım, makine yapımı, genel savunma tuzağı). Bunlar tamamlandı olarak sayılmaz.
-- CI bu 76 satırlı dosyayı **discovery mode** ile denetliyor: beklenen satır sayısı, şema, ID biçimi ve metadata boşlukları görünür. 17 U0 satırı bilinen audit boşluğu olarak raporlanır; keşif modu bunları test başarısı diye göstermiyor.
+- CI, LOG (76), INVENTORY (32), RAID (63), WORLD (35) ve MATERIAL (38) eşleştirme dosyalarını keşif modunda denetler. Beklenen satır sayısı, zorunlu şema, ID kimliği ve açık blocker/not alanları kontrol edilir. Bilinen U0 satırları “geçti” diye gizlenmez.
 
-Bu eşleştirme yalnızca LOG ailesi için ilerlemedir. Diğer sekiz katalog ailesi henüz aynı düzeyde satır bazında işlenmediğinden Faz 0 çıkış kapısı kapalıdır.
+Yeni eşleştirmelerle birlikte 5 katalog ailesinde **244/485 satır** satır bazlı haritaya alındı: LOG 76, INVENTORY 32, RAID 63, WORLD 35, MATERIAL 38. Geçici kaynak seviyesi dağılımı bu haritalarda U2=163, U1=45, U0=36; U4/U5/U6 olarak işaretlenen satır yok. Kalan **241 satır** STONE 96, STICK 76, FARMING 57 ve CORE 12 ailelerinde. 244 satırın da isimli test ve editör kanıtları ayrı ayrı kapatılmalıdır; bu nedenle Faz 0 çıkış kapısı kapalıdır.
