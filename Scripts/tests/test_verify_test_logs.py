@@ -108,7 +108,7 @@ class LogVerifierTests(unittest.TestCase):
             VERIFY.verify_stick_inventory(self.stick_inventory)
 
     def test_valid_stone_placement_log_passes(self):
-        names = ("BeginCancel", "FaceAndSocket", "ConfirmGate", "CollisionClearance")
+        names = ("BeginCancel", "FaceAndSocket", "ConfirmGate", "CollisionClearance", "StructuralConnection")
         self.stone_placement.write_text(
             "".join(
                 f"Test Completed. Result={{Success}} Name={{{name}}} "
@@ -117,7 +117,7 @@ class LogVerifierTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.assertEqual(VERIFY.verify_stone_placement(self.stone_placement), (4, 0))
+        self.assertEqual(VERIFY.verify_stone_placement(self.stone_placement), (5, 0))
 
     def test_stone_placement_failure_is_rejected(self):
         self.stone_placement.write_text(
