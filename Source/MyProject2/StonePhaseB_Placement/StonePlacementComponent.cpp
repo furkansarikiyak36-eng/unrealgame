@@ -3,6 +3,9 @@
 #include "StonePhaseB_Placement/StoneCarryComponent.h"
 #include "StoneCore/StoneDefinition.h"
 #include "Components/SceneComponent.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "CollisionQueryParams.h"
 #include "Math/RotationMatrix.h"
@@ -162,17 +165,20 @@ void UStonePlacementComponent::ExitAimMode()
     ManualYawDegrees = 0.0f;
 }
 
-bool UStonePlacementComponent::UpdatePlacementTarget(FVector SurfacePoint, FVector SurfaceNormal)
+bool UStonePlacementComponent::UpdatePlacementTarget(
+    FVector SurfacePoint, FVector SurfaceNormal, AActor* SurfaceActor)
 {
     if (!IsValid(PreviewStone) || !bAiming || SurfacePoint.ContainsNaN() ||
         SurfaceNormal.ContainsNaN() || SurfaceNormal.IsNearlyZero())
     {
         bHasPlacementTarget = false;
+        TargetSurfaceActor.Reset();
         return false;
     }
 
     TargetSurfacePoint = SurfacePoint;
     TargetSurfaceNormal = SurfaceNormal.GetSafeNormal();
+    TargetSurfaceActor = IsValid(SurfaceActor) ? SurfaceActor : nullptr;
     TargetTransform.SetLocation(TargetSurfacePoint);
     TargetTransform.SetRotation(FRotationMatrix::MakeFromZ(TargetSurfaceNormal).ToQuat());
     bHasPlacementTarget = true;
@@ -239,7 +245,8 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
         PlacementOptionIndex = INDEX_NONE;
     }
 
-    FQuat BaseRotation = FRotationMatrix::MakeFromZ(TargetSurfaceNormal.GetSafeNormal()).ToQuat();
+    const FVector SurfaceNormal = TargetSurfaceNormal.GetSafeNormal();
+    FQuat BaseRotation = FRotationMatrix::MakeFromZ(SurfaceNormal).ToQuat();
     FVector PlacementLocation = TargetSurfacePoint;
     bool bSelectedSocket = false;
     const FStoneSocket* SelectedSocket = nullptr;
@@ -249,7 +256,7 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
         const FStoneFace& Face = Definition->Faces[FaceIndices[PlacementOptionIndex]];
         const FVector WorldFaceNormal = BaseRotation.RotateVector(Face.LocalNormal.GetSafeNormal());
         const FQuat AlignRotation = FQuat::FindBetweenNormals(
-            WorldFaceNormal.GetSafeNormal(), -TargetSurfaceNormal.GetSafeNormal());
+            WorldFaceNormal.GetSafeNormal(), -SurfaceNormal);
         BaseRotation = AlignRotation * BaseRotation;
     }
     else if (PlacementOptionIndex != INDEX_NONE && PlacementOptionIndex >= FaceIndices.Num())
@@ -261,19 +268,42 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
             const FVector LocalSocketNormal = SelectedSocket->LocalRotation.RotateVector(FVector::UpVector);
             const FVector WorldSocketNormal = BaseRotation.RotateVector(LocalSocketNormal.GetSafeNormal());
             const FQuat AlignRotation = FQuat::FindBetweenNormals(
-                WorldSocketNormal.GetSafeNormal(), -TargetSurfaceNormal.GetSafeNormal());
+                WorldSocketNormal.GetSafeNormal(), -SurfaceNormal);
             BaseRotation = AlignRotation * BaseRotation;
             bSelectedSocket = true;
         }
     }
 
-    const FQuat YawRotation(
-        TargetSurfaceNormal.GetSafeNormal(), FMath::DegreesToRadians(ManualYawDegrees));
+    const FQuat YawRotation(SurfaceNormal, FMath::DegreesToRadians(ManualYawDegrees));
     const FQuat FinalRotation = YawRotation * BaseRotation;
     if (bSelectedSocket && SelectedSocket)
     {
         const FVector ScaledSocketPosition = TargetTransform.GetScale3D() * SelectedSocket->LocalPosition;
         PlacementLocation = TargetSurfacePoint - FinalRotation.RotateVector(ScaledSocketPosition);
+    }
+    else
+    {
+        // Place the physical mesh on the plane instead of centring its pivot on the hit point.
+        const UStaticMeshComponent* MeshComponent =
+            Cast<UStaticMeshComponent>(PreviewStone->GetRootComponent());
+        const UStaticMesh* StaticMesh = MeshComponent ? MeshComponent->GetStaticMesh() : nullptr;
+        if (StaticMesh)
+        {
+            const FBox LocalBounds = StaticMesh->GetBoundingBox();
+            const FVector Scale = TargetTransform.GetScale3D();
+            const FVector LocalCenter = LocalBounds.GetCenter() * Scale;
+            const FVector LocalExtent = LocalBounds.GetExtent() * Scale.GetAbs();
+            const FVector AxisX = FinalRotation.RotateVector(FVector::ForwardVector);
+            const FVector AxisY = FinalRotation.RotateVector(FVector::RightVector);
+            const FVector AxisZ = FinalRotation.RotateVector(FVector::UpVector);
+            const float SupportExtent =
+                FMath::Abs(FVector::DotProduct(SurfaceNormal, AxisX)) * LocalExtent.X +
+                FMath::Abs(FVector::DotProduct(SurfaceNormal, AxisY)) * LocalExtent.Y +
+                FMath::Abs(FVector::DotProduct(SurfaceNormal, AxisZ)) * LocalExtent.Z;
+            const float CenterProjection = FVector::DotProduct(
+                SurfaceNormal, FinalRotation.RotateVector(LocalCenter));
+            PlacementLocation += SurfaceNormal * (SupportExtent - CenterProjection);
+        }
     }
 
     TargetTransform.SetLocation(PlacementLocation);
@@ -281,9 +311,51 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
     PreviewStone->SetActorTransform(TargetTransform, false, nullptr, ETeleportType::TeleportPhysics);
 }
 
+bool UStonePlacementComponent::IsPlacementClear(const FTransform& CandidateTransform) const
+{
+    if (!GetWorld() || !IsValid(PreviewStone))
+    {
+        return false;
+    }
+
+    const UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(PreviewStone->GetRootComponent());
+    const UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Primitive);
+    if (!Primitive || !MeshComponent || !MeshComponent->GetStaticMesh() ||
+        !Primitive->IsQueryCollisionEnabled())
+    {
+        return false;
+    }
+
+    FCollisionObjectQueryParams ObjectTypes;
+    ObjectTypes.AddObjectTypesToQuery(ECC_WorldStatic);
+    ObjectTypes.AddObjectTypesToQuery(ECC_WorldDynamic);
+    ObjectTypes.AddObjectTypesToQuery(ECC_PhysicsBody);
+    ObjectTypes.AddObjectTypesToQuery(ECC_Pawn);
+
+    FComponentQueryParams QueryParams(SCENE_QUERY_STAT(StonePlacementClearance), false, GetOwner());
+    QueryParams.AddIgnoredActor(PreviewStone);
+    if (AActor* SurfaceActor = TargetSurfaceActor.Get())
+    {
+        // The traced support actor is ignored so the intended face may touch it.
+        // Actual socket compatibility / structural linking remains a separate graph gate.
+        QueryParams.AddIgnoredActor(SurfaceActor);
+    }
+
+    TArray<FOverlapResult> Overlaps;
+    const bool bHasOverlap = GetWorld()->ComponentOverlapMulti(
+        Overlaps,
+        Primitive,
+        CandidateTransform.GetLocation(),
+        CandidateTransform.GetRotation(),
+        QueryParams,
+        ObjectTypes);
+    return !bHasOverlap;
+}
+
 bool UStonePlacementComponent::ConfirmPlacement()
 {
-    if (!IsValid(PreviewStone) || !bAiming || !bHasPlacementTarget)
+    if (!IsValid(PreviewStone) || !bAiming || !bHasPlacementTarget ||
+        !IsPlacementClear(TargetTransform))
     {
         return false;
     }
@@ -353,11 +425,12 @@ void UStonePlacementComponent::TickComponent(
 
     if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
     {
-        UpdatePlacementTarget(Hit.ImpactPoint, Hit.ImpactNormal);
+        UpdatePlacementTarget(Hit.ImpactPoint, Hit.ImpactNormal, Hit.GetActor());
     }
     else
     {
         bHasPlacementTarget = false;
+        TargetSurfaceActor.Reset();
         TargetTransform = OriginalActorTransform;
         PreviewStone->SetActorTransform(OriginalActorTransform, false, nullptr, ETeleportType::TeleportPhysics);
     }
