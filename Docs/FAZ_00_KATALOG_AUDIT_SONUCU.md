@@ -34,7 +34,7 @@ python Scripts/audit_mechanic_catalog.py <katalog.csv> --expected-count 485 --js
 python Scripts/audit_mechanic_catalog.py <katalog.csv> --expected-count 485 --strict
 ```
 
-İlk komut keşif raporu üretir. İkinci komut kanıt boşluğu, eksik/tekrarlı ID veya beklenmeyen satır sayısı olduğunda sıfır olmayan çıkış vermelidir. 485 satırın tümü dokuz aile dosyasına eşlendi ve U0/U1/U2 kaynak triage durumu kanonik kayda aktarıldı. Faz 1 kaynak kodu çalışması artık bu katalogdaki U0 maddelerinin tamamının uygulanmasını beklemez; bu maddeler kendi teslim fazlarının blocker/backlog kayıtlarında kalır. Kazı adayları arasında nihai teknoloji seçimi ise ölçüm kanıtı gelmeden yapılmaz.
+İlk komut keşif raporu üretir. İkinci komut kanıt alanları, kimlik veya satır sayısında hata olduğunda sıfır olmayan çıkış vermelidir. 485 satırın tümü dokuz aile dosyasına eşlendi ve U0/U1/U2 kaynak triage durumu kanonik kayda aktarıldı. U0 maddeleri kendi teslim fazlarında uygulanacak backlog kayıtlarıdır; Faz 1 kodlamasını bloke etmez. Sparse 3B delta yaklaşımı ilk veri backend'i olarak seçildi; performans/alternatif incelemesi daha sonra, gerekirse Faz 14'te yapılır.
  
 
 ## Sonraki ilerleme — LOG alanının satır satır eşleştirilmesi
@@ -69,7 +69,7 @@ Matriste iki aday ve iki çözünürlük için dört koşu bulunuyor. Mevcut sat
 
 Taş yerleştirme çalışması, bağımsız component seviyesinden `AForestCharacter` girişlerine genişletildi. Fiziksel pickup, carry state, face/socket önizlemesi, collision-clearance ve graph-bearing hedefte reciprocal bağlantı commit/rollback davranışı kaynak kodunda var. Dolu hedef socket'i ikinci bir taşın kullanması reddediliyor.
 
-Bunlar kaynak kodu ve beş Unreal Automation Test kaydıdır; UE 5.8 build/test çalıştırma kanıtı değildir. P0-023, P0-030, P0-032 ve P0-033 bu nedenle “In Progress” kalır; graph save/load, karma ahşap-taş yapılar ve oyun içi çarpışma/görsel kabul hâlâ açık.
+Bunlar kaynak kodu ve beş Unreal Automation Test kaydıdır; graph save/load, karma ahşap-taş yapılar ve oyun içi çarpışma/görsel kabul kapsamlı Faz 14 incelemesinde yeniden ele alınacak açık işlerdir. Bunlar diğer bağımsız fazların kodlamasını bloke etmez.
 
 
 ## Güncel taş yerleştirme graph kapısı
