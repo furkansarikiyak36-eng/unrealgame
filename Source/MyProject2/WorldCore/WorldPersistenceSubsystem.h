@@ -5,6 +5,7 @@
 #include "ExcavationTypes.h"
 #include "UndergroundHazardTypes.h"
 #include "InventoryCore/InventoryTypes.h"
+#include "WorldCore/ChunkState.h"
 #include "Engine/SaveGame.h"
 #include "WorldPersistenceSubsystem.generated.h"
 
@@ -62,6 +63,13 @@ public:
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
     FUndergroundHazardSnapshot UndergroundHazards;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    bool bHasWorldState = false;
+
+    /** Versioned chunk/cell state snapshot; UWorldStateSubsystem remains the runtime owner. */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    FWorldStateSnapshot WorldState;
 
     /** Stackable player resources only; physical ACarvableLog/stone actors remain world actors. */
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
@@ -177,7 +185,7 @@ protected:
     void RememberCommandId(const FGuid& CommandId);
     void RememberWorldEventKey(const FString& EventKey);
 
-    static constexpr int32 CurrentSaveSchemaVersion = 3;
+    static constexpr int32 CurrentSaveSchemaVersion = 4;
     static constexpr int32 MaxRetainedLedgerEntries = 100000;
 
     UPROPERTY(Transient)
