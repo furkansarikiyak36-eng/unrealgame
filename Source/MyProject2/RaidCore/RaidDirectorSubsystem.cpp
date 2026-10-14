@@ -38,6 +38,8 @@ bool URaidDirectorSubsystem::SetAutomaticSchedulingEnabled(bool bEnabled,float I
     {
         return false;
     }
+    if(!Scheduler)return false;
+    if(bEnabled&&!GetWorld())return false;
     bAutomaticSchedulingEnabled=bEnabled;
     AutoScheduleIntervalSeconds=IntervalSeconds;
     AutoScheduleJitterMinSeconds=FMath::Clamp(JitterMinSeconds,-86400.0f,86400.0f);
@@ -48,7 +50,6 @@ bool URaidDirectorSubsystem::SetAutomaticSchedulingEnabled(bool bEnabled,float I
         Scheduler->ResetSchedule();
         return true;
     }
-    if(!GetWorld()||!Scheduler)return false;
     Scheduler->ScheduleNextEvent(GetWorld()->GetTimeSeconds()+AutoScheduleIntervalSeconds,AutoScheduleJitterMinSeconds,AutoScheduleJitterMaxSeconds);
     return true;
 }
@@ -57,6 +58,8 @@ void URaidDirectorSubsystem::Tick(float Dt)
     Super::Tick(Dt);
     UWorld* World=GetWorld();
     if(!World)return;
+    TimeBudget->BeginTick();
+    FrameBudget->ResetFrame(); // Enemy navigation still needs an independent budget after a wave has ended.
     if(!Context.bEventActive)
     {
         if(bAutomaticSchedulingEnabled&&Scheduler&&Scheduler->IsEventDue(World->GetTimeSeconds()))
@@ -66,7 +69,6 @@ void URaidDirectorSubsystem::Tick(float Dt)
         }
         return;
     }
-    TimeBudget->BeginTick();FrameBudget->ResetFrame();
     ElapsedEventTime+=FMath::Clamp(FMath::IsFinite(Dt)?Dt:0.f,0.f,5.f);
     ProcessWaveTick(Dt);
     if(TimeBudget->HasTimeRemaining())ProcessSpawns(Dt);
