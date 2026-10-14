@@ -1,6 +1,6 @@
 #include "FeedStorageComponent.h"
 UFeedStorageComponent::UFeedStorageComponent(){PrimaryComponentTick.bCanEverTick=false;}
-bool UFeedStorageComponent::ConsumeFeed(FName ID,float A){if(ID.IsNone()||A<0.f)return false;float* X=FeedStock.Find(ID);if(!X||*X+KINDA_SMALL_NUMBER<A)return false;*X-=A;if(*X<=.01f)FeedStock.Remove(ID);return true;}
+bool UFeedStorageComponent::ConsumeFeed(FName ID,float A){if(ID.IsNone()||!FMath::IsFinite(A)||A<=0.f)return false;float* X=FeedStock.Find(ID);if(!X||*X+KINDA_SMALL_NUMBER<A)return false;*X-=A;if(*X<=.01f)FeedStock.Remove(ID);return true;}
 void UFeedStorageComponent::AddFeed(FName ID,float A,const FFeedItem& F){TryAddFeed(ID,A,F);}
 float UFeedStorageComponent::GetTotalFeedAmount()const{float Total=0.f;for(const auto& Pair:FeedStock)if(FMath::IsFinite(Pair.Value)&&Pair.Value>0.f)Total+=Pair.Value;return Total;}
 bool UFeedStorageComponent::CanAddFeed(FName ID,float A)const
