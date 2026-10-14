@@ -114,6 +114,7 @@ private:
 		GoalNotchFlat,
 		GoalCrossCut,
 		GoalSplit,
+		GoalGroove,
 		GoalPoint,
 		GoalChamfer,
 		GoalTrim,
