@@ -1,6 +1,7 @@
 #include "WorldPersistenceSubsystem.h"
 
 #include "ExcavationVolumeSubsystem.h"
+#include "UndergroundHazardSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 
@@ -8,6 +9,7 @@ void UWorldPersistenceSubsystem::Initialize(FSubsystemCollectionBase& Collection
 {
     Super::Initialize(Collection);
     Collection.InitializeDependency<UExcavationVolumeSubsystem>();
+    Collection.InitializeDependency<UUndergroundHazardSubsystem>();
 
     WorldId = FGuid::NewGuid();
     WorldSeed = static_cast<int32>(
@@ -24,6 +26,16 @@ void UWorldPersistenceSubsystem::Initialize(FSubsystemCollectionBase& Collection
         Excavation->OnVolumeReset.AddDynamic(
             this, &UWorldPersistenceSubsystem::HandleExcavationVolumeReset);
     }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UUndergroundHazardSubsystem* Hazards = World->GetSubsystem<UUndergroundHazardSubsystem>())
+        {
+            Hazards->OnWaterSeepage.AddDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundWaterSeepage);
+            Hazards->OnRoofCollapse.AddDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundRoofCollapse);
+            Hazards->OnSupportChanged.AddDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundSupportChanged);
+        }
+    }
 }
 
 void UWorldPersistenceSubsystem::Deinitialize()
@@ -34,6 +46,16 @@ void UWorldPersistenceSubsystem::Deinitialize()
             this, &UWorldPersistenceSubsystem::HandleExcavationChanged);
         Excavation->OnVolumeReset.RemoveDynamic(
             this, &UWorldPersistenceSubsystem::HandleExcavationVolumeReset);
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UUndergroundHazardSubsystem* Hazards = World->GetSubsystem<UUndergroundHazardSubsystem>())
+        {
+            Hazards->OnWaterSeepage.RemoveDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundWaterSeepage);
+            Hazards->OnRoofCollapse.RemoveDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundRoofCollapse);
+            Hazards->OnSupportChanged.RemoveDynamic(this, &UWorldPersistenceSubsystem::HandleUndergroundSupportChanged);
+        }
     }
 
     ProcessedCommandIdSet.Reset();
@@ -171,6 +193,31 @@ void UWorldPersistenceSubsystem::HandleExcavationVolumeReset()
     }
 }
 
+
+void UWorldPersistenceSubsystem::HandleUndergroundWaterSeepage(const FVector& LocationCm, float VolumeAddedM3)
+{
+    if (!bApplyingLoadedState && FMath::IsFinite(VolumeAddedM3) && VolumeAddedM3 > 0.0f)
+    {
+        IncrementWorldRevision();
+    }
+}
+
+void UWorldPersistenceSubsystem::HandleUndergroundRoofCollapse(const FVector& LocationCm, int32 CellsCollapsed)
+{
+    if (!bApplyingLoadedState && CellsCollapsed > 0)
+    {
+        IncrementWorldRevision();
+    }
+}
+
+void UWorldPersistenceSubsystem::HandleUndergroundSupportChanged(const FGuid& SupportId, bool bIsOperational)
+{
+    if (!bApplyingLoadedState && SupportId.IsValid())
+    {
+        IncrementWorldRevision();
+    }
+}
+
 void UWorldPersistenceSubsystem::IncrementWorldRevision()
 {
     if (WorldRevision < TNumericLimits<int64>::Max())
@@ -247,6 +294,15 @@ bool UWorldPersistenceSubsystem::SaveCoreStateToSlot(const FString& SlotName, in
     SaveObject->Manifest.WorldRevision = WorldRevision;
     SaveObject->Manifest.SavedAtUtc = FDateTime::UtcNow().ToIso8601();
     SaveObject->Excavation = MoveTemp(Snapshot);
+
+    UWorld* World = GetWorld();
+    UUndergroundHazardSubsystem* Hazards = World ? World->GetSubsystem<UUndergroundHazardSubsystem>() : nullptr;
+    FUndergroundHazardSnapshot HazardSnapshot;
+    if (!Hazards || !Hazards->ExportSnapshot(HazardSnapshot))
+    {
+        return false;
+    }
+    SaveObject->UndergroundHazards = MoveTemp(HazardSnapshot);
     SaveObject->ProcessedCommandIds = ProcessedCommandIdsInOrder;
     SaveObject->RecentWorldEventKeys = RecentWorldEventKeysInOrder;
 
@@ -275,7 +331,7 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     }
 
     const FWorldCoreSaveManifest& Manifest = LoadedSave->Manifest;
-    if (Manifest.SchemaVersion != CurrentSaveSchemaVersion
+    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
         || !Manifest.WorldId.IsValid()
         || Manifest.WorldRevision < 0
         || LoadedSave->ProcessedCommandIds.Num() > MaxRetainedLedgerEntries
@@ -308,17 +364,26 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     }
 
     UExcavationVolumeSubsystem* Excavation = GetExcavationSubsystem();
-    if (!Excavation)
+    UWorld* LoadWorld = GetWorld();
+    UUndergroundHazardSubsystem* Hazards = LoadWorld ? LoadWorld->GetSubsystem<UUndergroundHazardSubsystem>() : nullptr;
+    if (!Excavation || !Hazards || !Hazards->ValidateSnapshot(LoadedSave->UndergroundHazards))
     {
         return false;
     }
 
-    // The importer validates the full sparse snapshot before its single state swap.
+    // Each domain validates its snapshot before replacing its owned runtime state.
     // Suppress the import-reset revision so the saved revision remains authoritative.
     bApplyingLoadedState = true;
     const bool bImported = Excavation->ImportSnapshot(LoadedSave->Excavation, true);
-    bApplyingLoadedState = false;
     if (!bImported)
+    {
+        bApplyingLoadedState = false;
+        return false;
+    }
+
+    const bool bHazardsImported = Hazards->ImportSnapshot(LoadedSave->UndergroundHazards);
+    bApplyingLoadedState = false;
+    if (!bHazardsImported)
     {
         return false;
     }
