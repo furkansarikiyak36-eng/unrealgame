@@ -127,6 +127,7 @@ else
   if (( OVERALL_RC == 0 )); then OVERALL_RC=81; fi
 fi
 
+echo "[6/6] Pruning old logs..."
 # Keep the latest 15 run logs of each kind and the latest 15 build logs.
 for pattern in "mekanik_*.log" "wood_*.log" "build_*.log"; do
   ls -1t "$RUNS"/$pattern 2>/dev/null | tail -n +16 | xargs -r rm -f || true
