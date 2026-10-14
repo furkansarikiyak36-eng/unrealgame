@@ -133,7 +133,7 @@ python Scripts/audit_mechanic_catalog.py path/to/MEKANIK_KATALOG_TAKIP_CSV.csv -
 
 ## Ek kaynak denetimleri — 14 Ekim 2026
 
-İlk LOG denetimi: [FAZ_00_LOG_KANIT_DENETIMI.md](./FAZ_00_LOG_KANIT_DENETIMI.md). LOG-001–076 için kaynak yolu mevcut, kısmi ve kanıtlanmamış özellikler birbirinden ayrılmıştır. Bu kaynak taraması editör/oyun içi doğrulama yerine geçmez.
+İlk LOG denetimi: [FAZ_00_LOG_KANIT_DENETIMI.md](./FAZ_00_LOG_KANIT_DENETIMI.md). LOG-001–076 için kaynak yolu, kısmi destek ve bu incelemede bulunmayan özellikler ayrılmıştır. CSV eşleştirmesi 59 U2 / 17 U0 olarak sınıflandırılmıştır; bu kaynak taraması editör/oyun içi doğrulama yerine geçmez.
 
 Sistem entegrasyonu taraması: [FAZ_00_SISTEM_ENTEGRASYON_DENETIMI.md](./FAZ_00_SISTEM_ENTEGRASYON_DENETIMI.md). En önemli engeller:
 - fiziksel kaynak köprüsünün `ACarvableLog` yerine farklı `ALogActor` türünü kabul etmesi;
@@ -150,6 +150,6 @@ Bu bulgular kodu doğrudan yeniden yazmak için değil, fazlar arası sahiplik s
 
 ## Satır bazlı kapsam ilerlemesi
 
-`Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv`, LOG-001–LOG-076 için ilk 76 satırlı kaynak/kanıt eşleştirmesini içerir. Her satırda kaynak zinciri veya “bu incelemede bulunmadı” sınırı, eksik test/editör kanıtı ve açık blocker yazılmıştır. Hiçbir kayıt yalnızca statik kod taraması nedeniyle U1–U6 seviyesine yükseltilmedi. LOG grubundaki 76 satırın tamamı U0 kalır; 409 diğer mekanik ve LOG grubundaki satır-özel otomasyon/editör kanıtları Faz 0 iş listesindedir.
+`Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv`, LOG-001–LOG-076 için kaynak/kanıt eşleştirmesini içerir. Mevcut statik kaynak taramasında **59 satır U2** (yerel davranış izi var) ve **17 satır U0** (davranış zinciri bulunmadı/ayrı özellik) olarak sınıflandırıldı. Hiçbir satır U4/U5/U6 olarak yükseltilmedi; 59 U2 satırının da satıra özel otomatik test ve editör kanıtı bekliyor. Diğer 409 mekanik aynı satır bazlı derinlikte henüz işlenmedi.
 
 `Scripts/run_python_tests.sh` artık bu dosyayı beklenen 76 satırla keşif modunda kontrol eder. Bu, katalog formatını/kimliklerini ve kanıt metaverisini denetler; UE 5.8 derlemesi veya editör kabulünün yerine geçmez.
