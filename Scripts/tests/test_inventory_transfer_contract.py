@@ -23,13 +23,28 @@ class InventoryTransferContractTests(unittest.TestCase):
         self.assertIn("Payload = Slot.Item", CPP)
         self.assertIn("Destination->AddItemData(Payload)", CPP)
 
-    def test_failed_destination_add_attempts_source_rollback(self):
-        self.assertIn("Source->AddItemData(Payload)", CPP)
-        self.assertIn("Inventory transfer rollback failed", CPP)
+    def test_failed_destination_add_restores_both_exact_slot_snapshots(self):
+        transfer = CPP[CPP.index("bool UInventoryComponent::TransferItem"):CPP.index("bool UInventoryComponent::ExchangeItems")]
+        self.assertIn("OriginalSourceSlots", transfer)
+        self.assertIn("OriginalDestinationSlots", transfer)
+        self.assertIn("Source->Slots = OriginalSourceSlots", transfer)
+        self.assertIn("Destination->Slots = OriginalDestinationSlots", transfer)
+        self.assertIn("Source->bSuppressInventoryEvents = true", transfer)
+        self.assertIn("Destination->bSuppressInventoryEvents = true", transfer)
+        self.assertNotIn("Source->AddItemData(Payload)", transfer)
+
+    def test_item_exchange_is_transactional_for_processing_recipes(self):
+        exchange = CPP[CPP.index("bool UInventoryComponent::ExchangeItems"):CPP.index("int32 UInventoryComponent::GetItemCount")]
+        self.assertIn("OriginalSlots", exchange)
+        self.assertIn("RemoveItem(InputID, InputCount)", exchange)
+        self.assertIn("AddItem(OutputID, OutputCount)", exchange)
+        self.assertIn("Slots = OriginalSlots", exchange)
+        self.assertIn("bSuppressInventoryEvents = true", exchange)
 
     def test_does_not_create_resources_or_allow_drop_bypass(self):
         self.assertIn("Source->HasItem(ItemID, Count)", CPP)
-        self.assertIn("!D||!D->bCanBeDropped", CPP)
+        self.assertIn("Definition->bCanBeDropped", CPP)
+        self.assertIn("CanDropItem(ItemID, Count)", CPP)
 
 
 if __name__ == "__main__":
