@@ -46,7 +46,7 @@ class WorldStateIntegrationTests(unittest.TestCase):
     def test_schema_four_saves_world_state_and_keeps_legacy_schemas_readable(self):
         self.assertIn("FWorldStateSnapshot WorldState;", SAVE_H)
         self.assertIn("bool bHasWorldState = false;", SAVE_H)
-        self.assertIn("CurrentSaveSchemaVersion = 5", SAVE_H)
+        self.assertIn("CurrentSaveSchemaVersion = 6", SAVE_H)
         self.assertIn("Manifest.SchemaVersion != 3", SAVE_CPP)
         self.assertIn("WorldState->ExportSnapshot(WorldStateSnapshot)", SAVE_CPP)
         self.assertIn("WorldState->ValidateSnapshot(LoadedSave->WorldState)", SAVE_CPP)
