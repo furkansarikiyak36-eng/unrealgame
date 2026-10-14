@@ -8,6 +8,8 @@ CROP_H = (ROOT / "Source/MyProject2/PhaseT2_Plant/CropFieldActor.h").read_text(e
 CROP_CPP = (ROOT / "Source/MyProject2/PhaseT2_Plant/CropFieldActor.cpp").read_text(encoding="utf-8")
 FEED_H = (ROOT / "Source/MyProject2/PhaseT6_Animal/FeedStorageComponent.h").read_text(encoding="utf-8")
 FEED_CPP = (ROOT / "Source/MyProject2/PhaseT6_Animal/FeedStorageComponent.cpp").read_text(encoding="utf-8")
+FEED_CYCLE_H = (ROOT / "Source/MyProject2/PhaseT9_Integration/FeedCycleComponent.h").read_text(encoding="utf-8")
+FEED_CYCLE_CPP = (ROOT / "Source/MyProject2/PhaseT9_Integration/FeedCycleComponent.cpp").read_text(encoding="utf-8")
 ANIMAL_H = (ROOT / "Source/MyProject2/PhaseT6_Animal/AnimalActor.h").read_text(encoding="utf-8")
 ANIMAL_CPP = (ROOT / "Source/MyProject2/PhaseT6_Animal/AnimalActor.cpp").read_text(encoding="utf-8")
 INVENTORY_CPP = (ROOT / "Source/MyProject2/InventoryCore/InventoryComponent.cpp").read_text(encoding="utf-8")
@@ -59,6 +61,10 @@ class FarmingIntegrationTests(unittest.TestCase):
         self.assertIn("GetTotalFeedAmount()+A<=StorageCapacity", FEED_CPP)
         self.assertIn("FMath::IsFinite(A)", FEED_CPP)
         self.assertIn("FeedDefinitions.Add(ID,F)", FEED_CPP)
+        self.assertNotIn("TMap<FName,float> FeedStock", FEED_CYCLE_H)
+        self.assertIn("FindComponentByClass<UFeedStorageComponent>()", FEED_CYCLE_CPP)
+        self.assertIn("Storage->TryAddFeed(FeedID,Amount,Feed)", FEED_CYCLE_CPP)
+        self.assertIn("Storage->ConsumeFeed(ID,Take)", FEED_CYCLE_CPP)
 
     def test_animals_accumulate_manure_from_consumed_feed(self):
         self.assertIn("UManureComponent", ANIMAL_H)
