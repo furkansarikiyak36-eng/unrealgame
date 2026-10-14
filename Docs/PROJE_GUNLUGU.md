@@ -322,3 +322,11 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - `MyProject2.Build.cs` içine Landscape modül bağımlılığı eklendi; `Scripts/tests/test_excavation_terrain_adapter_contract.py` statik kontrat testi Python CI'a bağlandı.
 - **Açık kalan:** Landscape'in orijinal render/collision yüzeyinden voxel mesh'e yetki devri, malzeme stratification ve navigation güncellemesi henüz tamamlanmış kabul edilmez. Bu kodda geometri/collision üretimi var; UE 5.8 compile/Automation bu oturumda çalıştırılmadı. Faz 3 tracker bu nedenle In Progress durumunda bırakıldı.
 
+### 2026-10-14 — Faz 3: malzeme ID'leri ve navigation adaptörü
+
+- Ortak UExcavationBaseDensitySource sözleşmesine temel malzeme ID sorgusu eklendi. UExcavationVolumeSubsystem, sparse kazı deltalarını değiştirmeden base provider üzerinden ID örnekleyebiliyor.
+- AExcavationTerrainChunkActor, FDynamicMeshMaterialAttribute üçgen ID'lerini ayarlıyor; StratifiedMaterialLayers ile provider ID'lerini mesh material slotlarına yönlendiriyor. Otomatik renderer spawn için projeye özel Blueprint chunk sınıfı seçme noktası eklendi.
+- Landscape provider, GetPhysicalMaterialAtLocation değerini kullanıcı tarafından ayarlanabilen fiziksel materyal→katman ID eşleştirmesinden geçiriyor. Eşleştirme listesi terrain renderer subsystem üzerinden sağlanıyor; default ID 0 SurfaceMaterial kullanır.
+- Mesh değişikliği ve temizliği sonrasında NavigationSystem nav octree güncelleme çağrısı eklendi; Python kontrat testleri material-ID, Landscape map ve nav update davranışlarını kapsayacak şekilde genişletildi.
+- Açık kalan ana blocker: ayrı voxel mesh üretmek Landscape'in orijinal render surface/collision'unu otomatik kaldırmaz. Gerçek runtime delik/yetki devri veya Landscape collision'ını güvenli şekilde yönetme entegrasyonu ve UE 5.8 build/oyun içi kabul bitene kadar Faz 3 In Progress kalır.
+
