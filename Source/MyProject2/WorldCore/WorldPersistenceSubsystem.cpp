@@ -2,8 +2,35 @@
 
 #include "ExcavationVolumeSubsystem.h"
 #include "UndergroundHazardSubsystem.h"
+#include "ForestCharacter.h"
+#include "InventoryCore/InventoryComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/EngineUtils.h"
 #include "Engine/World.h"
+
+
+namespace
+{
+    AForestCharacter* FindWorldSavePlayer(UWorld* World)
+    {
+        if (!World)
+        {
+            return nullptr;
+        }
+        if (AForestCharacter* Player = Cast<AForestCharacter>(UGameplayStatics::GetPlayerCharacter(World, 0)))
+        {
+            return Player;
+        }
+        for (TActorIterator<AForestCharacter> It(World); It; ++It)
+        {
+            if (IsValid(*It))
+            {
+                return *It;
+            }
+        }
+        return nullptr;
+    }
+}
 
 void UWorldPersistenceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -303,6 +330,25 @@ bool UWorldPersistenceSubsystem::SaveCoreStateToSlot(const FString& SlotName, in
         return false;
     }
     SaveObject->UndergroundHazards = MoveTemp(HazardSnapshot);
+
+    // Preserve the currently playable character's stack inventory in the same
+    // versioned envelope. World-piece actors (notably ACarvableLog) stay world-owned.
+    if (AForestCharacter* Player = FindWorldSavePlayer(World))
+    {
+        if (UInventoryComponent* Inventory = Player->GetInventoryComponent())
+        {
+            SaveObject->bHasPlayerInventory = true;
+            const TArray<FInventorySlot> Slots = Inventory->GetSlots();
+            for (const FInventorySlot& Slot : Slots)
+            {
+                if (Slot.IsOccupied() && !Slot.bLocked)
+                {
+                    SaveObject->PlayerInventoryItems.Add(Slot.Item);
+                }
+            }
+        }
+    }
+
     SaveObject->ProcessedCommandIds = ProcessedCommandIdsInOrder;
     SaveObject->RecentWorldEventKeys = RecentWorldEventKeysInOrder;
 
@@ -331,7 +377,7 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     }
 
     const FWorldCoreSaveManifest& Manifest = LoadedSave->Manifest;
-    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
+    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
         || !Manifest.WorldId.IsValid()
         || Manifest.WorldRevision < 0
         || LoadedSave->ProcessedCommandIds.Num() > MaxRetainedLedgerEntries
@@ -371,6 +417,28 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
         return false;
     }
 
+    AForestCharacter* SavedPlayer = nullptr;
+    UInventoryComponent* PlayerInventory = nullptr;
+    TArray<FInventoryItem> PreviousPlayerInventory;
+    if (LoadedSave->bHasPlayerInventory)
+    {
+        SavedPlayer = FindWorldSavePlayer(LoadWorld);
+        PlayerInventory = SavedPlayer ? SavedPlayer->GetInventoryComponent() : nullptr;
+        // Validate the full inventory snapshot before any domain starts importing.
+        if (!PlayerInventory || !PlayerInventory->CanRestoreFromSavedItems(LoadedSave->PlayerInventoryItems))
+        {
+            return false;
+        }
+        const TArray<FInventorySlot> ExistingSlots = PlayerInventory->GetSlots();
+        for (const FInventorySlot& Slot : ExistingSlots)
+        {
+            if (Slot.IsOccupied() && !Slot.bLocked)
+            {
+                PreviousPlayerInventory.Add(Slot.Item);
+            }
+        }
+    }
+
     // Each domain validates its snapshot before replacing its owned runtime state.
     // Suppress the import-reset revision so the saved revision remains authoritative.
     bApplyingLoadedState = true;
@@ -382,11 +450,25 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     }
 
     const bool bHazardsImported = Hazards->ImportSnapshot(LoadedSave->UndergroundHazards);
-    bApplyingLoadedState = false;
     if (!bHazardsImported)
     {
+        bApplyingLoadedState = false;
         return false;
     }
+
+    // Inventory was preflighted against the exact active slot/weight policy above.
+    // Restore it only after the other snapshots have accepted their own state.
+    if (PlayerInventory && !PlayerInventory->RestoreFromSavedItems(LoadedSave->PlayerInventoryItems))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Core save load: prevalidated player inventory restore failed."));
+        if (!PlayerInventory->RestoreFromSavedItems(PreviousPlayerInventory))
+        {
+            UE_LOG(LogTemp, Error, TEXT("Core save load: player inventory rollback also failed."));
+        }
+        bApplyingLoadedState = false;
+        return false;
+    }
+    bApplyingLoadedState = false;
 
     WorldId = Manifest.WorldId;
     WorldSeed = Manifest.WorldSeed;
