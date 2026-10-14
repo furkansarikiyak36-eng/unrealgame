@@ -7,6 +7,7 @@
 
 class AExcavationTerrainChunkActor;
 class UExcavationFlatBaseDensitySource;
+class UExcavationLandscapeDensitySource;
 class UExcavationVolumeSubsystem;
 
 /**
@@ -54,13 +55,23 @@ protected:
     void HandleVolumeReset();
 
     void UpdateStreamedChunks();
+    void RefreshLandscapeFallbackProvider();
     bool HasLiveRegisteredChunk(const FIntVector& Coordinate);
     void RemoveInvalidRegisteredActors();
 
     UPROPERTY(Transient)
     TObjectPtr<UExcavationFlatBaseDensitySource> FlatFallbackDensitySource;
 
+    UPROPERTY(Transient)
+    TObjectPtr<UExcavationLandscapeDensitySource> LandscapeFallbackDensitySource;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UObject> RegisteredFallbackDensitySource;
+
     TMap<FIntVector, TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>> RegisteredChunks;
     TMap<FIntVector, TWeakObjectPtr<AExcavationTerrainChunkActor>> ManagedChunkActors;
     float StreamingAccumulatorSeconds = 0.0f;
+    float LandscapeDiscoveryAccumulatorSeconds = 0.0f;
+    float LandscapeDiscoveryIntervalSeconds = 1.0f;
+    bool bDidInitialLandscapeDiscovery = false;
 };
