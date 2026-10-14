@@ -4,6 +4,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "ExcavationTypes.h"
 #include "UndergroundHazardTypes.h"
+#include "InventoryCore/InventoryTypes.h"
 #include "Engine/SaveGame.h"
 #include "WorldPersistenceSubsystem.generated.h"
 
@@ -61,6 +62,13 @@ public:
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
     FUndergroundHazardSnapshot UndergroundHazards;
+
+    /** Stackable player resources only; physical ACarvableLog/stone actors remain world actors. */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    bool bHasPlayerInventory = false;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    TArray<FInventoryItem> PlayerInventoryItems;
 
     /** Bounded rolling command ledger used to reject duplicate client retries after reload. */
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
@@ -163,7 +171,7 @@ protected:
     void RememberCommandId(const FGuid& CommandId);
     void RememberWorldEventKey(const FString& EventKey);
 
-    static constexpr int32 CurrentSaveSchemaVersion = 2;
+    static constexpr int32 CurrentSaveSchemaVersion = 3;
     static constexpr int32 MaxRetainedLedgerEntries = 100000;
 
     UPROPERTY(Transient)
