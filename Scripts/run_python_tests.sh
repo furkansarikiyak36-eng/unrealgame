@@ -7,7 +7,9 @@ echo "[1/12] Verifying the UE-log parser test suite..."
 "$PYTHON" "$ROOT/Scripts/tests/test_verify_test_logs.py"
 echo "[2/12] Verifying the mechanic-catalog auditor test suite..."
 "$PYTHON" "$ROOT/Scripts/tests/test_audit_mechanic_catalog.py"
-echo "[3/12] Checking Python syntax..."
+echo "[3/12] Checking Python and shell syntax..."
+bash -n "$ROOT/Scripts/run_tests.sh"
+bash -n "$ROOT/Scripts/run_python_tests.sh"
 "$PYTHON" -m py_compile \
   "$ROOT/Scripts/verify_test_logs.py" \
   "$ROOT/Scripts/audit_mechanic_catalog.py" \
