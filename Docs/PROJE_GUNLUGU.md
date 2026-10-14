@@ -407,3 +407,10 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - LastObservedWorldDay ile AccumulatedDeltaDays birbirinden ayrıldı. Her simülasyon adımı en fazla bir gün, pending catch-up en fazla 365 gün; tarihsel yağış tekrar üretimi en fazla 365 günle sınırlı. Daha eski pasif geçmiş performans için yaklaşık ele alınır, eksiksiz tarihsel replay garantisi verilmez.
 - FChunkStateSnapshot / FWorldStateSnapshot ve schema-4 UWorldCoreSaveGame bağlantısı eklendi. Saat/hava/seed ve chunk/cell state doğrulanır; chunk-store için yeni map kurulmadan mevcut map değiştirilmez. Schema 1–3 kayıtlar geriye dönük okunabilir; bu kayıtlarda world-state snapshot yoksa mevcut hücre durumu otomatik silinmez.
 - Statik sözleşme testi Scripts/tests/test_phase8_world_state_integration_contract.py eklendi ve Python runner'a bağlandı. CI/UE doğrulama sonucu ayrıca kaydedilecek; burada Unreal Engine 5.8 derlemesi veya oyun içi save/load koşturulmuş kabul edilmiyor. Daha derin cross-domain rollback ve performans ölçümü Faz 14'te.
+
+
+### 2026-10-14 — Faz 8: statik CI doğrulaması
+
+- GitHub Actions Python tooling CI **#794 başarılı** (run [38534211068](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38534211068)). Faz 8'in 7 statik dünya-durumu sözleşme testi ve mevcut tüm Python, save-contract, envanter, yeraltı ve 485 katalog kontrolleri geçti.
+- CI sırasında şema 3'ü zorunlu bekleyen eski Faz 4 ve Faz 6 test kabulleri schema 4 ile uyumlu hale getirildi; yükleme kodu schema 1–4'ü kabul eder, schema 1–3 için yeni world-state snapshot alanı yoksa eski dünya hücreleri üzerine boş snapshot zorla uygulanmaz.
+- Bu CI Python/shell/statik kaynak kontrolleridir; Unreal Engine 5.8 C++ derlemesi, gerçek SaveGame round-trip, uzun süreli simülasyon veya oyun içi E2E çalıştırılmadı. Bunlar, diğer fazlar arası state rollback ve performans kabulüyle birlikte Faz 14'e bırakılır.
