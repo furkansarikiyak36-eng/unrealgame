@@ -359,6 +359,7 @@ bool UExcavationVolumeSubsystem::ImportSnapshot(
         LockedCellsPerChunkAxis = 0;
     }
 
+    OnVolumeReset.Broadcast();
     return true;
 }
 
@@ -702,6 +703,7 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
 
     CandidateRecord.bCommitted = true;
     OutRecord = MoveTemp(CandidateRecord);
+    OnVolumeChanged.Broadcast(OutRecord, false);
     return true;
 }
 
@@ -776,5 +778,6 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
         CellsByChunk.Reset();
     }
 
+    OnVolumeChanged.Broadcast(Record, true);
     return true;
 }
