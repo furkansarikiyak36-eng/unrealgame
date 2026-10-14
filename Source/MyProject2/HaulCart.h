@@ -33,13 +33,16 @@ public:
 	AHaulCart();
 
 	/** A cart, sled or rack standing on Ground, facing Yaw. */
-	UFUNCTION(BlueprintCallable, Category = "Hauling")
 	static AHaulCart* Spawn(UWorld* World, const FVector& Ground, float Yaw, EHaulKind Kind);
 
 	static FString KindName(EHaulKind Kind);
 	EHaulKind GetKind() const { return Kind; }
 
 	/** Wood the thing holds (cm3): this many shoulder loads of one whole log each. */
+	/** Selects a cart/sled/rack variant only while it has no cargo. */
+	UFUNCTION(BlueprintCallable, Category = "Hauling")
+	void SetKind(EHaulKind NewKind);
+
 	float GetCapacity() const;
 	float GetLoadVolume() const;
 	int32 GetLoadCount() const { return Loaded.Num(); }
