@@ -139,3 +139,11 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 İlk statik kaynak seviyeleri: U2=333, U1=88, U0=64; U3–U6=0. U2/U1 kaynakta bir algoritma/model izinin bulunmasıdır; bu, katalog satırının uçtan uca geçtiği anlamına gelmez. Her satırda isimli otomatik test sonucu ve editör/oyun içi kanıtı bekliyor; U0 maddelerinin uygulama ya da doğru kaynak sahibi bulunması gerekiyor.
 
 `Scripts/run_python_tests.sh` 9 CSV'yi beklenen satır sayılarıyla audit ediyor. Güncel Python CI run #88 başarılı: https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38510701119. Bu sonuç UE 5.8 derleme veya oyun testi değildir. Faz 0 açık; tek final demo ilkesi değişmedi.
+
+
+### 2026-10-14 — Çubuk crafting işlem atomikliği
+
+- `UStickInventoryComponent` için toplu girdi preflight, duplicate item aggregation, tüketim sonrası kapasite hesabı ve snapshot rollback içeren native transaction API eklendi.
+- `UCraftingComponent` artık craft output/input için bu API'yi kullanıyor; `bRequiresTool` kontrolü eklendi; şekil state'i sayım envanterinde olmadığı için `RequiredShape` içeren tarifler fail-closed şekilde reddediliyor.
+- Üç Unreal Automation Test eklendi ve UE host çalıştırıcısı/log doğrulayıcısı ayrı `MyProject2.Inventory.StickCraftTransaction` suite'ini zorunlu kılıyor.
+- Bu kodun Unreal Engine 5.8 derlemesi/otomasyon sonucu bu ortamda alınmadı. Güncel GitHub Actions yalnızca Python tooling ve katalog kontrollerini çalıştırır; C++ doğrulaması, kullanıcı tarafından UE hostunda `bash Scripts/run_tests.sh` çalıştırılana kadar açık kalır.
