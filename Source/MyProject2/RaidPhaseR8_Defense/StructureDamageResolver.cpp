@@ -26,7 +26,7 @@ bool UStructureDamageResolver::ApplyDamageToBlock(AActor* Block,float Damage)
     if(ALogActor* Log=Cast<ALogActor>(Block))
     {
         if(UDamageComponent* Component=Log->FindComponentByClass<UDamageComponent>())Component->ApplyDamage(Damage);
-        else Log->SetHealth(Log->GetHealth()-Damage);
+        else { Log->SetHealth(Log->GetHealth()-Damage); if(Log->GetHealth()<=0.f)Log->SetLogState(ELogState::Destroyed); }
         bApplied=true;
     }
     else if(AStoneActor* Stone=Cast<AStoneActor>(Block))
