@@ -458,3 +458,10 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - \`ARaidEnemy\` navmesh varsa Director'ın kare başına bütçeli path query'sini kullanıyor; navmesh yoksa eski collision-swept greybox hareketi çalışıyor. Yapı hasarı ortak resolver'a bağlı; yapı parçası yok olunca nav dirty area güncelleniyor.
 - Köprü log parçaları canonical \`InfrastructureLinkKey\` taşır. Bir parçanın yıkılması \`URegionLogisticsSubsystem\` üzerindeki ilgili köprü rotasını kapatır; fiziksel log SaveGame veri sözleşmesi link anahtarını da round-trip yapar.
 - Raid runtime harness'e dört motor-içi kontrol eklendi. \`Scripts/tests/test_phase12_raid_director_contract.py\` ve runner kaydı eklendi; CI sonucu son head için kontrol edilecek. Unreal Engine 5.8 derleme ve in-world raid/AI/route/save-load testleri yapılmadı; Faz 14 bütünsel doğrulamaya bırakıldı.
+
+
+### 2026-10-14 — Faz 12 statik CI sonucu
+
+- GitHub Actions Python tooling CI #1004 başarılıdır: https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38539811476
+- Faz 12 için eklenen 14 statik sözleşme testi, shell/Python syntax kontrolü, önceki faz sözleşmeleri ve 485 satırlı mekanik katalog denetimi geçti.
+- Bu CI Unreal Engine 5.8 C++ derlemesi veya oyun içi baskın E2E testi değildir; gerçek Start→Wave→Resolve/Cancel, navmesh ve bridge route save/load kabulü Faz 14'te yapılacak.
