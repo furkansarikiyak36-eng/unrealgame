@@ -113,3 +113,19 @@ Faz 0 tamamlanmış sayılmadan önce:
 - [ ] Kazı spike'ının karşılaştıracağı teknoloji seçenekleri ve ölçümler onaylanmalı.
 
 **Sıradaki çalışma:** önce CSV katalog satırlarını repo dosyaları ve çağrı zincirlerine bağlamak; ardından U0 olarak kalan en yüksek riskli sistemlerden başlayarak gerçek bir davranış ve test kanıtı elde etmek. Faz 1 kazı spike'ına ancak Phase 0 çıkış kapısı geçildikten sonra başlanır.
+
+
+## 14 Ekim 2026 — katalog kapısı ve denetleyici
+
+Eklenen denetleyici: `Scripts/audit_mechanic_catalog.py`; bağımsız test paketi: `Scripts/tests/test_audit_mechanic_catalog.py`.
+
+Yerel katalog çıktısında 485 satır, 485 benzersiz ID, 0 yinelenen ID ve 485 adet `U0 — denetim gerekli` bulunuyor. Bu sonuç katalog şemasının düzgün olduğunu, ancak mekaniklerin kanıtlanmadığını gösterir. Bu nedenle Faz 0 **aktif kalır**; tüm satırlar için kaynak sahibi, çağrı zinciri, otomatik test kanıtı, editör kanıtı ve blocker bilgisi tamamlanmadan Faz 1 çıkış kapısı açılmaz.
+
+Denetim komutu:
+
+```bash
+python Scripts/audit_mechanic_catalog.py path/to/MEKANIK_KATALOG_TAKIP_CSV.csv --expected-count 485 --json-out Saved/TestRuns/catalog_audit.json
+python Scripts/audit_mechanic_catalog.py path/to/MEKANIK_KATALOG_TAKIP_CSV.csv --expected-count 485 --strict
+```
+
+İlk komut keşif sırasında boşlukları raporlar; ikinci komut boşluk varsa non-zero çıkışla kabul kapısını kapalı tutar. Katalog-denetleyici için 7 birim test izole Python ortamında çalıştırıldı ve geçti. GitHub Actions sonucu görünmeden CI geçişi; Unreal Engine 5.8 hostunda build/automation yapılmadan da motor geçişi iddia edilmez.
