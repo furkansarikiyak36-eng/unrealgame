@@ -1,5 +1,6 @@
 #include "StonePlacementComponent.h"
 #include "StonePhaseA_Mining/StoneActor.h"
+#include "StonePhaseB_Placement/StoneCarryComponent.h"
 #include "StoneCore/StoneDefinition.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
@@ -296,6 +297,16 @@ bool UStonePlacementComponent::ConfirmPlacement()
     {
         CancelPlacement();
         return false;
+    }
+
+    if (GetOwner())
+    {
+        if (UStoneCarryComponent* Carry = GetOwner()->FindComponentByClass<UStoneCarryComponent>())
+        {
+            // A loose stone can be placed without the carry component owning it.
+            // If it was the carried stone, clear that reference only after installation succeeded.
+            Carry->ReleaseForPlacement(StoneToPlace);
+        }
     }
 
     PlacementHistory.Add(StoneToPlace);
