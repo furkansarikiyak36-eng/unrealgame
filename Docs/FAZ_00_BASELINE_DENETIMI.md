@@ -150,9 +150,9 @@ Bu bulgular kodu doğrudan yeniden yazmak için değil, fazlar arası sahiplik s
 
 ## Satır bazlı kapsam ilerlemesi
 
-Satır bazlı eşleştirme dosyaları şu grupları kapsıyor: LOG 76, INVENTORY 32, RAID 63, WORLD 35 ve MATERIAL 38 — toplam **244/485**. Kaynak dosyalarındaki yerel davranış izi ile uçtan uca/test/editör kanıtı ayrıştırılıyor; U4/U5/U6 seviyesine yükseltilen satır yok. **241 satır** STONE/STICK/FARMING/CORE gruplarında eşleştirme bekliyor; haritalanmış 244 satır için de satıra özel test/editör kanıtları açık iş olarak kalıyor.
+Satır bazlı eşleştirme dosyaları dokuz katalog ailesinin tamamını kapsıyor: LOG 76, INVENTORY 32, RAID 63, WORLD 35, MATERIAL 38, FARMING 57, CORE 12, STONE 96, STICK 76 — toplam **485/485**. Statik kaynak triage dağılımı U2=333, U1=88, U0=64; U3–U6=0. Kaynak haritalama tamamlandı; tüm satırlara özgü test kimliği/sonucu, editör kanıtı ve gerektiğinde kayıt/performans kanıtı eklenmesi hâlâ açık.
 
-`Scripts/run_python_tests.sh`, beş sistem eşleştirme CSV'sini beklenen satır sayılarıyla keşif modunda denetler. Bu, katalog formatını/kimliklerini ve kanıt metaverisini kontrol eder; UE 5.8 derlemesi veya editör kabulünün yerine geçmez.
+`Scripts/run_python_tests.sh`, dokuz sistem eşleştirme CSV'sini beklenen satır sayılarıyla denetler. Son GitHub Actions Python tooling run #88 başarılıdır. Bu denetim şema/kimlik/metaveri ve Python araç testidir; UE 5.8 derlemesi, editör kabulü veya paket testi yerine geçmez.
 
 
 ## Envanter sahipliği engeli
