@@ -16,6 +16,27 @@ namespace
         return FMath::IsFinite(Density) && Density >= 0.0f && Density <= 1.0f;
     }
 
+    int32 FloorDivide(int32 Value, int32 PositiveDivisor)
+    {
+        const int32 Quotient = Value / PositiveDivisor;
+        const int32 Remainder = Value % PositiveDivisor;
+        return Remainder < 0 ? Quotient - 1 : Quotient;
+    }
+
+    int32 PositiveModulo(int32 Value, int32 PositiveDivisor)
+    {
+        const int32 Remainder = Value % PositiveDivisor;
+        return Remainder < 0 ? Remainder + PositiveDivisor : Remainder;
+    }
+
+    FIntVector ChunkForCellAtSize(const FIntVector& Cell, int32 CellsPerChunkAxis)
+    {
+        return FIntVector(
+            FloorDivide(Cell.X, CellsPerChunkAxis),
+            FloorDivide(Cell.Y, CellsPerChunkAxis),
+            FloorDivide(Cell.Z, CellsPerChunkAxis));
+    }
+
     bool IsValidCellCoordinate(double WorldCoordinateCm, double CellSizeCm, int32& OutCell)
     {
         if (!FMath::IsFinite(WorldCoordinateCm) || !FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0)
@@ -44,6 +65,9 @@ namespace
 void UExcavationVolumeSubsystem::Deinitialize()
 {
     CellOverrides.Reset();
+    CellsByChunk.Reset();
+    LockedCellSizeCm = 0.0f;
+    LockedCellsPerChunkAxis = 0;
     Super::Deinitialize();
 }
 
@@ -53,8 +77,10 @@ bool UExcavationVolumeSubsystem::TryWorldToCell(const FVector& WorldPositionCm, 
     {
         return false;
     }
-    if (CellOverrides.Num() > 0 && LockedCellSizeCm > 0.0f
-        && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
+    if (CellsPerChunkAxis < 4
+        || (CellOverrides.Num() > 0
+            && ((LockedCellSizeCm > 0.0f && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
+                || (LockedCellsPerChunkAxis > 0 && CellsPerChunkAxis != LockedCellsPerChunkAxis))))
     {
         return false;
     }
@@ -74,8 +100,10 @@ bool UExcavationVolumeSubsystem::TryWorldToCell(const FVector& WorldPositionCm, 
 FVector UExcavationVolumeSubsystem::CellToWorldCenter(const FIntVector& Cell) const
 {
     if (!FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0f
-        || (CellOverrides.Num() > 0 && LockedCellSizeCm > 0.0f
-            && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm)))
+        || CellsPerChunkAxis < 4
+        || (CellOverrides.Num() > 0
+            && ((LockedCellSizeCm > 0.0f && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
+                || (LockedCellsPerChunkAxis > 0 && CellsPerChunkAxis != LockedCellsPerChunkAxis))))
     {
         return FVector::ZeroVector;
     }
@@ -119,6 +147,97 @@ bool UExcavationVolumeSubsystem::IsCellOverridden(const FIntVector& Cell) const
     return CellOverrides.Contains(Cell);
 }
 
+bool UExcavationVolumeSubsystem::TryGetChunkCoordinateForCell(
+    const FIntVector& Cell,
+    FIntVector& OutChunkCoordinate) const
+{
+    if (CellsPerChunkAxis < 4
+        || (CellOverrides.Num() > 0 && LockedCellsPerChunkAxis > 0
+            && CellsPerChunkAxis != LockedCellsPerChunkAxis))
+    {
+        return false;
+    }
+
+    OutChunkCoordinate = ChunkForCellAtSize(Cell, CellsPerChunkAxis);
+    return true;
+}
+
+TArray<FIntVector> UExcavationVolumeSubsystem::GetOverrideCellsInChunk(
+    const FIntVector& ChunkCoordinate) const
+{
+    TArray<FIntVector> Result;
+    if (CellsPerChunkAxis < 4
+        || (CellOverrides.Num() > 0 && LockedCellsPerChunkAxis > 0
+            && CellsPerChunkAxis != LockedCellsPerChunkAxis))
+    {
+        return Result;
+    }
+
+    const TSet<FIntVector>* IndexedCells = CellsByChunk.Find(ChunkCoordinate);
+    if (!IndexedCells)
+    {
+        return Result;
+    }
+
+    Result = IndexedCells->Array();
+    Result.Sort([](const FIntVector& A, const FIntVector& B)
+    {
+        if (A.X != B.X) return A.X < B.X;
+        if (A.Y != B.Y) return A.Y < B.Y;
+        return A.Z < B.Z;
+    });
+    return Result;
+}
+
+TArray<FIntVector> UExcavationVolumeSubsystem::GetAffectedChunksForEdit(
+    const FExcavationEditRecord& Record) const
+{
+    TArray<FIntVector> Result;
+    if (!Record.bCommitted || Record.SchemaVersion != 1 || CellsPerChunkAxis < 4
+        || (CellOverrides.Num() > 0 && LockedCellsPerChunkAxis > 0
+            && CellsPerChunkAxis != LockedCellsPerChunkAxis))
+    {
+        return Result;
+    }
+
+    TSet<FIntVector> AffectedChunks;
+    const int32 ChunkSize = CellsPerChunkAxis;
+    for (const FExcavationCellChange& Change : Record.Changes)
+    {
+        const FIntVector Chunk = ChunkForCellAtSize(Change.Cell, ChunkSize);
+        const int32 LocalX = PositiveModulo(Change.Cell.X, ChunkSize);
+        const int32 LocalY = PositiveModulo(Change.Cell.Y, ChunkSize);
+        const int32 LocalZ = PositiveModulo(Change.Cell.Z, ChunkSize);
+
+        const int32 MinOffsetX = LocalX <= 1 ? -1 : 0;
+        const int32 MaxOffsetX = LocalX >= ChunkSize - 2 ? 1 : 0;
+        const int32 MinOffsetY = LocalY <= 1 ? -1 : 0;
+        const int32 MaxOffsetY = LocalY >= ChunkSize - 2 ? 1 : 0;
+        const int32 MinOffsetZ = LocalZ <= 1 ? -1 : 0;
+        const int32 MaxOffsetZ = LocalZ >= ChunkSize - 2 ? 1 : 0;
+
+        for (int32 OffsetX = MinOffsetX; OffsetX <= MaxOffsetX; ++OffsetX)
+        {
+            for (int32 OffsetY = MinOffsetY; OffsetY <= MaxOffsetY; ++OffsetY)
+            {
+                for (int32 OffsetZ = MinOffsetZ; OffsetZ <= MaxOffsetZ; ++OffsetZ)
+                {
+                    AffectedChunks.Add(Chunk + FIntVector(OffsetX, OffsetY, OffsetZ));
+                }
+            }
+        }
+    }
+
+    Result = AffectedChunks.Array();
+    Result.Sort([](const FIntVector& A, const FIntVector& B)
+    {
+        if (A.X != B.X) return A.X < B.X;
+        if (A.Y != B.Y) return A.Y < B.Y;
+        return A.Z < B.Z;
+    });
+    return Result;
+}
+
 bool UExcavationVolumeSubsystem::ApplySphereEdit(
     const FVector& CenterCm,
     float RadiusCm,
@@ -132,6 +251,7 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
         || RadiusCm <= 0.0f
         || !FMath::IsFinite(CellSizeCm)
         || CellSizeCm <= 0.0f
+        || CellsPerChunkAxis < 4
         || MaxCellsPerEdit <= 0
         || (EditType != EExcavationEditType::Carve && EditType != EExcavationEditType::Fill))
     {
@@ -204,6 +324,7 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
     if (CellOverrides.Num() == 0 && CandidateRecord.Changes.Num() > 0)
     {
         LockedCellSizeCm = CellSizeCm;
+        LockedCellsPerChunkAxis = CellsPerChunkAxis;
     }
 
     for (const FExcavationCellChange& Change : CandidateRecord.Changes)
@@ -212,6 +333,7 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
         NewOverride.Density = Change.NewDensity;
         NewOverride.LastOperationId = CandidateRecord.OperationId;
         CellOverrides.Add(Change.Cell, NewOverride);
+        CellsByChunk.FindOrAdd(ChunkForCellAtSize(Change.Cell, LockedCellsPerChunkAxis)).Add(Change.Cell);
     }
 
     // An idempotent edit that changes no cells is still a valid committed operation.
@@ -261,12 +383,26 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
         else
         {
             CellOverrides.Remove(Change.Cell);
+            const int32 ChunkSizeForIndex = LockedCellsPerChunkAxis > 0
+                ? LockedCellsPerChunkAxis
+                : CellsPerChunkAxis;
+            const FIntVector Chunk = ChunkForCellAtSize(Change.Cell, ChunkSizeForIndex);
+            if (TSet<FIntVector>* IndexedCells = CellsByChunk.Find(Chunk))
+            {
+                IndexedCells->Remove(Change.Cell);
+                if (IndexedCells->Num() == 0)
+                {
+                    CellsByChunk.Remove(Chunk);
+                }
+            }
         }
     }
 
     if (CellOverrides.Num() == 0)
     {
         LockedCellSizeCm = 0.0f;
+        LockedCellsPerChunkAxis = 0;
+        CellsByChunk.Reset();
     }
 
     return true;
