@@ -66,3 +66,17 @@ float UExcavationLandscapeDensitySource::SampleBaseDensityAtWorld_Implementation
     // Outside all loaded landscape proxies is empty space; never invent a solid wall at proxy boundaries.
     return 0.0f;
 }
+
+int32 UExcavationLandscapeDensitySource::SampleBaseMaterialIdAtWorld_Implementation(
+    const FVector& WorldPositionCm) const
+{
+    if (!FMath::IsFinite(WorldPositionCm.X)
+        || !FMath::IsFinite(WorldPositionCm.Y)
+        || !FMath::IsFinite(WorldPositionCm.Z))
+    {
+        return -1;
+    }
+
+    // Base layer defaults to ID 0 until a project-specific provider supplies landscape-layer IDs.
+    return 0;
+}
