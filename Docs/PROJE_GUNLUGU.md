@@ -147,3 +147,11 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - `UCraftingComponent` artık craft output/input için bu API'yi kullanıyor; `bRequiresTool` kontrolü eklendi; şekil state'i sayım envanterinde olmadığı için `RequiredShape` içeren tarifler fail-closed şekilde reddediliyor.
 - Üç Unreal Automation Test eklendi ve UE host çalıştırıcısı/log doğrulayıcısı ayrı `MyProject2.Inventory.StickCraftTransaction` suite'ini zorunlu kılıyor.
 - Bu kodun Unreal Engine 5.8 derlemesi/otomasyon sonucu bu ortamda alınmadı. Güncel GitHub Actions yalnızca Python tooling ve katalog kontrollerini çalıştırır; C++ doğrulaması, kullanıcı tarafından UE hostunda `bash Scripts/run_tests.sh` çalıştırılana kadar açık kalır.
+
+
+### 2026-10-14 — Kırma işlemlerinde kısmi çıktı geri alma
+
+- `UStoneWorkingComponent::CrushBoulder`, istenen tüm taş parçalarını oluşturamadığında spawn edilmiş parçaları yok eder ve kaynak kayayı korur. Parçalar kaynak `UStoneDefinition` ile initialize edilir.
+- `UStickBreakingComponent::CompleteBreak`, kısmi spawn başarısızlığında çıktıları geri temizler, kaynak çubuğu korur ve sürekli frame başına tekrar denemeyi durdurur.
+- Taş `HollowGroove/EngraveJoint/SmoothSurface` no-op metotları artık geometri değişimi yapmadan başarı döndürmez; gerçek işlemler hâlâ backlog.
+- P0-024 ve P0-026 kod düzeyi üzerinde ilerletildi; UE 5.8 build/automation sonucu henüz yok.
