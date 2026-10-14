@@ -51,7 +51,7 @@ public:
 
     /** Chunk coordinate for a global voxel-cell coordinate; uses floor division for negatives. */
     UFUNCTION(BlueprintPure, Category = "Excavation")
-    FIntVector GetChunkCoordinateForCell(const FIntVector& Cell) const;
+    bool TryGetChunkCoordinateForCell(const FIntVector& Cell, FIntVector& OutChunkCoordinate) const;
 
     /** Returns the explicitly overridden cells belonging to a chunk in stable sorted order. */
     UFUNCTION(BlueprintPure, Category = "Excavation")
