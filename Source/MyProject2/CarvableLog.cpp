@@ -10,6 +10,7 @@
 #include "PickupItem.h"
 #include "Campfire.h"
 #include "BurnSubsystem.h"
+#include "MaterialCore/MaterialDefinition.h"
 #include "RaidEnemy.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -159,6 +160,10 @@ void ACarvableLog::AddDamage(float Amount)
 
 void ACarvableLog::SetDamage(float Value)
 {
+	if (!FMath::IsFinite(Value))
+	{
+		return;
+	}
 	const float Before = Damage;
 	Damage = FMath::Clamp(Value, 0.f, 1.f);
 	if (FMath::IsNearlyEqual(Before, Damage, 0.0001f))
@@ -166,7 +171,8 @@ void ACarvableLog::SetDamage(float Value)
 		return;
 	}
 	UpdateDamageLook();
-	// Crossing a threshold changes what a piece in a structure can hold: look at the whole structure again.
+	// The existing StructureLink graph owns load-bearing effects. Re-evaluate only
+	// when the same thresholds its evaluator consumes have been crossed.
 	const auto Crossed = [Before, this](float Threshold) { return (Before < Threshold) != (Damage < Threshold); };
 	if (bAnchored && (Crossed(WoodStructure::JointLooseDamage) || Crossed(WoodStructure::FailureDamage)))
 	{
@@ -174,9 +180,64 @@ void ACarvableLog::SetDamage(float Value)
 	}
 }
 
+void ACarvableLog::SimulateMaterialEnvironment(
+	float ElapsedDays, float AmbientTemperatureC, bool bRainExposed, float RainfallMm)
+{
+	if (!FMath::IsFinite(ElapsedDays) || ElapsedDays <= 0.0f ||
+		!FMath::IsFinite(AmbientTemperatureC) || !FMath::IsFinite(RainfallMm))
+	{
+		return;
+	}
+
+	ElapsedDays = FMath::Min(ElapsedDays, 365.0f);
+	MaterialAgeDays = FMath::Min(MaterialAgeDays + ElapsedDays, 1000000.0f);
+
+	const FMaterialProperties* Properties = MaterialDefinition ? &MaterialDefinition->Properties : nullptr;
+	const float WaterAbsorption = Properties
+		? FMath::Clamp(Properties->WaterAbsorption, 0.0f, 1.0f)
+		: 0.35f;
+	const float WaterDamageRate = Properties
+		? FMath::Clamp(Properties->WaterDamageRate, 0.0f, 0.1f)
+		: 0.02f;
+	const float DecayRate = Properties
+		? FMath::Clamp(Properties->DecayRate, 0.0f, 0.1f)
+		: 0.0015f;
+
+	if (bRainExposed && RainfallMm > 0.0f && WaterAbsorption > 0.0f)
+	{
+		// Rainfall is a per-world-day total. Applying at most one day's total avoids
+		// multiplying today's weather by a long offline catch-up interval.
+		const float DailyRainFactor = FMath::Min(ElapsedDays, 1.0f);
+		const float AddedMoisture = (RainfallMm / 100.0f) * WaterAbsorption * DailyRainFactor;
+		MoistureContent = FMath::Clamp(MoistureContent + AddedMoisture, 0.0f, 1.0f);
+	}
+	else
+	{
+		const float DryingRate = AmbientTemperatureC < 2.0f ? 0.02f : 0.08f;
+		MoistureContent = FMath::Max(0.0f, MoistureContent - DryingRate * ElapsedDays);
+	}
+
+	// Burning/charred state belongs exclusively to UBurnSubsystem/EBurnState.
+	// Wetness changes damage and burn resistance without creating another fire state.
+	if (BurnState == EBurnState::Charred || Damage >= 1.0f)
+	{
+		return;
+	}
+
+	const float ThermalFactor = FMath::Clamp((AmbientTemperatureC + 5.0f) / 25.0f, 0.0f, 1.5f);
+	const float MoistureFactor = FMath::Clamp(MoistureContent, 0.0f, 1.0f);
+	const float EnvironmentalDamage = ElapsedDays * ThermalFactor * MoistureFactor *
+		(DecayRate + WaterDamageRate * 0.01f);
+	if (EnvironmentalDamage > 0.0f && FMath::IsFinite(EnvironmentalDamage))
+	{
+		AddDamage(EnvironmentalDamage);
+	}
+}
+
 float ACarvableLog::GetIgniteSeconds() const
 {
-	return FMath::Clamp(Radius * 0.4f, 2.f, 20.f);
+	// Wet timber takes longer to catch; UBurnSubsystem still owns the ignition/warm lists.
+	return FMath::Clamp(Radius * 0.4f * (1.0f + 2.0f * MoistureContent), 2.f, 60.f);
 }
 
 float ACarvableLog::GetHeatShare() const
@@ -215,7 +276,8 @@ bool ACarvableLog::Ignite()
 	{
 		BurnState = EBurnState::Burning;
 		HeatSeconds = GetIgniteSeconds();
-		BurnTotal = FMath::Max(ACampfire::FuelSecondsOf(this), 1.f);
+		// Moisture lowers the effective burn rate without creating a second fire-state owner.
+		BurnTotal = FMath::Max(ACampfire::FuelSecondsOf(this), 1.f) * (1.0f + 1.5f * MoistureContent);
 		BurnLeft = BurnTotal;
 		Burn->Light(this);
 		ShowFlames(true, 1.f);
