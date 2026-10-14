@@ -17,7 +17,6 @@
 | Her mekanik değişikliği için `AMechanicsDemo` otomatik testine kontrol eklenir | Grafiksiz doğrulama |
 | Dosyalar web Claude ile **zip + not** ile paylaşılır; tünel ve yazma yetkisi verilmez | Güvenlik, kota |
 | Editör, uzun derleme ve test işlerinde kapalı tutulur, iş bitince `Demo_WoodChain` açık yeniden başlatılır | Derleme ve test aynı DLL'i kullanır |
-
 | Ateş yerleştirme modu değil, odunun özelliği: her parça yanabilir (tutuşuyor → yanıyor → yanık), yakıt = hacim (tam kütük ~593 sn), hasar yakıt bitince 1'e varır; yanan parça yanındakini ısıtır; aynı anda en çok 12 parça yanar | Faz 8 (13 Ekim planı) |
 | Kamp ateşi 7 taşla kurulur ([C]), odun atmak ateşi yakmaz; çakmak ([F] basılı) ya da yanan odun yakar | Ham madde zinciri; iki ateşleme kaynağı kararı |
 
