@@ -173,3 +173,14 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - Geçerli trace/placement hedefi olmadan `ConfirmPlacement` commit etmiyor. İptal, özgün actor transform/state/attach bilgilerini geri yüklemeyi dener.
 - `Source/MyProject2/Tests/StonePlacementTests.cpp` içine üç UE Automation Test eklendi. `Scripts/run_tests.sh` Stone Placement suite'ini ayrı logla çalıştırıp parser üzerinden minimum üç testi zorunlu kontrol ediyor.
 - Derleme ve UE 5.8 otomasyon sonucu henüz yok; bu nedenle bu kod düzeyi ilerlemedir, kabul edilmiş feature değildir.
+
+
+### 2026-10-14 — Fiziksel taş yerleştirme: input + graph bağlama
+
+- `AForestCharacter` içine `UStoneCarryComponent` ve `UStonePlacementComponent` bağlandı. E ile fiziksel taş alma/bırakma; sol tık ile önizleme/onay; Q/tekerlek ile yüz/socket seçimi; R ile döndürme; sağ tık ile iptal giriş akışı eklendi.
+- `CarrySpeed` ve `IsHandsBusy` fiziksel taş taşımasını hesaba katıyor; pickup/drop/confirm/cancel sırasında tool görünürlüğü ve hareket hızı güncelleniyor.
+- Yerleştirme mesh sınırıyla destek düzlemine oturtuluyor ve `ComponentOverlapMulti` ile bloklayan fiziksel çakışma aranıyor.
+- Yapısal hedef actor graph sahibiyse, selected socket yalnızca hedef taşta yakın ve boş socket ile eşleştiğinde `UStructuralGraph::ConnectTo` üzerinden iki uçlu bağlantı commit ediliyor. Commit başarısız olursa `Installed` state'i verilmez; state geçişi başarısızsa yeni graph link'i geri alınır.
+- Socket occupancy artık ortak `UStoneDefinition` asset içindeki transient alanlardan okunmuyor; per-actor graph connections temel alınır.
+- Beş UE Automation Test yazıldı ve `Scripts/run_tests.sh` / `verify_test_logs.py` bu suite için minimum 5 farklı başarılı sonuç ister.
+- GitHub Actions Python tooling/shell/katalog kontrolleri başarılı; bu C++ kodu **UE 5.8 üzerinde henüz derlenip test edilmedi**. P0-023/P0-030/P0-032/P0-033 “In Progress” durumunda kalır.
