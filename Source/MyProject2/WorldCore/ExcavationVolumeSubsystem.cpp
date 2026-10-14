@@ -267,6 +267,14 @@ bool UExcavationVolumeSubsystem::RegisterFallbackBaseDensitySource(UObject* Sour
     return true;
 }
 
+void UExcavationVolumeSubsystem::UnregisterFallbackBaseDensitySource(UObject* Source)
+{
+    if (Source == nullptr || FallbackBaseDensitySourceObject == Source)
+    {
+        FallbackBaseDensitySourceObject = nullptr;
+    }
+}
+
 void UExcavationVolumeSubsystem::UnregisterBaseDensitySource(UObject* Source)
 {
     if (Source == nullptr || BaseDensitySourceObject == Source)
