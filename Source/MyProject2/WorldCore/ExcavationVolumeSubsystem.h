@@ -72,6 +72,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Excavation")
     void UnregisterBaseDensitySource(UObject* Source);
 
+    /** Export a stable, versioned snapshot for the persistence adapter. */
+    UFUNCTION(BlueprintCallable, Category = "Excavation|Persistence")
+    bool ExportSnapshot(FExcavationVolumeSnapshot& OutSnapshot) const;
+
+    /** Validate a snapshot fully before replacing live sparse data. Existing data is protected by default. */
+    UFUNCTION(BlueprintCallable, Category = "Excavation|Persistence")
+    bool ImportSnapshot(const FExcavationVolumeSnapshot& Snapshot, bool bReplaceExistingState = false);
+
     /** Use caller-sampled base terrain density when this sparse overlay has no entry. */
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool ResolveDensityAtCell(const FIntVector& Cell, float BaseDensity, float& OutDensity) const;
@@ -115,6 +123,10 @@ public:
     /** Number of voxel cells along each chunk axis; minimum 4 supports border sampling. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Config", meta = (ClampMin = "4"))
     int32 CellsPerChunkAxis = 32;
+
+    /** Maximum sparse cell overrides accepted by the versioned snapshot importer/exporter. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Persistence", meta = (ClampMin = "1"))
+    int32 MaxSnapshotOverrideCells = 2000000;
 
 protected:
     /** Captures the grid size used by live overrides so changing config cannot remap them. */
