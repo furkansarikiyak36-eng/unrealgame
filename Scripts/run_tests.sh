@@ -25,6 +25,10 @@ if [[ ${1:-} == "--no-build" ]]; then SKIP_BUILD=1; fi
 
 mkdir -p "$RUNS" "$LOGS"
 
+# Fast tests run first so failures are detected before spending time on an engine build.
+echo "[1/6] Running platform-independent Python unit tests..."
+bash "$ROOT/Scripts/run_python_tests.sh"
+
 if [[ ! -f "$PROJECT" ]]; then
   echo "Project file not found: $PROJECT" >&2
   exit 3
@@ -39,11 +43,8 @@ if tasklist 2>/dev/null | grep -qi "UnrealEditor.exe"; then
   exit 5
 fi
 
-echo "[1/5] Testing the log verifier itself..."
-python "$ROOT/Scripts/tests/test_verify_test_logs.py"
-
 if (( SKIP_BUILD == 0 )); then
-  echo "[2/5] Building MyProject2Editor..."
+  echo "[2/6] Building MyProject2Editor..."
   rm -f "$ROOT"/Binaries/Win64/UnrealEditor-MyProject2.patch_*
   BUILD_CMD=("$UE/Build/BatchFiles/Build.bat" MyProject2Editor Win64 Development "-Project=$PROJECT_WIN" -WaitMutex)
   if "${BUILD_CMD[@]}" >"$BUILD_LOG" 2>&1; then
@@ -55,7 +56,7 @@ if (( SKIP_BUILD == 0 )); then
     exit "$BUILD_RC"
   fi
 else
-  echo "[2/5] Build skipped by --no-build."
+  echo "[2/6] Build skipped by --no-build."
 fi
 
 run_ue_test() {
@@ -90,7 +91,7 @@ run_ue_test() {
   return 0
 }
 
-echo "[3/5] Running Wood automation tests..."
+echo "[3/6] Running Wood automation tests..."
 if run_ue_test "Wood automation" 400 "WoodTests.log" "wood_$STAMP.log" \
   -ExecCmds="Automation RunTests MyProject2.Wood; Quit" -unattended -nullrhi -nosplash -nop4 -log=WoodTests.log; then
   WOOD_RC=0
@@ -98,7 +99,7 @@ else
   WOOD_RC=$?
 fi
 
-echo "[4/5] Running MechanicsDemo checks..."
+echo "[4/6] Running MechanicsDemo checks..."
 if run_ue_test "MechanicsDemo" 600 "MyProject2.log" "mekanik_$STAMP.log" \
   /Game/Maps/Demo_WoodChain -game -unattended -nullrhi -nosplash -nop4 -log -MechanicsDemoQuit; then
   MECHANICS_RC=0
@@ -106,7 +107,7 @@ else
   MECHANICS_RC=$?
 fi
 
-echo "[5/5] Verifying fresh logs and updating generated docs..."
+echo "[5/6] Verifying fresh logs and updating generated docs..."
 WOOD_LOG="$RUNS/wood_$STAMP.log"
 MECHANICS_LOG="$RUNS/mekanik_$STAMP.log"
 OVERALL_RC=0
