@@ -66,6 +66,8 @@ namespace
 
         Definition->StoneName = FName(TEXT("AutomationStone"));
         Definition->Dimensions = FVector(30.0f, 20.0f, 20.0f);
+        Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
+            FSoftObjectPath(TEXT("/Engine/BasicShapes/Cube.Cube")));
 
         FStoneFace BottomFace;
         BottomFace.FaceName = FName(TEXT("Bottom"));
