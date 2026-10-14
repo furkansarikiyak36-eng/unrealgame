@@ -296,3 +296,12 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Aktif sparse override varken cell boyutu veya chunk eksen boyutu değiştirilirse dünya-koordinat sorguları/editler reddediliyor; böylece önceden yazılmış cell kimlikleri sessizce farklı geometriye kaymıyor.
 - Aynı hücreyi tekrar düzenleyen sonraki işlem, yoğunluk aynı olsa bile hücrenin işlem sahipliğini alır. Bu sayede önceki rollback yeni işlemin sonucunu yanlışlıkla silemez; rollback sırası doğrulanır.
 - GitHub Actions Python tooling CI run #417 başarılıdır. Bu kontrol Python/shell/CSV araçlarını çalıştırır; yeni C++ kaynak için Unreal derlemesi değildir. UE testleri Claude Code host sürecinde çalıştırılacaktır.
+
+### 2026-10-14 — Faz 1: kazı veri çekirdeği uygulandı (Web)
+
+- Sphere, capsule ve axis-aligned box carve/fill API'leri ortak ApplyBoundedEdit transaction yolunu kullanıyor. Aday hücre kümesi doğrulanmadan canlı sparse state değiştirilmez; işlem boyutu MaxCellsPerEdit ile sınırlıdır.
+- Density sorgusu sparse override'ı base terrain provider sonucundan önce çözümler. UExcavationBaseDensitySource Blueprint interface'i mevcut/prosedürel arazi katmanının temel density örneklemesini kendi sahipliğinde tutmasına izin verir.
+- Sürümlü FExcavationVolumeSnapshot veri sözleşmesi ve all-or-nothing ExportSnapshot/ImportSnapshot eklendi. Import duplicate hücreyi, geçersiz density'yi ve limit aşımını reddeder; başarılı import chunk indeksini yeniden kurup reset olayı yayınlar.
+- Chunk başına override indeksi, negatif koordinatlar için floor division, seam komşu chunk listesi, edit/rollback değişim event'i ve snapshot-reset event'i sağlandı.
+- Faz 1 kapsamı veri çekirdeği olarak kodlandı. Gerçek terrain sınıfı provider implementasyonu, mesh/collision/nav üretimi ve genel world persistence ayrı sonraki fazlarda bağlanacak.
+- GitHub Actions Python tooling run #459 başarılı; bu Unreal C++ derlemesi değildir. UE 5.8 testleri bu aşamada çalıştırılmadı; Claude Code/UE host akışına bırakıldı ve Faz 1 kodlaması bu nedenle bloke edilmedi.
