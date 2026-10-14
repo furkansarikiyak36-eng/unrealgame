@@ -243,6 +243,42 @@ bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
     return true;
 }
 
+bool UExcavationVolumeSubsystem::TrySampleBaseMaterialIdAtWorld(
+    const FVector& WorldPositionCm,
+    int32& OutMaterialId) const
+{
+    OutMaterialId = 0;
+    if (!IsFiniteVector(WorldPositionCm) || !IsGridConfigurationCompatible())
+    {
+        return false;
+    }
+
+    UObject* MaterialSource = IsValid(BaseDensitySourceObject)
+        ? BaseDensitySourceObject.Get()
+        : FallbackBaseDensitySourceObject.Get();
+    if (!IsValid(MaterialSource))
+    {
+        // Scalar-density-only worlds have one default material layer.
+        return true;
+    }
+
+    if (!MaterialSource->GetClass()->ImplementsInterface(UExcavationBaseDensitySource::StaticClass()))
+    {
+        return false;
+    }
+
+    const int32 MaterialId =
+        IExcavationBaseDensitySource::Execute_SampleBaseMaterialIdAtWorld(
+            MaterialSource, WorldPositionCm);
+    if (MaterialId < 0 || MaterialId > 31)
+    {
+        return false;
+    }
+
+    OutMaterialId = MaterialId;
+    return true;
+}
+
 bool UExcavationVolumeSubsystem::RegisterBaseDensitySource(UObject* Source)
 {
     if (!IsValid(Source)
