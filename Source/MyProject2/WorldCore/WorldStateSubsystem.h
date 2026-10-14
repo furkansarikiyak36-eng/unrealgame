@@ -61,6 +61,6 @@ protected:
     float ComputeRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const;
     void SimulateChunk(UChunkState* Chunk, float DeltaDays, float TargetDay=-1.0f);
     static constexpr int32 MaxSnapshotChunks = 16384;
-    static constexpr int64 MaxSnapshotCells = 4194304;
+    static constexpr int64 MaxSnapshotCells = 1048576;
     static constexpr int32 MaxRainfallDaysToReconstruct = 365;
 };
