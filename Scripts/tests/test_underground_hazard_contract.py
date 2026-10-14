@@ -9,6 +9,7 @@ HAZARD_H = (WORLD / "UndergroundHazardSubsystem.h").read_text(encoding="utf-8")
 HAZARD_CPP = (WORLD / "UndergroundHazardSubsystem.cpp").read_text(encoding="utf-8")
 SUPPORT_H = (WORLD / "UndergroundSupportActor.h").read_text(encoding="utf-8")
 SUPPORT_CPP = (WORLD / "UndergroundSupportActor.cpp").read_text(encoding="utf-8")
+BUILD_NODE_CPP = (ROOT / "Source" / "MyProject2" / "BuildingNodeActor.cpp").read_text(encoding="utf-8")
 TYPES = (WORLD / "UndergroundHazardTypes.h").read_text(encoding="utf-8")
 TRAP_H = (WORLD / "UndergroundTrapActor.h").read_text(encoding="utf-8")
 TRAP_CPP = (WORLD / "UndergroundTrapActor.cpp").read_text(encoding="utf-8")
@@ -20,7 +21,8 @@ BASE_BUILD = (ROOT / "Source" / "MyProject2" / "MyProject2.Build.cs").read_text(
 class UndergroundHazardContractTests(unittest.TestCase):
     def test_support_actor_reuses_existing_structural_node_graph(self):
         self.assertIn("class MYPROJECT2_API AUndergroundSupportActor : public ABuildingNodeActor", SUPPORT_H)
-        self.assertIn("UStructuralIntegritySubsystem", SUPPORT_CPP)
+        self.assertIn("UStructuralIntegritySubsystem", BUILD_NODE_CPP)
+        self.assertIn("Super::BeginPlay()", SUPPORT_CPP)
         self.assertIn("ApplySupportProfile()", SUPPORT_CPP)
         self.assertIn("CompressiveCapacityKN", SUPPORT_CPP)
         self.assertIn("ApplyMoistureExposure", SUPPORT_H)
