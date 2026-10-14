@@ -121,12 +121,12 @@ bool FStonePlacementBeginCancelTest::RunTest(const FString& Parameters)
     const FTransform OriginalTransform = Stone->GetActorTransform();
     TestTrue(TEXT("Loose stone begins placement"), Placement->BeginPlacement(Stone));
     TestTrue(TEXT("Preview points to the source stone"), Placement->GetPreviewStone() == Stone);
-    TestEqual(TEXT("Preview disables loose physics through carried state"),
-        Stone->GetStructuralState_Implementation(), EStructuralNodeState::Carried);
+    TestTrue(TEXT("Preview disables loose physics through carried state"),
+        Stone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
     TestTrue(TEXT("Cancel restores the original physical object"), Placement->CancelPlacement());
     TestTrue(TEXT("Cancel clears the preview"), Placement->GetPreviewStone() == nullptr);
-    TestEqual(TEXT("Cancel restores the source state"),
-        Stone->GetStructuralState_Implementation(), EStructuralNodeState::Loose);
+    TestTrue(TEXT("Cancel restores the source state"),
+        Stone->GetStructuralState_Implementation() == EStructuralNodeState::Loose);
     TestTrue(TEXT("Cancel restores the original position"),
         Stone->GetActorLocation().Equals(OriginalTransform.GetLocation(), 0.01f));
 
@@ -218,15 +218,15 @@ bool FStonePlacementConfirmGateTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Placement begins"), Placement->BeginPlacement(Stone));
     TestFalse(TEXT("Placement cannot commit before a valid target"),
         Placement->ConfirmPlacement());
-    TestEqual(TEXT("Rejected commit preserves carried state"),
-        Stone->GetStructuralState_Implementation(), EStructuralNodeState::Carried);
+    TestTrue(TEXT("Rejected commit preserves carried state"),
+        Stone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
 
     TestTrue(TEXT("A valid target can be set"),
         Placement->UpdatePlacementTarget(FVector(80.0f, 0.0f, 25.0f), FVector::UpVector));
     TestTrue(TEXT("Placement commits after a valid target"), Placement->ConfirmPlacement());
     TestTrue(TEXT("Preview is cleared after success"), Placement->GetPreviewStone() == nullptr);
-    TestEqual(TEXT("Committed stone is installed"),
-        Stone->GetStructuralState_Implementation(), EStructuralNodeState::Installed);
+    TestTrue(TEXT("Committed stone is installed"),
+        Stone->GetStructuralState_Implementation() == EStructuralNodeState::Installed);
 
     DestroyStonePlacementTestWorld(World);
     return true;
