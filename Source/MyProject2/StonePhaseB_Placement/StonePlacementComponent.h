@@ -5,6 +5,7 @@
 #include "StonePlacementComponent.generated.h"
 
 class AStoneActor;
+class USceneComponent;
 
 UCLASS(ClassGroup=(Stone), meta=(BlueprintSpawnableComponent))
 class MYPROJECT2_API UStonePlacementComponent : public UActorComponent
@@ -18,6 +19,7 @@ public:
     UFUNCTION(BlueprintPure) FTransform GetTargetTransform() const { return TargetTransform; }
     UFUNCTION(BlueprintPure) int32 GetPlacementOptionIndex() const { return PlacementOptionIndex; }
     UFUNCTION(BlueprintPure) AStoneActor* GetPreviewStone() const { return PreviewStone; }
+    UFUNCTION(BlueprintPure) bool IsPlacing() const { return PreviewStone != nullptr; }
     UFUNCTION(BlueprintCallable) void EnterAimMode();
     UFUNCTION(BlueprintCallable) void ExitAimMode();
     UFUNCTION(BlueprintCallable) void CycleFace();
