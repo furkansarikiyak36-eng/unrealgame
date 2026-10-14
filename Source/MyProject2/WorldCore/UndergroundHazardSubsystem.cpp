@@ -67,6 +67,8 @@ void UUndergroundHazardSubsystem::Deinitialize()
 
     RegisteredSupports.Reset();
     WaterPockets.Reset();
+    ModifiedSurfaceCells.Reset();
+    SurfaceCellsProcessedThisTick.Reset();
     OpenCaveCells.Reset();
     OpenCaveCellSet.Reset();
     PendingStabilityCells.Reset();
@@ -86,8 +88,8 @@ bool UUndergroundHazardSubsystem::IsTickable() const
 
 void UUndergroundHazardSubsystem::Tick(float DeltaTime)
 {
-    const int32 StabilityBudget = FMath::Clamp(MaxStabilityChecksPerTick, 1, 256);
     const int32 CollapseBudget = FMath::Clamp(MaxCollapseCellsPerTick, 0, 8);
+    const int32 StabilityBudget = CollapseBudget == 0 ? 0 : FMath::Clamp(MaxStabilityChecksPerTick, 1, 256);
     int32 Checks = 0;
     int32 Collapses = 0;
 
@@ -127,6 +129,7 @@ void UUndergroundHazardSubsystem::Tick(float DeltaTime)
     HydrologyAccumulatorSeconds = FMath::Fmod(HydrologyAccumulatorSeconds, Interval);
 
     const int32 HydroBudget = FMath::Clamp(MaxHydrologyChecksPerTick, 1, 1024);
+    SurfaceCellsProcessedThisTick.Reset();
     int32 HydroChecks = 0;
     while (!OpenCaveCells.IsEmpty() && HydroChecks < HydroBudget)
     {
@@ -143,6 +146,12 @@ void UUndergroundHazardSubsystem::Tick(float DeltaTime)
 
         ++HydroChecks;
         ProcessHydrologyCell(Cell);
+    }
+
+    if (OpenCaveCells.Num() > OpenCaveCellSet.Num() + 128)
+    {
+        OpenCaveCells.RemoveAll([this](const FIntVector& Cell) { return !OpenCaveCellSet.Contains(Cell); });
+        HydrologyCursor = OpenCaveCells.IsEmpty() ? 0 : HydrologyCursor % OpenCaveCells.Num();
     }
 
     SimulateUndergroundGravityFlow();
@@ -241,7 +250,9 @@ AUndergroundSupportActor* UUndergroundHazardSubsystem::PlaceSupport(
 
     UWorld* World = GetWorld();
     UExcavationVolumeSubsystem* Excavation = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
-    if (!World || !Excavation || !SupportActorClass)
+    UWorldStateSubsystem* WorldState = World ? World->GetSubsystem<UWorldStateSubsystem>() : nullptr;
+    if (!World || !Excavation || !SupportActorClass
+        || (!Snapshot.ModifiedSurfaceCells.IsEmpty() && !WorldState))
     {
         return nullptr;
     }
@@ -544,6 +555,11 @@ void UUndergroundHazardSubsystem::ProcessHydrologyCell(const FIntVector& Cell)
         return;
     }
 
+    if (SurfaceCellsProcessedThisTick.Contains(GlobalCell))
+    {
+        return;
+    }
+
     float TransferM3 = 0.0f;
     const float MaxTransfer = FMath::Clamp(MaxSeepagePerPocketTickM3, 0.0001f, 1.0f);
     if (FMath::IsFinite(SurfaceCell->Water.Volume)
@@ -577,6 +593,14 @@ void UUndergroundHazardSubsystem::ProcessHydrologyCell(const FIntVector& Cell)
 
     SurfaceCell->bIsDirty = true;
     SourceChunk->MarkDirty();
+
+    SurfaceCellsProcessedThisTick.Add(GlobalCell);
+    FUndergroundSurfaceWaterCellSnapshot& SurfaceSnapshot = ModifiedSurfaceCells.FindOrAdd(GlobalCell);
+    SurfaceSnapshot.GlobalWorldCell = GlobalCell;
+    SurfaceSnapshot.WaterVolumeM3 = SurfaceCell->Water.Volume;
+    SurfaceSnapshot.WaterLevel = SurfaceCell->Water.Level;
+    SurfaceSnapshot.SoilMoisture = SurfaceCell->SoilMoisture;
+    SurfaceSnapshot.bHasWater = SurfaceCell->bHasWater;
 
     for (const TPair<FGuid, TWeakObjectPtr<AUndergroundSupportActor>>& Pair : RegisteredSupports)
     {
@@ -681,7 +705,8 @@ bool UUndergroundHazardSubsystem::ValidateSnapshot(const FUndergroundHazardSnaps
 {
     if (Snapshot.SchemaVersion != 1
         || Snapshot.Supports.Num() > FMath::Max(1, MaxSnapshotSupports)
-        || Snapshot.WaterPockets.Num() > FMath::Max(1, MaxSnapshotWaterPockets))
+        || Snapshot.WaterPockets.Num() > FMath::Max(1, MaxSnapshotWaterPockets)
+        || Snapshot.ModifiedSurfaceCells.Num() > FMath::Max(1, MaxSnapshotSurfaceCells))
     {
         return false;
     }
@@ -713,13 +738,28 @@ bool UUndergroundHazardSubsystem::ValidateSnapshot(const FUndergroundHazardSnaps
         }
         PocketCells.Add(Pocket.Cell);
     }
+
+    TSet<FIntPoint> SurfaceCellIds;
+    for (const FUndergroundSurfaceWaterCellSnapshot& Surface : Snapshot.ModifiedSurfaceCells)
+    {
+        if (SurfaceCellIds.Contains(Surface.GlobalWorldCell)
+            || !FMath::IsFinite(Surface.WaterVolumeM3) || Surface.WaterVolumeM3 < 0.0f
+            || !FMath::IsFinite(Surface.WaterLevel) || Surface.WaterLevel < 0.0f
+            || !FMath::IsFinite(Surface.SoilMoisture)
+            || Surface.SoilMoisture < 0.0f || Surface.SoilMoisture > 1.0f)
+        {
+            return false;
+        }
+        SurfaceCellIds.Add(Surface.GlobalWorldCell);
+    }
     return true;
 }
 
 bool UUndergroundHazardSubsystem::ExportSnapshot(FUndergroundHazardSnapshot& OutSnapshot) const
 {
     OutSnapshot = FUndergroundHazardSnapshot();
-    if (RegisteredSupports.Num() > MaxSnapshotSupports || WaterPockets.Num() > MaxSnapshotWaterPockets)
+    if (RegisteredSupports.Num() > MaxSnapshotSupports || WaterPockets.Num() > MaxSnapshotWaterPockets
+        || ModifiedSurfaceCells.Num() > MaxSnapshotSurfaceCells)
     {
         return false;
     }
@@ -756,6 +796,37 @@ bool UUndergroundHazardSubsystem::ExportSnapshot(FUndergroundHazardSnapshot& Out
     Candidate.WaterPockets.Sort([](const FUndergroundWaterPocket& A, const FUndergroundWaterPocket& B)
     {
         return IsLessCell(A.Cell, B.Cell);
+    });
+
+    for (const TPair<FIntPoint, FUndergroundSurfaceWaterCellSnapshot>& Pair : ModifiedSurfaceCells)
+    {
+        FUndergroundSurfaceWaterCellSnapshot Row = Pair.Value;
+        UWorldStateSubsystem* State = GetWorld() ? GetWorld()->GetSubsystem<UWorldStateSubsystem>() : nullptr;
+        if (State)
+        {
+            const double CellCm = FMath::Max(1.0, State->ChunkSettings.GetCellSizeMeters() * 100.0);
+            const FVector Location(
+                (static_cast<double>(Pair.Key.X) + 0.5) * CellCm,
+                (static_cast<double>(Pair.Key.Y) + 0.5) * CellCm,
+                0.0);
+            FChunkCell* CurrentCell = nullptr;
+            UChunkState* CurrentChunk = nullptr;
+            int32 CurrentIndex = INDEX_NONE;
+            FIntPoint GlobalCell;
+            if (FindWorldSurfaceCell(Location, CurrentCell, CurrentChunk, CurrentIndex, GlobalCell) && CurrentCell)
+            {
+                Row.WaterVolumeM3 = FMath::Max(0.0f, CurrentCell->Water.Volume);
+                Row.WaterLevel = FMath::Max(0.0f, CurrentCell->Water.Level);
+                Row.SoilMoisture = FMath::Clamp(CurrentCell->SoilMoisture, 0.0f, 1.0f);
+                Row.bHasWater = CurrentCell->bHasWater;
+            }
+        }
+        Candidate.ModifiedSurfaceCells.Add(Row);
+    }
+    Candidate.ModifiedSurfaceCells.Sort([](const FUndergroundSurfaceWaterCellSnapshot& A, const FUndergroundSurfaceWaterCellSnapshot& B)
+    {
+        if (A.GlobalWorldCell.X != B.GlobalWorldCell.X) return A.GlobalWorldCell.X < B.GlobalWorldCell.X;
+        return A.GlobalWorldCell.Y < B.GlobalWorldCell.Y;
     });
 
     if (!ValidateSnapshot(Candidate))
@@ -828,6 +899,31 @@ bool UUndergroundHazardSubsystem::ImportSnapshot(const FUndergroundHazardSnapsho
     for (const FUndergroundWaterPocket& Pocket : Snapshot.WaterPockets)
     {
         WaterPockets.Add(Pocket.Cell, Pocket);
+    }
+
+    ModifiedSurfaceCells.Reset();
+    for (const FUndergroundSurfaceWaterCellSnapshot& Row : Snapshot.ModifiedSurfaceCells)
+    {
+        const double CellCm = FMath::Max(1.0, WorldState->ChunkSettings.GetCellSizeMeters() * 100.0);
+        const FVector Location(
+            (static_cast<double>(Row.GlobalWorldCell.X) + 0.5) * CellCm,
+            (static_cast<double>(Row.GlobalWorldCell.Y) + 0.5) * CellCm,
+            0.0);
+        FChunkCell* SurfaceCell = WorldState->GetCellAtWorld(Location);
+        if (!SurfaceCell)
+        {
+            return false;
+        }
+        SurfaceCell->Water.Volume = Row.WaterVolumeM3;
+        SurfaceCell->Water.Level = Row.WaterLevel;
+        SurfaceCell->SoilMoisture = Row.SoilMoisture;
+        SurfaceCell->bHasWater = Row.bHasWater;
+        SurfaceCell->bIsDirty = true;
+        if (UChunkState* Chunk = WorldState->GetChunk(WorldState->ChunkSettings.WorldToChunk(Location)))
+        {
+            Chunk->MarkDirty();
+        }
+        ModifiedSurfaceCells.Add(Row.GlobalWorldCell, Row);
     }
 
     HandleExcavationReset();
