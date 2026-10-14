@@ -17,6 +17,7 @@ class LogVerifierTests(unittest.TestCase):
         self.mechanics = self.root / "mechanics.log"
         self.wood = self.root / "wood.log"
         self.stick_inventory = self.root / "stick_inventory.log"
+        self.stone_placement = self.root / "stone_placement.log"
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -105,6 +106,34 @@ class LogVerifierTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "no test result matched"):
             VERIFY.verify_stick_inventory(self.stick_inventory)
+
+    def test_valid_stone_placement_log_passes(self):
+        names = ("BeginCancel", "FaceAndSocket", "ConfirmGate")
+        self.stone_placement.write_text(
+            "".join(
+                f"Test Completed. Result={{Success}} Name={{{name}}} "
+                f"Path={{MyProject2.StonePlacement.Automation.{name}}}\\n"
+                for name in names
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(VERIFY.verify_stone_placement(self.stone_placement), (3, 0))
+
+    def test_stone_placement_failure_is_rejected(self):
+        self.stone_placement.write_text(
+            "Test Completed. Result={Success} Name={BeginCancel} "
+            "Path={MyProject2.StonePlacement.BeginCancel}\\n"
+            "Test Completed. Result={Fail} Name={FaceAndSocket} "
+            "Path={MyProject2.StonePlacement.FaceAndSocket}\\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "1 failed"):
+            VERIFY.verify_stone_placement(self.stone_placement)
+
+    def test_missing_stone_placement_result_is_rejected(self):
+        self.stone_placement.write_text("Automation suite aborted\\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "no parseable"):
+            VERIFY.verify_stone_placement(self.stone_placement)
 
     def test_fewer_than_required_mechanics_checks_are_rejected(self):
         self.mechanics.write_text("SONUÇ: 100 geçti, 0 kaldı\\n", encoding="utf-8")
