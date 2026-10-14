@@ -89,6 +89,7 @@ public:
     int32 ChunksPerRegion = 8;
 
 protected:
+    bool FindLowestCostRoute(const FGuid& StartNodeId, const FGuid& DestinationNodeId, float PayloadMassKg, FRegionRouteResult& OutRoute) const;
     int32 FindNodeIndexById(const FGuid& NodeId) const;
     int32 FindNodeIndexByKey(FName StableNodeKey) const;
     int32 FindLinkIndexByKey(FName StableLinkKey) const;
