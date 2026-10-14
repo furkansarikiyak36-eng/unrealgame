@@ -1515,6 +1515,33 @@ void AForestCharacter::UpdateFocus()
 
 void AForestCharacter::PrimaryAction()
 {
+	// Physical-stone placement takes priority over legacy log/build placement input.
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (StonePlacement->ConfirmPlacement())
+		{
+			ShowMessage(TEXT("Taş yerleştirildi."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taşı yerleştirmek için geçerli bir yüzeye nişan al."));
+		}
+		return;
+	}
+
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		if (StonePlacement && StonePlacement->BeginPlacement(StoneCarry->GetCarried()))
+		{
+			ShowMessage(TEXT("Taş yerleştirme: Q/tekerlek ile yüz-soket seç, R ile döndür, sol tık onayla."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taş yerleştirme başlatılamadı."));
+		}
+		return;
+	}
+
 	if (bBuildMode)
 	{
 		if (IsWallTool())
@@ -1663,6 +1690,22 @@ void AForestCharacter::Interact()
 	ALogWallBlueprint* Blueprint = FocusedBlueprint.Get();
 	APickupItem* FocusedLog = FocusedPickup.Get();
 
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		ShowMessage(TEXT("Taş yerleştirme açık. Sol tık onaylar, sağ tık iptal eder."));
+		return;
+	}
+
+	// A physical stone is a world actor, not an item count in the legacy backpack.
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		if (StoneCarry->Drop())
+		{
+			ShowMessage(TEXT("Taş yere bırakıldı."));
+		}
+		return;
+	}
+
 	// Untying the rope comes first: it is the only thing E does while dragging a trunk.
 	if (CarriedItem == EForestItem::TrunkLog)
 	{
@@ -1678,6 +1721,37 @@ void AForestCharacter::Interact()
 			if (AHaulCart* Cart = Cast<AHaulCart>(CartHit.GetActor()); Cart && Cart->GetLoadCount() > 0)
 			{
 				TestUnload(Cart);
+				return;
+			}
+		}
+	}
+
+	// Pick up the same physical stone actor that will later be installed in the world.
+	if (CarriedItem == EForestItem::None && StoneCarry && !StoneCarry->IsCarrying())
+	{
+		FHitResult StoneHit;
+		if (TraceFromView(400.f, StoneHit, true))
+		{
+			if (AStoneActor* Stone = Cast<AStoneActor>(StoneHit.GetActor()))
+			{
+				UStoneDefinition* Definition = Stone->GetDefinition();
+				if (!Definition)
+				{
+					ShowMessage(TEXT("Bu taşın tanımı eksik; güvenli biçimde alınamıyor."));
+					return;
+				}
+
+				const EStoneCarryMode Mode = Definition->Mass <= StoneCarry->MaxSingleHandMass
+					? EStoneCarryMode::SingleHand
+					: EStoneCarryMode::TwoHands;
+				if (StoneCarry->PickUp(Stone, Mode))
+				{
+					ShowMessage(TEXT("Taş alındı. Sol tıkla yerleştirme önizlemesini başlat."));
+				}
+				else
+				{
+					ShowMessage(TEXT("Bu taş çok ağır veya şu anda alınamıyor."));
+				}
 				return;
 			}
 		}
@@ -2053,6 +2127,19 @@ void AForestCharacter::DebugBuildRoom()
 
 void AForestCharacter::CancelBuild()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (StonePlacement->CancelPlacement())
+		{
+			ShowMessage(TEXT("Taş yerleştirme iptal edildi; taş eski konumuna döndü."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taş yerleştirme iptal edilemedi."));
+		}
+		return;
+	}
+
 	if (bBuildMode && bWallStartSet)
 	{
 		bWallStartSet = false;
@@ -2166,6 +2253,12 @@ void AForestCharacter::WallClick()
 
 void AForestCharacter::RotateBuild()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		StonePlacement->RotateStone(1.0f);
+		return;
+	}
+
 	if (bBuildMode)
 	{
 		BuildYawOffset = FMath::Fmod(BuildYawOffset + 90.f, 360.f);
@@ -2202,6 +2295,14 @@ void AForestCharacter::RotateBuild()
 void AForestCharacter::CycleBuildItem(const FInputActionValue& Value)
 {
 	const float Axis = Value.Get<float>();
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (!FMath::IsNearlyZero(Axis))
+		{
+			StonePlacement->CycleFace();
+		}
+		return;
+	}
 	if (bBuildMode && !FMath::IsNearlyZero(Axis))
 	{
 		SelectNextAvailable(Axis > 0.f ? 1 : -1);
