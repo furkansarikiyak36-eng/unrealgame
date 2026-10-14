@@ -28,10 +28,8 @@ namespace
             {
                 continue;
             }
-            if (Face.OccupiedBy.IsValid())
-            {
-                continue;
-            }
+            // Occupancy is runtime actor/graph state. UStoneDefinition is a shared data asset,
+            // so its transient OccupiedBy field is not safe as a per-stone placement authority.
             OutFaceIndices.Add(Index);
         }
 
@@ -44,10 +42,8 @@ namespace
             {
                 continue;
             }
-            if (Socket.Occupant.IsValid())
-            {
-                continue;
-            }
+            // Do not infer socket availability from the shared data asset. The connection graph
+            // must validate actual socket occupancy before a structural connection is committed.
             OutSocketIndices.Add(Index);
         }
     }
