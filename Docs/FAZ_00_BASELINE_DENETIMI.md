@@ -194,3 +194,8 @@ Beş test `Source/MyProject2/Tests/StonePlacementTests.cpp` içine eklendi: yaş
 Kaynak/face veya socket adı artık hedef AStoneActor'ın yakın, doğru yöne bakan ve boş socket'iyle eşleşmeden yapısal commit yapılmasına izin vermez. UStructuralGraph::ConnectTo iki uçta da kayıt oluşturur; state transition başarısızsa yeni bağlantı geri alınır. Hedefteki doluluk bilgisi shared DataAsset'ten değil actor graph'ından okunur. Bu adapter yalnızca AStoneActor hedefini kapsıyor; eski ahşap yapı graflarıyla genel bağlantı henüz yapılmadı.
 
 Beş Unreal Automation Test source dosyasına eklendi; Unreal Engine 5.8 build/test çalıştırması henüz yok.
+
+
+## Taş tuzağı — hasar dispatch düzeltmesi
+
+P0-025 için StoneTrapActor'ın trigger volume overlap olayı bağlandı. Trigger bilinen hedef tipleri için doğrudan receiver metodunu çağırıyor; bilinmeyen hedefler için Unreal'ın standart ApplyDamage yoluna dönüyor. Cooldown süresince Rearm çağrısı tuzağı yeniden armed yapmıyor. İki C++ Automation Test eklendi (hasar/cooldown ve null-victim güvenliği). UE 5.8 build/automation ve gerçek overlap/physics doğrulaması henüz yok; P0-025 In Progress kalır.
