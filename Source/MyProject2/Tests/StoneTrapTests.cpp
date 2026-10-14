@@ -2,6 +2,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "Engine/World.h"
+#include "Components/BoxComponent.h"
 #include "RaidEnemy.h"
 #include "StonePhaseF_Environment/StoneTrapActor.h"
 
