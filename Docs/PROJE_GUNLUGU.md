@@ -155,3 +155,12 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - `UStickBreakingComponent::CompleteBreak`, kısmi spawn başarısızlığında çıktıları geri temizler, kaynak çubuğu korur ve sürekli frame başına tekrar denemeyi durdurur.
 - Taş `HollowGroove/EngraveJoint/SmoothSurface` no-op metotları artık geometri değişimi yapmadan başarı döndürmez; gerçek işlemler hâlâ backlog.
 - P0-024 ve P0-026 kod düzeyi üzerinde ilerletildi; UE 5.8 build/automation sonucu henüz yok.
+
+
+### 2026-10-14 — Faz 1 kazı teknolojisi spike hazırlığı
+
+- İki runtime kazı adayı tanımlandı: sparse 3B density/SDF delta ve Dynamic Mesh lokal CSG/boolean.
+- Ortak test kümesi ve 25 cm/50 cm ölçüm koşuları `Docs/FAZ_01_KAZI_TECHNOLOJI_SPIKE.md` ve `Docs/FAZ_01_KAZI_SPIKE_SABLONU.csv` içinde belgelendi.
+- `Scripts/validate_excavation_spike.py` + 7 validator testi eklendi; Python CI, boş/yarım ölçümle “seçildi” kararına geçilmesini engelleyecek.
+- CI runner'ı 14 adımlı Python/shell/katalog/spike matrix check düzenine getirildi.
+- Durum: Faz 1 sadece şartname/validator hazır; ölçüm/teknoloji seçimi bekliyor ve Faz 0 kabul kapısına bağlı. Unreal 5.8 hostta benchmark yapılmadı.
