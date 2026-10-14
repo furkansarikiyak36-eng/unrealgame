@@ -386,6 +386,7 @@ bool UStonePlacementComponent::ConfirmPlacement()
     PreviewStone = nullptr;
     bAiming = false;
     bHasPlacementTarget = false;
+    TargetSurfaceActor.Reset();
     PlacementOptionIndex = INDEX_NONE;
     ManualYawDegrees = 0.0f;
     OriginalAttachComponent.Reset();
