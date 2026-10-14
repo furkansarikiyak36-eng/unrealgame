@@ -341,8 +341,16 @@ void UStonePlacementComponent::TickComponent(
         return;
     }
 
-    const FVector Start = GetOwner()->GetActorLocation();
-    const FVector End = Start + GetOwner()->GetActorForwardVector() * ReachDistance;
+    FVector Start = FVector::ZeroVector;
+    FRotator ViewRotation = FRotator::ZeroRotator;
+    GetOwner()->GetActorEyesViewPoint(Start, ViewRotation);
+    if (Start.ContainsNaN() || ViewRotation.ContainsNaN())
+    {
+        bHasPlacementTarget = false;
+        return;
+    }
+
+    const FVector End = Start + ViewRotation.Vector() * ReachDistance;
     FHitResult Hit;
     FCollisionQueryParams Params(SCENE_QUERY_STAT(StonePlacementTrace), false, GetOwner());
     Params.AddIgnoredActor(PreviewStone);
