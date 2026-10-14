@@ -399,10 +399,12 @@ void UProductionChainComponent::TickComponent(
                 return;
             }
 
+            const EProductionJobStatus PreviousStatus = Job.Status;
             const int32 OldWholeSecond = FMath::FloorToInt(Job.ProgressSeconds);
             Job.ProgressSeconds = FMath::Min(Job.RequiredDurationSeconds, Job.ProgressSeconds + SafeDelta);
             Job.Status = EProductionJobStatus::Running;
-            if (FMath::FloorToInt(Job.ProgressSeconds) != OldWholeSecond
+            if (PreviousStatus != Job.Status
+                || FMath::FloorToInt(Job.ProgressSeconds) != OldWholeSecond
                 || Job.ProgressSeconds >= Job.RequiredDurationSeconds)
             {
                 NotifyStateChanged(Job.JobId, Job.Status);
@@ -501,11 +503,11 @@ bool UProductionChainComponent::UsesCorePersistedInventories() const
     {
         return false;
     }
-    const AActor* InputOwner = InputStore->GetOwner();
-    const AActor* OutputOwner = OutputStore->GetOwner();
-    const auto IsCoreSavedOwner = [](const AActor* Owner)
+    AActor* InputOwner = InputStore->GetOwner();
+    AActor* OutputOwner = OutputStore->GetOwner();
+    const auto IsCoreSavedOwner = [](AActor* Owner)
     {
-        return IsValid(Owner) && (Cast<AForestCharacter>(Owner) != nullptr || Cast<AInventoryStorageActor>(Owner) != nullptr);
+        return IsValid(Owner) && (Owner->IsA<AForestCharacter>() || Owner->IsA<AInventoryStorageActor>());
     };
     return IsCoreSavedOwner(InputOwner) && IsCoreSavedOwner(OutputOwner);
 }
