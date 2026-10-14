@@ -6,11 +6,13 @@
 #include "UndergroundHazardTypes.h"
 #include "InventoryCore/InventoryTypes.h"
 #include "WorldCore/ChunkState.h"
+#include "WorldCore/RegionLogisticsTypes.h"
 #include "Engine/SaveGame.h"
 #include "WorldPersistenceSubsystem.generated.h"
 
 class UExcavationVolumeSubsystem;
 class UUndergroundHazardSubsystem;
+class URegionLogisticsSubsystem;
 
 UENUM(BlueprintType)
 enum class EWorldCoreCommandResult : uint8
@@ -70,6 +72,13 @@ public:
     /** Versioned chunk/cell state snapshot; UWorldStateSubsystem remains the runtime owner. */
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
     FWorldStateSnapshot WorldState;
+
+    /** Route/infrastructure metadata; regional resource/risk projections are derived from canonical world cells. */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    bool bHasRegionLogistics = false;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    FRegionLogisticsSnapshot RegionLogistics;
 
     /** Stackable player resources only; physical ACarvableLog/stone actors remain world actors. */
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
@@ -179,13 +188,16 @@ protected:
     UFUNCTION()
     void HandleUndergroundSupportChanged(const FGuid& SupportId, bool bIsOperational);
 
+    UFUNCTION()
+    void HandleRegionLogisticsChanged(int64 NewRevision);
+
     UExcavationVolumeSubsystem* GetExcavationSubsystem() const;
     static bool IsValidSlotName(const FString& SlotName);
     void IncrementWorldRevision();
     void RememberCommandId(const FGuid& CommandId);
     void RememberWorldEventKey(const FString& EventKey);
 
-    static constexpr int32 CurrentSaveSchemaVersion = 4;
+    static constexpr int32 CurrentSaveSchemaVersion = 5;
     static constexpr int32 MaxRetainedLedgerEntries = 100000;
 
     UPROPERTY(Transient)
