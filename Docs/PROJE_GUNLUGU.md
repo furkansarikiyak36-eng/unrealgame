@@ -65,3 +65,9 @@ Kullanıcı istedi: "1-5 kısmını yap". Test 74/74, Wood birim testi 11/11.
 ### 2026-10-13 — Kayıt sistemi testi (CC)
 - `Scripts/run_tests.sh` baştan sona çalıştırıldı: derleme başarılı, mekanik test 74/74, Wood birim testi 11/11. Kayıtlar `Saved/TestRuns/` altında, `KOD_HARITASI.md` ve `TEST_DURUMU.md` yenilendi.
 - Editör çalışırken script reddeder (beklenen); test için editör kapatıldı, bitince `Demo_WoodChain` ile yeniden açıldı.
+
+### 2026-10-14 — Yeni paket analizi: Material/Inventory/Stone/Stick/Raid/Farming/World (CC, entegre EDİLMEDİ)
+- `do/` altına gelen: `..._Combined_UE58_Review.zip` (609 .h/.cpp, ~11 bin satır, 60+ klasör: Inventory, Stone, Stick, Raid, Farming (PhaseT), World (W1–W6), Material (M1–M6), Phase1–7 ALogActor), `..._Material_Addon_...zip` (yalnız Material), `README_MATERIAL_TR.zip`. "(1)" kopyaları birebir aynı (md5).
+- Bulgular: UE'de hiç derlenmemiş (paket kendisi söylüyor), otomasyon testi yok. Yansıtılmış tür adı çakışması yok (176 tür); ama (1) paket `MyProject2.Build.cs` bizimkini ezer ve CableComponent/GeometryScriptingCore/GeometryFramework/EnhancedInput'u siler → derleme kırılır; (2) `Core/MaterialTypes.h` ve `MaterialCore/MaterialTypes.h` aynı adlı iki farklı başlık (EMaterialType / EMaterialClass), ikisi de include yolunda → belirsiz include; (3) `ALogActor` ikinci bir kütük sistemi (karar #3 ile çelişir); `InventoryCore`+`CraftingRecipe` tarifsiz kütük ilkesiyle çelişir; (4) paketin `MyProject2.cpp` dosyası `MyProject2.h` include'unu atar.
+- Paketin kendi Python scriptleri çalıştırılmadı (indirilen kod).
+- Repo `origin/main`'e web'den `TOTAL_PLAN.md` yüklenmiş (Faz 7–14 planı); henüz çekilmedi.
