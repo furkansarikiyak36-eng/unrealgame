@@ -7,12 +7,14 @@
 #include "InventoryCore/InventoryTypes.h"
 #include "WorldCore/ChunkState.h"
 #include "WorldCore/RegionLogisticsTypes.h"
+#include "Phase11_Production/ProductionChainTypes.h"
 #include "Engine/SaveGame.h"
 #include "WorldPersistenceSubsystem.generated.h"
 
 class UExcavationVolumeSubsystem;
 class UUndergroundHazardSubsystem;
 class URegionLogisticsSubsystem;
+class UProductionChainComponent;
 
 UENUM(BlueprintType)
 enum class EWorldCoreCommandResult : uint8
@@ -79,6 +81,13 @@ public:
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
     FRegionLogisticsSnapshot RegionLogistics;
+
+    /** Per-station production queue snapshots; inventories remain owned and saved by their canonical inventory components. */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    bool bHasProductionChains = false;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    TArray<FProductionChainSnapshot> ProductionChains;
 
     /** Stackable player resources only; physical ACarvableLog/stone actors remain world actors. */
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
@@ -172,6 +181,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "World Core|Persistence")
     bool LoadCoreStateFromSlot(const FString& SlotName, int32 UserIndex = 0);
 
+    /** Called by station queue state transitions so Save/dirty UI sees production changes. */
+    void NotifyProductionChanged(FName StationKey);
+
 protected:
     UFUNCTION()
     void HandleExcavationChanged(const FExcavationEditRecord& Record, bool bIsRollback);
@@ -197,7 +209,8 @@ protected:
     void RememberCommandId(const FGuid& CommandId);
     void RememberWorldEventKey(const FString& EventKey);
 
-    static constexpr int32 CurrentSaveSchemaVersion = 5;
+    static constexpr int32 CurrentSaveSchemaVersion = 6;
+    static constexpr int32 MaxProductionStationsInSave = 1024;
     static constexpr int32 MaxRetainedLedgerEntries = 100000;
 
     UPROPERTY(Transient)
