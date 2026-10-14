@@ -123,7 +123,7 @@ class Phase11ProductionChainContract(unittest.TestCase):
         self.assertIn("SaveObject->ProductionChains.Add", SAVE_CPP)
         self.assertIn("Manifest.SchemaVersion != 5 && Manifest.SchemaVersion != CurrentSaveSchemaVersion", SAVE_CPP)
         self.assertIn("LoadedSave->bHasProductionChains", SAVE_CPP)
-        self.assertIn("Production->ValidateSnapshot(ProductionSnapshot)", SAVE_CPP)
+        self.assertIn("(*Found)->ValidateSnapshot(ProductionSnapshot)", SAVE_CPP)
         self.assertIn("Production->ImportSnapshot(ProductionSnapshot)", SAVE_CPP)
         self.assertIn("PreviousProductionSnapshots", SAVE_CPP)
         self.assertIn("NotifyProductionChanged", SAVE_CPP)
