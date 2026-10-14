@@ -1,0 +1,4 @@
+#include "Phase2_Transport/LogBuoyancyComponent.h"
+#include "Components/PrimitiveComponent.h"
+ULogBuoyancyComponent::ULogBuoyancyComponent(){PrimaryComponentTick.bCanEverTick=true;PrimaryComponentTick.TickInterval=0.05f;}
+void ULogBuoyancyComponent::TickComponent(float D,ELevelTick T,FActorComponentTickFunction* F){Super::TickComponent(D,T,F);AActor* O=GetOwner();if(!O)return;UPrimitiveComponent* P=Cast<UPrimitiveComponent>(O->GetRootComponent());if(!P||!P->IsSimulatingPhysics())return;const float Depth=FMath::Clamp(WaterLevelZ-O->GetActorLocation().Z,-ApproximateSubmergedDepth,ApproximateSubmergedDepth);if(Depth<=0)return;const float Alpha=FMath::Clamp(Depth/ApproximateSubmergedDepth,0.0f,1.0f);const float Mass=P->GetMass();P->AddForce(FVector::UpVector*Mass*GetWorld()->GetGravityZ()*-Buoyancy*Alpha);P->AddForce(-P->GetComponentVelocity()*WaterDrag*Mass*Alpha);}

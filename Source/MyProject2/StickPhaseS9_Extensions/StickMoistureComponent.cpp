@@ -1,0 +1,2 @@
+#include "StickMoistureComponent.h"
+UStickMoistureComponent::UStickMoistureComponent(){PrimaryComponentTick.bCanEverTick=true;PrimaryComponentTick.TickInterval=1.f;} void UStickMoistureComponent::ApplyRain(float I,float D){Moisture=FMath::Clamp(Moisture+FMath::Max(0.f,I)*D*.05f,0.f,1.f);} void UStickMoistureComponent::Dry(float D){Moisture=FMath::Max(0.f,Moisture-D*DryRate);} void UStickMoistureComponent::SoakInWater(){Moisture=1.f;} void UStickMoistureComponent::TickComponent(float D,ELevelTick T,FActorComponentTickFunction*F){Super::TickComponent(D,T,F);Dry(D);}

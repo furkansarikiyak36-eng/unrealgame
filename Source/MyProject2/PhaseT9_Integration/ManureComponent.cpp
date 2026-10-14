@@ -1,0 +1,5 @@
+#include "ManureComponent.h"
+UManureComponent::UManureComponent(){PrimaryComponentTick.bCanEverTick=false;}
+float UManureComponent::ComputeManureNitrogen(float NitrogenIntake,float NitrogenRetained,float NitrogenProducts) const{return FMath::Max(0.f,NitrogenIntake-NitrogenRetained-NitrogenProducts);}
+void UManureComponent::AccumulateManure(float Amount,float NitrogenContent){const float Accepted=FMath::Min(FMath::Max(0.f,Amount),FMath::Max(0.f,ManureStorageMax-ManureAmount));ManureAmount+=Accepted;ManureNitrogen+=Amount>SMALL_NUMBER?FMath::Max(0.f,NitrogenContent)*(Accepted/Amount):0.f;}
+float UManureComponent::CollectManure(float Amount){const float Taken=FMath::Min(FMath::Max(0.f,Amount),ManureAmount);const float Ratio=ManureAmount>SMALL_NUMBER?Taken/ManureAmount:0.f;ManureAmount-=Taken;ManureNitrogen*=1.f-Ratio;return Taken;}

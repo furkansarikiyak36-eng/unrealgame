@@ -1,10 +1,10 @@
 # Test durumu
 
-Otomatik üretildi (14 October 2026 03:48) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
+Otomatik üretildi (14 October 2026 04:30) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
 
 ## Mekanik test (grafiksiz, `-MechanicsDemoQuit`)
 
-Son çalıştırma: **74 geçti, 0 kaldı** (13 October 2026 13:07, `mekanik_2026-10-13_1304.log`)
+Son çalıştırma: **74 geçti, 0 kaldı** (14 October 2026 04:30, `mekanik_2026-10-14_0428.log`)
 
 Geçen kontrollerin özeti (74):
 
@@ -13,7 +13,7 @@ Geçen kontrollerin özeti (74):
 - Gövde ikiye bölündü: 2 büyük kütük (beklenen 2)
 - Büyük kütükler bölündü: 4 taşınabilir kütük düştü (beklenen 4)
 - Kütük çaprazlama oturdu: açı 90°, eksenler arası 35.7 cm (beklenen 35.7), üstteki kütüğün altına eyer çentiği  -  üçgen 744
-- Tek alt kütük: uçtan geçen kütük tek destekte durmadı, 19° devrildi; alttaki yerinde
+- Tek alt kütük: uçtan geçen kütük tek destekte durmadı, 12° devrildi; alttaki yerinde
 - Omuz hacme göre: tam kütük alındı (yük %96), ikinci tam kütük sığmadı
 - Direk dikildi: dikeylik 1.000, alt uç zeminden 0.5 cm, sabit evet, omuz boş
 - Köşe: iki alt kütüğe çaprazlama kondu, 2 çentik açıldı, kütük duruyor (iki destek)
@@ -89,10 +89,11 @@ Son çalıştırmalar:
 
 - mekanik_2026-10-13_final.log: 74 geçti, 0 kaldı
 - mekanik_2026-10-13_1304.log: 74 geçti, 0 kaldı
+- mekanik_2026-10-14_0428.log: 74 geçti, 0 kaldı
 
 ## Wood birim testleri (`MyProject2.Wood`)
 
-Son çalıştırma: **11 geçti, 0 kaldı** (13 October 2026 13:05)
+Son çalıştırma: **11 geçti, 0 kaldı** (14 October 2026 04:29)
 
 - ✅ MyProject2.Wood.Analysis.Cabin
 - ✅ MyProject2.Wood.Analysis.Floors

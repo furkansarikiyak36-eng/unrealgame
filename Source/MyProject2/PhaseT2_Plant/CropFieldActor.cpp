@@ -1,0 +1,18 @@
+#include "CropFieldActor.h"
+#include "Engine/World.h"
+#include "PlantGrowthComponent.h"
+#include "PlantStageComponent.h"
+#include "PlantVisualComponent.h"
+#include "PlantDefinition.h"
+#include "PhaseT3_Soil/SoilCellComponent.h"
+#include "PhaseT3_Soil/SoilMoistureComponent.h"
+#include "PhaseT3_Soil/SoilNutrientComponent.h"
+#include "PhaseT3_Soil/SoilPHComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "SimCore/SimulationSubsystem.h"
+ACropFieldActor::ACropFieldActor(){PrimaryActorTick.bCanEverTick=false;FieldMesh=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Field"));RootComponent=FieldMesh;GrowthComponent=CreateDefaultSubobject<UPlantGrowthComponent>(TEXT("Growth"));StageComponent=CreateDefaultSubobject<UPlantStageComponent>(TEXT("Stage"));VisualComponent=CreateDefaultSubobject<UPlantVisualComponent>(TEXT("Visual"));SoilComponent=CreateDefaultSubobject<USoilCellComponent>(TEXT("Soil"));CreateDefaultSubobject<USoilMoistureComponent>(TEXT("SoilMoisture"));CreateDefaultSubobject<USoilNutrientComponent>(TEXT("SoilNutrients"));CreateDefaultSubobject<USoilPHComponent>(TEXT("SoilPH"));}
+void ACropFieldActor::BeginPlay(){Super::BeginPlay();if(USimulationSubsystem* Sim=GetWorld()->GetSubsystem<USimulationSubsystem>())Sim->OnDayTick.AddDynamic(this,&ACropFieldActor::HandleSimulationDay);if(StageComponent)StageComponent->OnStageChanged.AddDynamic(this,&ACropFieldActor::HandleStageChanged);}
+void ACropFieldActor::PlantCrop(UPlantDefinition* Def,int32 Count){if(!Def||!GrowthComponent)return;GrowthComponent->SetDefinition(Def);GrowthComponent->PlantState.SeedCount=FMath::Max(0,Count);if(VisualComponent)VisualComponent->SetDefinition(Def);if(StageComponent)StageComponent->CheckStageTransition(EGrowthStage::Seed);}
+void ACropFieldActor::HandleSimulationDay(int32){UpdateDaily();}
+void ACropFieldActor::UpdateDaily(){if(!GetWorld()||!GrowthComponent||!SoilComponent)return;USimulationSubsystem* Sim=GetWorld()->GetSubsystem<USimulationSubsystem>();USimulationState* S=Sim?Sim->GetState():nullptr;if(!S)return;float Ks=1.f,Kn=1.f,PH=1.f; if(auto* M=FindComponentByClass<USoilMoistureComponent>())Ks=M->ComputeWaterStress(SoilComponent->GetSoilState().Water,SoilComponent->GetSoilState().WaterWilting,SoilComponent->GetSoilState().WaterCritical);if(auto* N=FindComponentByClass<USoilNutrientComponent>()){const auto& Soil=SoilComponent->GetSoilState();Kn=FMath::Min3(N->ComputeSuitability(Soil.Nitrogen,GrowthComponent->Definition?GrowthComponent->Definition->NitrogenDemand:100.f),N->ComputeSuitability(Soil.Phosphorus,GrowthComponent->Definition?GrowthComponent->Definition->PhosphorusDemand:50.f),N->ComputeSuitability(Soil.Potassium,GrowthComponent->Definition?GrowthComponent->Definition->PotassiumDemand:80.f));}if(auto* P=FindComponentByClass<USoilPHComponent>();P&&GrowthComponent->Definition)PH=P->ComputePHSuitability(GrowthComponent->Definition->OptimalPH,GrowthComponent->Definition->PHTolerance);GrowthComponent->SetStress(Ks,Kn*PH,SoilComponent->GetSoilState().WeedBiomass/500.f);SoilComponent->UpdateDaily(S->Rainfall,0.f,2.f,2.f,0.f,1.f);if(auto* N=FindComponentByClass<USoilNutrientComponent>())N->ApplyDailyLeaching();GrowthComponent->UpdateDaily(S->TempMax,S->TempMin,1.f);if(StageComponent)StageComponent->CheckStageTransition(GrowthComponent->GetCurrentStage());if(VisualComponent)VisualComponent->UpdateVisual(GrowthComponent->GetCurrentStage(),GrowthComponent->GetState().StageProgress);}
+void ACropFieldActor::HandleStageChanged(EGrowthStage,EGrowthStage NewStage){if(VisualComponent&&GrowthComponent)VisualComponent->UpdateVisual(NewStage,GrowthComponent->GetState().StageProgress);}

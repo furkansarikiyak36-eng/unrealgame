@@ -1,0 +1,3 @@
+#include "HordeCompositionPicker.h"
+FName UHordeCompositionPicker::PickWeightedEnemy(const TArray<FWeightedEntry>& P){float Total=0.f;for(const auto&E:P)Total+=FMath::Max(0.f,E.Weight);if(Total<=0.f)return NAME_None;float R=FMath::FRandRange(0.f,Total),A=0.f;for(const auto&E:P){A+=FMath::Max(0.f,E.Weight);if(R<=A)return E.EnemyID;}return P.Last().EnemyID;}
+FName UHordeCompositionPicker::PickConditionalEnemy(const TArray<FConditionalEntry>& P,int32 Stage,FName Tag){TArray<FWeightedEntry> F;for(const auto&E:P)if(Stage>=E.MinStage&&Stage<=E.MaxStage&&(E.RequiredTag.IsNone()||E.RequiredTag==Tag)){FWeightedEntry W;W.EnemyID=E.EnemyID;W.Weight=E.Weight;F.Add(W);}return PickWeightedEnemy(F);}

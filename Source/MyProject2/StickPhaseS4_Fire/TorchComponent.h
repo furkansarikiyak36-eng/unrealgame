@@ -1,0 +1,5 @@
+#pragma once
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "TorchComponent.generated.h"
+UCLASS(ClassGroup=(Fire),meta=(BlueprintSpawnableComponent)) class MYPROJECT2_API UTorchComponent:public UActorComponent{GENERATED_BODY() public: UTorchComponent(); UFUNCTION(BlueprintCallable) void Ignite(float FuelAmount); UFUNCTION(BlueprintCallable) void Extinguish(); UFUNCTION(BlueprintCallable) void AddFuel(float Amount); UFUNCTION(BlueprintPure) bool IsLit()const{return bIsLit;} UFUNCTION(BlueprintPure) float GetFuel()const{return CurrentFuel;} UPROPERTY(EditAnywhere,BlueprintReadWrite) float MaxFuel=100; UPROPERTY(EditAnywhere,BlueprintReadWrite) float BurnRate=1; UPROPERTY(EditAnywhere,BlueprintReadWrite) float LightRadius=800; UPROPERTY(EditAnywhere,BlueprintReadWrite) float HeatRadius=300; UPROPERTY(VisibleInstanceOnly,BlueprintReadOnly) float CurrentFuel=0; UPROPERTY(VisibleInstanceOnly,BlueprintReadOnly) bool bIsLit=false; protected: virtual void TickComponent(float,ELevelTick,FActorComponentTickFunction*)override;};

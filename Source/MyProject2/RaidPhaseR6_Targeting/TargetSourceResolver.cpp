@@ -1,0 +1,2 @@
+#include "TargetSourceResolver.h"
+AActor* UTargetSourceResolver::ResolveTargetPriority(const TArray<FTargetCandidate>& Cs,AActor* Forced,AActor* Current) const{if(IsValid(Forced))return Forced;if(IsValid(Current)){for(const auto&C:Cs)if(C.Target.Get()==Current&&C.Score>=0.f)return Current;}AActor* Best=nullptr;float Score=-TNumericLimits<float>::Max();for(const auto&C:Cs)if(C.Target.IsValid()&&C.Score>Score){Score=C.Score;Best=C.Target.Get();}return Best;}

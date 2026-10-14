@@ -1,0 +1,6 @@
+#include "CombiningAreaComponent.h"
+UCombiningAreaComponent::UCombiningAreaComponent(){PrimaryComponentTick.bCanEverTick=false;}
+bool UCombiningAreaComponent::AddIngredient(FName ID,int32 Count){if(ID.IsNone()||Count<=0)return false;for(auto&I:Ingredients)if(I.ItemID==ID){I.Count+=Count;if(OnCombiningAreaChanged.IsBound())OnCombiningAreaChanged.Broadcast();return true;}if(Ingredients.Num()>=FMath::Max(1,MaxSlots))return false;FInventoryCraftingIngredient I;I.ItemID=ID;I.Count=Count;Ingredients.Add(I);if(OnCombiningAreaChanged.IsBound())OnCombiningAreaChanged.Broadcast();return true;}
+bool UCombiningAreaComponent::RemoveIngredient(FName ID,int32 Count){if(ID.IsNone()||Count<=0)return false;for(int32 i=0;i<Ingredients.Num();++i)if(Ingredients[i].ItemID==ID){if(Ingredients[i].Count<Count)return false;Ingredients[i].Count-=Count;if(Ingredients[i].Count<=0)Ingredients.RemoveAt(i);if(OnCombiningAreaChanged.IsBound())OnCombiningAreaChanged.Broadcast();return true;}return false;}
+void UCombiningAreaComponent::ClearAll(){Ingredients.Empty();if(OnCombiningAreaChanged.IsBound())OnCombiningAreaChanged.Broadcast();}
+int32 UCombiningAreaComponent::GetIngredientCount(FName ID)const{int32 N=0;for(const auto&I:Ingredients)if(I.ItemID==ID)N+=I.Count;return N;}

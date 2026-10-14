@@ -1,0 +1,4 @@
+#include "StickPathComponent.h"
+#include "StickPhaseS1_Core/StickActor.h"
+#include "Engine/World.h"
+UStickPathComponent::UStickPathComponent(){PrimaryComponentTick.bCanEverTick=false;} bool UStickPathComponent::BuildPath(const TArray<FVector>&W,float Width){if(W.Num()<2||!StickClass||StickSpacing<=0||Width<=0)return false;for(int32 i=0;i<W.Num()-1;++i){FVector D=(W[i+1]-W[i]).GetSafeNormal(),P=FVector::CrossProduct(D,FVector::UpVector).GetSafeNormal();float L=FVector::Distance(W[i],W[i+1]);int32 N=FMath::CeilToInt(L/StickSpacing);for(int32 j=0;j<N;++j)for(float X=-Width*.5f;X<=Width*.5f;X+=StickSpacing)if(auto*S=GetWorld()->SpawnActor<AStickActor>(StickClass,W[i]+D*(j*StickSpacing)+P*X,FRotator(0,D.Rotation().Yaw,0)))S->SetStructuralState_Implementation(EStructuralNodeState::Installed);}return true;}

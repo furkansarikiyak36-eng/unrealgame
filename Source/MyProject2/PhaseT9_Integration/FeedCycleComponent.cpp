@@ -1,0 +1,5 @@
+#include "FeedCycleComponent.h"
+UFeedCycleComponent::UFeedCycleComponent(){PrimaryComponentTick.bCanEverTick=false;}
+void UFeedCycleComponent::AddHarvestedFeed(FName FeedID,float Amount){if(FeedID.IsNone()||Amount<=0.f)return;float T=0.f;for(const auto& P:FeedStock)T+=P.Value;const float Space=FMath::Max(0.f,StorageCapacity-T);FeedStock.FindOrAdd(FeedID)+=FMath::Min(Amount,Space);}
+float UFeedCycleComponent::ConsumeForAnimals(FName FeedID,float Amount){if(Amount<=0.f)return 0.f;if(float* P=FeedStock.Find(FeedID)){const float X=FMath::Min(*P,Amount);*P-=X;if(*P<=.01f)FeedStock.Remove(FeedID);return X;}return 0.f;}
+void UFeedCycleComponent::UpdateDaily(float DailyConsumption,float DailyProduction){float T=0.f;for(const auto& P:FeedStock)T+=P.Value;const float NewT=FMath::Max(0.f,T+FMath::Max(0.f,DailyProduction)-FMath::Max(0.f,DailyConsumption));if(NewT<T){float Remaining=T-NewT;for(auto It=FeedStock.CreateIterator();It&&Remaining>0.f;++It){const float X=FMath::Min(It.Value(),Remaining);It.Value()-=X;Remaining-=X;if(It.Value()<=.01f)It.RemoveCurrent();}}}

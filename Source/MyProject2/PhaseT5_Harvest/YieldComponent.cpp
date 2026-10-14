@@ -1,0 +1,4 @@
+#include "YieldComponent.h"
+UYieldComponent::UYieldComponent(){PrimaryComponentTick.bCanEverTick=false;}
+float UYieldComponent::ComputePotentialYield(float Biomass,float HarvestIndex) const{return FMath::Max(0.f,Biomass)*FMath::Clamp(HarvestIndex,0.f,1.f);}
+float UYieldComponent::ComputeGameYield(float PotentialYield,float WaterMul,float NutrientMul,float WeedMul,float DiseaseMul,bool bWaterAlreadyApplied) const{return FMath::Max(0.f,PotentialYield)*(bWaterAlreadyApplied?1.f:FMath::Clamp(WaterMul,0.f,1.f))*FMath::Clamp(NutrientMul,0.f,1.f)*FMath::Clamp(WeedMul,0.f,1.f)*FMath::Clamp(DiseaseMul,0.f,1.f);}

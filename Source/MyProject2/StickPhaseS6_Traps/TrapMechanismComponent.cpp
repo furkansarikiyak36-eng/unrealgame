@@ -1,0 +1,2 @@
+#include "TrapMechanismComponent.h"
+UTrapMechanismComponent::UTrapMechanismComponent(){PrimaryComponentTick.bCanEverTick=false;} void UTrapMechanismComponent::Arm(){bArmed=true;} void UTrapMechanismComponent::Disarm(){bArmed=false;} bool UTrapMechanismComponent::Trigger(AActor* V){if(!bArmed||!GetWorld())return false;float T=GetWorld()->GetTimeSeconds();if(T-LastTriggerTime<Cooldown)return false;LastTriggerTime=T;OnTrapTriggered.Broadcast(V);return true;}

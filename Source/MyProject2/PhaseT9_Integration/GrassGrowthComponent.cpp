@@ -1,0 +1,3 @@
+#include "GrassGrowthComponent.h"
+UGrassGrowthComponent::UGrassGrowthComponent(){PrimaryComponentTick.bCanEverTick=false;}
+float UGrassGrowthComponent::ComputeDailyGrowth(float Temperature,float Rainfall,float SoilWater) const{const float FT=FMath::Clamp(1.f-FMath::Abs(Temperature-OptimalTemp)/20.f,0.f,1.f);const float FW=FMath::Clamp(SoilWater/50.f,0.f,1.f);const float FR=FMath::Clamp(.5f+FMath::Max(0.f,Rainfall)/30.f,0.f,1.5f);return FMath::Max(0.f,BaseGrowthRate)*FT*FW*FR;}

@@ -1,0 +1,7 @@
+#include "NavGraphBuilder.h"
+#include "Engine/World.h"
+int32 UNavGraph::FindNearestNode(const FVector&P)const{int32 I=INDEX_NONE;double Best=TNumericLimits<double>::Max();for(int32 N=0;N<Nodes.Num();++N){const double D=FVector::DistSquared(Nodes[N].Position,P);if(D<Best){Best=D;I=N;}}return I;}
+void UNavGraph::AddNode(const FVector&P){FNavNode N;N.Position=P;Nodes.Add(N);}
+void UNavGraph::ConnectNodes(int32 A,int32 B){if(A==B||!Nodes.IsValidIndex(A)||!Nodes.IsValidIndex(B))return;Nodes[A].Neighbors.AddUnique(B);Nodes[B].Neighbors.AddUnique(A);}
+void UNavGraph::Clear(){Nodes.Empty();}
+void UNavGraphBuilder::BuildFromWorld(UWorld*W,const FVector&C,UNavGraph*G){if(!W||!G||CellSize<=0.f)return;G->Clear();G->CellSize=CellSize;const int32 Grid=FMath::CeilToInt(FMath::Max(0.f,BuildRadius)/CellSize);TMap<FIntPoint,int32>M;FCollisionQueryParams Params;Params.bTraceComplex=false;for(int32 X=-Grid;X<=Grid;++X)for(int32 Y=-Grid;Y<=Grid;++Y){const FVector P=C+FVector(X*CellSize,Y*CellSize,0);FHitResult H;if(W->LineTraceSingleByChannel(H,P+FVector(0,0,1000),P-FVector(0,0,2000),ECC_WorldStatic,Params)){const int32 Idx=G->Nodes.Num();G->AddNode(H.ImpactPoint+FVector(0,0,90));M.Add(FIntPoint(X,Y),Idx);}}for(const auto&Pair:M){const FIntPoint C2=Pair.Key;const int32 I=Pair.Value;const FIntPoint Ns[4]={FIntPoint(C2.X+1,C2.Y),FIntPoint(C2.X-1,C2.Y),FIntPoint(C2.X,C2.Y+1),FIntPoint(C2.X,C2.Y-1)};for(const FIntPoint&N:Ns)if(int32*J=M.Find(N))G->ConnectNodes(I,*J);}}

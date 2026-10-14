@@ -1,0 +1,3 @@
+#include "PathProgressTracker.h"
+bool UPathProgressTracker::IsStuck(AActor*E,float Dt){if(!E)return false;const TWeakObjectPtr<AActor>K(E);const FVector Now=E->GetActorLocation();FVector*Last=LastPositions.Find(K);LastPositions.Add(K,Now);if(!Last){StuckTimers.Add(K,0.f);return false;}if(FVector::Distance(*Last,Now)<StuckDistance){float&T=StuckTimers.FindOrAdd(K);T+=FMath::Max(0.f,Dt);if(T>=StuckThreshold){T=0;return true;}}else StuckTimers.Add(K,0.f);return false;}
+EAlternativeAction UPathProgressTracker::ChooseAlternativeAction(AActor*E){return E?EAlternativeAction::RecalculatePath:EAlternativeAction::Wait;}

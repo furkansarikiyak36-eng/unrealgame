@@ -1,0 +1,8 @@
+#include "RecipeMatcher.h"
+#include "CraftingRecipeAsset.h"
+URecipeMatcher::URecipeMatcher(){PrimaryComponentTick.bCanEverTick=false;}
+void URecipeMatcher::BeginPlay(){Super::BeginPlay();for(UCraftingRecipeAsset*R:RecipeAssets)UCraftingRecipeLibrary::RegisterRecipe(R);}
+bool URecipeMatcher::IsRecipeSatisfied(const UCraftingRecipeAsset*R,const TArray<FInventoryCraftingIngredient>&Have,TArray<FName>&Missing)const{Missing.Empty();if(!R)return false;for(const auto&Req:R->Ingredients){int32 N=0;for(const auto&I:Have)if(I.ItemID==Req.ItemID)N+=I.Count;if(N<Req.Count)Missing.Add(Req.ItemID);}return Missing.IsEmpty();}
+TArray<FRecipeMatch>URecipeMatcher::FindMatchingRecipes(const TArray<FInventoryCraftingIngredient>&Have)const{TArray<FRecipeMatch>Out;TArray<UCraftingRecipeAsset*>All=UCraftingRecipeLibrary::GetAllRecipes();for(UCraftingRecipeAsset*R:RecipeAssets)if(R&&!All.Contains(R))All.Add(R);for(UCraftingRecipeAsset*R:All){if(!R)continue;TArray<FName>Missing;bool bOk=IsRecipeSatisfied(R,Have,Missing);if(!bOk&&!bAllowPartialMatch)continue;FRecipeMatch M;M.Recipe=R;M.bExactMatch=bOk;M.MissingItems=Missing;M.MissingCount=Missing.Num();Out.Add(M);}return Out;}
+FRecipeMatch URecipeMatcher::FindBestMatch(const TArray<FInventoryCraftingIngredient>&Have)const{TArray<FRecipeMatch>M=FindMatchingRecipes(Have);for(const auto&I:M)if(I.bExactMatch)return I;if(!M.IsEmpty())return M[0];return FRecipeMatch();}
+TArray<UCraftingRecipeAsset*>URecipeMatcher::GetPossibleResults(const TArray<FInventoryCraftingIngredient>&Have)const{TArray<UCraftingRecipeAsset*>R;for(const auto&M:FindMatchingRecipes(Have))if(M.bExactMatch&&M.Recipe)R.Add(M.Recipe);return R;}

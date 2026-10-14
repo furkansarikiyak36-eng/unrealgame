@@ -1,0 +1,2 @@
+#include "StickFlexComponent.h"
+UStickFlexComponent::UStickFlexComponent(){PrimaryComponentTick.bCanEverTick=false;} float UStickFlexComponent::ComputeBendAmount(float F)const{return Flexibility*F*.01f;} bool UStickFlexComponent::WillSnap(float F)const{return ComputeBendAmount(F)>SnapThreshold;} FVector UStickFlexComponent::ComputeTipOffset(float F)const{return FVector(0,0,-ComputeBendAmount(F));}
