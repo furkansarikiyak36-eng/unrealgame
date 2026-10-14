@@ -572,7 +572,62 @@ ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
 
 bool ACarvableLog::CutGroove(float SideAngleDeg)
 {
-	return Notch(GetCenterX(), SideAngleDeg, 0.f, Radius, Radius * 0.3f);
+	// A trough is cut into the exposed flat face of a half-log, never into an untouched round log.
+	// SideAngleDeg is intentionally not used: the physical split determines the only valid groove face.
+	(void)SideAngleDeg;
+	if (!bSplitPiece || SplitCount != 1)
+	{
+		return false;
+	}
+	if (JointCuts.ContainsByPredicate([](const FJointCut& Cut) { return Cut.Tool == ECarveTool::Groove; }))
+	{
+		return false; // one continuous channel per half-log
+	}
+
+	const float GrooveRadius = FMath::Min(Radius * 0.35f, GetLength() * 0.04f);
+	if (GrooveRadius < 2.f || GetLength() < 2.f * ModuleLength)
+	{
+		return false;
+	}
+
+	const float BeforeVolume = Volume;
+	UDynamicMesh* Mesh = MeshComponent->GetDynamicMesh();
+	UDynamicMesh* Backup = NewObject<UDynamicMesh>(this);
+	UDynamicMesh* Cutter = NewObject<UDynamicMesh>(this);
+	if (!Mesh || !Backup || !Cutter)
+	{
+		return false;
+	}
+	Backup->SetMesh(Mesh->GetMeshRef());
+
+	// FlatAngle is the normal of the split plane. Move the cutter slightly into the solid,
+	// then sweep its cylinder along the entire log axis to make a true longitudinal channel.
+	const float Flat = FMath::DegreesToRadians(FlatAngle);
+	const FVector FaceOut(0.f, FMath::Cos(Flat), -FMath::Sin(Flat));
+	const float CentreOffset = GrooveRadius * 0.30f;
+	const FVector Centre = FVector(GetCenterX(), 0.f, 0.f) - FaceOut * CentreOffset;
+	const FTransform CutterTransform(FRotationMatrix::MakeFromZ(FVector::XAxisVector).ToQuat(), Centre);
+	UGeometryScriptLibrary_MeshPrimitiveFunctions::AppendCylinder(
+		Cutter, FGeometryScriptPrimitiveOptions(), CutterTransform, GrooveRadius, GetLength() + 2.f * ModuleLength,
+		64, 0, true, EGeometryScriptPrimitiveOriginMode::Center);
+
+	SubtractTool(Mesh, Cutter);
+	FinishEdit();
+	if (Volume >= BeforeVolume - 1.f)
+	{
+		// Do not report a successful groove if the mesh boolean did not remove material.
+		Mesh->SetMesh(Backup->GetMeshRef());
+		FinishEdit();
+		return false;
+	}
+
+	JointCuts.Add({ ECarveTool::Groove, GetCenterX(), FlatAngle, 0.f, 0.f, GrooveRadius, 0.f });
+	if (!(SourceMesh && bStartAsleep))
+	{
+		Resettle();
+	}
+	OnLogCarved.Broadcast(this, ECarveTool::Groove);
+	return true;
 }
 
 void ACarvableLog::LetFall()
@@ -771,7 +826,8 @@ void ACarvableLog::GetSnapPoints(ECarveTool Tool, float Width, TArray<float>& Ou
 		break;
 	}
 	case ECarveTool::Groove:
-		if (CutSpans.Num() == 0)
+		if (bSplitPiece && SplitCount == 1
+			&& !JointCuts.ContainsByPredicate([](const FJointCut& Cut) { return Cut.Tool == ECarveTool::Groove; }))
 		{
 			OutX.Add(GetCenterX());
 		}
@@ -1205,8 +1261,28 @@ void ACarvableLog::GetCutGuide(ECarveTool Tool, float LocalX, float SideAngleDeg
 		break;
 	}
 	case ECarveTool::Groove:
-		GetCutGuide(ECarveTool::Notch, GetCenterX(), SideAngleDeg, 0.f, Width, Depth, OutLines, OutClosed);
+	{
+		if (!bSplitPiece || SplitCount != 1
+			|| JointCuts.ContainsByPredicate([](const FJointCut& Cut) { return Cut.Tool == ECarveTool::Groove; }))
+		{
+			break;
+		}
+		const float GrooveRadius = FMath::Min(R * 0.35f, GetLength() * 0.04f);
+		const float CentreOffset = GrooveRadius * 0.30f;
+		const float HalfOpening = FMath::Sqrt(FMath::Max(0.f, GrooveRadius * GrooveRadius - CentreOffset * CentreOffset));
+		const float Flat = FMath::DegreesToRadians(FlatAngle);
+		const FVector FaceOut(0.f, FMath::Cos(Flat), -FMath::Sin(Flat));
+		const FVector Across = FVector::CrossProduct(FVector::XAxisVector, FaceOut).GetSafeNormal();
+		// The two preview rails lie just outside the split face and extend from end to end.
+		for (const float Sign : { -1.f, 1.f })
+		{
+			OutLines.Add({
+				FVector(MinX - GuideLift, 0.f, 0.f) + Across * (HalfOpening * Sign) + FaceOut * GuideLift,
+				FVector(MaxX + GuideLift, 0.f, 0.f) + Across * (HalfOpening * Sign) + FaceOut * GuideLift });
+			OutClosed.Add(false);
+		}
 		break;
+	}
 	case ECarveTool::NotchRound:
 	{
 		FVector Centre, Out, Across;
