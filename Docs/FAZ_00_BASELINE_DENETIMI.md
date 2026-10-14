@@ -199,3 +199,8 @@ Beş Unreal Automation Test source dosyasına eklendi; Unreal Engine 5.8 build/t
 ## Taş tuzağı — hasar dispatch düzeltmesi
 
 P0-025 için StoneTrapActor'ın trigger volume overlap olayı bağlandı. Trigger bilinen hedef tipleri için doğrudan receiver metodunu çağırıyor; bilinmeyen hedefler için Unreal'ın standart ApplyDamage yoluna dönüyor. Cooldown süresince Rearm çağrısı tuzağı yeniden armed yapmıyor. İki C++ Automation Test eklendi (hasar/cooldown ve null-victim güvenliği). UE 5.8 build/automation ve gerçek overlap/physics doğrulaması henüz yok; P0-025 In Progress kalır.
+
+
+### Stone Trap güncellemesi
+
+P0-025 trigger volume'u Pawn ve PhysicsBody kanallarında overlap yapıyor. Bu, yalnızca karakter overlap'ini değil, fiziksel taş/kütük gövdelerini de aday tetikleyici olarak içerir. StoneTrapTests.cpp query-only/overlap ayarlarını, hedef hasarını, cooldown ve null-victim durumunu test ediyor; gerçek overlap ve fizik davranışı UE 5.8 runtime kabulü bekliyor.
