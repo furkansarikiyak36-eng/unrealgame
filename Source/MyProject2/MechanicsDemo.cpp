@@ -279,7 +279,7 @@ namespace
 		{ TEXT("Oyma: enine kesim"), TEXT("[R] Enine kesim: 65 cm'lik modül çizgilerinden birine bak  |  2 vuruş") },
 		{ TEXT("Oyma: boyuna yarma"), TEXT("[R] Boyuna yarma  |  [Tekerlek] dikey/yatay  |  2 vuruş") },
 		{ TEXT("Oluk: önce boyuna yar, sonra yarım kütüğe kanal aç"), TEXT("Yuvarlak kütüğe oluk açılmaz. [R] Boyuna yarma yap; yarım kütüğün düz yüzüne bakıp [R] Oluk seç ve aynı yere 2 vuruş yap.") },
-		{ TEXT("Uç: sivriltme (kazık)"), TEXT("[R] Sivri uç, kütüğün ucuna bak, 2 vuruş") },
+		{ TEXT("Uç: sivriltme (malzeme hazırlama)"), TEXT("[R] Sivri uç, kütüğün ucuna bak, 2 vuruş. Bu tek başına işlevsel tuzak değildir; kazık için dik yerleştirip zemine sabitlemelisin.") },
 		{ TEXT("Uç: pah kırma"), TEXT("[R] Pah, diğer ucuna bak, 2 vuruş") },
 		{ TEXT("Uç: düzeltme"), TEXT("[R] Uç düzeltme, sivri ya da pahlı uca bak, 2 vuruş (sivri uç geri kesilir)") },
 		{ TEXT("Kırlangıç kuyruğu aç"), TEXT("[R] Kırlangıç, kütüğün bir geçme noktasına bak, 2 vuruş") },
@@ -288,7 +288,7 @@ namespace
 		{ TEXT("Payanda: direk ile kirişin arasına"), TEXT("Direğe kiriş koy (2 direk), 2-4 modül boyunda bir parçayla direğe bak, [Sol tık]: 45° payanda") },
 		{ TEXT("Platform kur"), TEXT("4 direk, 2 kiriş, üstüne yarım kütük (boyuna yarılmış) döşeme tahtaları: yarım kütükle kirişe bak, [Sol tık]") },
 		{ TEXT("Kapı kasası: iki duvar arası boşluk + lento"), TEXT("Üçer direkli iki duvar, arada 100 cm; üstüne uzun kütük koy") },
-		{ TEXT("Sivri kazık duvarı"), TEXT("Direklerin ucunu sivriltip 3-4 tanesini yan yana dik") },
+		{ TEXT("Sivri kazık duvarı"), TEXT("3-4 kütüğün üst ucunu sivrilt; her parçayı dik yerleştirip tabanını doğrudan zemine sabitle. Başka kütüğün üstüne dayanan veya sivri ucu aşağı bakan parça kazık sayılmaz.") },
 		{ TEXT("Ateş yak"), TEXT("7 taş topla, düz yere bakıp [C] ile ateş yeri kur; küçük bir parçayı omza alıp ateşe bak, [Sol tık]; sonra [F] çakmağı ateşe tutup bekle") },
 		{ TEXT("Hasarlı parçayı onar"), TEXT("Yapıdaki yanık parçaya (ateşin yanında ya da [Y] admin) aynı boyda sağlam parçayla bak, [Sol tık]") },
 	};
