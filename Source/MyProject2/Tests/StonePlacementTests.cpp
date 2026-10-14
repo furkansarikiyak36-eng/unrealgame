@@ -6,6 +6,7 @@
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "StoneCore/StoneDefinition.h"
 #include "StonePhaseB_Placement/StonePlacementComponent.h"
+#include "StonePhaseB_Placement/StoneCarryComponent.h"
 
 namespace
 {
@@ -215,7 +216,19 @@ bool FStonePlacementConfirmGateTest::RunTest(const FString& Parameters)
         return false;
     }
 
-    TestTrue(TEXT("Placement begins"), Placement->BeginPlacement(Stone));
+    UStoneCarryComponent* Carry = NewObject<UStoneCarryComponent>(Owner);
+    TestNotNull(TEXT("Carry component created"), Carry);
+    if (!Carry)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+    Owner->AddInstanceComponent(Carry);
+    Carry->RegisterComponent();
+    TestTrue(TEXT("Stone enters the carry owner"), Carry->PickUp(Stone, EStoneCarryMode::TwoHands));
+    TestTrue(TEXT("Carry owner references the same physical stone"), Carry->GetCarried() == Stone);
+
+    TestTrue(TEXT("Placement begins from the carried stone"), Placement->BeginPlacement(Carry->GetCarried()));
     TestFalse(TEXT("Placement cannot commit before a valid target"),
         Placement->ConfirmPlacement());
     TestTrue(TEXT("Rejected commit preserves carried state"),
@@ -227,6 +240,8 @@ bool FStonePlacementConfirmGateTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Preview is cleared after success"), Placement->GetPreviewStone() == nullptr);
     TestTrue(TEXT("Committed stone is installed"),
         Stone->GetStructuralState_Implementation() == EStructuralNodeState::Installed);
+    TestFalse(TEXT("Carry owner releases the stone after placement"), Carry->IsCarrying());
+    TestTrue(TEXT("Carry owner no longer owns the installed stone"), Carry->GetCarried() == nullptr);
 
     DestroyStonePlacementTestWorld(World);
     return true;
