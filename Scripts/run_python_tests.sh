@@ -4,40 +4,40 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PYTHON="${PYTHON:-python}"
 
-echo "[2/28] Verifying the UE-log parser test suite..."
+echo "[1/28] Verifying the UE-log parser test suite..."
 "$PYTHON" "$ROOT/Scripts/tests/test_verify_test_logs.py"
 
-echo "[3/28] Verifying the mechanic-catalog auditor test suite..."
+echo "[2/28] Verifying the mechanic-catalog auditor test suite..."
 "$PYTHON" "$ROOT/Scripts/tests/test_audit_mechanic_catalog.py"
 
-echo "[4/28] Verifying the excavation spike matrix validator..."
+echo "[3/28] Verifying the excavation spike matrix validator..."
 "$PYTHON" "$ROOT/Scripts/tests/test_validate_excavation_spike.py"
 
-echo "[5/28] Testing canonical catalog cross-mapping validator..."
+echo "[4/28] Testing canonical catalog cross-mapping validator..."
 "$PYTHON" "$ROOT/Scripts/tests/test_validate_catalog_mapping.py"
 
-echo "[6/28] Testing fail-closed documentation update gate..."
+echo "[5/28] Testing fail-closed documentation update gate..."
 "$PYTHON" "$ROOT/Scripts/tests/test_runner_fail_closed.py"
 
-echo "[7/28] Verifying the inventory drop bridge contract..."
+echo "[6/28] Verifying the inventory drop bridge contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_inventory_drop_bridge_contract.py"
 
-echo "[8/28] Verifying the world-core persistence contract..."
+echo "[7/28] Verifying the world-core persistence contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_world_persistence_contract.py"
 
-echo "[9/28] Verifying the excavation terrain adapter contract..."
+echo "[8/28] Verifying the excavation terrain adapter contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_excavation_terrain_adapter_contract.py"
 
-echo "[10/28] Verifying the underground hazard contract..."
+echo "[9/28] Verifying the underground hazard contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_underground_hazard_contract.py"
 
-echo "[11/28] Verifying the carvable-log damage/recovery contract..."
+echo "[10/28] Verifying the carvable-log damage/recovery contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_carvable_log_contract.py"
 
-echo "[12/28] Verifying the inventory transfer transaction contract..."
+echo "[11/28] Verifying the inventory transfer transaction contract..."
 "$PYTHON" "$ROOT/Scripts/tests/test_inventory_transfer_contract.py"
 
-echo "[13/28] Verifying Phase 6 inventory, stick and persistence integration..."
+echo "[12/28] Verifying Phase 6 inventory, stick and persistence integration..."
 "$PYTHON" "$ROOT/Scripts/tests/test_phase6_inventory_integration.py"
 
 echo "[13/28] Verifying Phase 7 wood material/structure integration..."
