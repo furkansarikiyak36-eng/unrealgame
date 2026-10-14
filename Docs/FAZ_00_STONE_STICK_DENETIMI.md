@@ -97,3 +97,10 @@ Yapısal hedefe yerleştirme artık yalnızca Installed state'i vermiyor. Hedef 
 Socket world-position/normal hesabı AStoneActor mesh component transform'undan yapılır; bu, actor transform'una ek mesh-relative scale/transform'u da içerir. Yerleştirme bounds-ofseti de mesh component relative transform'unu dikkate alır. Kullanılmış socket/yüz adı ortak UStoneDefinition asset alanlarından değil actor graph'ından türetilir.
 
 Otomasyon dosyası artık beş Unreal Automation Test içeriyor; beşinci test reciprocal bağlantıyı ve dolu hedef socket'in tekrar kullanılmasının reddedilmesini doğrular. Bu testler UE 5.8 hostunda henüz çalıştırılmadı. Legacy ahşap/diğer yapısal sınıflar için adapter bu değişiklikte uygulanmadı; graph-bearing ancak AStoneActor olmayan hedeflere placement fail-closed davranır.
+
+
+## Taş tuzağı — tetik ve hasar hattı eklendi
+
+Taş tuzağı artık sadece fiziği etkinleştirmiyor. Trigger volume QueryOnly / Pawn-overlap olarak ayarlanıyor ve BeginOverlap callback doğrudan Trigger(Victim) çağırıyor. Trigger, bilinen gameplay hedefleri için mevcut alıcı metotlarını kullanıyor: RaidEnemy, ForestCharacter, AStoneActor ve ACarvableLog; diğer aktörlere Unreal'ın standart ApplyDamage/TakeDamage yolunu iletiyor. Kütükte raw damage pointleri 0..1 normalized damage fraction'a editable çarpanla dönüştürülüyor.
+
+Cooldown işlemi de düzeltildi: bir tuzak cooldown bitmeden Rearm çağrısıyla yeniden kurulmuş sayılmıyor. İki Unreal Automation Test yazıldı: damage dispatch + cooldown ve null-victim safety. Bunlar UE 5.8'de henüz çalıştırılmadı; fiziksel rolling/falling impact, gerçek overlap ve damage tuning editörde doğrulanmalı.
