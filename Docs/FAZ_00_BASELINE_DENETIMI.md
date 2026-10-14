@@ -150,9 +150,9 @@ Bu bulgular kodu doğrudan yeniden yazmak için değil, fazlar arası sahiplik s
 
 ## Satır bazlı kapsam ilerlemesi
 
-`Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv`, LOG-001–LOG-076 için kaynak/kanıt eşleştirmesini içerir. Mevcut statik kaynak taramasında **59 satır U2** (yerel davranış izi var) ve **17 satır U0** (davranış zinciri bulunmadı/ayrı özellik) olarak sınıflandırıldı. Hiçbir satır U4/U5/U6 olarak yükseltilmedi; 59 U2 satırının da satıra özel otomatik test ve editör kanıtı bekliyor. Diğer 409 mekanik aynı satır bazlı derinlikte henüz işlenmedi.
+Satır bazlı eşleştirme dosyaları şu grupları kapsıyor: LOG 76, INVENTORY 32, RAID 63, WORLD 35 ve MATERIAL 38 — toplam **244/485**. Kaynak dosyalarındaki yerel davranış izi ile uçtan uca/test/editör kanıtı ayrıştırılıyor; U4/U5/U6 seviyesine yükseltilen satır yok. **241 satır** STONE/STICK/FARMING/CORE gruplarında eşleştirme bekliyor; haritalanmış 244 satır için de satıra özel test/editör kanıtları açık iş olarak kalıyor.
 
-`Scripts/run_python_tests.sh` artık bu dosyayı beklenen 76 satırla keşif modunda kontrol eder. Bu, katalog formatını/kimliklerini ve kanıt metaverisini denetler; UE 5.8 derlemesi veya editör kabulünün yerine geçmez.
+`Scripts/run_python_tests.sh`, beş sistem eşleştirme CSV'sini beklenen satır sayılarıyla keşif modunda denetler. Bu, katalog formatını/kimliklerini ve kanıt metaverisini kontrol eder; UE 5.8 derlemesi veya editör kabulünün yerine geçmez.
 
 
 ## Envanter sahipliği engeli
