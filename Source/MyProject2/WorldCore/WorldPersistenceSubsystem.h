@@ -3,10 +3,12 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "ExcavationTypes.h"
+#include "UndergroundHazardTypes.h"
 #include "Engine/SaveGame.h"
 #include "WorldPersistenceSubsystem.generated.h"
 
 class UExcavationVolumeSubsystem;
+class UUndergroundHazardSubsystem;
 
 UENUM(BlueprintType)
 enum class EWorldCoreCommandResult : uint8
@@ -42,9 +44,8 @@ struct MYPROJECT2_API FWorldCoreSaveManifest
 /**
  * Versioned core save envelope.
  *
- * Phase 2 persists the world identity/revision and the excavation sparse delta.
- * Other domain-owned snapshots can be added by their owning implementation phases
- * without making this envelope a second authority for their runtime state.
+ * The shared envelope stores domain snapshots as save-boundary transfers; runtime
+ * ownership remains in each domain subsystem.
  */
 UCLASS()
 class MYPROJECT2_API UWorldCoreSaveGame : public USaveGame
@@ -57,6 +58,9 @@ public:
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
     FExcavationVolumeSnapshot Excavation;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
+    FUndergroundHazardSnapshot UndergroundHazards;
 
     /** Bounded rolling command ledger used to reject duplicate client retries after reload. */
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "World Core|Save")
@@ -144,13 +148,22 @@ protected:
     UFUNCTION()
     void HandleExcavationVolumeReset();
 
+    UFUNCTION()
+    void HandleUndergroundWaterSeepage(const FVector& LocationCm, float VolumeAddedM3);
+
+    UFUNCTION()
+    void HandleUndergroundRoofCollapse(const FVector& LocationCm, int32 CellsCollapsed);
+
+    UFUNCTION()
+    void HandleUndergroundSupportChanged(const FGuid& SupportId, bool bIsOperational);
+
     UExcavationVolumeSubsystem* GetExcavationSubsystem() const;
     static bool IsValidSlotName(const FString& SlotName);
     void IncrementWorldRevision();
     void RememberCommandId(const FGuid& CommandId);
     void RememberWorldEventKey(const FString& EventKey);
 
-    static constexpr int32 CurrentSaveSchemaVersion = 1;
+    static constexpr int32 CurrentSaveSchemaVersion = 2;
     static constexpr int32 MaxRetainedLedgerEntries = 100000;
 
     UPROPERTY(Transient)
