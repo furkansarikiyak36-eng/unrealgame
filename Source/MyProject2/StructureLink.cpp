@@ -163,6 +163,17 @@ WoodStructure::FNode StructureLink::MakeNode(const ACarvableLog* Log, int32 Id, 
 	Data.EndB = Log->GetEnd(true) == ELogEnd::Pointed ? EWoodEndShape::Pointed : EWoodEndShape::Flat;
 	Node.Role = WoodStructure::DeriveRole(Data, WoodStructure::ClassifyOrientation(Node.B - Node.A));
 	Node.bGrounded = IsGrounded(Log->GetWorld(), Log, Node.A, Node.B, Node.RadiusCm);
+	// A sharpened end alone is not a functional defensive stake: it must be anchored,
+	// rest directly on the ground (not another log), and point upward when vertical.
+	if (Node.Role == EWoodRole::Stake)
+	{
+		const bool bPointedEndIsUp = (Node.A.Z > Node.B.Z && Log->GetEnd(false) == ELogEnd::Pointed)
+			|| (Node.B.Z > Node.A.Z && Log->GetEnd(true) == ELogEnd::Pointed);
+		if (!Node.bGrounded || !bPointedEndIsUp)
+		{
+			Node.Role = EWoodRole::Post;
+		}
+	}
 	Node.Damage = Log->GetDamage();
 	Node.bTemporary = Log->IsTemporary();
 	return Node;
