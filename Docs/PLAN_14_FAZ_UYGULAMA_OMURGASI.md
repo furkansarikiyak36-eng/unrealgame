@@ -53,6 +53,15 @@ Yeni bir sistem eklenirken önce mevcut sorumlusu aranır. Aynı işi yapan eski
 - **Sınır:** Bu, genel kayıt zarfının Faz 2 temelidir ve şu anda kazı sparse delta'sını kaydeder. Terrain mesh/collision, envanter ve diğer alan sistemlerinin kendi sahipliğindeki kayıtları bu aşamada tamamlanmış sayılmaz; ilgili fazlarda aynı zarf genişletilecektir.
 - `Scripts/tests/test_world_persistence_contract.py` CI'a bağlı statik kontrat kontrolüdür. Unreal Engine 5.8 C++ derleme veya oyun otomasyonu bu ortamda çalıştırılmadı; motor doğrulaması ve bütüncül çapraz sistem audit'i Faz 14'e kadar açık kalır.
 
+### Faz 3 — runtime arazi geometri adaptörü (uygulama durumu)
+
+- \`AExcavationTerrainChunkActor\`, mevcut \`UExcavationVolumeSubsystem\` density örneklemesinden Marching Tetrahedra yüzeyi üretir ve aynı dinamik mesh bileşenini complex-as-simple fizik çarpışması için kullanır. Kazı hücresi/yoğunluğu için ikinci bir otorite oluşturmaz.
+- \`UExcavationTerrainChunkSubsystem\`, mevcut 2B simülasyon chunk store'unun yerine geçmez. Sadece 3B görsel/çarpışma chunk aktörlerini kaydeder, değişiklik event'lerini etkilenmiş chunk'lara yönlendirir ve snapshot yüklemesi/reset sonrası geometriyi yeniden üretir. Böylece mevcut \`UWorldChunkSubsystem\` / \`UWorldStateSubsystem\` sahipliği korunur.
+- Otomatik renderer streaming varsayılan olarak oyuncunun etrafında 3D chunk'ları küçük bir bütçeyle üretir; başlangıç ayarları yatay yarıçap 1, oyuncu chunk'ının 4 kat altı ve her tick'te en fazla 1 yeni chunk'tır. Ayarlar Game config üzerinden değiştirilebilir.
+- \`UExcavationLandscapeDensitySource\`, yüklü \`ALandscapeProxy\` yükseklik alanlarını temel density sağlayıcısına bağlar; yüklü Landscape bulunmazsa prototip düz yüzey sağlayıcısı kullanılır. Proje tarafından kaydedilen aktif custom provider her zaman bu fallback kaynağından önceliklidir.
+- Her chunk örneklemesi için sonlu density ve geçerli koordinat kontrolü yapılır; 64 hücre/eksen ve 200.000 triangle varsayılan üst sınırı aşılırsa bozuk/aşırı mesh collision'a commit edilmez. Geliştirme sürümü tam chunk mesh rebuild kullanır; daha ayrıntılı per-chunk incrementality/performance ayarı Faz 14 toplu analizine bırakılmıştır.
+- **Açık entegrasyon noktaları:** Landscape'in kendi render/collision yüzeyiyle tam hand-off (delik/görünürlük yetkilisi), voxel malzeme/strata seçimi ve NavMesh güncelleme davranışı henüz tam kabul edilmedi. Bu adaptör onları tamamlanmış özellik olarak göstermiyor. Bunlar kapatılmadan Faz 3 son kabulüne geçilmez.
+
 ## Kazı teknolojisi seçimini nasıl ele alacağız
 
 Faz 1'de bütün performans/benchmark bürokrasisini tamamlamadan ortak veri sözleşmesini ve değiştirilebilir backend sınırını kuracağız. İlk uygulama seyrek yerel 3B hücre/density delta yaklaşımıdır; A/B Dynamic Mesh CSG alternatifi not edilir ancak ilk kod katmanını bloke etmez. Nihai optimizasyon/alternatif seçimi, gerçek kısıtlar görüldükten sonra Faz 14 bütünsel analizinde yapılabilir. Kuyu, yatay tünel, oda ve chunk-sınırı gereksinimleri baştan veri modelinin parçasıdır; yalnızca heightmap deformasyonuna indirgenmez.
