@@ -45,6 +45,14 @@ Yeni bir sistem eklenirken önce mevcut sorumlusu aranır. Aynı işi yapan eski
 | 14 | Bütünsel analiz, hata ayıklama ve içerik kilidi | 485 mekanik toplu inceleme, entegrasyon/regresyon, save/load, kaynak bilançosu, performans ve blocker raporu | Katman sınırları ve çapraz sistem akışları analiz edilir; kritik kusurlar kapatılır |
 | 15 | Tek final Windows demo | Tek paket, README, kontroller, test kayıtları, performans ve bilinen sorunlar | Temiz açılış, 30–60 dakika oynama, iki save/load turu ve kabul checklist'i |
 
+### Faz 2 — uygulanan çekirdek sözleşme
+
+- `UWorldPersistenceSubsystem`, dünya kimliği, deterministik kaydedilmiş seed, monotonik dünya revizyonu ve kazı alt sisteminin commit/rollback/reset olaylarını ortaklaştırır. `UExcavationVolumeSubsystem` kazı hücrelerinin tek otoriter sahibi olmaya devam eder.
+- `ApplySphereEditOnce`, `ApplyCapsuleEditOnce` ve `ApplyBoxEditOnce`, çağıranın sağladığı `FGuid` komut kimliğiyle tekrar denemelerin aynı edit'i ikinci kez uygulamasını engeller. Son 100.000 komut kimliği ve son 100.000 olay anahtarı kayıt zarfında tutulur; bu sınırlı geçmiş penceresinin dışındaki kimlikler kalıcı idempotency garantisi kapsamında değildir.
+- `UWorldCoreSaveGame` sürümlü manifest, dünya ID/seed/revizyonu, kazı sparse snapshot'ı ve sınırlı idempotency/event defterlerini taşır. Yüklemede manifest ve defterler önce doğrulanır; sparse snapshot'ın doğrulanması ve tek adımda değiştirilmesi mevcut `ImportSnapshot` yoluna bırakılır. Başarılı yükleme kaydedilmiş revizyonu korur.
+- **Sınır:** Bu, genel kayıt zarfının Faz 2 temelidir ve şu anda kazı sparse delta'sını kaydeder. Terrain mesh/collision, envanter ve diğer alan sistemlerinin kendi sahipliğindeki kayıtları bu aşamada tamamlanmış sayılmaz; ilgili fazlarda aynı zarf genişletilecektir.
+- `Scripts/tests/test_world_persistence_contract.py` CI'a bağlı statik kontrat kontrolüdür. Unreal Engine 5.8 C++ derleme veya oyun otomasyonu bu ortamda çalıştırılmadı; motor doğrulaması ve bütüncül çapraz sistem audit'i Faz 14'e kadar açık kalır.
+
 ## Kazı teknolojisi seçimini nasıl ele alacağız
 
 Faz 1'de bütün performans/benchmark bürokrasisini tamamlamadan ortak veri sözleşmesini ve değiştirilebilir backend sınırını kuracağız. İlk uygulama seyrek yerel 3B hücre/density delta yaklaşımıdır; A/B Dynamic Mesh CSG alternatifi not edilir ancak ilk kod katmanını bloke etmez. Nihai optimizasyon/alternatif seçimi, gerçek kısıtlar görüldükten sonra Faz 14 bütünsel analizinde yapılabilir. Kuyu, yatay tünel, oda ve chunk-sınırı gereksinimleri baştan veri modelinin parçasıdır; yalnızca heightmap deformasyonuna indirgenmez.
