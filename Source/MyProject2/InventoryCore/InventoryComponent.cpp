@@ -16,7 +16,9 @@ UInventoryItemData* UInventoryComponent::GetItemData(FName ID) const
 }
 int32 UInventoryComponent::FindStackSlot(FName ID) const
 {
-    for (int32 i=0;i<Slots.Num();++i) if (!Slots[i].bLocked && Slots[i].IsOccupied() && Slots[i].Item.ItemID==ID && !Slots[i].Item.IsFull()) return i;
+    const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
+    for (int32 i=0; i<ActiveSlotCount; ++i)
+        if (!Slots[i].bLocked && Slots[i].IsOccupied() && Slots[i].Item.ItemID==ID && !Slots[i].Item.IsFull()) return i;
     return INDEX_NONE;
 }
 int32 UInventoryComponent::FindEmptySlot() const
@@ -28,13 +30,23 @@ bool UInventoryComponent::CanFitItem(const FInventoryItem& Item, int32 Count) co
 {
     if (Count<=0 || Item.ItemID.IsNone()) return false;
     if (!bIgnoreWeight && GetTotalWeight()+Item.Weight*Count > MaxWeight+KINDA_SMALL_NUMBER) return false;
+    // Capacity checks and mutation must use the same addressable slot range.
+    // MaxSlots may change after BeginPlay while Slots retains its old allocation.
+    const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
     int32 Space=0, NeededSlots=0;
     if (Item.MaxStack>1)
-        for (const FInventorySlot& S:Slots) if (!S.bLocked && S.IsOccupied() && S.Item.ItemID==Item.ItemID) Space+=FMath::Max(0,S.Item.MaxStack-S.Item.Count);
+        for (int32 i=0; i<ActiveSlotCount; ++i)
+        {
+            const FInventorySlot& S=Slots[i];
+            if (!S.bLocked && S.IsOccupied() && S.Item.ItemID==Item.ItemID)
+                Space+=FMath::Max(0,S.Item.MaxStack-S.Item.Count);
+        }
     const int32 Remaining=FMath::Max(0,Count-Space);
     NeededSlots = Item.MaxStack>1 ? FMath::DivideAndRoundUp(Remaining,FMath::Max(1,Item.MaxStack)) : Remaining;
-    int32 Free=0; for (const FInventorySlot& S:Slots) if (!S.bLocked && !S.IsOccupied()) ++Free;
-    return Slots.Num() >= MaxSlots && NeededSlots <= Free;
+    int32 Free=0;
+    for (int32 i=0; i<ActiveSlotCount; ++i)
+        if (!Slots[i].bLocked && !Slots[i].IsOccupied()) ++Free;
+    return NeededSlots <= Free;
 }
 bool UInventoryComponent::CanAddItem(FName ID, int32 Count) const
 {
@@ -48,16 +60,25 @@ EInventoryResult UInventoryComponent::AddItem(FName ID, int32 Count)
     const FInventoryItem Prototype=Data->ToInventoryItem(1);
     if (!bIgnoreWeight && GetTotalWeight()+Prototype.Weight*Count > MaxWeight+KINDA_SMALL_NUMBER) return EInventoryResult::TooHeavy;
     if (!CanFitItem(Prototype,Count)) return EInventoryResult::InventoryFull;
+    const TArray<FInventorySlot> OriginalSlots = Slots;
     int32 Remaining=Count;
     while (Remaining>0)
     {
         int32 Index=(Prototype.MaxStack>1)?FindStackSlot(ID):INDEX_NONE;
         if (Index==INDEX_NONE) Index=FindEmptySlot();
-        if (Index==INDEX_NONE) return EInventoryResult::InventoryFull; // preflight should make this unreachable
+        if (Index==INDEX_NONE)
+        {
+            Slots = OriginalSlots;
+            return EInventoryResult::InventoryFull;
+        }
         if (!Slots[Index].IsOccupied()) { Slots[Index].Item=Data->ToInventoryItem(0); Slots[Index].SlotIndex=Index; }
         const int32 Space=FMath::Max(0,Slots[Index].Item.MaxStack-Slots[Index].Item.Count);
         const int32 Add=FMath::Min(Space,Remaining);
-        if (Add<=0) return EInventoryResult::InventoryFull;
+        if (Add<=0)
+        {
+            Slots = OriginalSlots;
+            return EInventoryResult::InventoryFull;
+        }
         Slots[Index].Item.Count+=Add; Remaining-=Add;
     }
     if (OnItemAdded.IsBound()) OnItemAdded.Broadcast(ID,GetItemCount(ID)); BroadcastChanged(); return EInventoryResult::Success;
@@ -69,11 +90,22 @@ EInventoryResult UInventoryComponent::AddItemData(const FInventoryItem& Item)
     if (D) return AddItem(Item.ItemID,Item.Count);
     // Fallback permits save/load of item records only when the slot has room; it does not invent definitions.
     if (!bIgnoreWeight && GetTotalWeight()+Item.Weight*Item.Count>MaxWeight+KINDA_SMALL_NUMBER) return EInventoryResult::TooHeavy;
-    int32 Free=0; for (const FInventorySlot& S:Slots) if (!S.bLocked&&!S.IsOccupied()) ++Free;
+    const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
+    int32 Free=0; for (int32 i=0; i<ActiveSlotCount; ++i) if (!Slots[i].bLocked&&!Slots[i].IsOccupied()) ++Free;
     const int32 Stack=FMath::Max(1,Item.MaxStack); const int32 Need=FMath::DivideAndRoundUp(Item.Count,Stack);
     if (Need>Free) return EInventoryResult::InventoryFull;
+    const TArray<FInventorySlot> OriginalSlots = Slots;
     int32 Left=Item.Count;
-    while(Left>0) { int32 I=FindEmptySlot(); if(I==INDEX_NONE) return EInventoryResult::InventoryFull; Slots[I].Item=Item; Slots[I].Item.Count=FMath::Min(Left,Stack); Slots[I].SlotIndex=I; Left-=Slots[I].Item.Count; }
+    while(Left>0)
+    {
+        int32 I=FindEmptySlot();
+        if(I==INDEX_NONE)
+        {
+            Slots = OriginalSlots;
+            return EInventoryResult::InventoryFull;
+        }
+        Slots[I].Item=Item; Slots[I].Item.Count=FMath::Min(Left,Stack); Slots[I].SlotIndex=I; Left-=Slots[I].Item.Count;
+    }
     BroadcastChanged(); return EInventoryResult::Success;
 }
 EInventoryResult UInventoryComponent::RemoveItem(FName ID,int32 Count)
@@ -92,7 +124,13 @@ int32 UInventoryComponent::GetItemCount(FName ID) const { int32 N=0; for(const F
 bool UInventoryComponent::HasItem(FName ID,int32 Count) const { return Count>=0 && GetItemCount(ID)>=Count; }
 bool UInventoryComponent::HasAllItems(const TArray<FInventoryItem>& Req) const { for(const FInventoryItem& I:Req) if(!HasItem(I.ItemID,I.Count)) return false; return true; }
 TArray<FInventorySlot> UInventoryComponent::GetSlotsByCategory(EInventoryCategory C) const { TArray<FInventorySlot> R; for(const FInventorySlot& S:Slots) if(S.IsOccupied()&&S.Item.Category==C) R.Add(S); return R; }
-int32 UInventoryComponent::GetUsedSlotCount() const { int32 N=0; for(const FInventorySlot& S:Slots) if(S.IsOccupied()) ++N; return N; }
+int32 UInventoryComponent::GetUsedSlotCount() const
+{
+    const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
+    int32 N=0;
+    for (int32 i=0; i<ActiveSlotCount; ++i) if (Slots[i].IsOccupied()) ++N;
+    return N;
+}
 float UInventoryComponent::GetTotalWeight() const { float W=0; for(const FInventorySlot& S:Slots) if(S.IsOccupied()) W+=S.Item.Weight*S.Item.Count; return W; }
 void UInventoryComponent::NormalizeSlotIndexes() { for(int32 i=0;i<Slots.Num();++i) Slots[i].SlotIndex=i; }
 void UInventoryComponent::SortByCategory() { Slots.Sort([](const FInventorySlot&A,const FInventorySlot&B){if(A.IsOccupied()!=B.IsOccupied())return A.IsOccupied(); return (uint8)A.Item.Category<(uint8)B.Item.Category;}); NormalizeSlotIndexes(); BroadcastChanged(); }
@@ -104,7 +142,8 @@ bool UInventoryComponent::RestoreFromSavedItems(const TArray<FInventoryItem>& Sa
     ClearAll();
     float Weight=0; int32 Needed=0;
     for(const FInventoryItem& I:Saved){if(I.IsEmpty())continue; Weight+=I.Weight*I.Count; Needed+=FMath::DivideAndRoundUp(I.Count,FMath::Max(1,I.MaxStack));}
-    int32 Free=0;for(const FInventorySlot&S:Slots)if(!S.bLocked&&!S.IsOccupied())++Free;
+    const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
+    int32 Free=0;for(int32 i=0;i<ActiveSlotCount;++i)if(!Slots[i].bLocked&&!Slots[i].IsOccupied())++Free;
     if(Needed>Free || (!bIgnoreWeight&&Weight>MaxWeight+KINDA_SMALL_NUMBER)){ClearAll();return false;}
     for(const FInventoryItem& I:Saved){if(I.IsEmpty())continue;const EInventoryResult R=AddItemData(I);if(R!=EInventoryResult::Success){ClearAll();return false;}}
     BroadcastChanged();return true;

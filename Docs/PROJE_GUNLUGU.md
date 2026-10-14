@@ -238,3 +238,12 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - Scripts/validate_catalog_mapping.py, ana katalogdaki 485 Mechanic_ID'nin dokuz türetilmiş CSV'ye doğru sistemde, eksiksiz ve bir kez eşlendiğini denetler.
 - Scripts/tests/test_validate_catalog_mapping.py kapsamında 8 hata/başarı senaryosu eklendi.
 - Scripts/run_python_tests.sh ana katalog snapshot'ını ve tüm eşleştirmeleri CI içinde doğrulayacak şekilde güncellendi; ana CSV için ayrıca keşif raporu çalıştırır, U0 kanıt boşluklarını geçerli kabul etmezmiş gibi göstermeden açıkça listeler.
+
+
+### 2026-10-14 — InventoryComponent kapasite preflight ve rollback
+
+- \`UInventoryComponent::CanFitItem\` önce bütün \`Slots\` dizisini sayarken \`FindEmptySlot\` yalnızca \`min(MaxSlots, Slots.Num())\` içinden çalışıyordu. \`MaxSlots\` oyun sırasında düşürülürse ön kontrol gerçekte kullanılabilir olandan fazla kapasite sayabiliyor ve \`AddItem\` kısmi mutasyonla hata dönebiliyordu.
+- Stack araması, preflight, serbest/kullanılan slot hesapları ve save restore kapasite hesabı aynı etkin slot aralığına bağlandı.
+- \`AddItem\` ve \`AddItemData\` beklenmeyen yerleştirme başarısızlığında öncesindeki slot snapshot'ını geri yüklüyor.
+- \`Source/MyProject2/Tests/InventoryCapacityTests.cpp\` içinde kapasite küçülürken kısmi eklemeyi reddetme/rollback ve geçerli ekleme testleri eklendi.
+- Bu C++ testleri UE 5.8 hostunda henüz çalıştırılmadı; build/Automation kabulü bekliyor.

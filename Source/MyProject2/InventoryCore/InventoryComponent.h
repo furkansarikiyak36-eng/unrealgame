@@ -23,7 +23,7 @@ public:
     UFUNCTION(BlueprintPure, Category="Inventory") TArray<FInventorySlot> GetSlots() const { return Slots; }
     UFUNCTION(BlueprintPure, Category="Inventory") TArray<FInventorySlot> GetSlotsByCategory(EInventoryCategory Category) const;
     UFUNCTION(BlueprintPure, Category="Inventory") int32 GetUsedSlotCount() const;
-    UFUNCTION(BlueprintPure, Category="Inventory") int32 GetFreeSlotCount() const { return FMath::Max(0, MaxSlots-GetUsedSlotCount()); }
+    UFUNCTION(BlueprintPure, Category="Inventory") int32 GetFreeSlotCount() const { return FMath::Max(0, FMath::Min(MaxSlots, Slots.Num())-GetUsedSlotCount()); }
     UFUNCTION(BlueprintPure, Category="Inventory") bool IsFull() const { return GetFreeSlotCount() <= 0; }
     UFUNCTION(BlueprintPure, Category="Inventory") float GetTotalWeight() const;
     UFUNCTION(BlueprintCallable, Category="Inventory") bool CanAddItem(FName ItemID, int32 Count=1) const;
