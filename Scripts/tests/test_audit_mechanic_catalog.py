@@ -83,7 +83,8 @@ class CatalogAuditTests(unittest.TestCase):
     def test_blocker_and_notes_must_be_explicit(self):
         report = audit_rows([row(Bagimlilik_Bloker="", Acik_Notlar="")],
                             list(REQUIRED_COLUMNS))
-        self.assertEqual(report["summary"]["evidence_gaps"], 2)
+        self.assertEqual(report["summary"]["evidence_gaps"], 1)
+        self.assertEqual(len(report["evidence_gaps"][0]["missing"]), 2)
         self.assertTrue(report["errors"])
 
     def test_duplicate_ids_in_different_systems_still_fail(self):
