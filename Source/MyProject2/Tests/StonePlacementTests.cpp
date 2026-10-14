@@ -247,9 +247,32 @@ bool FStonePlacementConfirmGateTest::RunTest(const FString& Parameters)
         Stone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
 
     TestTrue(TEXT("Placement can be started again"), Placement->BeginPlacement(Carry->GetCarried()));
-    TestTrue(TEXT("A valid target can be set"),
-        Placement->UpdatePlacementTarget(FVector(80.0f, 0.0f, 25.0f), FVector::UpVector));
-    TestTrue(TEXT("Placement commits after a valid target"), Placement->ConfirmPlacement());
+
+    AActor* SupportSurface = World->SpawnActor<AActor>(
+        FVector(80.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
+    TestNotNull(TEXT("Support surface actor created"), SupportSurface);
+    if (!SupportSurface)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+    UBoxComponent* SupportBox = NewObject<UBoxComponent>(SupportSurface, TEXT("SupportSurface"));
+    TestNotNull(TEXT("Support surface collision created"), SupportBox);
+    if (!SupportBox)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+    SupportSurface->SetRootComponent(SupportBox);
+    SupportBox->SetBoxExtent(FVector(300.0f, 300.0f, 50.0f));
+    SupportBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    SupportBox->SetCollisionObjectType(ECC_WorldStatic);
+    SupportBox->SetCollisionResponseToAllChannels(ECR_Block);
+    SupportBox->RegisterComponent();
+
+    TestTrue(TEXT("A valid support surface can be targeted"),
+        Placement->UpdatePlacementTarget(FVector(80.0f, 0.0f, 50.0f), FVector::UpVector, SupportSurface));
+    TestTrue(TEXT("Placement commits when the only overlap is the support surface"), Placement->ConfirmPlacement());
     TestTrue(TEXT("Preview is cleared after success"), Placement->GetPreviewStone() == nullptr);
     TestTrue(TEXT("Committed stone is installed"),
         Stone->GetStructuralState_Implementation() == EStructuralNodeState::Installed);
