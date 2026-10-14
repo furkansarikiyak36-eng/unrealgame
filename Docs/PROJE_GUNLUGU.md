@@ -367,3 +367,5 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - `AInventoryStorageActor` aynı envanter ve transfer API'sini kullanır. World save schema 3 oyuncu stack stoğuna ek olarak her depoyu benzersiz anahtarla sıralı snapshot'a alır; load sırasında tüm depoların anahtarı/miktarı/kapasitesi önceden doğrulanır. Schema 1/2 kayıtları geriye dönük desteklenir.
 - Statik kontratlara fiziksel kaynak, storage ve schema-3 doğrulamaları eklendi. CI #675'te görülen tek hata test beklentisinin eski `CanDropItem(ItemID, Count)` metnini aramasıydı; gerçek API `CanDropItem(ID, Count)` olduğundan test bu sözleşmeye düzeltildi. Son dal head'i için temiz CI koşusu henüz doğrulanmış değil. Unreal Engine 5.8 C++ build/Automation bu ortamda çalıştırılmadı.
 - **Açık:** gerçek UE E2E'de depo transferi, processing, physical drop/pickup, build/salvage ve save/load turları. Bu fazlar arası bilanço ve tam çapraz-sistem audit Faz 14'e ayrıldı; bu log ara demo/paket teslimi anlamına gelmez.
+
+<!-- transient Phase 6 validation trigger -->
