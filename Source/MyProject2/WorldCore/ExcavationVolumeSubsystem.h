@@ -49,6 +49,18 @@ public:
     UFUNCTION(BlueprintPure, Category = "Excavation")
     int32 GetOverrideCellCount() const { return CellOverrides.Num(); }
 
+    /** Chunk coordinate for a global voxel-cell coordinate; uses floor division for negatives. */
+    UFUNCTION(BlueprintPure, Category = "Excavation")
+    FIntVector GetChunkCoordinateForCell(const FIntVector& Cell) const;
+
+    /** Returns the explicitly overridden cells belonging to a chunk in stable sorted order. */
+    UFUNCTION(BlueprintPure, Category = "Excavation")
+    TArray<FIntVector> GetOverrideCellsInChunk(const FIntVector& ChunkCoordinate) const;
+
+    /** Includes neighboring chunks touched at a one-cell mesh sampling border. */
+    UFUNCTION(BlueprintPure, Category = "Excavation")
+    TArray<FIntVector> GetAffectedChunksForEdit(const FExcavationEditRecord& Record) const;
+
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool TryWorldToCell(const FVector& WorldPositionCm, FIntVector& OutCell) const;
 
@@ -63,9 +75,17 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Config", meta = (ClampMin = "1"))
     int32 MaxCellsPerEdit = 250000;
 
+    /** Number of voxel cells along each chunk axis; minimum 4 supports border sampling. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Config", meta = (ClampMin = "4"))
+    int32 CellsPerChunkAxis = 32;
+
 protected:
     /** Captures the grid size used by live overrides so changing config cannot remap them. */
     float LockedCellSizeCm = 0.0f;
+    int32 LockedCellsPerChunkAxis = 0;
+
+    /** Derived index for localized mesh/collision updates; rebuilt from CellOverrides after restore. */
+    TMap<FIntVector, TSet<FIntVector>> CellsByChunk;
 
     /** Sparse explicit overrides only; missing cells are sampled from the base-world provider. */
     UPROPERTY(Transient)
