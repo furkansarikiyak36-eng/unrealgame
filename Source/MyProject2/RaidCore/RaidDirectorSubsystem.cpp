@@ -31,7 +31,7 @@ void URaidDirectorSubsystem::Initialize(FSubsystemCollectionBase& Collection){Su
 void URaidDirectorSubsystem::Deinitialize(){if(Context.bEventActive)CancelRaid(TEXT("WorldSubsystemDeinitialize"));Super::Deinitialize();}
 TStatId URaidDirectorSubsystem::GetStatId()const{RETURN_QUICK_DECLARE_CYCLE_STAT(URaidDirectorSubsystem,STATGROUP_Tickables);}
 void URaidDirectorSubsystem::ConfigureRaidAssets(URaidStageTableAsset*T,const TArray<UHordePlanAsset*>&P,UEnemyGroupLibrary*G,UEnemyLibrary*E){StageTable=T;AvailablePlans.Reset();for(UHordePlanAsset*Plan:P)if(Plan)AvailablePlans.Add(Plan);EnemyGroups=G;Enemies=E;}
-void URaidDirectorSubsystem::Tick(float Dt){Super::Tick(Dt);if(!Context.bEventActive||!GetWorld())return;TimeBudget->BeginTick();FrameBudget->ResetFrame();ElapsedEventTime+=Dt;ProcessWaveTick(Dt);if(TimeBudget->HasTimeRemaining())ProcessSpawns(Dt);}
+void URaidDirectorSubsystem::Tick(float Dt){Super::Tick(Dt);if(!Context.bEventActive||!GetWorld())return;TimeBudget->BeginTick();FrameBudget->ResetFrame();ElapsedEventTime+=FMath::Clamp(FMath::IsFinite(Dt)?Dt:0.f,0.f,5.f);ProcessWaveTick(Dt);if(TimeBudget->HasTimeRemaining())ProcessSpawns(Dt);}
 void URaidDirectorSubsystem::StartRaid(FName ID,ERaidEventType Type)
 {
     if(!GetWorld()||ID.IsNone()||Type==ERaidEventType::None||Context.bEventActive||!Debouncer->TryAcquireEventLock(ID,60.f))return;
