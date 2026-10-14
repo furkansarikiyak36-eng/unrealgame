@@ -485,7 +485,7 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
         return false;
     }
 
-    const FVector RadiusVector(RadiusCm);
+    const FVector RadiusVector(RadiusCm, RadiusCm, RadiusCm);
     return ApplyBoundedEdit(
         CenterCm - RadiusVector,
         CenterCm + RadiusVector,
@@ -512,7 +512,7 @@ bool UExcavationVolumeSubsystem::ApplyCapsuleEdit(
         return false;
     }
 
-    const FVector RadiusVector(RadiusCm);
+    const FVector RadiusVector(RadiusCm, RadiusCm, RadiusCm);
     const FVector MinBounds(
         FMath::Min(StartCm.X, EndCm.X) - RadiusCm,
         FMath::Min(StartCm.Y, EndCm.Y) - RadiusCm,
