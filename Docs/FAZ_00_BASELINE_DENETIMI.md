@@ -84,6 +84,15 @@ Depoda `ACarvableLog` ve Wood analiz kodunun yanında `BuildingNodeActor`, `Stru
 | Material | Definition, interaction, instance, composite, plaster/metal, integration klasörleri | Profil/etkileşim altyapısı var; fiziksel aktörlerle tek otorite belirsiz | Ahşap/taş Actor'ü ile chunk state arasında tek hasar/yanma akışı |
 | Core | World time, chunk, event, inventory save ve farklı yapı modelleri | Kurucu sınıflar var; sahiplik sözleşmeleri kesinleştirilmeli | Kimlik, olay semantiği, RNG, zaman ve persistence kontratları |
 
+## Phase 0 implementation performed on the plan branch
+
+These changes have been made on `plan/phase-00-baseline`; they are not yet merged into `main`:
+
+- `Scripts/verify_test_logs.py` fails closed when the MechanicsDemo summary is missing, any failure is reported, no individual Wood automation results are parseable, a Wood test fails, results conflict/duplicate, or the report falls below the recorded regression floor (**101 MechanicsDemo checks and 12 unique Wood tests**).
+- `Scripts/tests/test_verify_test_logs.py` covers valid logs, failed mechanics checks, missing mechanics summary, failed Wood tests, missing Wood results, and both minimum-count regressions.
+- `Scripts/run_tests.sh` captures the build exit code, fails on missing logs or non-zero Unreal process exit, runs log verification before regenerating the report, and retains build/test logs. It also supports `UE_ENGINE_ROOT` to avoid a hard-coded install path.
+- These are infrastructure changes only. **No Unreal Engine build or editor run has been performed in this environment**, so the shell runner still needs validation on the actual Windows + UE 5.8 host. The 101/12 minimums are taken from the existing repository report and should be changed only with an explicit baseline decision.
+
 ## Faz 0 çıkış kriterleri
 
 Faz 0 tamamlanmış sayılmadan önce:
@@ -93,7 +102,8 @@ Faz 0 tamamlanmış sayılmadan önce:
 - [ ] Her satır U0–U6 durumlarından biriyle, kanıtı gösterilerek etiketlenmeli.
 - [ ] Otomatik test kapsamı ile editor test kapsamı ayrılmalı.
 - [ ] Çakışan authoritative state sahipleri karara bağlanmalı.
-- [ ] `Scripts/run_tests.sh` kullanıcının UE 5.8 ortamında çalıştırılıp yeni baseline kayıt edilmeli; bu çalışma ortamından henüz koşturulmuş gibi gösterilmemeli.
+- [ ] Yeni fail-closed test runner, Windows + UE 5.8 ana makinesinde gerçek derleme/test ile doğrulanmalı; süreç çıkış kodları ve log ayrıştırması beklenen sonucu vermeli.
+- [ ] Gerçek UE 5.8 baseline logları oluşturulmalı; bu çalışma ortamından henüz koşturulmuş gibi gösterilmemeli.
 - [ ] Kazı spike'ının karşılaştıracağı teknoloji seçenekleri ve ölçümler onaylanmalı.
 
 **Sıradaki çalışma:** önce CSV katalog satırlarını repo dosyaları ve çağrı zincirlerine bağlamak; ardından U0 olarak kalan en yüksek riskli sistemlerden başlayarak gerçek bir davranış ve test kanıtı elde etmek. Faz 1 kazı spike'ına ancak Phase 0 çıkış kapısı geçildikten sonra başlanır.
