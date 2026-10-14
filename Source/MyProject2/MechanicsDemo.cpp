@@ -1048,6 +1048,36 @@ void AMechanicsDemo::RunShaping(AForestCharacter* Character)
 	const bool bQuarterRejected = QuarterPiece && QuarterPiece->GetSplitCount() == 2
 		&& QuarterGroovePoints.IsEmpty() && QuarterGuide.IsEmpty() && !QuarterPiece->CutGroove(0.f);
 	Report(bQuarterRejected, TEXT("Oluk önkoşulu: ikinci kez boyuna yarılıp çeyrek olan parçada oluk seçeneği sunulmuyor"));
+
+	// A pointed end is only a functional stake when it is vertical, anchored to the ground,
+	// and the point faces upward. Pointing the end alone must not make a defensive wall piece.
+	const FVector StakeGround(2500.f, -2500.f, 0.f);
+	ACarvableLog* GroundedStake = ACarvableLog::SpawnLog(World,
+		FTransform(FRotator::ZeroRotator, StakeGround + FVector(0.f, 0.f, 35.f)));
+	GroundedStake->ShapeEnd(true, ECarveTool::Point);
+	GroundedStake->PlaceAt(GroundedStake->GetStandTransform(StakeGround, 0.f), true);
+	const WoodStructure::FNode GroundedStakeNode = StructureLink::MakeNode(GroundedStake, 9901);
+	Report(GroundedStakeNode.Role == EWoodRole::Stake && GroundedStakeNode.bGrounded,
+		TEXT("Kazık bağlamı: sivri uç yukarıda ve tabanı doğrudan zeminde olan sabit parça savunma kazığı"));
+
+	ACarvableLog* SupportLog = ACarvableLog::SpawnLog(World,
+		FTransform(FRotator::ZeroRotator, FVector(2850.f, -2500.f, 36.f)));
+	SupportLog->Anchor();
+	ACarvableLog* RaisedPointedPost = ACarvableLog::SpawnLog(World,
+		FTransform(FRotator::ZeroRotator, FVector(2850.f, -2500.f, 200.f)));
+	RaisedPointedPost->ShapeEnd(true, ECarveTool::Point);
+	RaisedPointedPost->PlaceAt(RaisedPointedPost->GetStandTransform(FVector(2850.f, -2500.f, 71.f), 0.f), true);
+	const WoodStructure::FNode RaisedPointedNode = StructureLink::MakeNode(RaisedPointedPost, 9902);
+	Report(!RaisedPointedNode.bGrounded && RaisedPointedNode.Role == EWoodRole::Post,
+		TEXT("Kazık bağlamı: sivri parça başka kütüğün üstünde duruyorsa zemine sabitlenmiş kazık sayılmaz"));
+
+	ACarvableLog* DownPointedStake = ACarvableLog::SpawnLog(World,
+		FTransform(FRotator::ZeroRotator, FVector(3250.f, -2500.f, 35.f)));
+	DownPointedStake->ShapeEnd(false, ECarveTool::Point);
+	DownPointedStake->PlaceAt(DownPointedStake->GetStandTransform(FVector(3250.f, -2500.f, 0.f), 0.f), true);
+	const WoodStructure::FNode DownPointedNode = StructureLink::MakeNode(DownPointedStake, 9903);
+	Report(DownPointedNode.bGrounded && DownPointedNode.Role == EWoodRole::Post,
+		TEXT("Kazık bağlamı: ucu aşağı bakan dik parça sivri uçlu dikme olsa da savunma kazığı değildir"));
 }
 
 ACarvableLog* AMechanicsDemo::Piece(FName Name) const
