@@ -15,6 +15,11 @@ void UExcavationTerrainChunkSubsystem::Initialize(FSubsystemCollectionBase& Coll
     Super::Initialize(Collection);
     Collection.InitializeDependency<UExcavationVolumeSubsystem>();
 
+    if (!TerrainChunkActorClass)
+    {
+        TerrainChunkActorClass = AExcavationTerrainChunkActor::StaticClass();
+    }
+
     FlatFallbackDensitySource = NewObject<UExcavationFlatBaseDensitySource>(this);
     FlatFallbackDensitySource->SurfaceHeightCm = 0.0f;
     RegisteredFallbackDensitySource = FlatFallbackDensitySource;
@@ -353,8 +358,14 @@ void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
             continue;
         }
 
+        UClass* ChunkClass = TerrainChunkActorClass.Get();
+        if (!ChunkClass)
+        {
+            ChunkClass = AExcavationTerrainChunkActor::StaticClass();
+        }
+
         AExcavationTerrainChunkActor* Actor = World->SpawnActorDeferred<AExcavationTerrainChunkActor>(
-            AExcavationTerrainChunkActor::StaticClass(),
+            ChunkClass,
             FTransform::Identity,
             nullptr,
             nullptr,
