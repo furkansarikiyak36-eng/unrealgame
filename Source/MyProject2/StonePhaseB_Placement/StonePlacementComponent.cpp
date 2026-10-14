@@ -299,33 +299,44 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
 
     const FQuat YawRotation(SurfaceNormal, FMath::DegreesToRadians(ManualYawDegrees));
     const FQuat FinalRotation = YawRotation * BaseRotation;
+    const FTransform ContactTransform(FinalRotation, TargetSurfacePoint, TargetTransform.GetScale3D());
+    const UStaticMeshComponent* MeshComponent =
+        Cast<UStaticMeshComponent>(PreviewStone->GetRootComponent());
+    const FTransform MeshRelativeTransform = MeshComponent
+        ? MeshComponent->GetRelativeTransform()
+        : FTransform::Identity;
+
     if (bSelectedSocket && SelectedSocket)
     {
-        const FVector ScaledSocketPosition = TargetTransform.GetScale3D() * SelectedSocket->LocalPosition;
-        PlacementLocation = TargetSurfacePoint - FinalRotation.RotateVector(ScaledSocketPosition);
+        // Socket coordinates are mesh-local. Include the mesh component's own relative
+        // transform before moving the actor pivot so the socket, not the pivot, hits the target.
+        const FVector SocketInComponentSpace =
+            MeshRelativeTransform.TransformPosition(SelectedSocket->LocalPosition);
+        const FVector SocketWorldAtContact = ContactTransform.TransformPosition(SocketInComponentSpace);
+        PlacementLocation = TargetSurfacePoint - (SocketWorldAtContact - TargetSurfacePoint);
     }
-    else
+    else if (MeshComponent && MeshComponent->GetStaticMesh())
     {
-        // Place the physical mesh on the plane instead of centring its pivot on the hit point.
-        const UStaticMeshComponent* MeshComponent =
-            Cast<UStaticMeshComponent>(PreviewStone->GetRootComponent());
-        const UStaticMesh* StaticMesh = MeshComponent ? MeshComponent->GetStaticMesh() : nullptr;
-        if (StaticMesh)
+        // Find the lowest transformed mesh-bound corner along the contact normal.
+        // This also respects carved/scaled stones whose mesh component scale differs from actor scale.
+        const FBox LocalBounds = MeshComponent->GetStaticMesh()->GetBoundingBox();
+        float MinimumProjection = TNumericLimits<float>::Max();
+        for (int32 CornerIndex = 0; CornerIndex < 8; ++CornerIndex)
         {
-            const FBox LocalBounds = StaticMesh->GetBoundingBox();
-            const FVector Scale = TargetTransform.GetScale3D();
-            const FVector LocalCenter = LocalBounds.GetCenter() * Scale;
-            const FVector LocalExtent = LocalBounds.GetExtent() * Scale.GetAbs();
-            const FVector AxisX = FinalRotation.RotateVector(FVector::ForwardVector);
-            const FVector AxisY = FinalRotation.RotateVector(FVector::RightVector);
-            const FVector AxisZ = FinalRotation.RotateVector(FVector::UpVector);
-            const float SupportExtent =
-                FMath::Abs(FVector::DotProduct(SurfaceNormal, AxisX)) * LocalExtent.X +
-                FMath::Abs(FVector::DotProduct(SurfaceNormal, AxisY)) * LocalExtent.Y +
-                FMath::Abs(FVector::DotProduct(SurfaceNormal, AxisZ)) * LocalExtent.Z;
-            const float CenterProjection = FVector::DotProduct(
-                SurfaceNormal, FinalRotation.RotateVector(LocalCenter));
-            PlacementLocation += SurfaceNormal * (SupportExtent - CenterProjection);
+            const FVector LocalCorner(
+                (CornerIndex & 1) ? LocalBounds.Max.X : LocalBounds.Min.X,
+                (CornerIndex & 2) ? LocalBounds.Max.Y : LocalBounds.Min.Y,
+                (CornerIndex & 4) ? LocalBounds.Max.Z : LocalBounds.Min.Z);
+            const FVector ComponentCorner = MeshRelativeTransform.TransformPosition(LocalCorner);
+            const FVector WorldCornerAtContact = ContactTransform.TransformPosition(ComponentCorner);
+            const float Projection = FVector::DotProduct(
+                WorldCornerAtContact - TargetSurfacePoint, SurfaceNormal);
+            MinimumProjection = FMath::Min(MinimumProjection, Projection);
+        }
+
+        if (FMath::IsFinite(MinimumProjection))
+        {
+            PlacementLocation = TargetSurfacePoint - SurfaceNormal * MinimumProjection;
         }
     }
 
@@ -428,8 +439,13 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
         const int32 SocketOffset = PlacementOptionIndex - FaceIndices.Num();
         const FStoneSocket& SourceSocket = MyDefinition->Sockets[SocketIndices[SocketOffset]];
         MySocket = SourceSocket.SocketName;
-        SourcePortWorld = TargetTransform.TransformPosition(SourceSocket.LocalPosition);
-        SourcePortNormal = TargetTransform.TransformVectorNoScale(
+        const UStaticMeshComponent* SourceMesh = StoneToPlace->MeshComponent;
+        if (!SourceMesh)
+        {
+            return false;
+        }
+        SourcePortWorld = SourceMesh->GetComponentTransform().TransformPosition(SourceSocket.LocalPosition);
+        SourcePortNormal = SourceMesh->GetComponentTransform().TransformVectorNoScale(
             SourceSocket.LocalRotation.RotateVector(FVector::UpVector)).GetSafeNormal();
     }
     else
@@ -464,7 +480,12 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
         }
 
         MySocket = MyDefinition->Faces[SelectedFaceIndex].FaceName;
-        SourcePortNormal = TargetTransform.TransformVectorNoScale(
+        const UStaticMeshComponent* SourceMesh = StoneToPlace->MeshComponent;
+        if (!SourceMesh)
+        {
+            return false;
+        }
+        SourcePortNormal = SourceMesh->GetComponentTransform().TransformVectorNoScale(
             MyDefinition->Faces[SelectedFaceIndex].LocalNormal.GetSafeNormal()).GetSafeNormal();
         if (FVector::DotProduct(SourcePortNormal, -TargetSurfaceNormal.GetSafeNormal()) < 0.5f)
         {
@@ -501,8 +522,14 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
             continue;
         }
 
-        const FVector CandidateWorld = TargetStone->GetActorTransform().TransformPosition(Candidate.LocalPosition);
-        const FVector CandidateNormal = TargetStone->GetActorTransform().TransformVectorNoScale(
+        const UStaticMeshComponent* TargetMesh = TargetStone->MeshComponent;
+        if (!TargetMesh)
+        {
+            continue;
+        }
+        const FTransform TargetMeshTransform = TargetMesh->GetComponentTransform();
+        const FVector CandidateWorld = TargetMeshTransform.TransformPosition(Candidate.LocalPosition);
+        const FVector CandidateNormal = TargetMeshTransform.TransformVectorNoScale(
             Candidate.LocalRotation.RotateVector(FVector::UpVector)).GetSafeNormal();
         if (FVector::DotProduct(CandidateNormal, TargetSurfaceNormal.GetSafeNormal()) < 0.5f ||
             FVector::DotProduct(SourcePortNormal, CandidateNormal) > -0.5f)
