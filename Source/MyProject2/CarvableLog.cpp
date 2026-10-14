@@ -316,9 +316,23 @@ void ACarvableLog::ShowFlames(bool bShow, float Strength)
 
 bool ACarvableLog::CanReplace(const ACarvableLog* Old, const ACarvableLog* Replacement)
 {
-	return Old && Replacement && Old != Replacement && Old->IsAnchored() && !Replacement->IsAnchored() && Old->GetDamage() >= 0.2f
-		&& Replacement->GetDamage() < Old->GetDamage() && Old->IsSplit() == Replacement->IsSplit()
-		&& FMath::IsNearlyEqual(Old->GetLength(), Replacement->GetLength(), 1.5f);
+	if (!Old || !Replacement || Old == Replacement || !Old->IsAnchored() || Replacement->IsAnchored()
+		|| Replacement->IsCarried() || Replacement->MeshComponent->IsSimulatingPhysics()
+		|| Replacement->BurnState != EBurnState::Intact || Old->GetDamage() < 0.2f
+		|| Replacement->GetDamage() >= Old->GetDamage() || Old->IsSplit() != Replacement->IsSplit()
+		|| Old->GetSplitCount() != Replacement->GetSplitCount()
+		|| !Replacement->JointCuts.IsEmpty() || !Replacement->CutSpans.IsEmpty())
+	{
+		return false;
+	}
+
+	// "Same size" includes cross-section: length alone lets a thin/quarter-split piece replace a full beam.
+	const FVector OldSize = Old->GetLocalBox().GetSize();
+	const FVector ReplacementSize = Replacement->GetLocalBox().GetSize();
+	return FMath::IsNearlyEqual(Old->GetLength(), Replacement->GetLength(), 1.5f)
+		&& FMath::IsNearlyEqual(Old->GetRadius(), Replacement->GetRadius(), 1.5f)
+		&& FMath::IsNearlyEqual(OldSize.Y, ReplacementSize.Y, 1.5f)
+		&& FMath::IsNearlyEqual(OldSize.Z, ReplacementSize.Z, 1.5f);
 }
 
 bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
@@ -327,29 +341,69 @@ bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
 	{
 		return false;
 	}
-	// Two pieces of the same length can come from different places of their logs: their local frames start at different
-	// X. The new piece is set so that its box lies exactly where the old one's did, and the joints are cut shifted the same way.
+
+	// Rebuilding joints is one repair transaction: never leave a partly notched replacement in the structure.
+	UDynamicMesh* BackupMesh = NewObject<UDynamicMesh>(Replacement);
+	if (!BackupMesh)
+	{
+		return false;
+	}
+	BackupMesh->SetMesh(Replacement->MeshComponent->GetDynamicMesh()->GetMeshRef());
+	const FTransform OriginalTransform = Replacement->GetActorTransform();
+	const TArray<FJointCut> OriginalJointCuts = Replacement->JointCuts;
+	const TArray<FVector2f> OriginalCutSpans = Replacement->CutSpans;
 	const float Shift = Replacement->MinX - Old->MinX;
+	const float StockMinX = Replacement->MinX;
+	const float StockMaxX = Replacement->MaxX;
+
 	FTransform Where = Old->GetActorTransform();
 	Where.AddToTranslation(-Where.GetRotation().RotateVector(FVector(Shift, 0.f, 0.f)));
 	Replacement->PlaceAt(Where, /*bAnchorIt*/ true);
+	Replacement->JointCuts.Reset();
+	Replacement->CutSpans.Reset();
+
+	auto RollbackReplacement = [&]()
+	{
+		Replacement->MeshComponent->GetDynamicMesh()->SetMesh(BackupMesh->GetMeshRef());
+		Replacement->JointCuts = OriginalJointCuts;
+		Replacement->CutSpans = OriginalCutSpans;
+		Replacement->FinishEdit();
+		Replacement->SetActorTransform(OriginalTransform, false, nullptr, ETeleportType::TeleportPhysics);
+		Replacement->bAnchored = false;
+		Replacement->MeshComponent->SetSimulatePhysics(false);
+		Replacement->SetActorTickEnabled(false);
+		Replacement->UpdateDamageLook();
+	};
+
 	for (const FJointCut& Cut : Old->JointCuts)
 	{
 		const float X = Cut.LocalX + Shift;
-		if (X < Replacement->MinX || X > Replacement->MaxX)
+		if (X < StockMinX || X > StockMaxX)
 		{
-			continue;
+			RollbackReplacement();
+			return false;
 		}
+
+		bool bCutRebuilt = false;
 		switch (Cut.Tool)
 		{
-		case ECarveTool::Notch:      Replacement->Notch(X, Cut.SideAngleDeg, Cut.AngleDeg, Cut.MateRadius, Cut.Depth); break;
-		case ECarveTool::NotchRound: Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, true); break;
-		case ECarveTool::NotchFlat:  Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, false); break;
-		case ECarveTool::Dovetail:   Replacement->CutDovetail(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth); break;
-		default: break;
+		case ECarveTool::Notch:      bCutRebuilt = Replacement->Notch(X, Cut.SideAngleDeg, Cut.AngleDeg, Cut.MateRadius, Cut.Depth); break;
+		case ECarveTool::NotchRound: bCutRebuilt = Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, true); break;
+		case ECarveTool::NotchFlat:  bCutRebuilt = Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, false); break;
+		case ECarveTool::Dovetail:   bCutRebuilt = Replacement->CutDovetail(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth); break;
+		default:                     bCutRebuilt = false; break;
+		}
+
+		if (!bCutRebuilt)
+		{
+			RollbackReplacement();
+			return false;
 		}
 	}
+
+	// The replacement's new geometry changes both the support graph and cached feature classification.
 	Old->Release();
+	StructureLink::Settle(GetWorld());
 	OnLogRepaired.Broadcast(Replacement);
 	return true;
 }

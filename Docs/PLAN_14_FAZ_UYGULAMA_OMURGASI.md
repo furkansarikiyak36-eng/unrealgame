@@ -84,3 +84,11 @@ U0–U6 etiketleri kataloğun mevcut bilgi durumunu anlatır; geliştirme sıras
 ## Tek kullanıcı teslimatı
 
 Faz 0–14 tamamlandıktan ve Faz 14 bütünsel analizindeki kritik kusurlar giderildikten sonra Faz 15 başlar: tek Windows packaged build, temiz başlatma, 30–60 dakikalık oynanış, iki save/load çevrimi, kontroller/README, sonuç kayıtları, performans ve bilinen sınırlamalar raporu. Ara fazlarda kullanıcıya paket teslim edilmez.
+
+
+### 2026-10-14 — Faz 5: mevcut kütük ve onarım akışının sertleştirilmesi
+
+- İkinci bir kütük sahibi oluşturulmadı; mevcut `ACarvableLog` ve `StructureLink` kanonik kaldı. Onarım önkoşulu artık yalnızca uzunluğu değil kesit boyutlarını ve split sayısını da karşılaştırır; taşınan/hareket eden, yanmakta olan veya zaten eklemleri kesilmiş stok onarım adayı olamaz.
+- `ReplaceDamaged`, eski eklem kayıtlarını yenileme parçasına kopyalarken işlemi yedek mesh ile korur. Herhangi bir kesim yeniden üretilemezse geometri, eklem aralıkları ve yerleşim geri yüklenir; kısmi kesim başarılı onarım olarak bildirilmez.
+- Onarım tamamlandığında mevcut `StructureLink::Settle` akışı yeniden çalıştırılır; destek grafı ve önbelleğe alınan yapı türleri eski geometride kalmaz. Mevcut `MechanicsDemo` carving/repair delegate bağlantıları korunur.
+- `Scripts/tests/test_carvable_log_contract.py` statik entegrasyon sözleşmesi eklendi ve Python CI runner'a bağlandı. Bu testler source contract'larını doğrular; Unreal Engine 5.8 C++ derlemesi veya oyun içi görsel kanıt yerine geçmez. Faz 5 görsel/runtime kabul kanıtı final kabul turunda tamamlanacak; bütünsel çapraz-faz audit Faz 14'tedir.

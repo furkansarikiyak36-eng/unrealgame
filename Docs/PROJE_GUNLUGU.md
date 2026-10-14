@@ -339,3 +339,11 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - UWorldCoreSaveGame schema 2: underground support kimliği/transform/tip/dayanıklılık profili, 3D water pockets ve sızıntıdan etkilenen yüzey hücrelerinin su/nem değerleri eklenmiştir. Schema 1 core kayıtları için uyumluluk yolu korunur.
 - `Scripts/tests/test_underground_hazard_contract.py` CI'a bağlandı; statik Python kontrat testleri başarılı (#587/#588). Unreal Engine 5.8 C++ build/gameplay testi çalıştırılmadı. Çökme/sızıntı denge ayarı ve bütünsel entegrasyon analizi Faz 14'te.
 
+
+
+### 2026-10-14 — Faz 5: kütük onarımı ve yapı bağlantısı
+
+- `ACarvableLog::CanReplace` artık onarım adayının gerçek kesit boyutlarını, split sayısını, hareket/taşıma durumunu, ateş durumunu ve eklem kayıtlarının boş olmasını doğrular; yalnızca eşit uzunluğa bakarak farklı profilli parça yerleştirilmez.
+- `ReplaceDamaged` joint replay'i backup mesh üzerinden transaction yaptı. Bilinmeyen/başarısız kesim türü veya sınır dışı joint konumu onarımı iptal eder ve replacement mesh/metadata/transform geri alınır.
+- Başarılı onarım mevcut `StructureLink::Settle` ile tekrar değerlendirilir; ardından `OnLogRepaired` yayınlanır. Mevcut MechanicsDemo gözlemcileri değişmeden kaldı.
+- Yeni statik kontrat testi runner'a eklendi. UE 5.8 build ve görsel oyun içi doğrulama bu ortamda çalıştırılmadı; 485 mekanik için genel bütünsel denetim Faz 14'e bırakıldı.
