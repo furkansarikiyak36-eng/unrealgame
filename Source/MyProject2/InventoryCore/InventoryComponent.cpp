@@ -156,6 +156,64 @@ EInventoryResult UInventoryComponent::DropItem(FName ID,int32 Count)
 {
     UInventoryItemData* D=GetItemData(ID); if(!D||!D->bCanBeDropped) return EInventoryResult::InvalidRequest; return RemoveItem(ID,Count);
 }
+bool UInventoryComponent::TransferItem(UInventoryComponent* Source, UInventoryComponent* Destination, FName ItemID, int32 Count)
+{
+    if (!IsValid(Source) || !IsValid(Destination) || Source == Destination ||
+        ItemID.IsNone() || Count <= 0 || !Source->HasItem(ItemID, Count))
+    {
+        return false;
+    }
+
+    // Preserve the source item's canonical payload rather than constructing a second
+    // definition for stone, sticks, or other physical resources.
+    FInventoryItem Payload;
+    bool bFoundPayload = false;
+    for (const FInventorySlot& Slot : Source->Slots)
+    {
+        if (Slot.IsOccupied() && Slot.Item.ItemID == ItemID)
+        {
+            Payload = Slot.Item;
+            bFoundPayload = true;
+            break;
+        }
+    }
+    if (!bFoundPayload)
+    {
+        return false;
+    }
+
+    Payload.Count = Count;
+    if (!Destination->CanAddItem(ItemID, Count))
+    {
+        // CanAddItem requires a registered definition. Save-derived items without a
+        // definition are still transferable through the same bounded slot/weight checks.
+        if (Destination->GetItemData(ItemID) != nullptr ||
+            !Destination->CanFitItem(Payload, Count))
+        {
+            return false;
+        }
+    }
+
+    const EInventoryResult Removed = Source->RemoveItem(ItemID, Count);
+    if (Removed != EInventoryResult::Success)
+    {
+        return false;
+    }
+
+    const EInventoryResult Added = Destination->AddItemData(Payload);
+    if (Added == EInventoryResult::Success)
+    {
+        return true;
+    }
+
+    // Destination rejected after preflight; restore the source before reporting failure.
+    const EInventoryResult Restored = Source->AddItemData(Payload);
+    if (Restored != EInventoryResult::Success)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Inventory transfer rollback failed for '%s' (%d items)."), *ItemID.ToString(), Count);
+    }
+    return false;
+}
 int32 UInventoryComponent::GetItemCount(FName ID) const { int32 N=0; for(const FInventorySlot& S:Slots) if(S.IsOccupied()&&S.Item.ItemID==ID) N+=S.Item.Count; return N; }
 bool UInventoryComponent::HasItem(FName ID,int32 Count) const { return Count>=0 && GetItemCount(ID)>=Count; }
 bool UInventoryComponent::HasAllItems(const TArray<FInventoryItem>& Req) const { for(const FInventoryItem& I:Req) if(!HasItem(I.ItemID,I.Count)) return false; return true; }
