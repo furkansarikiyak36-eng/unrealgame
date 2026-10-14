@@ -60,3 +60,31 @@ Son kaynak düzenlemeleri:
 `Source/MyProject2/Tests/StonePlacementTests.cpp` üç Unreal Automation Test içeriyor: begin/cancel, yüz ve socket hizalaması, geçerli hedef olmadan onayın reddi.
 
 **Kabul durumu:** Kod/test kaynakları branch'e eklendi; UE 5.8 derlemesi ve test çalıştırması bu ortamda yapılmadığından P0-023 kapanmış sayılmaz. Otomasyon sonucu, preview collision ve gerçek Blueprint input bağlantısı motor hostunda doğrulanmalı.
+
+
+## Güncel entegrasyon — oyuncu taş taşıma, çarpışma ve yapısal socket bağlantısı
+
+Son kaynak turunda taş sistemi oyuncunun ana input akışına bağlandı; artık yalnızca bağımsız bir component/demo çağrısı değildir.
+
+- `AForestCharacter` constructor'ı `UStoneCarryComponent` ve `UStonePlacementComponent` oluşturur.
+- `Interact/E`: görüşteki fiziksel `AStoneActor` tanımı ve taşıma ağırlığı uygunsa alınır; eldeki taş E ile bırakılır.
+- Sol tık: eldeki taşta ilk tık yerleştirme önizlemesini başlatır; önizleme açıkken ikinci sol tık onaylar.
+- `Q`/mouse wheel yüz/socket seçimini, `R` yön döndürmeyi, sağ tık iptali kullanır. Taş taşınırken hareket hızı/tool visibility de mevcut karakter durumuna bağlandı.
+- Yerleştirme trace'i oyuncunun göz konumunu/yönünü kullanır, taşın kendisini trace dışında tutar ve seçilen yüz/mesh sınırını temas düzlemine yaklaştırır.
+- `IsPlacementClear` component overlap sorgusuyla bloklayan fiziksel nesne/pawn çakışmasını kontrol eder; hedef destek aktörü, istenen temas yüzeyine izin vermek için overlap sorgusundan çıkarılır. Bu nedenle bütün hedef geometrisi/karma collider durumları UE 5.8 editöründe ayrıca doğrulanmalı.
+- Hedef bir `IStructuralNode` ve `UStructuralGraph` taşıyorsa yerleştirme, yapısal bağlantı kabul edilmeden `Installed` state'ine geçmez. Açıkça seçilen kaynak socket'i yalnızca hedef taşta yakın ve boş bir socket ile eşleşirse commit edilir; `ConnectTo` iki uçta da reciprocal bağlantı kaydı üretir. State geçişi başarısızsa yeni bağlantı geri alınır.
+- Socket doluluğu, paylaşılan `UStoneDefinition` içindeki transient `OccupiedBy/Occupant` alanlarından değil, aktörün kendi `UStructuralGraph::Connections` listesinden okunur. Aynı DataAsset'i paylaşan taşlar böylece birbirlerinin runtime occupancy state'ini devralmaz.
+
+### Otomasyon kapsamı (kaynakta eklendi, henüz UE 5.8'de çalıştırılmadı)
+
+`Source/MyProject2/Tests/StonePlacementTests.cpp` beş Unreal Automation Test içerir:
+
+1. `MyProject2.StonePlacement.Lifecycle.BeginCancel`
+2. `MyProject2.StonePlacement.Selection.FaceAndSocket`
+3. `MyProject2.StonePlacement.Lifecycle.ConfirmGate`
+4. `MyProject2.StonePlacement.Validation.CollisionClearance`
+5. `MyProject2.StonePlacement.Structure.SocketConnection` — reciprocal graph bağlantısını ve dolu target socket'in ikinci taş tarafından yeniden kullanılmasının reddedilmesini kontrol eder.
+
+`Scripts/run_tests.sh` artık `MyProject2.StonePlacement` suite'ini ayrı logda çalıştırır. `Scripts/verify_test_logs.py` minimum **5** benzersiz başarılı stone placement sonucu olmadan doğrulamayı geçirmez.
+
+**Açık kalan sınır:** Bu beş C++ testi UE 5.8 üzerinde henüz derlenmedi/çalıştırılmadı. Genel ahşap graph adaptörü, yapı çöküşünün bütün sistemlere yayılması, graph save/load ve editör görsel doğrulaması hâlâ kabul kapılarıdır. Bu kod düzeyi ilerleme “oyun içinde onaylandı” anlamına gelmez.
