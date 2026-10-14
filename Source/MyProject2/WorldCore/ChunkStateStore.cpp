@@ -31,7 +31,7 @@ bool UChunkStateStore::ReplaceAllChunks(const TArray<FChunkStateSnapshot>& Snaps
             return false;
         }
         TotalCells += Snapshot.Cells.Num();
-        if (TotalCells > 4194304)
+        if (TotalCells > 1048576)
         {
             return false;
         }
