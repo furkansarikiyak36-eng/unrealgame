@@ -31,7 +31,7 @@ static T* SpawnAfterInventoryCheck(
     UWorld* World = Self->GetWorld();
     AActor* Owner = Self->GetOwner();
     UInventoryComponent* Inventory = Owner ? Owner->FindComponentByClass<UInventoryComponent>() : nullptr;
-    if (!World || !Inventory || !Inventory->HasItem(ItemID, 1))
+    if (!World || !Inventory || !Inventory->CanDropItem(ItemID, 1))
     {
         return nullptr;
     }
