@@ -3,6 +3,7 @@
 #include "ForestHUD.h"
 #include "DayLoopSubsystem.h"
 #include "ScenarioSubsystem.h"
+#include "SurvivalGuideSubsystem.h"
 #include "WorldFeatures.h"
 #include "StructureLink.h"
 #include "ForestCharacter.h"
@@ -391,7 +392,7 @@ void AForestHUD::DrawHUD()
 		TEXT("Sol tık: vur / blok koy  |  E: topla  |  [T]: Mala (Chinking/Harç)"),
 		TEXT("[3] 3 Taş -> 1 Taş Blok"),
 		TEXT("Odun tarifle değil, kesilerek yapılır (kütük -> kiriş, yarım, kısa, kalas...)  |  [Tab] Çanta"),
-		TEXT("[P] Admin modu: [G] malzeme, [H] oda, [J] kes, [N] aç, [M] hasar, [K] oyma kütüğü, [L] demo, [Y] hasar"),
+		TEXT("[P] Admin modu: [G] malzeme, [H] oda, [J] kes, [N] aç, [M] hasar, [K] oyma kütüğü, [L] demo, [Y] hasar, [Z] baskın, [U] araba, [9] +3 saat"),
 		TEXT("[B] İnşa modu  |  Tekerlek / [Q]: seç  |  [R] döndür  |  Sağ tık: iptal"),
 		TEXT("Kütük Duvar: köşelere tıkla, plana bakıp [E] ile kütük ekle"),
 		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik / eğik  |  [F] çakmak (basılı tut)  |  [C] taş koy (7 taş = ateş yeri)  |  [X] it  |  [O] açıklık aç  |  [V] iskele işareti  |  [I] yapım (diken, çit, meşale, tarla, deri giysi, ip, ip hattı)  |  [8] ye  |  [E] su iç, not oku, ipe bin"),
@@ -473,6 +474,38 @@ void AForestHUD::DrawHUD()
 		}
 		DrawText(Hint, FLinearColor(0.75f, 0.9f, 1.f), X + 12.f, Y + 4.f, SmallFont);
 		break;
+	}
+
+	// Survival demo checklist, right side
+	if (const USurvivalGuideSubsystem* Guide = USurvivalGuideSubsystem::Get(GetWorld()); Guide && Guide->IsActive())
+	{
+		TArray<FSurvivalGoalLine> Lines;
+		int32 Current = INDEX_NONE;
+		Guide->GetLines(Lines, Current);
+		const float PanelW = 470.f;
+		const float RowH = 20.f;
+		const float X = Canvas->ClipX - PanelW - 20.f;
+		float Y = 70.f;
+		const FString Hint = Lines.IsValidIndex(Current) ? Lines[Current].Hint : FString(TEXT("Hepsi tamam: hayatta kaldın!"));
+		DrawPanel(X, Y, PanelW, 36.f + RowH * Lines.Num() + 44.f);
+		DrawText(FString::Printf(TEXT("HAYATTA KALMA DEMOSU  %d/%d"), Guide->GetDoneCount(), USurvivalGuideSubsystem::GetGoalCount()),
+			FLinearColor(1.f, 0.85f, 0.4f), X + 10.f, Y + 8.f, SmallFont);
+		Y += 32.f;
+		for (int32 Index = 0; Index < Lines.Num(); ++Index)
+		{
+			const FSurvivalGoalLine& Line = Lines[Index];
+			const bool bCurrent = Index == Current;
+			const FLinearColor Color = Line.bDone ? FLinearColor(0.35f, 1.f, 0.45f) : bCurrent ? FLinearColor(1.f, 0.9f, 0.35f) : FLinearColor(1.f, 1.f, 1.f, 0.45f);
+			DrawText(FString::Printf(TEXT("%s  %s"), Line.bDone ? TEXT("[x]") : bCurrent ? TEXT("[>]") : TEXT("[ ]"), *Line.Text), Color, X + 10.f, Y, SmallFont);
+			Y += RowH;
+		}
+		// The hint wraps over two lines at most.
+		const int32 Split = Hint.Len() > 70 ? Hint.Find(TEXT(" "), ESearchCase::IgnoreCase, ESearchDir::FromStart, 60) : INDEX_NONE;
+		DrawText(Split > 0 ? Hint.Left(Split) : Hint, FLinearColor(0.75f, 0.9f, 1.f), X + 10.f, Y + 4.f, SmallFont);
+		if (Split > 0)
+		{
+			DrawText(Hint.Mid(Split + 1), FLinearColor(0.75f, 0.9f, 1.f), X + 10.f, Y + 22.f, SmallFont);
+		}
 	}
 
 	// Admin mode badge, top right

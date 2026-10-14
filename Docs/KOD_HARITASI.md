@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (14 October 2026 14:35) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (14 October 2026 15:02) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -119,6 +119,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static FString RegionNameAt(const FVector& Where)` — Region names and how much colder (or warmer) each is: rocks colder and windier, the river damp.
 - `static int32 RaidSizeForDay(int32 Day)` — Raiders of a raid night: three plus one per day survived; more at once as the days go by.
 - `void SetTimeForTest(int32 Day, float Hour)` — For the mechanics test: puts the clock at Hour of Day, then runs the day's rules once.
+- `void SkipHours(float Hours)` — Moves the clock on by Hours (crossing midnight runs the day's simulation, so crops and animals go on).
 - `bool IsRaidRunning() const` — For the mechanics test: the raid of the night that is running, if any.
 - Ayrıca (açıklamasız): `Get`, `GetDay`, `GetHour`, `IsNight`, `GetNextRaidDay`, `RegionOffsetAt`, `GetTemperatureAt`, `RaidAtOnceForDay`
 
@@ -388,6 +389,12 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `const UInstancedStaticMeshComponent* FindPieces(EForestItem Item) const` — Placed pieces of one kind, or null if none were placed yet.
 - Ayrıca (açıklamasız): `AStructureManager`, `AddPiece`
 
+## SurvivalGuideSubsystem.h
+
+**USurvivalGuideSubsystem** (class) — The survival demo: a checklist through every pillar of the game (fire, cold, food, farming, animals, clothes, ropes, bridges, notes, defences, the first raid night), …
+
+- Ayrıca (açıklamasız): `Get`, `IsActive`, `GetLines`, `GetDoneCount`, `GetGoalCount`
+
 ## Wood/WoodCarrierComponent.h
 
 **UWoodCarrierComponent** (class)
@@ -521,4 +528,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-185 / 449 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+190 / 455 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

@@ -5,6 +5,10 @@
 #include "FarmKit.h"
 #include "LooseResources.h"
 #include "WorldFeatures.h"
+#include "HarvestableActor.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -19,6 +23,24 @@ namespace
 			return Hit.ImpactPoint;
 		}
 		return FVector(Where.X, Where.Y, 0.f);
+	}
+
+	/** A tree or rock the player can cut, made the way the game mode makes the ones placed in the level. */
+	void SpawnHarvestable(UWorld* World, const TCHAR* MeshName, const FVector& Ground, float Yaw, EHarvestType Type)
+	{
+		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Greybox/Meshes/%s.%s"), MeshName, MeshName));
+		AStaticMeshActor* Source = Mesh ? World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(FRotator(0.f, Yaw, 0.f), Ground)) : nullptr;
+		if (!Source)
+		{
+			return;
+		}
+		Source->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Source->GetStaticMeshComponent()->SetStaticMesh(Mesh);
+		if (AHarvestableActor* Harvestable = World->SpawnActor<AHarvestableActor>(AHarvestableActor::StaticClass(), Source->GetActorTransform()))
+		{
+			Harvestable->InitFrom(Source->GetStaticMeshComponent(), Type);
+		}
+		Source->Destroy();
 	}
 }
 
@@ -118,6 +140,19 @@ void UScenarioSubsystem::LayOut()
 		ARemnantNote::Place(World, FVector(-3100.f, 2300.f, Top), Notes[3].Key, Notes[3].Value);
 	}
 	Note(2, FVector(-2400.f, 1500.f, 0.f));
+
+	// Orman: more trees; Kayalık: rocks to break for stone.
+	const FVector2D Trees[] = { { -600.f, 900.f }, { -300.f, 1500.f }, { 200.f, 1900.f }, { -900.f, -400.f }, { -1100.f, 400.f },
+		{ 400.f, -1000.f }, { 1100.f, 1500.f }, { 1300.f, -700.f }, { -200.f, -1900.f }, { 600.f, 2400.f } };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Trees); ++Index)
+	{
+		SpawnHarvestable(World, Index % 3 == 2 ? TEXT("SM_GB_Tree_Broad") : TEXT("SM_GB_Tree_Pine"), GroundAt(World, FVector(Trees[Index], 0.f)), 37.f * Index, EHarvestType::Tree);
+	}
+	const FVector2D Rocks[] = { { -1700.f, -300.f }, { -1900.f, 500.f }, { -2200.f, -1500.f }, { -1600.f, -2200.f }, { -2400.f, 300.f }, { -1800.f, 2600.f } };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Rocks); ++Index)
+	{
+		SpawnHarvestable(World, TEXT("SM_GB_Rock"), GroundAt(World, FVector(Rocks[Index], 0.f)), 53.f * Index, EHarvestType::Rock);
+	}
 
 	// More stones lying about the rocky west.
 	for (int32 Index = 0; Index < 5; ++Index)

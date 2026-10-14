@@ -67,6 +67,8 @@ public:
 
 	/** For the mechanics test: puts the clock at Hour of Day, then runs the day's rules once. */
 	void SetTimeForTest(int32 Day, float Hour);
+	/** Moves the clock on by Hours (crossing midnight runs the day's simulation, so crops and animals go on). */
+	void SkipHours(float Hours);
 	/** For the mechanics test: the raid of the night that is running, if any. */
 	bool IsRaidRunning() const { return RaidDay > 0; }
 

@@ -382,6 +382,9 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UInputAction* RaidAction = MakeAction(TEXT("IA_DebugRaid"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(RaidAction, EKeys::Z);
 	Input->BindAction(RaidAction, ETriggerEvent::Started, this, &AForestCharacter::DebugRaid);
+	UInputAction* SkipAction = MakeAction(TEXT("IA_DebugSkipTime"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(SkipAction, EKeys::Nine);
+	Input->BindAction(SkipAction, ETriggerEvent::Started, this, &AForestCharacter::DebugSkipTime);
 	UInputAction* HaulerAction = MakeAction(TEXT("IA_DebugHaulers"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(HaulerAction, EKeys::U);
 	Input->BindAction(HaulerAction, ETriggerEvent::Started, this, &AForestCharacter::DebugHaulers);
@@ -1612,6 +1615,19 @@ void AForestCharacter::DebugRaid()
 	if (RequireAdmin())
 	{
 		ShowMessage(RaidKit::StartDefaultRaid(GetWorld()) ? TEXT("Baskın başladı") : TEXT("Baskın başlamadı"));
+	}
+}
+
+void AForestCharacter::DebugSkipTime()
+{
+	if (!RequireAdmin())
+	{
+		return;
+	}
+	if (UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld()))
+	{
+		Loop->SkipHours(3.f);
+		ShowMessage(FString::Printf(TEXT("Zaman ileri: gün %d, %02d:00"), Loop->GetDay(), FMath::FloorToInt(Loop->GetHour())));
 	}
 }
 

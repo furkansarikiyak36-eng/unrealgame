@@ -156,6 +156,24 @@ void UDayLoopSubsystem::SetTimeForTest(int32 Day, float Hour)
 	UpdateRules();
 }
 
+void UDayLoopSubsystem::SkipHours(float Hours)
+{
+	USimulationSubsystem* Clock = GetClock();
+	if (!Clock || !Clock->GetState() || Hours <= 0.f)
+	{
+		return;
+	}
+	float Target = Clock->GetState()->TimeOfDay + Hours;
+	while (Target >= 24.f)
+	{
+		Target -= 24.f;
+		Clock->AdvanceDays(1);
+	}
+	Clock->GetState()->TimeOfDay = Target;
+	Clock->GetState()->HourOfDay = FMath::FloorToInt(Target);
+	UpdateRules();
+}
+
 void UDayLoopSubsystem::Tick(float DeltaSeconds)
 {
 	UpdateRules();

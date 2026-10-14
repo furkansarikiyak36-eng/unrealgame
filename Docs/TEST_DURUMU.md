@@ -1,10 +1,10 @@
 # Test durumu
 
-Otomatik üretildi (14 October 2026 14:35) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
+Otomatik üretildi (14 October 2026 15:02) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
 
 ## Mekanik test (grafiksiz, `-MechanicsDemoQuit`)
 
-Son çalıştırma: **119 geçti, 0 kaldı** (14 October 2026 14:25, `mekanik_2026-10-14_142046.log`)
+Son çalıştırma: **119 geçti, 0 kaldı** (14 October 2026 15:01, `mekanik_2026-10-14_145730.log`)
 
 Geçen kontrollerin özeti (119):
 
@@ -13,14 +13,14 @@ Geçen kontrollerin özeti (119):
 - Gövde ikiye bölündü: 2 büyük kütük (beklenen 2)
 - Büyük kütükler bölündü: 2 taşınabilir kütük düştü (ağaç boyuna göre beklenen 2)
 - Kütük çaprazlama oturdu: açı 90°, eksenler arası 35.7 cm (beklenen 35.7), üstteki kütüğün altına eyer çentiği  -  üçgen 744
-- Tek alt kütük: uçtan geçen kütük tek destekte durmadı, 14° devrildi; alttaki yerinde
+- Tek alt kütük: uçtan geçen kütük tek destekte durmadı, 17° devrildi; alttaki yerinde
 - Omuz hacme göre: tam kütük alındı (yük %96), ikinci tam kütük sığmadı
 - Direk dikildi: dikeylik 1.000, alt uç zeminden 0.5 cm, sabit evet, omuz boş
 - Köşe: iki alt kütüğe çaprazlama kondu, 2 çentik açıldı, kütük duruyor (iki destek)
 - Köşe 2 sn sonra yerinde
 - Direkler için kütük 2M parçalara kesildi: 130, 130, 130 cm
 - Tek direk + kiriş: direk duruyor, kiriş desteksiz, fiziğe bırakıldı
-- Kiriş yere düştü (134 cm aşağı)
+- Kiriş yere düştü (133 cm aşağı)
 - İki direk + kiriş: kiriş duruyor (iki destek)
 - Kiriş 2 sn sonra yerinde
 - Direk söküldü (omuzda): kiriş desteksiz kaldı, düşüyor
@@ -35,7 +35,7 @@ Geçen kontrollerin özeti (119):
 - Üç direk (160 cm arayla) + kiriş: kiriş duruyor
 - Kiriş 2 sn sonra yerinde
 - Orta direk sökülünce (kalan direkler 320 cm arayla, sınır 292 cm) kiriş ortadan kırıldı
-- Kırılan kiriş yere indi (124 cm aşağı)
+- Kırılan kiriş yere indi (140 cm aşağı)
 - Direk geri kondu, kiriş yine üç direkte duruyor
 - Payanda P1 direğine kondu: 45° eğimli, alt ucu 86 cm yüksekte, duruyor
 - Payanda P3 direğine kondu: 45° eğimli, alt ucu 86 cm yüksekte, duruyor
@@ -84,7 +84,7 @@ Geçen kontrollerin özeti (119):
 - Açıklık: yanlarında 1 modül kalmayacak kadar kısa parçada açılmadı
 - Oluk aleti: iki vuruşta kütüğün boyuna oluk açıldı
 - Hareket durumu: serbest parça itildi, yapıdaki parça itilmedi; hafif çarpma hasarsız, sert çarpma %45 hasar
-- İtilen kütük 101 cm gitti; omuzdaki parça (Taşınıyor) itilmiyor
+- İtilen kütük 104 cm gitti; omuzdaki parça (Taşınıyor) itilmiyor
 - El arabası: iki kütük yüklendi (hacim 2967619 cm3 korundu), üçüncüsü sığmadı ve omuzda kaldı
 - Sehpa üçüncüyü aldı (kapasite el arabası < kızak < sehpa), sehpa itilince yerinden oynamadı
 - Araba itildi (228 cm), yükü onunla gitti; boşaltılan parça serbest (Loose) kaldı
@@ -132,16 +132,16 @@ Rehberli demo görevleri otomatik oynatmada tamamlanan: 17
 
 Son çalıştırmalar:
 
-- mekanik_2026-10-14_134759.log: 106 geçti, 1 kaldı
 - mekanik_2026-10-14_135403.log: 105 geçti, 2 kaldı
 - mekanik_2026-10-14_135902.log: 107 geçti, 0 kaldı
 - mekanik_2026-10-14_140440.log: 110 geçti, 0 kaldı
 - mekanik_2026-10-14_141418.log: 115 geçti, 0 kaldı
 - mekanik_2026-10-14_142046.log: 119 geçti, 0 kaldı
+- mekanik_2026-10-14_145730.log: 119 geçti, 0 kaldı
 
 ## Wood birim testleri (`MyProject2.Wood`)
 
-Son çalıştırma: **12 geçti, 0 kaldı** (14 October 2026 14:21)
+Son çalıştırma: **12 geçti, 0 kaldı** (14 October 2026 14:57)
 
 - ✅ MyProject2.Wood.Analysis.Cabin
 - ✅ MyProject2.Wood.Analysis.Floors

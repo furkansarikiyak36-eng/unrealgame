@@ -507,3 +507,10 @@ Test: mekanik 119/119 (+4). Senaryo ayrıca bir kez grafiksiz oyunla kuruldu, ha
 
 ### 2026-10-14 — Kapsamlı durum raporu (CC)
 - `DURUM_RAPORU.md` baştan yazıldı: referans oyunlara göre özet, nasıl çalıştırılır, bütün tuşlar, oynanır sistemler (kütük, taş/çubuk, ateş, gün döngüsü, baskın, tarım, dünya/altyapı, hikâye), kodu olup oyunda olmayanlar, testler, bilinen sorunlar, kod büyüklüğü, sıradaki işler.
+
+### 2026-10-14 — Hayatta kalma demosu (CC)
+Kullanıcı istedi: "demo kurabilir misin". Test: mekanik 119/119 (değişmedi).
+- `USurvivalGuideSubsystem`: normal oyunda (senaryo kurulunca) sağ üstte **15 görevlik hayatta kalma demosu**: çubuk ve taş topla, ateş yeri kur, ateşi yak, ateşin yanında ısın, yabani tahıldan tohum al, tarla aç ve ek, hasat al, hayvandan yiyecek/deri al, deri giysi giy, ip bük ve ip hattı ger, iple yara tırman, nehre köprü kur, savunma kur, 3 not oku, ilk baskın gecesini atlat. Oyuncunun durumuna bakılarak kendiliğinden işaretlenir, sıradaki görevin ipucu altta.
+- Senaryo artık ormana 10 ağaç (7 çam, 3 geniş) ve kayalığa 6 kaya ekliyor; haritadakiler gibi kesilip kırılabiliyor (demo haritasında önceden yalnızca 4 ağaç vardı, kaya yoktu).
+- Admin **[9]**: zamanı 3 saat ileri alır (gece yarısını geçince günün simülasyonu çalışır: ekin büyür, hayvan ürün verir).
+- Oyunla grafiksiz bir açılışta senaryo hatasız kuruldu. Görev panelinin ve yerleşimin görünüşü oyunda denenmedi.

@@ -452,6 +452,8 @@ private:
 	/** Admin [Z]: starts a raid. Admin [U]: sets a cart, a sled and a rack down in front. */
 	void DebugRaid();
 	void DebugHaulers();
+	/** Admin [9]: the clock three hours on. */
+	void DebugSkipTime();
 	bool bPlaceSupported = true;
 	TWeakObjectPtr<AActor> PlaceTarget;
 	/** Re-checks the structure after a piece went in or came out; says how many pieces fell. */
