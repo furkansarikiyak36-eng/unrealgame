@@ -20,6 +20,7 @@ public:
     bool SetLandscapeProxies(const TArray<ALandscapeProxy*>& InProxies);
 
     virtual float SampleBaseDensityAtWorld_Implementation(const FVector& WorldPositionCm) const override;
+    virtual int32 SampleBaseMaterialIdAtWorld_Implementation(const FVector& WorldPositionCm) const override;
 
 private:
     TArray<TWeakObjectPtr<ALandscapeProxy>> LandscapeProxies;
