@@ -60,6 +60,18 @@ public:
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool TryGetDensityOverrideAtCell(const FIntVector& Cell, float& OutDensity) const;
 
+    /** Sample final density: sparse override first, then registered base terrain, then explicit fallback. */
+    UFUNCTION(BlueprintPure, Category = "Excavation")
+    bool TrySampleDensityAtWorld(const FVector& WorldPositionCm, float& OutDensity) const;
+
+    /** Register an object implementing UExcavationBaseDensitySource. Returns false for invalid providers. */
+    UFUNCTION(BlueprintCallable, Category = "Excavation")
+    bool RegisterBaseDensitySource(UObject* Source);
+
+    /** Only the currently registered source (or null) may clear the base density provider. */
+    UFUNCTION(BlueprintCallable, Category = "Excavation")
+    void UnregisterBaseDensitySource(UObject* Source);
+
     /** Use caller-sampled base terrain density when this sparse overlay has no entry. */
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool ResolveDensityAtCell(const FIntVector& Cell, float BaseDensity, float& OutDensity) const;
@@ -96,6 +108,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Config", meta = (ClampMin = "1"))
     int32 MaxCellsPerEdit = 250000;
 
+    /** Used only when no base-density source is registered; 1 means solid. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Config", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float DefaultBaseDensity = 1.0f;
+
     /** Number of voxel cells along each chunk axis; minimum 4 supports border sampling. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Config", meta = (ClampMin = "4"))
     int32 CellsPerChunkAxis = 32;
@@ -120,6 +136,10 @@ protected:
 
     /** Derived index for localized mesh/collision updates; rebuilt from CellOverrides after restore. */
     TMap<FIntVector, TSet<FIntVector>> CellsByChunk;
+
+    /** Object implementing UExcavationBaseDensitySource; not an authoritative owner of excavation deltas. */
+    UPROPERTY(Transient)
+    TObjectPtr<UObject> BaseDensitySourceObject;
 
     /** Sparse explicit overrides only; missing cells are sampled from the base-world provider. */
     UPROPERTY(Transient)
