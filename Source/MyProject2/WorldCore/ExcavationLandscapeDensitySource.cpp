@@ -2,6 +2,7 @@
 
 #include "LandscapeProxy.h"
 #include "LandscapeHeightfieldCollisionComponent.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
 
 bool UExcavationLandscapeDensitySource::SetLandscapeProxies(const TArray<ALandscapeProxy*>& InProxies)
 {
@@ -32,6 +33,55 @@ bool UExcavationLandscapeDensitySource::SetLandscapeProxies(const TArray<ALandsc
     if (bChanged)
     {
         LandscapeProxies = MoveTemp(Candidate);
+    }
+    return bChanged;
+}
+
+bool UExcavationLandscapeDensitySource::SetMaterialMappings(
+    const TArray<FExcavationLandscapeMaterialMapping>& InMappings)
+{
+    TArray<FExcavationLandscapeMaterialMapping> Candidate;
+    for (const FExcavationLandscapeMaterialMapping& Mapping : InMappings)
+    {
+        if (!IsValid(Mapping.PhysicalMaterial)
+            || Mapping.MaterialId < 1 || Mapping.MaterialId > 31)
+        {
+            continue;
+        }
+
+        bool bDuplicateId = false;
+        for (const FExcavationLandscapeMaterialMapping& Existing : Candidate)
+        {
+            if (Existing.MaterialId == Mapping.MaterialId)
+            {
+                bDuplicateId = true;
+                break;
+            }
+        }
+
+        if (!bDuplicateId)
+        {
+            Candidate.Add(Mapping);
+        }
+    }
+
+    bool bChanged = Candidate.Num() != MaterialMappings.Num();
+    if (!bChanged)
+    {
+        for (int32 Index = 0; Index < Candidate.Num(); ++Index)
+        {
+            if (Candidate[Index].PhysicalMaterial != MaterialMappings[Index].PhysicalMaterial
+                || Candidate[Index].MaterialId != MaterialMappings[Index].MaterialId)
+            {
+                bChanged = true;
+                break;
+            }
+        }
+    }
+
+    if (bChanged)
+    {
+        MaterialMappings = MoveTemp(Candidate);
     }
     return bChanged;
 }
@@ -77,6 +127,38 @@ int32 UExcavationLandscapeDensitySource::SampleBaseMaterialIdAtWorld_Implementat
         return -1;
     }
 
-    // Base layer defaults to ID 0 until a project-specific provider supplies landscape-layer IDs.
+    for (const TWeakObjectPtr<ALandscapeProxy>& WeakProxy : LandscapeProxies)
+    {
+        const ALandscapeProxy* Proxy = WeakProxy.Get();
+        if (!IsValid(Proxy))
+        {
+            continue;
+        }
+
+        const TOptional<float> SurfaceHeight =
+            Proxy->GetHeightAtLocation(WorldPositionCm, EHeightfieldSource::Simple);
+        if (!SurfaceHeight.IsSet())
+        {
+            continue;
+        }
+
+        const UPhysicalMaterial* PhysicalMaterial =
+            Proxy->GetPhysicalMaterialAtLocation(WorldPositionCm, EHeightfieldSource::Simple);
+        if (!IsValid(PhysicalMaterial))
+        {
+            return 0;
+        }
+
+        for (const FExcavationLandscapeMaterialMapping& Mapping : MaterialMappings)
+        {
+            if (Mapping.PhysicalMaterial == PhysicalMaterial)
+            {
+                return Mapping.MaterialId;
+            }
+        }
+
+        return 0;
+    }
+
     return 0;
 }
