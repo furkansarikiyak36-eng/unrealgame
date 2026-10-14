@@ -5,7 +5,9 @@
 #include "InventoryCore/InventoryItem.h"
 #include "StickPhaseS1_Core/StickActor.h"
 #include "StickCore/StickDefinition.h"
+#include "StoneCore/StoneDefinition.h"
 #include "Core/StructuralMaterialTypes.h"
+#include "UObject/SoftObjectPath.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
 #include "LogConstructionActor.h"
@@ -1936,7 +1938,7 @@ void AForestCharacter::Interact()
 	FocusedPickup = nullptr;
 }
 
-APickupItem* AForestCharacter::DropInventoryItem(EForestItem Item, int32 Count)
+AActor* AForestCharacter::DropInventoryItem(EForestItem Item, int32 Count)
 {
 	if (!CoreInventory || !GetWorld() || Count <= 0 || Item == EForestItem::None ||
 		ForestItems::IsCarriedItem(Item))
@@ -1949,24 +1951,146 @@ APickupItem* AForestCharacter::DropInventoryItem(EForestItem Item, int32 Count)
 		return nullptr;
 	}
 
-	const FVector Forward = GetActorForwardVector().GetSafeNormal();
-	const FVector SpawnLocation = GetActorLocation() + Forward * 105.0f + FVector(0.0f, 0.0f, 35.0f);
-	const FTransform DropTransform(FRotator(0.0f, GetActorRotation().Yaw, 0.0f), SpawnLocation);
-	APickupItem* Pickup = APickupItem::Spawn(
-		GetWorld(), Item, Count, DropTransform, Forward * 160.0f + FVector(0.0f, 0.0f, 90.0f));
-	if (!Pickup)
+	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.0f).GetSafeNormal();
+	const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward).GetSafeNormal();
+	const FVector BaseLocation = GetActorLocation() + Forward * 105.0f + FVector(0.0f, 0.0f, 35.0f);
+	TArray<AActor*> SpawnedActors;
+	SpawnedActors.Reserve((Item == EForestItem::Stone || Item == EForestItem::Stick) ? Count : 1);
+
+	auto RollbackSpawnedActors = [&SpawnedActors]()
 	{
-		return nullptr;
+		for (AActor* Spawned : SpawnedActors)
+		{
+			if (IsValid(Spawned))
+			{
+				Spawned->Destroy();
+			}
+		}
+	};
+
+	if (Item == EForestItem::Stone)
+	{
+		UStaticMesh* StoneMesh = ForestItems::GetMesh(Item);
+		if (!StoneMesh)
+		{
+			return nullptr;
+		}
+
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const FVector Location = BaseLocation + Right * (static_cast<float>(Index) * 42.0f);
+			AStoneActor* Stone = GetWorld()->SpawnActor<AStoneActor>(
+				AStoneActor::StaticClass(), Location, FRotator::ZeroRotator);
+			if (!Stone)
+			{
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+
+			UStoneDefinition* Definition = NewObject<UStoneDefinition>(Stone, TEXT("InventoryStoneDefinition"));
+			if (!Definition)
+			{
+				Stone->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			Definition->StoneName = TEXT("InventoryStone");
+			Definition->Type = EStoneType::Granite;
+			Definition->Shape = EStoneShape::Small;
+			Definition->Role = EStoneRole::None;
+			Definition->Dimensions = FVector(13.0f, 10.0f, 9.0f);
+			Definition->Mass = 2.0f;
+			Definition->Volume = 0.0002f;
+			Definition->CompressiveStrength = 180.0f;
+			Definition->TensileStrength = 15.0f;
+			Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
+				FSoftObjectPath(TEXT("/Game/Greybox/Meshes/SM_GB_Stone.SM_GB_Stone")));
+			Stone->InitializeFromDefinition(Definition);
+			if (!Stone->MeshComponent || !Stone->MeshComponent->GetStaticMesh())
+			{
+				Stone->MeshComponent->SetStaticMesh(StoneMesh);
+			}
+			if (!Stone->MeshComponent || !Stone->MeshComponent->GetStaticMesh())
+			{
+				Stone->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			SpawnedActors.Add(Stone);
+		}
+	}
+	else if (Item == EForestItem::Stick)
+	{
+		UStaticMesh* StickMesh = ForestItems::GetMesh(Item);
+		if (!StickMesh)
+		{
+			return nullptr;
+		}
+
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const FVector Location = BaseLocation + Right * (static_cast<float>(Index) * 12.0f);
+			AStickActor* Stick = GetWorld()->SpawnActor<AStickActor>(
+				AStickActor::StaticClass(), Location, GetActorRotation());
+			if (!Stick)
+			{
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+
+			UStickDefinition* Definition = NewObject<UStickDefinition>(Stick, TEXT("InventoryStickDefinition"));
+			if (!Definition)
+			{
+				Stick->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			Definition->StickName = TEXT("InventoryStick");
+			Definition->Shape = EStickShape::Raw;
+			Definition->Size = EStickSize::Short;
+			Definition->Role = EStickRole::Crafting;
+			Definition->Length = 55.0f;
+			Definition->Diameter = 2.8f;
+			Definition->Mass = 0.2f;
+			Definition->Volume = 0.0006f;
+			Definition->Durability = 30.0f;
+			Definition->MaxStackSize = StackSize;
+			Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
+				FSoftObjectPath(TEXT("/Game/Greybox/Meshes/SM_GB_Stick.SM_GB_Stick")));
+			Stick->InitializeFromDefinition(Definition);
+			if (!Stick->MeshComponent || !Stick->MeshComponent->GetStaticMesh())
+			{
+				Stick->MeshComponent->SetStaticMesh(StickMesh);
+			}
+			if (!Stick->MeshComponent || !Stick->MeshComponent->GetStaticMesh())
+			{
+				Stick->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			SpawnedActors.Add(Stick);
+		}
+	}
+	else
+	{
+		const FTransform DropTransform(FRotator(0.0f, GetActorRotation().Yaw, 0.0f), BaseLocation);
+		APickupItem* Pickup = APickupItem::Spawn(
+			GetWorld(), Item, Count, DropTransform, Forward * 160.0f + FVector(0.0f, 0.0f, 90.0f));
+		if (!Pickup)
+		{
+			return nullptr;
+		}
+		SpawnedActors.Add(Pickup);
 	}
 
-	// Spawn first, then debit. If the inventory rejects the debit, remove the
-	// transient actor so a retry cannot duplicate the stack.
+	// One inventory debit commits the entire drop. If any physical spawn or the debit
+	// fails, every temporary actor is removed before returning.
 	if (CoreInventory->DropItem(ItemID, Count) != EInventoryResult::Success)
 	{
-		Pickup->Destroy();
+		RollbackSpawnedActors();
 		return nullptr;
 	}
-	return Pickup;
+	return SpawnedActors.IsEmpty() ? nullptr : SpawnedActors[0];
 }
 
 int32 AForestCharacter::GetItemCount(EForestItem Item) const
