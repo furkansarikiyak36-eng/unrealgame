@@ -4,6 +4,9 @@
 #include "Engine/World.h"
 #include "Components/BoxComponent.h"
 #include "RaidEnemy.h"
+#include "CarvableLog.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneDefinition.h"
 #include "StonePhaseF_Environment/StoneTrapActor.h"
 
 namespace
@@ -126,6 +129,96 @@ bool FStoneTrapNullVictimSafetyTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Rearm remains blocked before cooldown expires"), Trap->bArmed);
     Trap->Trigger(nullptr);
     TestFalse(TEXT("Null victim remains safe and trap stays disarmed"), Trap->bArmed);
+
+    DestroyStoneTrapTestWorld(World);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FStoneTrapPhysicalStoneDamageTest,
+    "MyProject2.StoneTrap.Damage.PhysicalStone",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FStoneTrapPhysicalStoneDamageTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateStoneTrapTestWorld();
+    if (!TestNotNull(TEXT("Test world created"), World))
+    {
+        return false;
+    }
+
+    AStoneTrapActor* Trap = World->SpawnActor<AStoneTrapActor>(
+        FVector::ZeroVector, FRotator::ZeroRotator);
+    AStoneActor* Stone = World->SpawnActor<AStoneActor>(
+        FVector(100.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
+    TestNotNull(TEXT("Stone trap created"), Trap);
+    TestNotNull(TEXT("Physical stone created"), Stone);
+    if (!Trap || !Stone)
+    {
+        DestroyStoneTrapTestWorld(World);
+        return false;
+    }
+
+    UStoneDefinition* Definition = NewObject<UStoneDefinition>(Stone);
+    TestNotNull(TEXT("Stone definition created"), Definition);
+    if (!Definition)
+    {
+        DestroyStoneTrapTestWorld(World);
+        return false;
+    }
+
+    Definition->StoneName = FName(TEXT("TrapTestStone"));
+    Definition->CompressiveStrength = 100.0f; // max health = 50
+    Stone->InitializeFromDefinition(Definition);
+    Trap->TrapType = EStoneTrapType::SpikeStone;
+    Trap->Damage = 10.0f;
+    Trap->Cooldown = 0.0f;
+
+    TestTrue(TEXT("Stone starts with expected health"),
+        FMath::IsNearlyEqual(Stone->GetHealth(), 50.0f, 0.01f));
+    Trap->Trigger(Stone);
+    TestTrue(TEXT("Stone trap routes damage into AStoneActor"),
+        FMath::IsNearlyEqual(Stone->GetHealth(), 40.0f, 0.01f));
+
+    DestroyStoneTrapTestWorld(World);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FStoneTrapLogDamageTest,
+    "MyProject2.StoneTrap.Damage.CarvableLog",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FStoneTrapLogDamageTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateStoneTrapTestWorld();
+    if (!TestNotNull(TEXT("Test world created"), World))
+    {
+        return false;
+    }
+
+    AStoneTrapActor* Trap = World->SpawnActor<AStoneTrapActor>(
+        FVector::ZeroVector, FRotator::ZeroRotator);
+    ACarvableLog* Log = World->SpawnActor<ACarvableLog>(
+        FVector(100.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
+    TestNotNull(TEXT("Stone trap created"), Trap);
+    TestNotNull(TEXT("Carvable log created"), Log);
+    if (!Trap || !Log)
+    {
+        DestroyStoneTrapTestWorld(World);
+        return false;
+    }
+
+    Trap->TrapType = EStoneTrapType::SpikeStone;
+    Trap->Damage = 10.0f;
+    Trap->LogDamageFractionPerPoint = 0.02f;
+    Trap->Cooldown = 0.0f;
+
+    TestTrue(TEXT("Log starts undamaged"),
+        FMath::IsNearlyEqual(Log->GetDamage(), 0.0f, 0.001f));
+    Trap->Trigger(Log);
+    TestTrue(TEXT("Stone trap converts points to normalized CarvableLog damage"),
+        FMath::IsNearlyEqual(Log->GetDamage(), 0.2f, 0.001f));
 
     DestroyStoneTrapTestWorld(World);
     return true;
