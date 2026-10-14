@@ -60,6 +60,7 @@ protected:
  bool bAutomaticSchedulingEnabled=false;
  FName AutoScheduleEventID=TEXT("ScheduledHordeNight");
  int32 BudgetWaveIndex=INDEX_NONE;
+ int32 EventBudgetRemaining=0;
  void CaptureContext(); void EvaluateDifficulty(); void BuildPlan(); void ProcessSpawns(float DeltaTime); void ProcessWaveTick(float DeltaTime);
  bool ValidateCurrentPlan(FString& OutError) const;
  void CleanupManagedEnemies();
