@@ -81,3 +81,12 @@ Bunlar kaynak kodu ve beş Unreal Automation Test kaydıdır; UE 5.8 build/test 
 Son kaynak turunda yapısal hedefe anonim (NAME_None) bağlantı bırakma davranışı kaldırıldı. Yerleştirme kaynak yüzünün/socket'inin yerel kimliğini kaydeder ve hedef AStoneActor üzerindeki yakın, doğru yöne bakan, boş socket bulunmadan yapısal commit yapmaz. UStructuralGraph::ConnectTo reciprocal link'i iki uçta kaydeder; hedef socket doluysa commit reddedilir. Diğer legacy structural actor ailelerine adapter bu değişiklikte eklenmedi ve fail-closed kalıyor.
 
 StonePlacementTests.cpp beş otomasyon senaryosu içeriyor; bunlar UE 5.8 hostunda henüz çalıştırılmadı. Faz 0 açık kalır.
+
+
+## Stone Trap P0-025 — ilk kod uygulaması
+
+- Trigger volume için Pawn overlap ve BeginOverlap callback eklendi.
+- Bilinen alıcılar: RaidEnemy, player, StoneActor ve CarvableLog; diğer aktörler standard Unreal damage event yolunu kullanır.
+- Rearm cooldown'u atlayamaz.
+- İki motor otomasyon testi eklendi; Windows test runner ayrı StoneTrap suite'ini çalıştırıp en az iki benzersiz başarılı sonuç ister.
+- Unreal Engine 5.8 testleri henüz çalıştırılmadı. Damage tuning/physics/overlap kabulü açık.
