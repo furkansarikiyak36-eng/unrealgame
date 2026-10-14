@@ -203,3 +203,10 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - Kütük hasarı için configurable raw-damage-to-normalized-fraction çarpanı eklendi.
 - Rearm, cooldown süresi tamamlanmadan tuzağı tekrar aktif hale getirmiyor.
 - İki UE Automation Test eklendi; Scripts/run_tests.sh ve log verifier güncelleniyor. UE 5.8 build/test henüz çalıştırılmadı.
+
+
+### 2026-10-14 — Stone Trap fiziksel hedef overlap kapsamı
+
+- TriggerVolume overlap tepkisi Pawn yanında PhysicsBody kanalına da açıldı; fiziksel taş/kütük gövdeleri de trigger event üretebilir.
+- StoneTrap otomasyon testinde iki collision kanalının overlap ayarı assertion ile kontrol ediliyor.
+- Son kaynak diff'i için Python tooling CI tetiklendi; UE 5.8 derlemesi ve C++ testleri bu ortamda çalıştırılmadı.
