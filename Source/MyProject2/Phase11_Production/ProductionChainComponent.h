@@ -133,6 +133,7 @@ protected:
     void NotifyStateChanged(const FGuid& JobId = FGuid(), EProductionJobStatus Status = EProductionJobStatus::Queued);
     static bool IsActiveStatus(EProductionJobStatus Status);
     static bool IsValidSavedJob(const FProductionJob& Job);
+    bool UsesCorePersistedInventories() const;
 
     static constexpr int32 MaxBatchCount = 100;
     static constexpr int32 MaxDeltaSecondsPerTick = 5;
