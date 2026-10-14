@@ -5,6 +5,13 @@
 #include "ExcavationTypes.h"
 #include "ExcavationVolumeSubsystem.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+    FOnExcavationVolumeChanged,
+    const FExcavationEditRecord&, EditRecord,
+    bool, bIsRollback);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnExcavationVolumeReset);
+
 /**
  * Sparse 3D override storage for local excavation edits.
  *
@@ -19,6 +26,14 @@ class MYPROJECT2_API UExcavationVolumeSubsystem : public UWorldSubsystem
 
 public:
     virtual void Deinitialize() override;
+
+    /** Informs geometry/collision adapters of committed edits and rollbacks. */
+    UPROPERTY(BlueprintAssignable, Category = "Excavation|Events")
+    FOnExcavationVolumeChanged OnVolumeChanged;
+
+    /** Informs adapters that a complete snapshot replaced the sparse state. */
+    UPROPERTY(BlueprintAssignable, Category = "Excavation|Events")
+    FOnExcavationVolumeReset OnVolumeReset;
 
     /**
      * Apply an all-or-nothing spherical carve/fill against cell centers.
