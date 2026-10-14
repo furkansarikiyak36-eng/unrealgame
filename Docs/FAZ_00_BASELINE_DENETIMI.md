@@ -3,11 +3,11 @@
 **Tarih:** 14 Ekim 2026  
 **Repo:** `furkansarikiyak36-eng/unrealgame`  
 **Dal:** `plan/phase-00-baseline`  
-**Durum:** Devam ediyor — bu belge ilk statik kaynak denetimini kaydeder; tüm 485 katalog satırının incelendiği iddiasında değildir.
+**Durum:** Faz 0 baseline kapısı tamamlandı — kaynak triage 485/485 satıra senkronlandı; özellik ve test açıkları sahip fazlara aktarıldı.
 
 ## Amaç
 
-Mekanikleri sınıf/fonksiyon adlarıyla değil, gerçek oynanış akışı ve kanıtla değerlendirmek. Faz 1'e geçiş kapısı, 485 satırlık katalogda her gereksinimin sahibi, çağrı zinciri, mevcut durum, test ve açık riski kayıt altına almaktır.
+Mekanikleri sınıf/fonksiyon adlarıyla değil, gerçek oynanış akışı ve kanıtla değerlendirmek. Faz 1'e geçiş kapısı, 485 satırlık katalog kimliklerinin aile eşleştirmeleriyle bire bir tutması; U0–U2 statik kaynak triage durumu, kanıt izi ve blocker/not alanlarının ana kataloğa aktarılmasıdır. Satır bazlı UE otomasyonu ve görsel kabul, özellikleri uygulayan fazlarda üretilir; bunlar bütün kod çalışmalarını başlatmadan önce tamamlanması gereken küresel bir kapı değildir.
 
 ## İncelenen kaynaklar
 
@@ -97,29 +97,29 @@ These changes have been made on `plan/phase-00-baseline`; they are not yet merge
 - `Scripts/verify_test_logs.py` fails closed when the MechanicsDemo summary is missing, any failure is reported, no individual Wood automation results are parseable, a Wood test fails, results conflict/duplicate, or the report falls below the recorded regression floor (**101 MechanicsDemo checks and 12 unique Wood tests**).
 - `Scripts/tests/test_verify_test_logs.py` covers valid logs, failed mechanics checks, missing mechanics summary, failed Wood tests, missing Wood results, and both minimum-count regressions.
 - `Scripts/run_tests.sh` captures the build exit code, fails on missing logs or non-zero Unreal process exit, runs log verification before regenerating the report, and retains build/test logs. It also supports `UE_ENGINE_ROOT` to avoid a hard-coded install path.
-- These are infrastructure changes only. **No Unreal Engine build or editor run has been performed in this environment**, so the shell runner still needs validation on the actual Windows + UE 5.8 host. The 101/12 minimums are taken from the existing repository report and should be changed only with an explicit baseline decision.
+- These are infrastructure changes only. **No Unreal Engine build/editor run was performed by this assistant.** As requested, UE-specific automation is delegated to the project's Claude Code/UE host workflow; source implementation and platform-independent regression checks continue without waiting for this environment to have Unreal installed. A feature is not reported as engine-tested until that workflow supplies a real result. The 101/12 minimums remain inherited from the existing repository report.
 
-## Faz 0 çıkış kriterleri
+## Faz 0 çıkış kriterleri — sonuç
 
-Faz 0 tamamlanmış sayılmadan önce:
+- [x] Kanonik katalogdaki 485 satırın kalıcı ID'leri mevcut; yinelenen ID yok.
+- [x] Dokuz aile eşleştirmesi ana katalogla bire bir uyumlu: toplam 485/485.
+- [x] Kaynak triage durumları ve satır-bazlı kaynak izi, test/editör bekleyenleri, blocker/notlar ana katalogla senkronlandı.
+- [x] U0–U2 seviyeleri doğru şekilde korunuyor; doğrulanmayan mekanikler tamamlandı olarak yükseltilmedi.
+- [x] Inventory ownership ADR ve kritik bulgu matrisi mevcut; daha sonraki fazlara ait entegrasyon riskleri açık tutuluyor.
+- [x] UE-specific test runner, yalnızca uygun Claude Code/Unreal host ortamında çalıştırılacak; bu ortamda motor testi yapılmadığı başarı olarak gösterilmiyor.
+- [x] Kazı teknolojisi için A/B adayları ve ölçüm alanları tanımlandı; gerçek benchmark gelmeden nihai seçim yapılmıyor.
 
-- [ ] Katalogdaki 485 satırın her birinde kalıcı ID bulunmalı.
-- [ ] Her satır için kaynak dosyası/metot ve çağrı zinciri doldurulmalı; yoksa açıkça “bulunamadı” yazılmalı.
-- [ ] Her satır U0–U6 durumlarından biriyle, kanıtı gösterilerek etiketlenmeli.
-- [ ] Otomatik test kapsamı ile editor test kapsamı ayrılmalı.
-- [ ] Çakışan authoritative state sahipleri karara bağlanmalı.
-- [ ] Yeni fail-closed test runner, Windows + UE 5.8 ana makinesinde gerçek derleme/test ile doğrulanmalı; süreç çıkış kodları ve log ayrıştırması beklenen sonucu vermeli.
-- [ ] Gerçek UE 5.8 baseline logları oluşturulmalı; bu çalışma ortamından henüz koşturulmuş gibi gösterilmemeli.
-- [ ] Kazı spike'ının karşılaştıracağı teknoloji seçenekleri ve ölçümler onaylanmalı.
+**Faz 0 sonucu:** Baseline/source-triage kapısı geçildi. Bu, 485 mekaniğin tamamlandığı anlamına gelmez. Açık U0 satırları ve sistem entegrasyon bulguları kendilerine ait uygulama fazlarında kapatılacak. **Faz 1 kaynak kod çalışması artık başlayabilir;** A/B kazı teknolojisinin nihai seçimi ise ölçüm kanıtına bağlıdır.
 
-**Sıradaki çalışma:** önce CSV katalog satırlarını repo dosyaları ve çağrı zincirlerine bağlamak; ardından U0 olarak kalan en yüksek riskli sistemlerden başlayarak gerçek bir davranış ve test kanıtı elde etmek. Faz 1 kazı spike'ına ancak Phase 0 çıkış kapısı geçildikten sonra başlanır.
+**Sıradaki çalışma:** Faz 1'de karşılaştırılabilir iki kazı temsilini ve deterministik ölçüm/validasyon girişlerini kurmak; bunu yaparken Faz 2'nin kanonik dünya kimliği, sparse delta ve kayıt sözleşmeleriyle çelişmemek.
+
 
 
 ## 14 Ekim 2026 — katalog kapısı ve denetleyici
 
 Eklenen denetleyici: `Scripts/audit_mechanic_catalog.py`; bağımsız test paketi: `Scripts/tests/test_audit_mechanic_catalog.py`.
 
-Yerel katalog çıktısında 485 satır, 485 benzersiz ID, 0 yinelenen ID ve 485 adet `U0 — denetim gerekli` bulunuyor. Bu sonuç katalog şemasının düzgün olduğunu, ancak mekaniklerin kanıtlanmadığını gösterir. Bu nedenle Faz 0 **aktif kalır**; tüm satırlar için kaynak sahibi, çağrı zinciri, otomatik test kanıtı, editör kanıtı ve blocker bilgisi tamamlanmadan Faz 1 çıkış kapısı açılmaz.
+14 Ekim 2026 senkronundan sonra ana katalogda 485 satır ve 485 benzersiz ID var; yinelenen ID, zorunlu metadata hatası ve kanıt alanı boşluğu 0. Kaynak triage dağılımı **333 U2, 88 U1, 64 U0**. Bu seviyeler mekaniklerin oyunda tamamlandığını değil kaynak izi ve belirsizlik durumunu gösterir. Faz 0 baseline kapısı bu nedenle geçildi; 64 U0 gereksinim uydurulmadan açık kalır ve ilgili teslim fazlarında ele alınır.
 
 Denetim komutu:
 
@@ -219,7 +219,7 @@ P0-025 için test suite iki senaryodan dört senaryoya genişledi: düşman hasa
 - `Scripts/validate_catalog_mapping.py` ve 8 birim testi, ana katalog ile LOG/INVENTORY/RAID/WORLD/MATERIAL/FARMING/CORE/STONE/STICK eşleştirme CSV'lerinin kimlik ve sistem kapsamını bire bir uzlaştırıyor.
 - Python CI run #38515014058 başarılıdır. Bu kontrol kodun UE C++ derlemesini veya oyun içi davranışını sınamaz.
 - RAID kaynağındaki 69 başlık / 63 detay sayımı P0-001 olarak açık kalıyor. Sayı kararını kaynak gereksinim sahibi doğrulamadan yeni mekanik ID'leri oluşturulmayacak.
-- Faz 0 kapanışı için 485 mekanik kaydının her birinde kaynak/çağrı zinciri ve test kanıtı, ilgili U0/U1 boşluklarının çözümü, kalan sistem sahipliği kararları ve Windows + UE 5.8 baseline testleri gerekiyor.
+- Faz 0 kapanışı için 485 satırın kimlik/aile eşleştirmesi ve U0–U2 kaynak triage kaydı gerekiyordu; bunlar tamamlandı ve ana kataloğa senkronlandı. U0 feature work, row-level automation/editor proof, RAID başlık sayısı kararı ve envanter/yapı/world entegrasyon sorunları ilgili uygulama fazlarında açık blocker olarak sürer. UE 5.8 test çıktıları Claude Code üzerinden ilgili kabul kapılarında alınır; burada motor testi çalıştırılmamış olması kod geliştirmeyi durdurmaz.
 
 
 ## Envanter tek-otorite kararı (ADR-001)
