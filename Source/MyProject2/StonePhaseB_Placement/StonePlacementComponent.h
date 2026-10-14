@@ -24,5 +24,9 @@ protected:
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) TObjectPtr<AStoneActor> PreviewStone = nullptr;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) FTransform TargetTransform;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) TArray<TObjectPtr<AStoneActor>> PlacementHistory;
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) int32 PlacementOptionIndex = INDEX_NONE;
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) FVector TargetSurfaceNormal = FVector::UpVector;
+
+    void ApplySelectedPlacementOption();
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 };
