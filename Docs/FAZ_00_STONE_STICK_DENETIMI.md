@@ -109,3 +109,14 @@ Cooldown işlemi de düzeltildi: bir tuzak cooldown bitmeden Rearm çağrısıyl
 ### Ek not — Stone Trap overlap kanalları
 
 Trap trigger volume artık Pawn **ve** PhysicsBody ile overlap yapacak şekilde ayarlı; böylece karakter/düşman yanında fiziksel taş ve kütük gövdeleri de tetik alanına girebilir. StoneTrapTests.cpp, bu iki collision cevabını açık assertion ile kontrol ediyor. Bu yalnızca test kodudur; gerçek Unreal overlap/physics davranışı UE 5.8'de çalıştırılana kadar onaylanmış sayılmaz.
+
+
+### Stone Trap alıcı testleri genişletildi
+
+StoneTrapTests.cpp artık dört test içerir:
+- Damage.DispatchAndCooldown — ARaidEnemy receiver, cooldown ve rearm.
+- Damage.NullVictimSafety — null victim güvenliği ve cooldown.
+- Damage.PhysicalStone — AStoneActor health azalması.
+- Damage.CarvableLog — yapı kütüğünde normalize hasar artışı.
+
+Windows/UE 5.8 test runner ve log verifier bu suite için en az dört benzersiz başarılı test sonucu istiyor. Kod ve test kaynakları branch'te; UE 5.8 C++ build/automation hâlâ çalıştırılmadı.
