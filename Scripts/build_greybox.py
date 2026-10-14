@@ -565,7 +565,6 @@ def build_contextual_demo_map(made, m):
         spawn_raw_carvable(carvable_class, made['RawLog_500'], (500, 850, 16), 'Stock_Raw_500', 'WoodStock')
         spawn_raw_carvable(carvable_class, made['RawLog_375'], (1050, 950, 16), 'Stock_Raw_375', 'WoodStock')
         spawn_raw_carvable(carvable_class, made['RawLog_250'], (1500, 850, 16), 'Stock_Raw_250', 'WoodStock')
-    spawn_mesh(made['Plank'], (900, 1200, 3), label='Example_Plank_Not_Placed', folder='WoodStock')
     # One usable cart and sled sit beside the stock, not randomly scattered across the map.
     cart_class = unreal.load_class(None, '/Script/MyProject2.HaulCart')
     if cart_class:
