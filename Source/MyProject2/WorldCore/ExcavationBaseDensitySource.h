@@ -12,7 +12,7 @@
  * heightfield or procedural terrain provide its baseline without owning or
  * duplicating the sparse 3D excavation delta.
  */
-UINTERFACE(BlueprintType)
+UINTERFACE(BlueprintType, Blueprintable)
 class MYPROJECT2_API UExcavationBaseDensitySource : public UInterface
 {
     GENERATED_BODY()
