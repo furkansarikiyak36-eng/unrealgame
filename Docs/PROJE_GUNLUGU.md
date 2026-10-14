@@ -305,3 +305,11 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Chunk başına override indeksi, negatif koordinatlar için floor division, seam komşu chunk listesi, edit/rollback değişim event'i ve snapshot-reset event'i sağlandı.
 - Faz 1 kapsamı veri çekirdeği olarak kodlandı. Gerçek terrain sınıfı provider implementasyonu, mesh/collision/nav üretimi ve genel world persistence ayrı sonraki fazlarda bağlanacak.
 - GitHub Actions Python tooling run #459 başarılı; bu Unreal C++ derlemesi değildir. UE 5.8 testleri bu aşamada çalıştırılmadı; Claude Code/UE host akışına bırakıldı ve Faz 1 kodlaması bu nedenle bloke edilmedi.
+
+### 2026-10-14 — Faz 2: dünya kimliği, idempotency ve kayıt zarfı
+
+- `UWorldPersistenceSubsystem` eklendi: kanonik dünya ID'si, kaydedilen world seed, değişiklik revizyonu, kazı commit/rollback/reset olaylarını dinleme ve çekirdek kayıt yüklenirken yapay revizyon artışını bastırma.
+- Sphere/capsule/box editleri için caller-provided `FGuid` ile idempotent command ingress eklendi. Aynı komut kimliği bellekte veya save/load sonrasında defterdeyse ikinci edit uygulanmıyor; geçersiz/reddedilmiş çağrılar deftere yazılmıyor.
+- `UWorldCoreSaveGame` manifest, sparse excavation snapshot ve son 100.000 komut/olay anahtarını saklıyor. Yükleme manifest/defterleri doğruluyor ve ancak snapshot importer kabul ederse canlı kazı durumunu değiştiriyor. Commit ve rollback aynı operasyon ID'sini kullansa da farklı olay anahtarına sahip.
+- Faz 2 statik Python kontrat testi CI betiğine bağlandı. Bu kod kazı delta'sı ve ortak save envelope temelini sağlar; terrain geometri, envanter ve diğer domain kayıtlarının tamamlandığını iddia etmez.
+- Unreal Engine 5.8 build/Automation bu oturumda çalıştırılmadı; çalışma ağacına kaydedildiğinde yalnızca hafif statik CI kontrolü yapılır. Motor doğrulaması ve kapsamlı sistem denetimi Faz 14'te.
