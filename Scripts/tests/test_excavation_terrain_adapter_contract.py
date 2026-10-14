@@ -10,6 +10,8 @@ ACTOR_CPP = (WORLD_CORE / "ExcavationTerrainChunkActor.cpp").read_text(encoding=
 SUBSYSTEM_H = (WORLD_CORE / "ExcavationTerrainChunkSubsystem.h").read_text(encoding="utf-8")
 SUBSYSTEM_CPP = (WORLD_CORE / "ExcavationTerrainChunkSubsystem.cpp").read_text(encoding="utf-8")
 BASE_SOURCE = (WORLD_CORE / "ExcavationFlatBaseDensitySource.cpp").read_text(encoding="utf-8")
+LANDSCAPE_SOURCE = (WORLD_CORE / "ExcavationLandscapeDensitySource.cpp").read_text(encoding="utf-8")
+BUILD_SPEC = (ROOT / "Source" / "MyProject2" / "MyProject2.Build.cs").read_text(encoding="utf-8")
 VOLUME_H = (WORLD_CORE / "ExcavationVolumeSubsystem.h").read_text(encoding="utf-8")
 VOLUME_CPP = (WORLD_CORE / "ExcavationVolumeSubsystem.cpp").read_text(encoding="utf-8")
 
@@ -54,6 +56,15 @@ class ExcavationTerrainAdapterContractTests(unittest.TestCase):
         self.assertLess(SUBSYSTEM_CPP.find("Actor->ChunkCoordinate = Coordinate"),
                         SUBSYSTEM_CPP.find("Actor->FinishSpawning(FTransform::Identity)"))
         self.assertIn("ManagedChunkActors", SUBSYSTEM_H)
+
+    def test_loaded_landscape_proxies_can_feed_the_base_density_layer(self):
+        self.assertIn('"Landscape"', BUILD_SPEC)
+        self.assertIn("ALandscapeProxy", LANDSCAPE_SOURCE)
+        self.assertIn("GetHeightAtLocation", LANDSCAPE_SOURCE)
+        self.assertIn("EHeightfieldSource::Simple", LANDSCAPE_SOURCE)
+        self.assertIn("return WorldPositionCm.Z <= SurfaceHeight.GetValue() ? 1.0f : 0.0f", LANDSCAPE_SOURCE)
+        self.assertIn("TActorIterator<ALandscapeProxy>", SUBSYSTEM_CPP)
+        self.assertIn("RegisterFallbackBaseDensitySource(LandscapeFallbackDensitySource)", SUBSYSTEM_CPP)
 
     def test_mesh_adapter_does_not_own_a_second_density_store(self):
         self.assertNotIn("CellOverrides", ACTOR_H + ACTOR_CPP)
