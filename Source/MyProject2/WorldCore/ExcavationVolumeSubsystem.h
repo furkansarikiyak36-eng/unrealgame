@@ -55,6 +55,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool TrySampleDensityAtWorld(const FVector& WorldPositionCm, float& OutDensity) const;
 
+    /** Samples the base provider only (ignores excavation density overrides) for exposed-surface material selection. */
+    UFUNCTION(BlueprintPure, Category = "Excavation|Materials")
+    bool TrySampleBaseMaterialIdAtWorld(const FVector& WorldPositionCm, int32& OutMaterialId) const;
+
     /** Register an active provider (for example, a Blueprint implementing UExcavationBaseDensitySource). */
     UFUNCTION(BlueprintCallable, Category = "Excavation")
     bool RegisterBaseDensitySource(UObject* Source);
