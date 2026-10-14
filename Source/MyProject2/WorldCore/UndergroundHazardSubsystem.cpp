@@ -73,6 +73,9 @@ void UUndergroundHazardSubsystem::Deinitialize()
     OpenCaveCellSet.Reset();
     PendingStabilityCells.Reset();
     PendingStabilityCellSet.Reset();
+    PendingVolumeReconciliations.Reset();
+    PendingVolumeReconciliationSet.Reset();
+    SurfaceCellsProcessedThisTick.Reset();
     Super::Deinitialize();
 }
 
@@ -90,6 +93,29 @@ void UUndergroundHazardSubsystem::Tick(float DeltaTime)
 {
     const int32 CollapseBudget = FMath::Clamp(MaxCollapseCellsPerTick, 0, 8);
     const int32 StabilityBudget = CollapseBudget == 0 ? 0 : FMath::Clamp(MaxStabilityChecksPerTick, 1, 256);
+
+    const int32 ReconcileBudget = FMath::Clamp(MaxVolumeReconciliationChecksPerTick, 1, 2048);
+    int32 ReconcileChecks = 0;
+    while (VolumeReconciliationCursor < PendingVolumeReconciliations.Num()
+        && ReconcileChecks < ReconcileBudget)
+    {
+        const FIntVector Cell = PendingVolumeReconciliations[VolumeReconciliationCursor++];
+        PendingVolumeReconciliationSet.Remove(Cell);
+        RefreshOpenCellTracking(Cell);
+        ++ReconcileChecks;
+    }
+
+    if (VolumeReconciliationCursor >= PendingVolumeReconciliations.Num())
+    {
+        PendingVolumeReconciliations.Reset();
+        PendingVolumeReconciliationSet.Reset();
+        VolumeReconciliationCursor = 0;
+    }
+    else if (VolumeReconciliationCursor >= 512)
+    {
+        PendingVolumeReconciliations.RemoveAt(0, VolumeReconciliationCursor, EAllowShrinking::No);
+        VolumeReconciliationCursor = 0;
+    }
     int32 Checks = 0;
     int32 Collapses = 0;
 
@@ -347,6 +373,18 @@ int32 UUndergroundHazardSubsystem::ComputeCavitySpan(const FIntVector& Cell) con
     return BestSpan;
 }
 
+void UUndergroundHazardSubsystem::EnqueueVolumeReconciliation(const FIntVector& Cell)
+{
+    if (PendingVolumeReconciliationSet.Contains(Cell)
+        || PendingVolumeReconciliations.Num() >= FMath::Clamp(MaxPendingVolumeReconciliations, 1, 300000))
+    {
+        return;
+    }
+
+    PendingVolumeReconciliationSet.Add(Cell);
+    PendingVolumeReconciliations.Add(Cell);
+}
+
 void UUndergroundHazardSubsystem::EnqueueStabilityCell(const FIntVector& Cell)
 {
     if (PendingStabilityCellSet.Contains(Cell)
@@ -406,8 +444,7 @@ void UUndergroundHazardSubsystem::HandleExcavationChanged(const FExcavationEditR
 {
     for (const FExcavationCellChange& Change : Record.Changes)
     {
-        // Sample post-transaction density so fills, rollbacks and reloads share the same reconciliation path.
-        RefreshOpenCellTracking(Change.Cell);
+        EnqueueVolumeReconciliation(Change.Cell);
     }
 
     if (!Record.Changes.IsEmpty() && !bResolvingCollapse)
@@ -428,7 +465,10 @@ void UUndergroundHazardSubsystem::HandleExcavationReset()
     OpenCaveCellSet.Reset();
     PendingStabilityCells.Reset();
     PendingStabilityCellSet.Reset();
+    PendingVolumeReconciliations.Reset();
+    PendingVolumeReconciliationSet.Reset();
     StabilityQueueCursor = 0;
+    VolumeReconciliationCursor = 0;
     HydrologyCursor = 0;
     SeedOpenCellTrackingFromSnapshot();
 }
@@ -545,6 +585,12 @@ void UUndergroundHazardSubsystem::ProcessHydrologyCell(const FIntVector& Cell)
     }
 
     const FVector CavePosition = Excavation->CellToWorldCenter(Cell);
+    float CurrentCaveDensity = 1.0f;
+    if (!TrySampleCellDensity(Cell, CurrentCaveDensity) || CurrentCaveDensity >= 0.5f)
+    {
+        RefreshOpenCellTracking(Cell);
+        return;
+    }
     FChunkCell* SurfaceCell = nullptr;
     UChunkState* SourceChunk = nullptr;
     int32 SourceCellIndex = INDEX_NONE;
