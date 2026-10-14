@@ -12,12 +12,14 @@
 | Katalog satırı | 485 |
 | Benzersiz ID | 485 |
 | Yinelenen ID | 0 |
-| Şema/kimlik hatası | 0 |
+| Şema/kimlik/kanıt alanı hatası | 485 |
 | U0 — denetim gerekli | 485 |
 | Kanıtlanmış U1–U6 satırı | 0 |
 | Kanıtlanmamış/haritalanmamış satır | 485 |
 
-Bu raporun ana sonucu “485 mekanik başarısız” değildir. Sonuç, **485 mekanik için henüz satır bazlı çağrı zinciri ve doğrulama kanıtı kaydedilmediği** anlamına gelir. Dizin/sınıf adı veya genel test raporu tek başına belirli katalog maddesini U3–U6 seviyesine yükseltmez.
+Bu raporun ana sonucu “485 mekanik başarısız” değildir. Sonuç, **485 mekanik için henüz satır bazlı çağrı zinciri ve doğrulama kanıtı kaydedilmediği** anlamına gelir. İlk sıkı denetimde 485 satırın tamamında `Bagimlilik_Bloker` ve `Acik_Notlar` alanları boştu; bu nedenle satır başına kanıt/meta veri boşluğu sayıldı. Dizin/sınıf adı veya genel test raporu tek başına belirli katalog maddesini U3–U6 seviyesine yükseltmez.
+
+Denetleyici için 9 birim test izole Python ortamında geçti (kaynak-konum zorunluluğu, açıklanmamış blocker/not alanı, U0, bilinmeyen seviye, duplicate ID ve eksik şema dahil). Unreal Engine derlemesi veya GitHub Actions sonucu bu testin parçası değildir.
 
 ## Sonraki denetim düzeni
 
