@@ -271,13 +271,11 @@ bool RaidKit::StartDefaultRaid(UWorld* World)
 
 void RaidKit::StopRaid(UWorld* World)
 {
+	// The director is the single owner of spawned raid actors. Never destroy every
+	// ARaidEnemy in the world; that could remove actors belonging to another system.
 	if (URaidDirectorSubsystem* Director = World ? World->GetSubsystem<URaidDirectorSubsystem>() : nullptr)
 	{
 		Director->CancelRaid(TEXT("Stopped"));
-	}
-	for (TActorIterator<ARaidEnemy> It(World); It; ++It)
-	{
-		It->Destroy();
 	}
 }
 
