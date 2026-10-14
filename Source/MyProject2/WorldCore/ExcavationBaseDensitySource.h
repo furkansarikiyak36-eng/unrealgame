@@ -23,6 +23,6 @@ class MYPROJECT2_API IExcavationBaseDensitySource
     GENERATED_BODY()
 
 public:
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Excavation|Base Density")
+    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, BlueprintPure, Category = "Excavation|Base Density")
     float SampleBaseDensityAtWorld(const FVector& WorldPositionCm) const;
 };
