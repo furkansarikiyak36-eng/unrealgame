@@ -103,6 +103,13 @@ float AUndergroundSupportActor::ApplyDamage(float Amount, const FVector& Directi
 
     const float Remaining = Super::ApplyDamage(Amount, Direction);
     CurrentIntegrity = FMath::Clamp(Remaining, 0.0f, MaximumIntegrity);
+    if (UWorld* World = GetWorld())
+    {
+        if (UUndergroundHazardSubsystem* Hazards = World->GetSubsystem<UUndergroundHazardSubsystem>())
+        {
+            Hazards->NotifySupportActorChanged(this);
+        }
+    }
     return CurrentIntegrity;
 }
 
@@ -124,6 +131,13 @@ void AUndergroundSupportActor::ApplyMoistureExposure(float WaterVolumeM3)
     if (CurrentIntegrity <= 0.0f)
     {
         TriggerChaosCollapse(FVector(0.0f, 0.0f, -80.0f));
+    }
+    else if (UWorld* World = GetWorld())
+    {
+        if (UUndergroundHazardSubsystem* Hazards = World->GetSubsystem<UUndergroundHazardSubsystem>())
+        {
+            Hazards->NotifySupportActorChanged(this);
+        }
     }
 }
 
