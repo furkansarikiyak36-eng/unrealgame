@@ -43,6 +43,10 @@ public:
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool TryGetDensityOverrideAtCell(const FIntVector& Cell, float& OutDensity) const;
 
+    /** Use caller-sampled base terrain density when this sparse overlay has no entry. */
+    UFUNCTION(BlueprintPure, Category = "Excavation")
+    bool ResolveDensityAtCell(const FIntVector& Cell, float BaseDensity, float& OutDensity) const;
+
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool IsCellOverridden(const FIntVector& Cell) const;
 
@@ -83,6 +87,7 @@ protected:
     /** Captures the grid size used by live overrides so changing config cannot remap them. */
     float LockedCellSizeCm = 0.0f;
     int32 LockedCellsPerChunkAxis = 0;
+    bool IsGridConfigurationCompatible() const;
 
     /** Derived index for localized mesh/collision updates; rebuilt from CellOverrides after restore. */
     TMap<FIntVector, TSet<FIntVector>> CellsByChunk;
