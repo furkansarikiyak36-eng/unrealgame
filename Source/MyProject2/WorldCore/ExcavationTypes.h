@@ -102,3 +102,38 @@ struct MYPROJECT2_API FExcavationEditRecord
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
     bool bCommitted = false;
 };
+
+/** Persistable sparse override row. Runtime rollback ownership IDs are intentionally not saved. */
+USTRUCT(BlueprintType)
+struct MYPROJECT2_API FExcavationCellSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Excavation|Save")
+    FIntVector Cell = FIntVector::ZeroValue;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Excavation|Save")
+    float Density = 0.0f;
+};
+
+/** Versioned data transfer contract consumed by the later world-persistence adapter. */
+USTRUCT(BlueprintType)
+struct MYPROJECT2_API FExcavationVolumeSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Excavation|Save")
+    int32 SchemaVersion = 1;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Excavation|Save")
+    float CellSizeCm = 50.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Excavation|Save")
+    int32 CellsPerChunkAxis = 32;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Excavation|Save")
+    float DefaultBaseDensity = 1.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Excavation|Save")
+    TArray<FExcavationCellSnapshot> Overrides;
+};
