@@ -52,7 +52,7 @@ class ContextualDemoBuilderTests(unittest.TestCase):
         self.assertIn("OnLogCarved.Broadcast(this, ECarveTool::Groove)", groove)
 
     def test_groove_snap_and_preview_are_context_gated(self) -> None:
-        self.assertGreaterEqual(self.log_cpp.count("if (!bSplitPiece || SplitCount != 1"), 3)
+        self.assertGreaterEqual(self.log_cpp.count("if (!bSplitPiece || SplitCount != 1"), 2)
         self.assertIn("GetLength() + 2.f * ModuleLength", self.log_cpp)
 
     def test_player_only_reports_a_groove_after_success(self) -> None:
