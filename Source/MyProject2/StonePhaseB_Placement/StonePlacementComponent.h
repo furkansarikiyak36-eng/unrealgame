@@ -14,6 +14,10 @@ public:
     UStonePlacementComponent();
     UFUNCTION(BlueprintCallable) bool BeginPlacement(AStoneActor* Stone);
     UFUNCTION(BlueprintCallable) bool CancelPlacement();
+    UFUNCTION(BlueprintCallable) bool UpdatePlacementTarget(FVector SurfacePoint, FVector SurfaceNormal);
+    UFUNCTION(BlueprintPure) FTransform GetTargetTransform() const { return TargetTransform; }
+    UFUNCTION(BlueprintPure) int32 GetPlacementOptionIndex() const { return PlacementOptionIndex; }
+    UFUNCTION(BlueprintPure) AStoneActor* GetPreviewStone() const { return PreviewStone; }
     UFUNCTION(BlueprintCallable) void EnterAimMode();
     UFUNCTION(BlueprintCallable) void ExitAimMode();
     UFUNCTION(BlueprintCallable) void CycleFace();
