@@ -269,3 +269,10 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - CanAddItem, AddItem ve AddItemData geçersiz data/payload'ı reddediyor; tanımsız raw payload için MaxStack ve finite/non-negative Weight kontrolü de eklendi.
 - InventoryCapacityTests.cpp içine NaN weight için definition validation, CanAddItem/AddItem ve tanımsız AddItemData reject testleri eklendi. Inventory.Core.Capacity minimumu 5 benzersiz UE automation sonucuna çıkarıldı.
 - Bu testler UE 5.8'de henüz çalıştırılmadı; Python CI sadece log parser ve scriptleri doğrular.
+
+
+### 2026-10-14 — UE test runner: başarısız koşuda raporları koruma
+
+- Önceki akış, UE süreç kodu veya test-log doğrulaması başarısız olduğunda bile Scripts/update_docs.py çağırabiliyordu.
+- KOD_HARITASI.md ve TEST_DURUMU.md üretimi artık yalnızca bütün UE süreç çıkış kodları ve fail-closed log doğrulaması başarılıysa çalışır; aksi durumda mevcut raporlar değiştirilmez.
+- Scripts/tests/test_runner_fail_closed.py ile bu kapıyı ve tüm suite süreç kodlarının overall status'a katılmasını denetleyen dört statik test eklendi; Python CI çalıştırıcısına bağlandı.

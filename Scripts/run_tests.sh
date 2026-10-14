@@ -153,6 +153,7 @@ if (( INV_CAPACITY_RC != 0 && OVERALL_RC == 0 )); then OVERALL_RC="$INV_CAPACITY
 if (( TRAP_RC != 0 && OVERALL_RC == 0 )); then OVERALL_RC="$TRAP_RC"; fi
 if (( MECHANICS_RC != 0 && OVERALL_RC == 0 )); then OVERALL_RC="$MECHANICS_RC"; fi
 
+VERIFY_RC=81
 if [[ -s "$WOOD_LOG" && -s "$STICK_LOG" && -s "$INV_CAPACITY_LOG" && -s "$STONE_LOG" && -s "$TRAP_LOG" && -s "$MECHANICS_LOG" ]]; then
   if python "$ROOT/Scripts/verify_test_logs.py" \
     --mechanics "$MECHANICS_LOG" --wood "$WOOD_LOG" \
@@ -164,10 +165,21 @@ if [[ -s "$WOOD_LOG" && -s "$STICK_LOG" && -s "$INV_CAPACITY_LOG" && -s "$STONE_
     VERIFY_RC=$?
     if (( OVERALL_RC == 0 )); then OVERALL_RC="$VERIFY_RC"; fi
   fi
-  python "$ROOT/Scripts/update_docs.py"
 else
   echo "Fresh test logs are incomplete; refusing to generate a passing baseline." >&2
   if (( OVERALL_RC == 0 )); then OVERALL_RC=81; fi
+fi
+
+if (( OVERALL_RC == 0 && VERIFY_RC == 0 )); then
+  if python "$ROOT/Scripts/update_docs.py"; then
+    echo "Generated docs updated only after a clean UE process and all log checks."
+  else
+    DOCS_RC=$?
+    if (( OVERALL_RC == 0 )); then OVERALL_RC="$DOCS_RC"; fi
+    echo "Documentation generation failed (exit $DOCS_RC)." >&2
+  fi
+else
+  echo "UE process or result verification failed; generated docs were not updated." >&2
 fi
 
 echo "[10/10] Pruning old logs..."
