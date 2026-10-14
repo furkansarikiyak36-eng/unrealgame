@@ -3,11 +3,11 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "WorldCore/ExcavationTypes.h"
+#include "ExcavationLandscapeDensitySource.h"
 #include "ExcavationTerrainChunkSubsystem.generated.h"
 
 class AExcavationTerrainChunkActor;
 class UExcavationFlatBaseDensitySource;
-class UExcavationLandscapeDensitySource;
 class UExcavationVolumeSubsystem;
 
 /**
@@ -28,6 +28,9 @@ public:
 
     void RegisterChunkActor(AExcavationTerrainChunkActor* Actor);
     void UnregisterChunkActor(AExcavationTerrainChunkActor* Actor);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Materials")
+    TArray<FExcavationLandscapeMaterialMapping> LandscapeMaterialMappings;
 
     UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming")
     bool bEnableAutomaticStreaming = true;
