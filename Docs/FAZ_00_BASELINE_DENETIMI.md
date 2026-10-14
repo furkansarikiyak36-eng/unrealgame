@@ -175,3 +175,8 @@ Satır bazlı eşleştirme dosyaları dokuz katalog ailesinin tamamını kapsıy
 - Ölçüm matrisi 25 cm ve 50 cm çözünürlükleriyle dört koşu ister. Game-thread/mesh/collision süreleri, worst spike, RAM ve save boyutu kanıtla yazılmadan teknoloji kararı verilmez.
 - `Scripts/validate_excavation_spike.py` ve testleri, matrisin dört A/B×çözünürlük koşusunu tutmasını ve “Seçildi/Tamamlandı” gibi kararların bütün ölçüm/kanıt alanları dolmadan yazılmamasını kontrol edecek şekilde eklendi.
 - Bu yalnızca Faz 1 hazırlığıdır. Faz 0 henüz UE 5.8 C++ build/automation ve diğer kabul kanıtlarıyla kapanmadı; bu ortamda geometri/collision benchmark çalıştırılmadı.
+
+
+## Yeni kaynak düzeltmesi — taş yerleştirme
+
+P0-023 için `UStonePlacementComponent` yüz/socket seçimi ve placement lifecycle davranışını uygulayacak şekilde güncellendi; üç Unreal Automation Test yazıldı. Log parserı ve UE host test runner'ı artık `MyProject2.StonePlacement` suite'ini zorunlu doğrulamaya dahil ediyor. Bu C++ kaynaklar UE 5.8 hostunda henüz derlenip çalıştırılmadığından bulgu “In Progress” kalır; yüz/socket preview ve attach/iptal davranışı oyun içinde gözlenmeden U5/U6 kanıtı verilmez.
