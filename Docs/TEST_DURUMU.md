@@ -1,19 +1,19 @@
 # Test durumu
 
-Otomatik üretildi (14 October 2026 04:30) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
+Otomatik üretildi (14 October 2026 04:54) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
 
 ## Mekanik test (grafiksiz, `-MechanicsDemoQuit`)
 
-Son çalıştırma: **74 geçti, 0 kaldı** (14 October 2026 04:30, `mekanik_2026-10-14_0428.log`)
+Son çalıştırma: **81 geçti, 0 kaldı** (14 October 2026 04:53, `mekanik_2026-10-14_0451.log`)
 
-Geçen kontrollerin özeti (74):
+Geçen kontrollerin özeti (81):
 
 - Ağaç 6 balta vuruşunda devrildi (beklenen: çam 6, geniş 8)
 - Ağaç yıkıldı, yerde gövde kaldı (~15.6 m)
 - Gövde ikiye bölündü: 2 büyük kütük (beklenen 2)
 - Büyük kütükler bölündü: 4 taşınabilir kütük düştü (beklenen 4)
 - Kütük çaprazlama oturdu: açı 90°, eksenler arası 35.7 cm (beklenen 35.7), üstteki kütüğün altına eyer çentiği  -  üçgen 744
-- Tek alt kütük: uçtan geçen kütük tek destekte durmadı, 12° devrildi; alttaki yerinde
+- Tek alt kütük: uçtan geçen kütük tek destekte durmadı, 18° devrildi; alttaki yerinde
 - Omuz hacme göre: tam kütük alındı (yük %96), ikinci tam kütük sığmadı
 - Direk dikildi: dikeylik 1.000, alt uç zeminden 0.5 cm, sabit evet, omuz boş
 - Köşe: iki alt kütüğe çaprazlama kondu, 2 çentik açıldı, kütük duruyor (iki destek)
@@ -35,7 +35,7 @@ Geçen kontrollerin özeti (74):
 - Üç direk (160 cm arayla) + kiriş: kiriş duruyor
 - Kiriş 2 sn sonra yerinde
 - Orta direk sökülünce (kalan direkler 320 cm arayla, sınır 292 cm) kiriş ortadan kırıldı
-- Kırılan kiriş yere indi (139 cm aşağı)
+- Kırılan kiriş yere indi (143 cm aşağı)
 - Direk geri kondu, kiriş yine üç direkte duruyor
 - Payanda P1 direğine kondu: 45° eğimli, alt ucu 86 cm yüksekte, duruyor
 - Payanda P3 direğine kondu: 45° eğimli, alt ucu 86 cm yüksekte, duruyor
@@ -56,7 +56,7 @@ Geçen kontrollerin özeti (74):
 - Tanıma: iki direk 260 cm arayla + üstünde uzun kütük, ortası boş = Köprü
 - Tanıma: geçici işaretli parçalar = İskele
 - Yakıt odunun hacmiyle orantılı: tam kütük 593 sn, yarım 297 sn, çeyrek 148 sn (10, 5, 2.5 dk)
-- Ateş yakıldı: çeyrek kütük yakıt oldu (148 sn), kütük harcandı, ateş yanıyor
+- Ateş yeri 7 taşla kuruldu (taşsız kurulmadı); çeyrek kütük yakıt oldu (148 sn) ama yanmadı; çakmak 1 sn yetmedi, 2,5 sn yaktı
 - Ateşe üç çeyrek daha atıldı: yakıt 148 -> 593 sn
 - Ateş yandıkça yakıt azaldı (100 sn: 593 -> 493) ve söndü
 - Tam kütük söneni yeniden yaktı (593 sn); ikincisiyle dolu (900 sn = üst sınır); üçüncüsü atılmadı, omuzda kaldı
@@ -68,6 +68,13 @@ Geçen kontrollerin özeti (74):
 - Onarım: yanan direk sağlam parçayla değiştirildi (yeni parça yerinde, hasar 0), yanan parça omza geldi (%41 hasarlı), kiriş duruyor
 - Değiştirilen yanık parça ateşe yakıt olarak atıldı (yakıt 568 -> 765 sn)
 - Ateş yeni direği de yaktı: eklemleri gevşeyince kiriş yine kırıldı
+- Çakmak: kalın kütük hemen tutuşmadı (yarı sürede yalnızca ısındı), 14 sn ısıdan sonra yandı
+- Yangın yayılıyor: yanan kütüğe değen kütük ısınıp tutuştu, 4 m ötedeki ısınmadı bile
+- Yanma: yakıtın yarısında %50 hasar, bitince yanık (%100); yandığı kütük de yandı, uzaktaki sağlam
+- Aynı anda en çok 12 parça yanıyor (15 kütükten 12 tutuştu)
+- Yanan yapı testi: üç direk + kiriş duruyor
+- Yanan direk: yakıtın %30'unda kiriş yerinde; %60'ı geçince (%70 hasar) eklemleri gevşedi, kiriş kırıldı
+- Alev alma: yakıt atılınca ateş yanmadı; yanan kütük ateşe atılınca tutuştu (çakmak gerekmedi)
 - Çöküş: kabinin alt kütüğü sökülünce üstündeki 4 parça desteksiz kalıp düştü; öbür alt kütük yerinde
 - Ağaçtan çıkan kütük doğrudan oyulabilir (390 cm, çap 70 cm)
 - Kesim çizgisi (çentik, beklenen ~çap): 1 çizgi, 94 nokta, kütük boyunca 71 cm
@@ -81,7 +88,7 @@ Geçen kontrollerin özeti (74):
 - Enine kesim modül çizgisinde (açık çizgiler: -65 65): 390 -> 130 + 260 cm (2.0M + 4.0M), parça tekrar: 260 -> 130 + 130 cm, çizgi uçtan 4.0M
 - Kesim çizgisi (yarma, beklenen tüm boy): 4 çizgi, 8 nokta, kütük boyunca 132 cm
 - Oyuncu vuruşu 1: kesim izi açıldı, henüz kesmedi
-- Oyuncu vuruşu 2 (1.5 sn sonra, kütük fizikle oturuyorken): boyuna yarıldı  -  parça 77 -> 78
+- Oyuncu vuruşu 2 (1.5 sn sonra, kütük fizikle oturuyorken): boyuna yarıldı  -  parça 87 -> 88
 
 Rehberli demo görevleri otomatik oynatmada tamamlanan: 17
 
@@ -90,10 +97,13 @@ Son çalıştırmalar:
 - mekanik_2026-10-13_final.log: 74 geçti, 0 kaldı
 - mekanik_2026-10-13_1304.log: 74 geçti, 0 kaldı
 - mekanik_2026-10-14_0428.log: 74 geçti, 0 kaldı
+- mekanik_2026-10-14_0443.log: sonuç yok
+- mekanik_2026-10-14_0448.log: sonuç yok
+- mekanik_2026-10-14_0451.log: 81 geçti, 0 kaldı
 
 ## Wood birim testleri (`MyProject2.Wood`)
 
-Son çalıştırma: **11 geçti, 0 kaldı** (14 October 2026 04:29)
+Son çalıştırma: **11 geçti, 0 kaldı** (14 October 2026 04:51)
 
 - ✅ MyProject2.Wood.Analysis.Cabin
 - ✅ MyProject2.Wood.Analysis.Floors

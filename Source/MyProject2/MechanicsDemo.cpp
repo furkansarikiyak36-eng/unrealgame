@@ -5,6 +5,7 @@
 #include "ForestCharacter.h"
 #include "StructureLink.h"
 #include "Campfire.h"
+#include "BurnSubsystem.h"
 #include "ForestTypes.h"
 #include "HarvestableActor.h"
 #include "PickupItem.h"
@@ -284,7 +285,7 @@ namespace
 		{ TEXT("Platform kur"), TEXT("4 direk, 2 kiriş, üstüne yarım kütük (boyuna yarılmış) döşeme tahtaları: yarım kütükle kirişe bak, [Sol tık]") },
 		{ TEXT("Kapı kasası: iki duvar arası boşluk + lento"), TEXT("Üçer direkli iki duvar, arada 100 cm; üstüne uzun kütük koy") },
 		{ TEXT("Sivri kazık duvarı"), TEXT("Direklerin ucunu sivriltip 3-4 tanesini yan yana dik") },
-		{ TEXT("Ateş yak"), TEXT("Küçük bir parçayı omzuna al, [R] ile Ateş modu, yere bak, [Sol tık]; ateşe bakıp daha çok odun at") },
+		{ TEXT("Ateş yak"), TEXT("7 taş topla, düz yere bakıp [C] ile ateş yeri kur; küçük bir parçayı omza alıp ateşe bak, [Sol tık]; sonra [F] çakmağı ateşe tutup bekle") },
 		{ TEXT("Hasarlı parçayı onar"), TEXT("Yapıdaki yanık parçaya (ateşin yanında ya da [Y] admin) aynı boyda sağlam parçayla bak, [Sol tık]") },
 	};
 	static_assert(UE_ARRAY_COUNT(GoalTexts) == 20, "one text per goal");
@@ -1184,19 +1185,24 @@ void AMechanicsDemo::AddFireScript(AForestCharacter* Character)
 		return 4.f;
 	});
 
-	// A quarter lights the fire (through the player's own aim and click); more wood goes on it.
+	// A fire pit is ringed out of stones; wood on it does not make a fire until it is lit with the lighter.
 	Script.Add([this, Character, Area]()
 	{
 		UWorld* World = GetWorld();
 		Face(Character, World, Area + FVector(-400.f, 0.f, 0.f), 0.f);
-		const bool bLit = Character->TestPickUp(Piece(TEXT("Q1"))) && Character->TestPlaceFire(GroundAt(World, Area));
-		ACampfire* Fire = nullptr;
-		for (TActorIterator<ACampfire> It(World); It; ++It)
-		{
-			Fire = *It;
-		}
-		Report(bLit && Fire && Fire->IsBurning() && !Piece(TEXT("Q1")) && FMath::Abs(Fire->GetFuelSeconds() - 148.f) < 8.f,
-			FString::Printf(TEXT("Ateş yakıldı: çeyrek kütük yakıt oldu (%.0f sn), kütük harcandı, ateş yanıyor"), Fire ? Fire->GetFuelSeconds() : 0.f));
+		const bool bNoStones = Character->TestBuildFirePit(GroundAt(World, Area), false) == nullptr;
+		ACampfire* Fire = Character->TestBuildFirePit(GroundAt(World, Area), true);
+		FHitResult Pit;
+		Pit.HitObjectHandle = FActorInstanceHandle(Fire);
+		Pit.ImpactPoint = Fire->GetActorLocation() + FVector(0.f, 0.f, 30.f);
+		Pit.ImpactNormal = FVector::UpVector;
+		const bool bFirst = Character->TestPickUp(Piece(TEXT("Q1"))) && Character->TestPlace(false, Pit);
+		const bool bUnlit = !Fire->IsBurning();
+		Character->TestLight(Fire, 1.f);
+		const bool bStillOut = !Fire->IsBurning();
+		Character->TestLight(Fire, 1.5f);
+		Report(bNoStones && Fire && bFirst && bUnlit && bStillOut && Fire->IsBurning() && !Piece(TEXT("Q1")) && FMath::Abs(Fire->GetFuelSeconds() - 148.f) < 8.f,
+			FString::Printf(TEXT("Ateş yeri 7 taşla kuruldu (taşsız kurulmadı); çeyrek kütük yakıt oldu (%.0f sn) ama yanmadı; çakmak 1 sn yetmedi, 2,5 sn yaktı"), Fire ? Fire->GetFuelSeconds() : 0.f));
 
 		FHitResult OnFire;
 		OnFire.HitObjectHandle = FActorInstanceHandle(Fire);
@@ -1234,7 +1240,9 @@ void AMechanicsDemo::AddFireScript(AForestCharacter* Character)
 		OnFire.ImpactPoint = Fire->GetActorLocation() + FVector(0.f, 0.f, 30.f);
 		OnFire.ImpactNormal = FVector::UpVector;
 		Character->TestPickUp(Piece(TEXT("W1"))) && Character->TestPlace(false, OnFire);
-		const bool bRelit = Fire->IsBurning();
+		const bool bUnlitAgain = !Fire->IsBurning();
+		Character->TestLight(Fire, 3.f);
+		const bool bRelit = bUnlitAgain && Fire->IsBurning();
 		const float Once = Fire->GetFuelSeconds();
 		Character->TestPickUp(Piece(TEXT("W2"))) && Character->TestPlace(false, OnFire);
 		const float Twice = Fire->GetFuelSeconds();
@@ -1329,6 +1337,7 @@ void AMechanicsDemo::AddDamageScript(AForestCharacter* Character)
 		UWorld* World = GetWorld();
 		ACampfire* Fire = ACampfire::Build(World, GroundAt(World, Y + FVector(160.f, 160.f, 0.f)).ImpactPoint);
 		Fire->AddFuel(Piece(TEXT("YFuel")));
+		Fire->Ignite();
 		const float Before = Piece(TEXT("YP2"))->GetDamage();
 		Fire->Burn(20.f);
 		const bool bOnlyNear = Piece(TEXT("YP1"))->GetDamage() < 0.001f && Piece(TEXT("YP3"))->GetDamage() < 0.001f && Piece(TEXT("YBeam"))->GetDamage() < 0.001f;
@@ -1387,6 +1396,171 @@ void AMechanicsDemo::AddDamageScript(AForestCharacter* Character)
 	});
 }
 
+void AMechanicsDemo::AddBurnScript(AForestCharacter* Character)
+{
+	const float M = ACarvableLog::ModuleLength;
+	const FVector Z(-2200.f, -2300.f, 0.f);
+
+	// Wood catches from heat: a lighter held on it, slowly; a thick log takes a while.
+	Script.Add([this, Character, Z]()
+	{
+		UWorld* World = GetWorld();
+		auto Lay = [&](FName Name, const FVector& Where)
+		{
+			ACarvableLog* Log = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Where));
+			Log->PlaceAt(FTransform(FRotator::ZeroRotator, Where), true);
+			Named.Add(Name, Log);
+		};
+		const float Pitch = 2.f * 35.f + 5.f; // 5 cm between the two logs
+		Lay(TEXT("B1"), Z + FVector(1500.f, 0.f, 36.f));
+		Lay(TEXT("B2"), Z + FVector(1500.f, Pitch, 36.f));
+		Lay(TEXT("B3"), Z + FVector(1500.f, 400.f, 36.f));
+
+		ACarvableLog* B1 = Piece(TEXT("B1"));
+		const float Need = B1->GetIgniteSeconds();
+		Character->TestLight(B1, Need * 0.5f);
+		const bool bWarm = B1->GetBurnState() == EBurnState::Igniting && !B1->IsBurning();
+		Character->TestLight(B1, Need * 0.6f);
+		Report(bWarm && B1->IsBurning() && Need > 5.f,
+			FString::Printf(TEXT("Çakmak: kalın kütük hemen tutuşmadı (yarı sürede yalnızca ısındı), %.0f sn ısıdan sonra yandı"), Need));
+		return 0.2f;
+	});
+
+	// Burning wood heats what touches it and not what is far from it.
+	Script.Add([this]()
+	{
+		UBurnSubsystem* Burn = UBurnSubsystem::Get(GetWorld());
+		ACarvableLog* B2 = Piece(TEXT("B2"));
+		ACarvableLog* B3 = Piece(TEXT("B3"));
+		Burn->Advance(5.f);
+		const bool bWarming = !B2->IsBurning() && B2->GetHeatShare() > 0.2f;
+		Burn->Advance(16.f);
+		Report(bWarming && B2->IsBurning() && !B3->IsBurning() && B3->GetHeatShare() == 0.f,
+			TEXT("Yangın yayılıyor: yanan kütüğe değen kütük ısınıp tutuştu, 4 m ötedeki ısınmadı bile"));
+		return 0.2f;
+	});
+
+	// It burns for as long as it holds wood, taking damage evenly, and is charred when the fuel is gone.
+	Script.Add([this]()
+	{
+		UBurnSubsystem* Burn = UBurnSubsystem::Get(GetWorld());
+		ACarvableLog* B1 = Piece(TEXT("B1"));
+		const float Total = ACampfire::FuelSecondsOf(B1);
+		Burn->Advance(Total * 0.5f - 21.f);
+		const float Half = B1->GetDamage();
+		const bool bStillBurning = B1->IsBurning();
+		Burn->Advance(Total);
+		Report(FMath::Abs(Half - 0.5f) < 0.05f && bStillBurning && B1->IsCharred() && B1->GetDamage() >= 1.f && Piece(TEXT("B2"))->IsCharred() && !Piece(TEXT("B3"))->IsBurning() && Burn->GetBurningCount() == 0,
+			FString::Printf(TEXT("Yanma: yakıtın yarısında %%%.0f hasar, bitince yanık (%%%.0f); yandığı kütük de yandı, uzaktaki sağlam"), Half * 100.f, B1->GetDamage() * 100.f));
+		return 0.2f;
+	});
+
+	// No more than MaxBurning pieces burn at once.
+	Script.Add([this, Z]()
+	{
+		UWorld* World = GetWorld();
+		TArray<ACarvableLog*> Pieces;
+		int32 Lit = 0;
+		for (int32 Index = 0; Index < ACarvableLog::MaxBurning + 3; ++Index)
+		{
+			ACarvableLog* Log = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Z + FVector(3000.f, 600.f * Index, 36.f)));
+			Pieces.Add(Log);
+			Lit += Log->Ignite() ? 1 : 0;
+		}
+		Report(Lit == ACarvableLog::MaxBurning && UBurnSubsystem::Get(World)->GetBurningCount() == ACarvableLog::MaxBurning,
+			FString::Printf(TEXT("Aynı anda en çok %d parça yanıyor (%d kütükten %d tutuştu)"), ACarvableLog::MaxBurning, Pieces.Num(), Lit));
+		UBurnSubsystem::Get(World)->Advance(1000.f);
+		for (ACarvableLog* Log : Pieces)
+		{
+			Log->Destroy();
+		}
+		return 0.2f;
+	});
+
+	// A structure burns: three posts and a beam; the middle post, set alight, takes the beam down once its joints have let go.
+	Script.Add([this, M, Z]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Where = Z + FVector(1500.f, 1000.f, 0.f);
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			ACarvableLog* Log = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Where + FVector(0.f, 700.f * Index, 70.f)));
+			Named.Add(*FString::Printf(TEXT("SA%d"), Index), Log);
+		}
+		ACarvableLog* Log = Piece(TEXT("SA0"));
+		Named.Add(TEXT("SB0"), Log->CrossCut(Log->GetMinX() + 2.f * M));
+		Named.Add(TEXT("SC0"), Piece(TEXT("SB0"))->CrossCut(Piece(TEXT("SB0"))->GetMinX() + 2.f * M));
+		Named.Add(TEXT("SBeam"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Where + FVector(0.f, 2200.f, 70.f))));
+		return 4.5f;
+	});
+	Script.Add([this, Character, Z]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Where = Z + FVector(1500.f, 1000.f, 0.f);
+		Face(Character, World, Where + FVector(-400.f, 0.f, 0.f), 0.f);
+		bool bOk = true;
+		int32 Index = 0;
+		for (const TCHAR* Name : { TEXT("SA0"), TEXT("SB0"), TEXT("SC0") })
+		{
+			bOk &= Character->TestPickUp(Piece(Name)) && Character->TestPlace(true, GroundAt(World, Where + FVector(160.f * Index++, 0.f, 0.f)));
+		}
+		bOk &= Character->TestPickUp(Piece(TEXT("SBeam"))) && Character->TestPlace(false, AimAtTop(Piece(TEXT("SA0"))));
+		bOk &= Piece(TEXT("SBeam"))->IsAnchored();
+		Report(bOk, TEXT("Yanan yapı testi: üç direk + kiriş duruyor"));
+
+		ACarvableLog* Middle = Piece(TEXT("SB0"));
+		Middle->Ignite();
+		const float PostFuel = ACampfire::FuelSecondsOf(Middle);
+		UBurnSubsystem::Get(World)->Advance(PostFuel * 0.3f);
+		const bool bEarly = Piece(TEXT("SBeam"))->IsAnchored() && Middle->IsAnchored() && Middle->GetDamage() < 0.4f;
+		UBurnSubsystem::Get(World)->Advance(PostFuel * 0.4f);
+		Report(bEarly && Middle->GetDamage() > 0.6f && !Piece(TEXT("SBeam"))->IsAnchored(),
+			FString::Printf(TEXT("Yanan direk: yakıtın %%30'unda kiriş yerinde; %%60'ı geçince (%%%.0f hasar) eklemleri gevşedi, kiriş kırıldı"), Middle->GetDamage() * 100.f));
+		return 0.3f;
+	});
+
+	// A burning piece carried to a fire lights it: no lighter needed.
+	Script.Add([this, Character, Z]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Pit = Z + FVector(1300.f, 1500.f, 0.f);
+		Face(Character, World, Pit + FVector(-400.f, 0.f, 0.f), 0.f);
+		Character->TestBuildFirePit(GroundAt(World, Pit), true);
+		Named.Add(TEXT("TFuel"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Pit + FVector(100.f, 350.f, 70.f))));
+		Named.Add(TEXT("TTorch"), ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Pit + FVector(100.f, -350.f, 70.f))));
+		return 4.5f;
+	});
+	Script.Add([this, Character, Z]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Pit = GroundAt(World, Z + FVector(1300.f, 1500.f, 0.f)).ImpactPoint;
+		ACampfire* Fire = nullptr;
+		for (TActorIterator<ACampfire> It(World); It; ++It)
+		{
+			if (FVector::Dist2D(It->GetActorLocation(), Pit) < 60.f)
+			{
+				Fire = *It;
+			}
+		}
+		if (!Fire)
+		{
+			Report(false, TEXT("Alev alma: ateş yeri kurulamadı"));
+			return 0.2f;
+		}
+		FHitResult OnFire;
+		OnFire.HitObjectHandle = FActorInstanceHandle(Fire);
+		OnFire.ImpactPoint = Fire->GetActorLocation() + FVector(0.f, 0.f, 30.f);
+		OnFire.ImpactNormal = FVector::UpVector;
+		const bool bFuel = Character->TestPickUp(Piece(TEXT("TFuel"))) && Character->TestPlace(false, OnFire);
+		const bool bOut = !Fire->IsBurning();
+		Piece(TEXT("TTorch"))->Ignite();
+		const bool bTorch = Character->TestPickUp(Piece(TEXT("TTorch"))) && Character->TestPlace(false, OnFire);
+		Report(bFuel && bOut && bTorch && Fire->IsBurning(),
+			TEXT("Alev alma: yakıt atılınca ateş yanmadı; yanan kütük ateşe atılınca tutuştu (çakmak gerekmedi)"));
+		return 0.2f;
+	});
+}
+
 void AMechanicsDemo::AddCollapseScript(AForestCharacter* Character)
 {
 	// Take the first log of the cabin out from under the rest: what rested on it only through it falls too.
@@ -1416,6 +1590,7 @@ void AMechanicsDemo::BuildScript(AForestCharacter* Character)
 	AddRecognitionScript(Character);
 	AddFireScript(Character);
 	AddDamageScript(Character);
+	AddBurnScript(Character);
 	AddCollapseScript(Character);
 }
 

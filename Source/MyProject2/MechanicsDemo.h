@@ -165,6 +165,7 @@ private:
 	void AddRecognitionScript(class AForestCharacter* Character);
 	void AddFireScript(class AForestCharacter* Character);
 	void AddDamageScript(class AForestCharacter* Character);
+	void AddBurnScript(class AForestCharacter* Character);
 	void AddCollapseScript(class AForestCharacter* Character);
 	ACarvableLog* Piece(FName Name) const;
 	int32 FrameStage = 0;

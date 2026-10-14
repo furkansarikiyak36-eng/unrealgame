@@ -38,12 +38,17 @@ public:
 	static ACampfire* Build(UWorld* World, const FVector& Ground);
 
 	/**
-	 * Throws Piece on the fire: it is used up, the fire is lit. False if the fire is already full or the piece is part of a
+	 * Throws Piece on the fire: it is used up (a burning piece lights the fire). False if the fire is already full or the piece is part of a
 	 * structure. The caller takes the piece off the shoulder first.
 	 */
 	bool AddFuel(ACarvableLog* Piece);
 
-	bool IsBurning() const { return FuelSeconds > 0.f; }
+	/** Fuel alone does not make a fire: it has to be lit (a lighter, or burning wood). */
+	bool IsBurning() const { return bLit && FuelSeconds > 0.f; }
+	/** Lights the fire if it has fuel. */
+	bool Ignite();
+	/** Heat from a lighter: the fire catches after a couple of seconds. */
+	bool ApplyHeat(float Seconds);
 	float GetFuelSeconds() const { return FuelSeconds; }
 
 	/** Burns for Seconds: fuel goes down, the light follows, wood in reach is scorched. Called every tick as well. */
@@ -70,5 +75,7 @@ private:
 	TObjectPtr<UStaticMeshComponent> Embers;
 
 	float FuelSeconds = 0.f;
+	float HeatSeconds = 0.f;
+	bool bLit = false;
 	float FlickerTime = 0.f;
 };

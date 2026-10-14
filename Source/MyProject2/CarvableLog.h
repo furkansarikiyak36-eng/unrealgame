@@ -11,6 +11,8 @@ class UDynamicMeshComponent;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class UStaticMesh;
+class UStaticMeshComponent;
+class UPointLightComponent;
 class APickupItem;
 
 UENUM()
@@ -80,6 +82,9 @@ struct FCrossPlacement
  * lengthwise splits, cut from the scanned mesh with Geometry Script. Local X is the log axis.
  * Carved faces use material slot 1 (cut wood, rings computed in local space), so they need no UVs.
  */
+/** Wood catches fire slowly, burns for as long as it holds wood, and is charred afterwards. */
+enum class EBurnState : uint8 { Intact, Igniting, Burning, Charred };
+
 UCLASS()
 class MYPROJECT2_API ACarvableLog : public AActor
 {
@@ -142,6 +147,29 @@ public:
 	float GetDamage() const { return Damage; }
 	void AddDamage(float Amount);
 	void SetDamage(float Value);
+
+	// --- Fire. Any piece of wood burns. It takes heat to catch (thin pieces quickly, thick ones slowly), burns for as long as
+	// the wood it holds (see ACampfire::FuelSecondsOf) taking damage all the while, and ends up charred. Burning pieces
+	// heat the wood around them and light fires (UBurnSubsystem drives all of it). ---
+
+	EBurnState GetBurnState() const { return BurnState; }
+	bool IsBurning() const { return BurnState == EBurnState::Burning; }
+	bool IsCharred() const { return BurnState == EBurnState::Charred; }
+	/** Seconds of full heat it takes this piece to catch: its radius times 0.4, between 2 and 20. */
+	float GetIgniteSeconds() const;
+	/** Heat from a lighter, a flame or a fire. True once the piece has caught (this call or before). */
+	bool ApplyHeat(float Seconds);
+	/** Catches fire at once. False if it is charred, or too many pieces already burn (MaxBurning). */
+	bool Ignite();
+	/** Seconds of burning left, and the share of its fuel used so far (0..1). */
+	float GetBurnSecondsLeft() const { return BurnLeft; }
+	float GetHeatShare() const;
+	/** Called by UBurnSubsystem: burns for Seconds (fuel, damage, flames). */
+	void StepBurn(float Seconds);
+	/** Called by UBurnSubsystem: heat fades when nothing heats the piece. Returns true while it is still warming. */
+	bool CoolStep(float Seconds);
+	/** Most pieces burning at once; more would be too much to simulate. */
+	static constexpr int32 MaxBurning = 12;
 
 	/** Scaffolding: part of the building site only until the structure is done. */
 	bool IsTemporary() const { return bTemporary; }
@@ -330,6 +358,18 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> DamageMaterial;
 	void UpdateDamageLook();
+
+	EBurnState BurnState = EBurnState::Intact;
+	float HeatSeconds = 0.f;
+	bool bHeatedSinceStep = false;
+	float BurnLeft = 0.f;
+	float BurnTotal = 0.f;
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UStaticMeshComponent>> FlameParts;
+	UPROPERTY(Transient)
+	TObjectPtr<UPointLightComponent> FlameLight;
+	void ShowFlames(bool bShow, float Strength);
+	void EndBurn();
 
 	bool bAnchored = false;
 	bool bCarried = false;

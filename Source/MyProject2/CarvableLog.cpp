@@ -8,6 +8,10 @@
 #include "EngineUtils.h"
 #include "ForestTypes.h"
 #include "PickupItem.h"
+#include "Campfire.h"
+#include "BurnSubsystem.h"
+#include "Components/PointLightComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Components/DynamicMeshComponent.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/StaticMesh.h"
@@ -165,6 +169,146 @@ void ACarvableLog::SetDamage(float Value)
 	if (bAnchored && (Crossed(WoodStructure::JointLooseDamage) || Crossed(WoodStructure::FailureDamage)))
 	{
 		StructureLink::Settle(GetWorld());
+	}
+}
+
+float ACarvableLog::GetIgniteSeconds() const
+{
+	return FMath::Clamp(Radius * 0.4f, 2.f, 20.f);
+}
+
+float ACarvableLog::GetHeatShare() const
+{
+	return BurnState == EBurnState::Burning || BurnState == EBurnState::Charred ? 1.f : FMath::Clamp(HeatSeconds / GetIgniteSeconds(), 0.f, 1.f);
+}
+
+bool ACarvableLog::ApplyHeat(float Seconds)
+{
+	if (BurnState == EBurnState::Burning)
+	{
+		return true;
+	}
+	if (BurnState == EBurnState::Charred || Seconds <= 0.f)
+	{
+		return false;
+	}
+	HeatSeconds += Seconds;
+	bHeatedSinceStep = true;
+	BurnState = EBurnState::Igniting;
+	if (UBurnSubsystem* Burn = UBurnSubsystem::Get(GetWorld()))
+	{
+		Burn->Warm(this);
+	}
+	return HeatSeconds >= GetIgniteSeconds() && Ignite();
+}
+
+bool ACarvableLog::Ignite()
+{
+	UBurnSubsystem* Burn = UBurnSubsystem::Get(GetWorld());
+	if (!Burn || BurnState == EBurnState::Charred || (BurnState != EBurnState::Burning && Burn->GetBurningCount() >= MaxBurning))
+	{
+		return false;
+	}
+	if (BurnState != EBurnState::Burning)
+	{
+		BurnState = EBurnState::Burning;
+		HeatSeconds = GetIgniteSeconds();
+		BurnTotal = FMath::Max(ACampfire::FuelSecondsOf(this), 1.f);
+		BurnLeft = BurnTotal;
+		Burn->Light(this);
+		ShowFlames(true, 1.f);
+	}
+	return true;
+}
+
+bool ACarvableLog::CoolStep(float Seconds)
+{
+	if (BurnState != EBurnState::Igniting)
+	{
+		return false;
+	}
+	// Heated during this step: no cooling. Otherwise it loses heat at half the rate it gains it.
+	if (bHeatedSinceStep)
+	{
+		bHeatedSinceStep = false;
+		return true;
+	}
+	HeatSeconds = FMath::Max(0.f, HeatSeconds - Seconds * 0.5f);
+	if (HeatSeconds <= 0.f)
+	{
+		BurnState = EBurnState::Intact;
+		return false;
+	}
+	return true;
+}
+
+void ACarvableLog::StepBurn(float Seconds)
+{
+	if (BurnState != EBurnState::Burning)
+	{
+		return;
+	}
+	const float Burned = FMath::Min(Seconds, BurnLeft);
+	BurnLeft -= Burned;
+	// The piece is burnt through exactly when its fuel is used up.
+	AddDamage(Burned / BurnTotal);
+	if (BurnLeft <= 0.f)
+	{
+		EndBurn();
+		return;
+	}
+	ShowFlames(true, FMath::Clamp(0.4f + 0.6f * BurnLeft / BurnTotal, 0.4f, 1.f));
+}
+
+void ACarvableLog::EndBurn()
+{
+	BurnState = EBurnState::Charred;
+	BurnLeft = 0.f;
+	SetDamage(FMath::Max(Damage, 1.f));
+	ShowFlames(false, 0.f);
+}
+
+void ACarvableLog::ShowFlames(bool bShow, float Strength)
+{
+	if (bShow && FlameParts.Num() == 0)
+	{
+		// A flame per module along the log, and one light in the middle.
+		UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
+		UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+		const int32 Count = FMath::Clamp(FMath::RoundToInt((MaxX - MinX) / ModuleLength), 1, 6);
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			UStaticMeshComponent* Flame = NewObject<UStaticMeshComponent>(this);
+			Flame->SetupAttachment(MeshComponent);
+			Flame->SetStaticMesh(Cone);
+			Flame->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Flame->SetCastShadow(false);
+			Flame->RegisterComponent();
+			if (Base)
+			{
+				UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Base, this);
+				Material->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.f, 0.45f, 0.05f));
+				Flame->SetMaterial(0, Material);
+			}
+			Flame->SetRelativeLocation(FVector(MinX + (MaxX - MinX) * (Index + 0.5f) / Count, 0.f, Radius * 0.9f));
+			FlameParts.Add(Flame);
+		}
+		FlameLight = NewObject<UPointLightComponent>(this);
+		FlameLight->SetupAttachment(MeshComponent);
+		FlameLight->SetLightColor(FLinearColor(1.f, 0.55f, 0.2f));
+		FlameLight->SetAttenuationRadius(600.f);
+		FlameLight->SetCastShadows(false);
+		FlameLight->RegisterComponent();
+		FlameLight->SetRelativeLocation(FVector((MinX + MaxX) * 0.5f, 0.f, Radius + 30.f));
+	}
+	for (UStaticMeshComponent* Flame : FlameParts)
+	{
+		Flame->SetVisibility(bShow);
+		Flame->SetRelativeScale3D(FVector(Radius / 100.f * 0.8f, Radius / 100.f * 0.8f, Radius / 100.f * 2.f * Strength));
+	}
+	if (FlameLight)
+	{
+		FlameLight->SetIntensity(bShow ? 3000.f * Strength : 0.f);
 	}
 }
 

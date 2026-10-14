@@ -20,6 +20,7 @@ class AStructureManager;
 class ALogWallBlueprint;
 class ALogConstructionActor;
 class AStoneMasonryActor;
+class ACampfire;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UCableComponent;
@@ -82,13 +83,16 @@ public:
 	bool CanPlaceAcross() const { return CarryPlace == ECarryPlace::Across; }
 
 	/** What a left click does with the carried piece where the player is looking. */
-	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fire, Fuel, Repair };
+	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair };
 	ECarryPlace GetCarryPlace() const { return CarryPlace; }
 	/** The piece would be held up where it is about to go (the structure graph says so); false: it would fall. */
 	bool IsPlaceSupported() const { return bPlaceSupported; }
 	/** R while carrying: lay pieces down or stand them up as posts. */
 	bool IsPlacingStanding() const { return bPlaceStanding; }
-	bool IsPlacingFire() const { return bPlaceFire; }
+	/** F held: the lighter heats what is in sight (a piece of wood or a fire pit). */
+	bool IsLighterHeld() const { return bLighterHeld; }
+	/** Stones it takes to ring a fire pit. */
+	static constexpr int32 FirePitStones = 7;
 	/** Shoulder load, 1 = full (one whole log). */
 	float GetCarryLoad() const;
 	static bool IsProfileTool(ECarveTool Tool)
@@ -202,8 +206,10 @@ public:
 	bool TestPickUp(ACarvableLog* Piece);
 	/** For the mechanics test: a left click with the carried piece aimed at Hit (true if it was placed). */
 	bool TestPlace(bool bStanding, const FHitResult& Hit);
-	/** For the mechanics test: the same with the fire mode chosen (lights a fire pit on the ground, or feeds one that is aimed at). */
-	bool TestPlaceFire(const FHitResult& Hit);
+	/** For the mechanics test: [C] with the stones given first when bGiveStones. Returns the pit, or null. */
+	ACampfire* TestBuildFirePit(const FHitResult& Hit, bool bGiveStones);
+	/** For the mechanics test: the lighter held on Target for Seconds. */
+	void TestLight(AActor* Target, float Seconds);
 
 	/** Console: MechanicsDemo. Same as admin + L, without needing admin mode. */
 	UFUNCTION(Exec)
@@ -338,8 +344,14 @@ private:
 	 */
 	ECarryPlace CarryPlace = ECarryPlace::None;
 	bool bPlaceStanding = false;
-	/** R cycles lay -> stand -> fire: the third lights a fire pit with the carried piece where the ground is aimed at. */
-	bool bPlaceFire = false;
+	/** [F] held. */
+	bool bLighterHeld = false;
+	void LighterPressed();
+	void LighterReleased();
+	/** Heats the target in sight for Seconds. */
+	void HeatTarget(AActor* Target, float Seconds);
+	/** [C]: rings a fire pit out of FirePitStones stones where the ground is aimed at. */
+	void BuildFirePit();
 	bool bPlaceSupported = true;
 	TWeakObjectPtr<AActor> PlaceTarget;
 	/** Re-checks the structure after a piece went in or came out; says how many pieces fell. */

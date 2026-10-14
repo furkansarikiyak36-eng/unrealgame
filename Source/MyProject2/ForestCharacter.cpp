@@ -283,6 +283,13 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	Input->BindAction(DamageAction, ETriggerEvent::Started, this, &AForestCharacter::DebugDamageStructure);
 	UInputAction* DemoAction = MakeAction(TEXT("IA_DebugDemo"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(DemoAction, EKeys::L);
+	UInputAction* LighterAction = MakeAction(TEXT("IA_Lighter"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(LighterAction, EKeys::F);
+	Input->BindAction(LighterAction, ETriggerEvent::Started, this, &AForestCharacter::LighterPressed);
+	Input->BindAction(LighterAction, ETriggerEvent::Completed, this, &AForestCharacter::LighterReleased);
+	UInputAction* FirePitAction = MakeAction(TEXT("IA_FirePit"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(FirePitAction, EKeys::C);
+	Input->BindAction(FirePitAction, ETriggerEvent::Started, this, &AForestCharacter::BuildFirePit);
 	Input->BindAction(DemoAction, ETriggerEvent::Started, this, &AForestCharacter::DebugMechanicsDemo);
 #endif
 }
@@ -301,6 +308,14 @@ void AForestCharacter::Tick(float DeltaSeconds)
 	DrawPreviewLines();
 
 	UpdateTool(DeltaSeconds);
+	if (bLighterHeld && !bBuildMode)
+	{
+		FHitResult Aim;
+		if (TraceFromView(350.f, Aim, true) && Aim.GetActor())
+		{
+			HeatTarget(Aim.GetActor(), DeltaSeconds * 3.f);
+		}
+	}
 
 	// Sprint only while moving and while stamina allows it.
 	const bool bMoving = GetVelocity().SizeSquared2D() > 100.f;
@@ -841,11 +856,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 	const float Yaw = bPlaceStanding ? Forward.Rotation().Yaw : Forward.Rotation().Yaw + 90.f;
 	PlaceTransform = bPlaceStanding ? Piece->GetStandTransform(Hit.ImpactPoint, Yaw) : Piece->GetLayTransform(Hit.ImpactPoint, Yaw);
-	CarryPlace = bPlaceFire ? ECarryPlace::Fire : (bPlaceStanding ? ECarryPlace::Stand : ECarryPlace::Lay);
-	if (bPlaceFire)
-	{
-		PlaceTransform = FTransform(FRotator::ZeroRotator, Hit.ImpactPoint);
-	}
+	CarryPlace = bPlaceStanding ? ECarryPlace::Stand : ECarryPlace::Lay;
 }
 
 bool AForestCharacter::PlaceCarried()
@@ -886,23 +897,13 @@ bool AForestCharacter::PlaceCarried()
 		ShowMessage(TEXT("Döşeme tahtası kondu"));
 		SettleStructure();
 		break;
-	case ECarryPlace::Fire:
-	{
-		ACampfire* Fire = ACampfire::Build(GetWorld(), PlaceTransform.GetLocation());
-		const float Seconds = ACampfire::FuelSecondsOf(Piece);
-		if (Fire && Fire->AddFuel(Piece))
-		{
-			ShowMessage(FString::Printf(TEXT("Ateş yakıldı: %.0f sn yakıt  —  daha çok odun için ateşe bak, [Sol tık]"), Seconds));
-		}
-		break;
-	}
 	case ECarryPlace::Fuel:
 	{
 		ACampfire* Fire = Cast<ACampfire>(PlaceTarget.Get());
 		const float Seconds = ACampfire::FuelSecondsOf(Piece);
 		if (Fire && Fire->AddFuel(Piece))
 		{
-			ShowMessage(FString::Printf(TEXT("Ateşe odun atıldı (+%.0f sn), toplam %.0f sn"), Seconds, Fire->GetFuelSeconds()));
+			ShowMessage(FString::Printf(TEXT("Ateşe odun atıldı (+%.0f sn), toplam %.0f sn%s"), Seconds, Fire->GetFuelSeconds(), Fire->IsBurning() ? TEXT("") : TEXT("  —  yakmak için [F] çakmak")));
 		}
 		else
 		{
@@ -952,19 +953,79 @@ bool AForestCharacter::TestPickUp(ACarvableLog* Piece)
 	return StartCarry(Piece);
 }
 
-bool AForestCharacter::TestPlaceFire(const FHitResult& Hit)
+ACampfire* AForestCharacter::TestBuildFirePit(const FHitResult& Hit, bool bGiveStones)
 {
-	bPlaceStanding = false;
-	bPlaceFire = true;
-	UpdateCarryPlacementAt(Hit, true);
-	const bool bPlaced = PlaceCarried();
-	bPlaceFire = false;
-	return bPlaced;
+	if (bGiveStones)
+	{
+		AddItem(EForestItem::Stone, FirePitStones);
+	}
+	if (GetItemCount(EForestItem::Stone) < FirePitStones)
+	{
+		return nullptr;
+	}
+	RemoveItem(EForestItem::Stone, FirePitStones);
+	return ACampfire::Build(GetWorld(), Hit.ImpactPoint);
+}
+
+void AForestCharacter::TestLight(AActor* Target, float Seconds)
+{
+	HeatTarget(Target, Seconds);
+}
+
+void AForestCharacter::HeatTarget(AActor* Target, float Seconds)
+{
+	if (ACarvableLog* Piece = Cast<ACarvableLog>(Target))
+	{
+		Piece->ApplyHeat(Seconds);
+		if (!Piece->IsBurning() && !Piece->IsCharred())
+		{
+			ShowMessage(FString::Printf(TEXT("Tutuşuyor %%%.0f"), Piece->GetHeatShare() * 100.f));
+		}
+	}
+	else if (ACampfire* Fire = Cast<ACampfire>(Target))
+	{
+		Fire->ApplyHeat(Seconds);
+		if (Fire->GetFuelSeconds() <= 0.f)
+		{
+			ShowMessage(TEXT("Ateşte yakıt yok  —  önce odun at"));
+		}
+	}
+}
+
+void AForestCharacter::LighterPressed()
+{
+	bLighterHeld = true;
+}
+
+void AForestCharacter::LighterReleased()
+{
+	bLighterHeld = false;
+}
+
+void AForestCharacter::BuildFirePit()
+{
+	if (IsHandsBusy())
+	{
+		ShowMessage(TEXT("Ateş yeri için elin boş olmalı"));
+		return;
+	}
+	if (GetItemCount(EForestItem::Stone) < FirePitStones)
+	{
+		ShowMessage(FString::Printf(TEXT("Ateş yeri için %d taş gerek (%d var)"), FirePitStones, GetItemCount(EForestItem::Stone)));
+		return;
+	}
+	FHitResult Hit;
+	if (!TraceFromView(500.f, Hit, true) || Hit.ImpactNormal.Z < 0.7f || Hit.GetActor()->IsA<ACarvableLog>())
+	{
+		ShowMessage(TEXT("Ateş yeri düz zemine kurulur  —  yere bak"));
+		return;
+	}
+	TestBuildFirePit(Hit, false);
+	ShowMessage(TEXT("Ateş yeri kuruldu  —  odun at, [F] çakmakla yak"));
 }
 
 bool AForestCharacter::TestPlace(bool bStanding, const FHitResult& Hit)
 {
-	bPlaceFire = false;
 	bPlaceStanding = bStanding;
 	UpdateCarryPlacementAt(Hit, true);
 	return PlaceCarried();
@@ -1874,22 +1935,8 @@ void AForestCharacter::RotateBuild()
 	}
 	else if (CarriedItem == EForestItem::Log)
 	{
-		// Lay -> stand -> fire -> lay.
-		if (bPlaceFire)
-		{
-			bPlaceFire = false;
-			bPlaceStanding = false;
-		}
-		else if (bPlaceStanding)
-		{
-			bPlaceStanding = false;
-			bPlaceFire = true;
-		}
-		else
-		{
-			bPlaceStanding = true;
-		}
-		ShowMessage(bPlaceFire ? TEXT("Koyma: ateş yak") : bPlaceStanding ? TEXT("Koyma: dik (direk)") : TEXT("Koyma: yatır"));
+		bPlaceStanding = !bPlaceStanding;
+		ShowMessage(bPlaceStanding ? TEXT("Koyma: dik (direk)") : TEXT("Koyma: yatır"));
 	}
 	else if (FocusedCarvable.IsValid())
 	{

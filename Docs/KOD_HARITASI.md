@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (14 October 2026 04:30) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (14 October 2026 04:54) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -17,15 +17,25 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `float GetSelfWeight() const` — --- Structural Getters & Setters ---
 - Ayrıca (açıklamasız): `ABuildingNodeActor`, `GetCurrentLoadKN`, `SetCurrentLoadKN`, `GetCompressiveCapacityKN`, `IsGrounded`, `SetGrounded`, `IsCollapsed`, `GetSupportingNodes`, `GetSupportedByNodes`
 
+## BurnSubsystem.h
+
+**UBurnSubsystem** (class) — Drives the fire of a world: every burning piece of wood burns down, heats the wood beside it (the closer, the faster; touching pieces catch in about the time a lighter …
+
+- `void Advance(float Seconds)` — Burns the world for Seconds (in steps of a quarter second). The tick does this; the mechanics test calls it to skip time.
+- Ayrıca (açıklamasız): `Get`, `Light`, `Warm`, `GetBurningCount`
+
 ## Campfire.h
 
 **ACampfire** (class) — A campfire. Any piece of wood is fuel: it burns as long as the wood it holds (a whole log 10 minutes, a half 5, a quarter 2.5), so cutting a log up into firewood is just …
 
 - `static float FuelSecondsOf(const ACarvableLog* Piece)` — Seconds Piece would burn.
 - `static ACampfire* Build(UWorld* World, const FVector& Ground)` — A fire pit with a ring of stones on the ground at Ground, not lit until it has fuel.
-- `bool AddFuel(ACarvableLog* Piece)` — Throws Piece on the fire: it is used up, the fire is lit. False if the fire is already full or the piece is part of a structure. The caller takes the piece off the …
+- `bool AddFuel(ACarvableLog* Piece)` — Throws Piece on the fire: it is used up (a burning piece lights the fire). False if the fire is already full or the piece is part of a structure. The caller takes the …
+- `bool IsBurning() const` — Fuel alone does not make a fire: it has to be lit (a lighter, or burning wood).
+- `bool Ignite()` — Lights the fire if it has fuel.
+- `bool ApplyHeat(float Seconds)` — Heat from a lighter: the fire catches after a couple of seconds.
 - `void Burn(float Seconds)` — Burns for Seconds: fuel goes down, the light follows, wood in reach is scorched. Called every tick as well.
-- Ayrıca (açıklamasız): `ACampfire`, `IsBurning`, `GetFuelSeconds`
+- Ayrıca (açıklamasız): `ACampfire`, `GetFuelSeconds`
 
 ## CarvableLog.h
 
@@ -35,7 +45,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **FCrossPlacement** (struct) — Where a log laid across another one goes, and the saddle notch that seats it (see ACarvableLog::ComputeCrossPlacement).
 
 
-**ACarvableLog** (class) — A raw log that can be carved while playing: smooth cups and grooves (notches), cross cuts and lengthwise splits, cut from the scanned mesh with Geometry Script. Local X …
+**ACarvableLog** (class)
 
 - `static ACarvableLog* SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh, const FTransform& Transform)` — Spawns a carvable copy of a raw log mesh (e.g. /Game/Building/Raw/SM_RawLog_C).
 - `static ACarvableLog* SpawnLog(UWorld* World, const FTransform& Transform)` — A whole log as a tree gives it (the greybox log, six modules long), falling into place.
@@ -48,6 +58,12 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static void GetCrossNotchGuide(const FCrossPlacement& Placement, const ACarvableLog* Upper, TArray<TArray<FVector>>& OutLines, TAr …` — Rim of that saddle notch on the upper log, in its local space (for the dashed guide before it is placed).
 - `static ACarvableLog* PlaceAcross(AActor* Lower, const FCrossPlacement& Placement, ACarvableLog* Upper)` — Lays Upper across Lower as computed: moves it there (off the shoulder), cuts its saddle notch and seats it. Both logs are anchored where they are (a lying log item is …
 - `float GetDamage() const` — 0 sound .. 1 burnt through or broken (wood goes darker as it takes damage). From the Wood structure rules: above 0.6 the joints of a piece let go (it no longer holds or …
+- `float GetIgniteSeconds() const` — Seconds of full heat it takes this piece to catch: its radius times 0.4, between 2 and 20.
+- `bool ApplyHeat(float Seconds)` — Heat from a lighter, a flame or a fire. True once the piece has caught (this call or before).
+- `bool Ignite()` — Catches fire at once. False if it is charred, or too many pieces already burn (MaxBurning).
+- `float GetBurnSecondsLeft() const` — Seconds of burning left, and the share of its fuel used so far (0..1).
+- `void StepBurn(float Seconds)` — Called by UBurnSubsystem: burns for Seconds (fuel, damage, flames).
+- `bool CoolStep(float Seconds)` — Called by UBurnSubsystem: heat fades when nothing heats the piece. Returns true while it is still warming.
 - `bool IsTemporary() const` — Scaffolding: part of the building site only until the structure is done.
 - `static bool CanReplace(const ACarvableLog* Old, const ACarvableLog* Replacement)` — A damaged piece in a structure can be swapped for another one of the same size (see ReplaceDamaged).
 - `static bool ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)` — Replacement takes Old's place, anchored, with the same joints cut into it. Old is released from the structure, damage and all, for the caller to pick up.
@@ -81,7 +97,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `ACarvableLog* CrossCut(float LocalX)` — Saws across at LocalX; the part beyond becomes a new log.
 - `ACarvableLog* Split(float AngleDeg)` — Splits along the axis on the plane at AngleDeg around X (0 = vertical); the other half becomes a new log.
 - `void GetNotchFrame(float LocalX, float SideAngleDeg, float CrossAngleDeg, float MateRadius, float Depth, FVector& OutCentre, FVect …` — Where the cup's mating log axis runs (local space), for previews.
-- Ayrıca (açıklamasız): `ACarvableLog`, `AddDamage`, `SetDamage`, `SetTemporary`, `IsAnchored`, `IsCarried`, `GetLength`, `GetRadius`, `GetCenterX`, `GetDiameter`, `GetMinX`, `GetMaxX`, `GetEnd`, `GetGridOriginX`
+- Ayrıca (açıklamasız): `ACarvableLog`, `AddDamage`, `SetDamage`, `GetBurnState`, `IsBurning`, `IsCharred`, `GetHeatShare`, `SetTemporary`, `IsAnchored`, `IsCarried`, `GetLength`, `GetRadius`, `GetCenterX`, `GetDiameter`, `GetMinX`, `GetMaxX`, `GetEnd`, `GetGridOriginX`
 
 ## ForestCharacter.h
 
@@ -95,14 +111,16 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool CanPlaceAcross() const` — E would lay the carried log across the log in sight.
 - `bool IsPlaceSupported() const` — The piece would be held up where it is about to go (the structure graph says so); false: it would fall.
 - `bool IsPlacingStanding() const` — R while carrying: lay pieces down or stand them up as posts.
+- `bool IsLighterHeld() const` — F held: the lighter heats what is in sight (a piece of wood or a fire pit).
 - `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
 - `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
 - `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
 - `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).
 - `bool TestPlace(bool bStanding, const FHitResult& Hit)` — For the mechanics test: a left click with the carried piece aimed at Hit (true if it was placed).
-- `bool TestPlaceFire(const FHitResult& Hit)` — For the mechanics test: the same with the fire mode chosen (lights a fire pit on the ground, or feeds one that is aimed at).
+- `ACampfire* TestBuildFirePit(const FHitResult& Hit, bool bGiveStones)` — For the mechanics test: [C] with the stones given first when bGiveStones. Returns the pit, or null.
+- `void TestLight(AActor* Target, float Seconds)` — For the mechanics test: the lighter held on Target for Seconds.
 - `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
-- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `IsPlacingFire`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`
 
 ## ForestOutline.h
 
@@ -368,4 +386,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-124 / 308 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+130 / 326 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

@@ -92,17 +92,37 @@ bool ACampfire::AddFuel(ACarvableLog* Piece)
 	{
 		return false;
 	}
-	const bool bWasOut = !IsBurning();
+	const bool bFlame = Piece->IsBurning();
 	FuelSeconds = FMath::Min(FuelSeconds + FuelSecondsOf(Piece), MaxFuelSeconds);
 	Piece->Destroy();
-	if (bWasOut)
+	if (bFlame)
 	{
+		Ignite();
+	}
+	return true;
+}
+
+bool ACampfire::Ignite()
+{
+	if (FuelSeconds <= 0.f)
+	{
+		return false;
+	}
+	if (!bLit)
+	{
+		bLit = true;
 		SetLit(true);
 	}
 	return true;
 }
 
-void ACampfire::SetLit(bool bLit)
+bool ACampfire::ApplyHeat(float Seconds)
+{
+	HeatSeconds += Seconds;
+	return HeatSeconds >= 2.f && Ignite();
+}
+
+void ACampfire::SetLit(bool bOn)
 {
 	static const FLinearColor FlameColor(1.f, 0.45f, 0.05f);
 	static const FLinearColor EmberLit(0.8f, 0.12f, 0.02f);
@@ -122,11 +142,11 @@ void ACampfire::SetLit(bool bLit)
 	};
 	for (UStaticMeshComponent* Flame : Flames)
 	{
-		Flame->SetVisibility(bLit);
+		Flame->SetVisibility(bOn);
 		Tint(Flame, FlameColor);
 	}
-	Tint(Embers, bLit ? EmberLit : EmberOut);
-	Light->SetIntensity(bLit ? 5000.f : 0.f);
+	Tint(Embers, bOn ? EmberLit : EmberOut);
+	Light->SetIntensity(bOn ? 5000.f : 0.f);
 }
 
 void ACampfire::Burn(float Seconds)
@@ -153,10 +173,16 @@ void ACampfire::Burn(float Seconds)
 		{
 			It->AddDamage(HeatDamagePerSecond * Burned);
 		}
+		if (Distance <= 15.f)
+		{
+			It->ApplyHeat(Burned);
+		}
 	}
 
-	if (!IsBurning())
+	if (FuelSeconds <= 0.f)
 	{
+		bLit = false;
+		HeatSeconds = 0.f;
 		SetLit(false);
 	}
 }

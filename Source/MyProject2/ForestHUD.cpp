@@ -88,6 +88,14 @@ void AForestHUD::DrawHUD()
 		{
 			Detail += FString::Printf(TEXT("  |  hasar %%%.0f"), Player->GetFocusedCarvable()->GetDamage() * 100.f);
 		}
+		if (Player->GetFocusedCarvable()->IsBurning())
+		{
+			Detail += FString::Printf(TEXT("  |  YANIYOR %.0f sn"), Player->GetFocusedCarvable()->GetBurnSecondsLeft());
+		}
+		else if (Player->GetFocusedCarvable()->IsCharred())
+		{
+			Detail += TEXT("  |  yanık");
+		}
 		const TCHAR* Wheel = bProfile ? TEXT("[Tekerlek] derinlik")
 			: Tool == ECarveTool::CrossCut ? TEXT("65 cm'lik modül çizgileri")
 			: AForestCharacter::IsEndTool(Tool) ? TEXT("kütüğün iki ucundan biri")
@@ -331,7 +339,7 @@ void AForestHUD::DrawHUD()
 		TEXT("[P] Admin modu: [G] malzeme, [H] oda, [J] kes, [N] aç, [M] hasar, [K] oyma kütüğü, [L] demo, [Y] hasar"),
 		TEXT("[B] İnşa modu  |  Tekerlek / [Q]: seç  |  [R] döndür  |  Sağ tık: iptal"),
 		TEXT("Kütük Duvar: köşelere tıkla, plana bakıp [E] ile kütük ekle"),
-		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik / ateş"),
+		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik  |  [F] çakmak (basılı tut)  |  [C] 7 taşla ateş yeri"),
 		TEXT("Oyma: [R] alet (çentik, enine kesim, yarma, oval, düz, sivri uç, pah, uç düzeltme, kırlangıç)  |  [E] parçayı omza al"),
 	};
 	DrawPanel(20.f, 20.f, 620.f, 16.f + 20.f * Help.Num());
@@ -369,7 +377,6 @@ void AForestHUD::DrawHUD()
 		case AForestCharacter::ECarryPlace::Beam:   Label = TEXT("[Sol tık] Kiriş koy (direğin üstüne)"); break;
 		case AForestCharacter::ECarryPlace::Brace:  Label = TEXT("[Sol tık] Payanda koy (45°, kirişin altına)"); break;
 		case AForestCharacter::ECarryPlace::Floor:  Label = TEXT("[Sol tık] Döşeme tahtası koy (düz yüz üstte)"); break;
-		case AForestCharacter::ECarryPlace::Fire:   Label = TEXT("[Sol tık] Ateş yak (odun yakıt olur)   [R] yatır"); break;
 		case AForestCharacter::ECarryPlace::Fuel:   Label = TEXT("[Sol tık] Ateşe odun at"); break;
 		case AForestCharacter::ECarryPlace::Repair: Label = TEXT("[Sol tık] Hasarlı parçayı bununla değiştir"); break;
 		default:                                    Label = TEXT("Yere ya da yerdeki bir kütüğe bak"); break;
