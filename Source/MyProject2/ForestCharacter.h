@@ -266,6 +266,9 @@ public:
 	bool HasRopeAnchor() const { return bRopeAnchorSet; }
 	bool IsRiding() const { return RideRope.IsValid(); }
 	bool IsStickMode() const { return bStickMode; }
+	/** [F1]: the full list of controls. */
+	bool IsHelpOpen() const { return bHelpOpen; }
+	void ToggleHelp() { bHelpOpen = !bHelpOpen; }
 	FString GetStickModeLabel() const;
 	/** For the mechanics test: the lighter held on Target for Seconds. */
 	void TestLight(AActor* Target, float Seconds);
@@ -421,6 +424,7 @@ private:
 	bool bLighterHeld = false;
 	/** [I]: stick building on/off; Q / the wheel picks what, left click builds it where the ground is aimed at. */
 	bool bStickMode = false;
+	bool bHelpOpen = false;
 	/** [I] rope line: the first end, set by the first click. */
 	bool bRopeAnchorSet = false;
 	FVector RopeAnchor = FVector::ZeroVector;

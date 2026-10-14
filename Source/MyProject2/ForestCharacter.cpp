@@ -364,6 +364,9 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UInputAction* FirePitAction = MakeAction(TEXT("IA_FirePit"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(FirePitAction, EKeys::C);
 	Input->BindAction(FirePitAction, ETriggerEvent::Started, this, &AForestCharacter::PlaceFireStone);
+	UInputAction* HelpAction = MakeAction(TEXT("IA_Help"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(HelpAction, EKeys::F1);
+	Input->BindAction(HelpAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleHelp);
 	UInputAction* EatAction = MakeAction(TEXT("IA_Eat"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(EatAction, EKeys::Eight);
 	Input->BindAction(EatAction, ETriggerEvent::Started, this, &AForestCharacter::EatFood);

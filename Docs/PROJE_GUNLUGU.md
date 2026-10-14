@@ -514,3 +514,8 @@ Kullanıcı istedi: "demo kurabilir misin". Test: mekanik 119/119 (değişmedi).
 - Senaryo artık ormana 10 ağaç (7 çam, 3 geniş) ve kayalığa 6 kaya ekliyor; haritadakiler gibi kesilip kırılabiliyor (demo haritasında önceden yalnızca 4 ağaç vardı, kaya yoktu).
 - Admin **[9]**: zamanı 3 saat ileri alır (gece yarısını geçince günün simülasyonu çalışır: ekin büyür, hayvan ürün verir).
 - Oyunla grafiksiz bir açılışta senaryo hatasız kuruldu. Görev panelinin ve yerleşimin görünüşü oyunda denenmedi.
+
+### 2026-10-14 — HUD düzeni (kullanıcı: "yazılar birbirine girmiş") (CC)
+- Sorun ekran görüntüsüyle doğrulandı: aynı anda iki görev listesi (eski kütük demosu kendiliğinden açılıyordu), taşan tuş listesi, tuş listesinin üstüne binen uzun gün satırı.
+- Düzeltme: sol üstte tek satır ("[F1] tuşlar  [Tab] çanta  [I] yapım"); **[F1]** gruplanmış tuş penceresini ortada açar/kapatır; üst ortada iki kısa satır (gün/saat/bölge/sıcaklık; baskın gecesi, notlar, altyapı); sağda hayatta kalma paneli yalnızca sıradaki görevi, ipucunu (sarılarak) ve sonraki 3 görevi gösterir. Senaryo kuruluyken eski kütük demosu kendiliğinden açılmaz, admin [L] ile açılır.
+- **`-HudShot=saniye`** bayrağı: oyun o saniyede arayüzle birlikte ekran görüntüsü alıp (`Saved/HudShot.png`) kapanır. Arayüz değişikliklerini görerek doğrulamak için. Son görüntü `Docs/hud_2026-10-14.png`.

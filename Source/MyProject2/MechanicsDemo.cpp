@@ -68,7 +68,13 @@ void AMechanicsDemo::BeginPlay()
 	{
 		return;
 	}
-	if (bAutoStart)
+	// In the survival scenario the survival checklist guides; the log demo waits for [L].
+	const UScenarioSubsystem* Scenario = UScenarioSubsystem::Get(GetWorld());
+	if (bAutoStart && !bAutoPlay && Scenario && Scenario->IsLaidOut())
+	{
+		SetActorTickEnabled(false);
+	}
+	else if (bAutoStart)
 	{
 		Begin(bAutoPlay ? StartDelay : 0.f);
 		if (bAutoPlay)
