@@ -28,7 +28,7 @@ def read_log(path: Path, label: str) -> str:
         raise ValueError(f"{label}: cannot read log '{path}': {exc}") from exc
 
 
-def verify_mechanics(path: Path) -> tuple[int, int]:
+def verify_mechanics(path: Path, minimum_passed: int = 1) -> tuple[int, int]:
     text = read_log(path, "Mechanics")
     results = MECHANICS_RESULT.findall(text)
     if not results:
@@ -38,8 +38,10 @@ def verify_mechanics(path: Path) -> tuple[int, int]:
         )
     passed, failed = map(int, results[-1])
     failure_details = MECHANICS_FAILED.findall(text)
-    if passed <= 0:
-        raise ValueError(f"Mechanics: summary reports no passed checks ({passed} passed).")
+    if passed < minimum_passed:
+        raise ValueError(
+            f"Mechanics: only {passed} checks passed; expected at least {minimum_passed}."
+        )
     if failed != 0:
         detail = "; ".join(s.strip()[:160] for s in failure_details[:5])
         suffix = f" Details: {detail}" if detail else ""
@@ -52,7 +54,7 @@ def verify_mechanics(path: Path) -> tuple[int, int]:
     return passed, failed
 
 
-def verify_wood(path: Path) -> tuple[int, int]:
+def verify_wood(path: Path, minimum_tests: int = 1) -> tuple[int, int]:
     text = read_log(path, "Wood")
     successes = WOOD_SUCCESS.findall(text)
     failures = WOOD_FAILED.findall(text)
@@ -71,6 +73,10 @@ def verify_wood(path: Path) -> tuple[int, int]:
         raise ValueError(
             f"Wood: {len(successes)} passed, {len(failures)} failed. Failed: {details}"
         )
+    if len(successes) < minimum_tests:
+        raise ValueError(
+            f"Wood: only {len(successes)} tests passed; expected at least {minimum_tests}."
+        )
     if len(passed_paths) != len(successes):
         raise ValueError(
             "Wood: duplicate successful result paths were found; verify the test log was not merged from runs."
@@ -82,10 +88,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mechanics", required=True, type=Path)
     parser.add_argument("--wood", required=True, type=Path)
+    parser.add_argument("--minimum-mechanics-checks", type=int, default=101,
+                        help="Fail if fewer than this many MechanicsDemo checks passed (default: 101).")
+    parser.add_argument("--minimum-wood-tests", type=int, default=12,
+                        help="Fail if fewer than this many unique Wood tests passed (default: 12).")
     args = parser.parse_args()
+    if args.minimum_mechanics_checks < 1 or args.minimum_wood_tests < 1:
+        parser.error("minimum test counts must be at least 1")
     try:
-        mech_passed, mech_failed = verify_mechanics(args.mechanics)
-        wood_passed, wood_failed = verify_wood(args.wood)
+        mech_passed, mech_failed = verify_mechanics(args.mechanics, args.minimum_mechanics_checks)
+        wood_passed, wood_failed = verify_wood(args.wood, args.minimum_wood_tests)
     except ValueError as exc:
         print(f"TEST VERIFICATION FAILED: {exc}", file=sys.stderr)
         return 1
