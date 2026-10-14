@@ -100,3 +100,14 @@ Kullanıcı istedi: "plandaki fazları hepsini entegre et, en son derle". Tek se
 - **Faz 13 (kısmi):** Kısa bacaklı (<100 cm) platform **Tezgâh** olarak tanınıyor (`EWoodFeatureKind::Table`, birim testi). Sivri kazık düşmana zarar verir, fırlatılan/itilen kütük çarpınca düşmana zarar verir (`HitEnemy`). **Yapılmadı:** sal, yaylı/tuzak mekanizması (kütük tuzağı), mobilyanın kullanımı.
 - **Faz 14 (kısmi):** `ARaidEnemy` (hedef: oyuncu, yoksa en yakın yapı; duvarı yıkar, kazığa gelince can kaybeder, baltayla 25 vurulur) ve `RaidKit::StartDefaultRaid` (paketin Raid yöneticisi koddan kurulan plan ve varlıklarla çalışır). Admin **[Z]** baskın başlatır. Paketteki `IsOnNavMesh` haritada gezinme ağı yoksa açık zemini geçerli sayacak şekilde düzeltildi. Testlerde: baskın başladı ve düşman doğdu, düşman orta direği yaktı ve kiriş kırıldı, kazık 25 can/sn aldı. **Yapılmadı:** ses (hiçbir mekanikte yok), düşman görseli (kırmızı direk), yol bulma (düz çizgi), oyuncuya hasarın testi, otomatik gece baskın takvimi.
 - Bulunan hatalar: UE'de `NormalImpulse` büyük çıktığı için ilk eşik (400 bin) köşe testini bozdu (alt kütüklere hasar); paketin spawn bulucusu gezinme ağı yok diye hiç yer bulamıyordu; düşman testinde direkler yanlış eksende diziliydi.
+
+
+### 2026-10-14 — Faz 0 kaynak denetimi (devam ediyor)
+
+Bu çalışma, önceki kod geliştirme fazlarından ayrı bir kabul/kanıt turudur; yeni kullanıcı demosu değildir.
+- 14 fazın kabul kapıları ve takip CSV'si repo dalına eklendi. Kullanıcıya tek demo Faz 15 sonunda verilecek; iç doğrulama senaryoları teslim paketi sayılmaz.
+- Mekanik kataloğu denetleyicisi ve 9 birim testi eklendi. Denetleyici kimlik tekrarlarını, şema sorunlarını, U0/unclassified satırları, seviyeye göre kaynak/test/editör kanıtını ve boş blocker/not alanlarını görünür kılar.
+- GitHub Actions `Python tooling checks` başarılı sonucu verdi (run #20); bu yalnızca Python araç testidir, Unreal Engine derlemesi değildir.
+- LOG-001–LOG-076 için kaynak kanıt denetimi `Docs/FAZ_00_LOG_KANIT_DENETIMI.md` içine yazıldı. Ana `ACarvableLog` ağacı/kütük/kesim/taşıma/yapı/fire loop çekirdeği korunacak; uzun halat/zipline, su üstü taşıma, bazı yapı türleri, makine/tuzak ve genel salvage kapsamları ayrı kanıt veya geliştirme istiyor.
+- Kaynak denetimi, fiziksel envanter köprüsünün `ALogActor/AStoneActor/AStickActor` sınıflarıyla çalıştığını ama oynanış kütüğünün `ACarvableLog` olduğunu; inventory drop metodunun doğrudan fiziksel aktör üretmediğini; raid yapısal hasar resolver'ının `ACarvableLog` yolunu göstermediğini; WorldPersistence'in chunk/world-state verisini kaydedip tek başına canlı yapı/araç/oyuncu aktör state'ini kapsamadığını teyit eden riskleri belgeledi.
+- 485 katalog kaydının tümünü kaynak zinciri, test kimliği ve editör kanıtıyla eşleştirme bitmedi. Faz 0 açık. UE 5.8 derleme, editör ve paket testi gerçek hostta yapılmadan başarılı olarak işaretlenmeyecek.
