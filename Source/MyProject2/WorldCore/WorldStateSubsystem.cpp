@@ -101,15 +101,38 @@ void UWorldStateSubsystem::Tick(float DeltaTime)
         }
 
         if (Chunk->Metadata.ActivationMode == EChunkActivationMode::Passive) continue;
+
+        // Preserve unprocessed simulation time across budgeted frames. Newly elapsed
+        // time is recorded once, separately from the chunk's simulated-through day.
+        const float NewlyElapsedDays = FMath::Max(0.0f, CurrentTotalDay - Chunk->Metadata.LastObservedWorldDay);
+        if (FMath::IsFinite(NewlyElapsedDays) && NewlyElapsedDays > 0.0f)
+        {
+            const float PendingCap = FMath::Clamp(
+                FMath::IsFinite(MaxAccumulatedSimulationDays) ? MaxAccumulatedSimulationDays : 365.0f, 1.0f, 365.0f);
+            const float ExistingPending = FMath::IsFinite(Chunk->Metadata.AccumulatedDeltaDays)
+                ? FMath::Clamp(Chunk->Metadata.AccumulatedDeltaDays, 0.0f, PendingCap) : 0.0f;
+            Chunk->Metadata.AccumulatedDeltaDays = FMath::Clamp(ExistingPending + NewlyElapsedDays, 0.0f, PendingCap);
+            Chunk->Metadata.LastObservedWorldDay = CurrentTotalDay;
+            Chunk->MarkDirty();
+        }
+
         const bool bContinuousDue = Chunk->Metadata.ActivationMode == EChunkActivationMode::Continuous;
         const bool bScheduledDue = Chunk->Metadata.ActivationMode == EChunkActivationMode::Scheduled &&
             (Chunk->Metadata.LastSimulationTime <= 0.0 || RealNow - Chunk->Metadata.LastSimulationTime >= 5.0);
-        if (!bContinuousDue && !bScheduledDue) continue;
+        if ((!bContinuousDue && !bScheduledDue) ||
+            Chunk->Metadata.AccumulatedDeltaDays <= KINDA_SMALL_NUMBER) continue;
         if (BudgetAllocator && !BudgetAllocator->TryAllocateChunk()) break;
 
-        const float ChunkDeltaDays = FMath::Max(0.0f, CurrentTotalDay - Chunk->Metadata.LastUpdateDay);
-        if (ChunkDeltaDays > 0.0f) SimulateChunk(Chunk, ChunkDeltaDays, CurrentTotalDay);
-        Chunk->Metadata.LastSimulationTime = RealNow;
+        const float MaxStep = FMath::Clamp(
+            FMath::IsFinite(MaxSimulationDaysPerStep) ? MaxSimulationDaysPerStep : 1.0f, 0.01f, 1.0f);
+        const float StepDays = FMath::Min(Chunk->Metadata.AccumulatedDeltaDays, MaxStep);
+        if (StepDays > KINDA_SMALL_NUMBER)
+        {
+            SimulateChunk(Chunk, StepDays, Chunk->Metadata.LastUpdateDay + StepDays);
+            Chunk->Metadata.AccumulatedDeltaDays = FMath::Max(0.0f, Chunk->Metadata.AccumulatedDeltaDays - StepDays);
+            Chunk->Metadata.LastSimulationTime = RealNow;
+            Chunk->MarkDirty();
+        }
     }
     SimulationCursor = (StartIndex + FMath::Max(1, Visited)) % Chunks.Num();
 }
