@@ -276,3 +276,16 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - Önceki akış, UE süreç kodu veya test-log doğrulaması başarısız olduğunda bile Scripts/update_docs.py çağırabiliyordu.
 - KOD_HARITASI.md ve TEST_DURUMU.md üretimi artık yalnızca bütün UE süreç çıkış kodları ve fail-closed log doğrulaması başarılıysa çalışır; aksi durumda mevcut raporlar değiştirilmez.
 - Scripts/tests/test_runner_fail_closed.py ile bu kapıyı ve tüm suite süreç kodlarının overall status'a katılmasını denetleyen dört statik test eklendi; Python CI çalıştırıcısına bağlandı.
+
+### 2026-10-14 — Implementation-first katman değişimi ve kazı veri çekirdeği (Web)
+
+Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyip kodlamayı bekletmek yerine, mevcut MyProject2 koduyla uyumlu katmanlar ve adaptörler kurularak bütün mekanikler geliştirilecek; kapsamlı bütüncül hata/regresyon/performance analizi Faz 14'te yapılacak. UE 5.8 testleri Claude Code/UE host akışına ait; bu oturumda çalıştırılmadı ve çalıştırılmış gibi raporlanmayacak.
+
+- Docs/PLAN_14_FAZ_UYGULAMA_OMURGASI.md implementation-first L0–L4 katmanlarına göre güncellendi. Faz 14 artık 485 mekanik ve tüm sistemler için toplu analiz/hata kapısı.
+- Docs/FAZ_TAKIP.csv içinde Faz 0 kaynak-triage baseline'ı tamamlandı olarak işaretlendi; U0/U1/U2 mekanik durumları kodlamayı bloke etmiyor. Faz 1 kazı veri temeli çalışması olarak başlatıldı.
+- 485 mekanik ana katalogda 333 U2, 88 U1 ve 64 U0 olarak aile eşleştirmeleriyle eşitlendi; 485 unique ID var. Bu dağılım oyun içi tamamlanma iddiası değildir.
+- Inventory-to-world bridge düzeltildi: null world/actor class/invalid item kontrolü eklenip fiziksel spawn sonrası DropItem çağrılıyor; drop reddedilirse spawned actor temizleniyor. Kaynak kontratını kontrol eden Python testi CI betiğine bağlandı; GitHub Actions sonucu henüz burada okunmadı.
+- Faz 1 için WorldCore/ExcavationTypes.h, ExcavationVolumeSubsystem.h/.cpp eklendi. Sparse cell override, küresel carve/fill edit, sınır/cap doğrulaması ve operation-id tabanlı rollback koruması bulunuyor. Veri backend'i henüz mesh/collision, nav veya save/load sistemine bağlanmış değildir; bunlar ilgili sonraki katmanlar.
+- Doğrulama: dosyalar branch'e kaydedildi; bu oturumda Unreal derleme veya motor otomasyonu çalıştırılmadı. Yeni C++ kodunun UE 5.8'de gerçek compile sonucu Claude Code tarafında alınmalı.
+
+**Sıradaki:** Faz 1 veri API'sini mevcut world/chunk/persistence kontratlarıyla uyumlu hale getirmek ve consumer'ların yalnızca UExcavationVolumeSubsystem API'sini kullanmasını sağlamak; ardından Faz 2'nin ortak kimlik/sahiplik/sürüm sözleşmelerini modül sınırlarına uygulamak.
