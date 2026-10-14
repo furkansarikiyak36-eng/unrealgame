@@ -17,6 +17,8 @@ from typing import Any
 REQUIRED_COLUMNS = (
     "Mechanic_ID",
     "Sistem",
+    "Katalog_ID",
+    "Teslim_Fazi",
     "Mekanik",
     "Durum",
     "Kod_Kaniti_ve_Cagri_Zinciri",
@@ -67,6 +69,8 @@ def audit_rows(rows: list[dict[str, str]], headers: list[str]) -> dict[str, Any]
     for line_no, row in enumerate(rows, start=2):
         mechanic_id = _text(row.get("Mechanic_ID"))
         system = _text(row.get("Sistem"))
+        catalog_id = _text(row.get("Katalog_ID"))
+        delivery_phase = _text(row.get("Teslim_Fazi"))
         mechanic = _text(row.get("Mekanik"))
         status = _text(row.get("Durum"))
         item_errors: list[str] = []
@@ -79,6 +83,10 @@ def audit_rows(rows: list[dict[str, str]], headers: list[str]) -> dict[str, Any]
             ids.append(mechanic_id)
         if not system:
             item_errors.append("Sistem boş")
+        if not catalog_id:
+            item_errors.append("Katalog_ID boş")
+        if not delivery_phase:
+            item_errors.append("Teslim_Fazi boş")
         if not mechanic:
             item_errors.append("Mekanik boş")
         if not status:
@@ -130,6 +138,7 @@ def audit_rows(rows: list[dict[str, str]], headers: list[str]) -> dict[str, Any]
         levels[f"U{level}" if level is not None else "Unclassified"] += 1
         result["rows"].append({
             "line": line_no, "mechanic_id": mechanic_id, "system": system,
+            "catalog_id": catalog_id, "delivery_phase": delivery_phase,
             "status": status, "level": level, "issues": item_errors,
             "warnings": item_warnings,
         })
