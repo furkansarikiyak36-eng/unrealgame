@@ -27,6 +27,9 @@ class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UCableComponent;
 class ULineBatchComponent;
+class UStoneCarryComponent;
+class UStonePlacementComponent;
+class AStoneActor;
 
 /**
  * First person survival character: chop trees, break rocks, pick up drops,
@@ -248,6 +251,13 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USurvivalComponent> Survival;
+
+	/** Physical stone handling uses the same actor from pickup through placement. */
+	UPROPERTY(VisibleAnywhere, Category = "Stone")
+	TObjectPtr<UStoneCarryComponent> StoneCarry;
+
+	UPROPERTY(VisibleAnywhere, Category = "Stone")
+	TObjectPtr<UStonePlacementComponent> StonePlacement;
 
 	/** Heavy actions cost stamina (GDD 6.1). */
 	UPROPERTY(EditAnywhere, Category = "Forest")
