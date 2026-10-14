@@ -26,6 +26,7 @@ class FarmingIntegrationTests(unittest.TestCase):
         self.assertIn("PlantCropFromInventory", CROP_H)
         planting = section(CROP_CPP, "bool ACropFieldActor::PlantCropFromInventory", "float ACropFieldActor::HarvestToFeedStorage")
         self.assertIn("Inventory->HasItem(SeedItemID,SeedCount)", planting)
+        self.assertIn("bCropPlanted", planting)
         self.assertIn("Inventory->RemoveItem(SeedItemID,SeedCount)", planting)
         self.assertIn("Def->ValidateDefinition(Error)", planting)
         self.assertIn("GrowthComponent->SetDefinition(Def)", CROP_CPP)
@@ -76,7 +77,7 @@ class FarmingIntegrationTests(unittest.TestCase):
         self.assertIn("EInventoryResult::Success", INVENTORY_CPP)
 
     def test_manure_is_debited_once_and_nutrients_return_to_the_world_cell(self):
-        manure = section(ANIMAL_CPP, "bool AAnimalActor::ApplyManureToSoil", "}")
+        manure = section(ANIMAL_CPP, "bool AAnimalActor::ApplyManureToSoil", "\\n}\\n")
         self.assertIn("ManureComponent->CollectManure(Amount)", manure)
         self.assertIn("WorldState->GetCellAtWorld(SoilWorldLocation)", manure)
         self.assertIn("Cell->SoilNitrogen", manure)
