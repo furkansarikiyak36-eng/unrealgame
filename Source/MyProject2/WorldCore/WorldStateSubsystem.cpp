@@ -39,7 +39,8 @@ void UWorldStateSubsystem::Tick(float DeltaTime)
                 TempMinC = SimState->TempMin;
                 TempMaxC = SimState->TempMax;
                 RainfallMm = SimState->Rainfall;
-                WindSpeed = SimState->WindSpeed;
+                WindSpeed = FMath::IsFinite(SimState->WindSpeed) ? FMath::Max(0.0f, SimState->WindSpeed) : 0.0f;
+                WindDirection = SimState->WindDirection.IsNearlyZero() ? FVector2D(1.0f, 0.0f) : SimState->WindDirection.GetSafeNormal();
                 bIsRaining = SimState->bIsRaining;
                 bIsSnowing = SimState->bIsSnowing;
                 RandomSeed = SimState->RandomSeed;
@@ -77,7 +78,7 @@ void UWorldStateSubsystem::Tick(float DeltaTime)
 
     const double RealNow = FPlatformTime::Seconds();
     const float CurrentTotalDay = WorldTime.ToTotalDays();
-    const float CurrentDayIndex = FMath::FloorToFloat(CurrentTotalDay);
+    const int32 CurrentDayIndex = FMath::FloorToInt(CurrentTotalDay);
     const int32 StartIndex = SimulationCursor % Chunks.Num();
     int32 Visited = 0;
     for (int32 Offset = 0; Offset < Chunks.Num(); ++Offset)
@@ -120,16 +121,146 @@ void UWorldStateSubsystem::UpdateWorldTimeTick(float DeltaTime)
 void UWorldStateSubsystem::AdvanceWorldTime(float DeltaDays) { if(DeltaDays>0) WorldTime=FWorldTime::FromTotalDays(WorldTime.ToTotalDays()+DeltaDays); }
 void UWorldStateSubsystem::SynchronizeAfterLoad()
 {
-    SimulationCursor=0; HourAccumulator=0.0;
+    SimulationCursor=0; HourAccumulator=FMath::Clamp(HourAccumulator, 0.0, 0.999999);
     if (UWorld* World=GetWorld()) if (USimulationSubsystem* Clock=World->GetSubsystem<USimulationSubsystem>()) if (USimulationState* SimState=Clock->GetState())
     {
         SimState->DayNumber=WorldTime.Day; SimState->HourOfDay=WorldTime.Hour; SimState->TimeOfDay=WorldTime.TimeOfDay;
         SimState->Temperature=TemperatureC; SimState->TempMin=TempMinC; SimState->TempMax=TempMaxC; SimState->Rainfall=RainfallMm;
-        SimState->WindSpeed=WindSpeed; SimState->bIsRaining=bIsRaining; SimState->bIsSnowing=bIsSnowing; Clock->SetRandomSeed(RandomSeed);
+        SimState->WindSpeed=WindSpeed; SimState->WindDirection=WindDirection.IsNearlyZero()?FVector2D(1.0f,0.0f):WindDirection.GetSafeNormal(); SimState->bIsRaining=bIsRaining; SimState->bIsSnowing=bIsSnowing; Clock->SetRandomSeed(RandomSeed);
         Clock->TickRates.HourAccumulator=0.0f; Clock->TickRates.DayAccumulator=0.0f; Clock->TickRates.FrameAccumulator=0.0f;
     }
 }
-UChunkState* UWorldStateSubsystem::GetOrCreateChunkAtWorld(const FVector& P) { return StateStore?StateStore->GetOrCreateChunk(ChunkSettings.WorldToChunk(P),ChunkSettings.CellsPerChunkAxis):nullptr; }
+
+bool UWorldStateSubsystem::ExportSnapshot(FWorldStateSnapshot& OutSnapshot) const
+{
+    if(!StateStore) return false;
+    FWorldStateSnapshot Snapshot;
+    Snapshot.SchemaVersion=1;
+    Snapshot.CellsPerChunkAxis=StateStore->CellsPerChunkAxis;
+    Snapshot.WorldTime=WorldTime;
+    Snapshot.TemperatureC=TemperatureC;
+    Snapshot.TempMinC=TempMinC;
+    Snapshot.TempMaxC=TempMaxC;
+    Snapshot.RainfallMm=RainfallMm;
+    Snapshot.WindSpeed=WindSpeed;
+    Snapshot.WindDirection=WindDirection;
+    Snapshot.bIsRaining=bIsRaining;
+    Snapshot.bIsSnowing=bIsSnowing;
+    Snapshot.RandomSeed=RandomSeed;
+    Snapshot.HourAccumulator=HourAccumulator;
+    TArray<UChunkState*> Chunks=StateStore->GetAllChunks();
+    Chunks.Sort([](const UChunkState& A,const UChunkState& B)
+    {
+        return A.Coordinate.X==B.Coordinate.X ? A.Coordinate.Y<B.Coordinate.Y : A.Coordinate.X<B.Coordinate.X;
+    });
+    Snapshot.Chunks.Reserve(Chunks.Num());
+    for(const UChunkState* Chunk:Chunks)
+    {
+        if(!Chunk) return false;
+        FChunkStateSnapshot Entry;
+        Entry.Coordinate=Chunk->Coordinate;
+        Entry.Cells=Chunk->Cells;
+        Entry.Metadata=Chunk->Metadata;
+        Snapshot.Chunks.Add(MoveTemp(Entry));
+    }
+    if(!ValidateSnapshot(Snapshot)) return false;
+    OutSnapshot=MoveTemp(Snapshot);
+    return true;
+}
+
+bool UWorldStateSubsystem::ValidateSnapshot(const FWorldStateSnapshot& Snapshot) const
+{
+    if(Snapshot.SchemaVersion!=1 || Snapshot.CellsPerChunkAxis<1 || Snapshot.CellsPerChunkAxis>256 ||
+       Snapshot.Chunks.Num()>MaxSnapshotChunks || Snapshot.WorldTime.Day<1 ||
+       Snapshot.WorldTime.Hour<0 || Snapshot.WorldTime.Hour>23 ||
+       !FMath::IsFinite(Snapshot.WorldTime.TimeOfDay) || Snapshot.WorldTime.TimeOfDay<0.0f || Snapshot.WorldTime.TimeOfDay>=24.0f ||
+       !FMath::IsFinite(Snapshot.TemperatureC) || Snapshot.TemperatureC < -100.0f || Snapshot.TemperatureC > 100.0f ||
+       !FMath::IsFinite(Snapshot.TempMinC) || Snapshot.TempMinC < -100.0f || Snapshot.TempMinC > 100.0f ||
+       !FMath::IsFinite(Snapshot.TempMaxC) || Snapshot.TempMaxC < -100.0f || Snapshot.TempMaxC > 100.0f ||
+       Snapshot.TempMinC>Snapshot.TempMaxC ||
+       !FMath::IsFinite(Snapshot.RainfallMm) || Snapshot.RainfallMm<0.0f || Snapshot.RainfallMm>1000.0f ||
+       !FMath::IsFinite(Snapshot.WindSpeed) || Snapshot.WindSpeed<0.0f || Snapshot.WindSpeed>500.0f ||
+       !FMath::IsFinite(Snapshot.WindDirection.X) || !FMath::IsFinite(Snapshot.WindDirection.Y) ||
+       Snapshot.WindDirection.SizeSquared()>4.0f ||
+       !FMath::IsFinite(Snapshot.HourAccumulator) || Snapshot.HourAccumulator<0.0 || Snapshot.HourAccumulator>=1.0)
+        return false;
+
+    const int64 ExpectedCells=static_cast<int64>(Snapshot.CellsPerChunkAxis)*Snapshot.CellsPerChunkAxis;
+    int64 TotalCells=0;
+    TSet<FIntPoint> Coordinates;
+    Coordinates.Reserve(Snapshot.Chunks.Num());
+    const auto Finite=[](float V){return FMath::IsFinite(V);};
+    const auto InRange=[&Finite](float V,float Min,float Max){return Finite(V)&&V>=Min&&V<=Max;};
+    for(const FChunkStateSnapshot& Chunk:Snapshot.Chunks)
+    {
+        if(Coordinates.Contains(Chunk.Coordinate) || Chunk.Cells.Num()!=ExpectedCells) return false;
+        Coordinates.Add(Chunk.Coordinate);
+        TotalCells+=Chunk.Cells.Num();
+        if(TotalCells>MaxSnapshotCells) return false;
+        const FChunkSimulationMetadata& M=Chunk.Metadata;
+        if(!Finite(M.LastUpdateDay)||M.LastUpdateDay<1.0f ||
+           !Finite(M.LastWeatherUpdateDay)||M.LastWeatherUpdateDay<1.0f ||
+           !Finite(M.LastObservedWorldDay)||M.LastObservedWorldDay<1.0f ||
+           !FMath::IsFinite(M.LastSimulationTime)||M.LastSimulationTime<0.0 ||
+           !Finite(M.AccumulatedDeltaDays)||M.AccumulatedDeltaDays<0.0f||M.AccumulatedDeltaDays>365.0f ||
+           static_cast<uint8>(M.ActivationMode)>static_cast<uint8>(EChunkActivationMode::Continuous) ||
+           M.ActiveEventCount<0) return false;
+
+        for(const FChunkCell& Cell:Chunk.Cells)
+        {
+            const FTerrainCell& T=Cell.Terrain;
+            const FWaterCell& W=Cell.Water;
+            const FChemistryCell& C=Cell.Chemistry;
+            const FBiomassCell& B=Cell.Biomass;
+            if(!Finite(T.Height)||!Finite(T.OriginalHeight)||!Finite(T.Deformation)||!InRange(T.Permeability,0.0f,1.0f) ||
+               !InRange(W.Volume,0.0f,1.0e9f)||!InRange(W.Level,0.0f,1.0e9f)||!Finite(W.FlowRate) ||
+               !Finite(W.FlowDirection.X)||!Finite(W.FlowDirection.Y)||
+               !InRange(C.ToxinConcentration,0.0f,1.0f)||!InRange(C.Radioactivity,0.0f,1.0e6f)||
+               !InRange(C.pH,0.0f,14.0f)||!InRange(C.Pollution,0.0f,1.0e6f)||
+               !InRange(B.Biomass,0.0f,1.0e9f)||!InRange(B.Health,0.0f,1.0f)||
+               !InRange(B.MoistureContent,0.0f,1.0f)||!InRange(B.DecayRate,0.0f,1000.0f)||
+               !InRange(Cell.SoilMoisture,0.0f,1.0f)||!InRange(Cell.SoilNitrogen,0.0f,1.0e9f)||
+               !InRange(Cell.SoilPhosphorus,0.0f,1.0e9f)||!InRange(Cell.SoilPotassium,0.0f,1.0e9f)||
+               !InRange(Cell.SoilPH,0.0f,14.0f)) return false;
+        }
+    }
+    return true;
+}
+
+bool UWorldStateSubsystem::ImportSnapshot(const FWorldStateSnapshot& Snapshot)
+{
+    if(!StateStore || !ValidateSnapshot(Snapshot) ||
+       !StateStore->ReplaceAllChunks(Snapshot.Chunks,Snapshot.CellsPerChunkAxis)) return false;
+    WorldTime=Snapshot.WorldTime;
+    TemperatureC=Snapshot.TemperatureC;
+    TempMinC=Snapshot.TempMinC;
+    TempMaxC=Snapshot.TempMaxC;
+    RainfallMm=Snapshot.RainfallMm;
+    WindSpeed=Snapshot.WindSpeed;
+    WindDirection=Snapshot.WindDirection.IsNearlyZero()?FVector2D(1.0f,0.0f):Snapshot.WindDirection.GetSafeNormal();
+    bIsRaining=Snapshot.bIsRaining;
+    bIsSnowing=Snapshot.bIsSnowing;
+    RandomSeed=Snapshot.RandomSeed;
+    HourAccumulator=FMath::Clamp(Snapshot.HourAccumulator,0.0,0.999999);
+    SynchronizeAfterLoad();
+    return true;
+}
+
+UChunkState* UWorldStateSubsystem::GetOrCreateChunkAtWorld(const FVector& P)
+{
+    if(!StateStore) return nullptr;
+    const FIntPoint Coordinate=ChunkSettings.WorldToChunk(P);
+    if(UChunkState* Existing=StateStore->FindChunk(Coordinate)) return Existing;
+    UChunkState* Created=StateStore->GetOrCreateChunk(Coordinate,ChunkSettings.CellsPerChunkAxis);
+    if(Created)
+    {
+        const float CurrentDay=WorldTime.ToTotalDays();
+        Created->Metadata.LastUpdateDay=CurrentDay;
+        Created->Metadata.LastObservedWorldDay=CurrentDay;
+        Created->Metadata.LastWeatherUpdateDay=FMath::FloorToFloat(CurrentDay);
+    }
+    return Created;
+}
 UChunkState* UWorldStateSubsystem::GetChunk(const FIntPoint& C) const { return StateStore?StateStore->FindChunk(C):nullptr; }
 FChunkCell* UWorldStateSubsystem::GetCellAtWorld(const FVector& P,const FIntPoint& Given)
 {
@@ -174,8 +305,11 @@ float UWorldStateSubsystem::ComputeRainfallForDay(int32 DayNumber) const
 
 float UWorldStateSubsystem::ComputeRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const
 {
-    const int32 FirstMissedDay = FMath::Max(2, FMath::FloorToInt(LastWeatherDay) + 1);
+    int32 FirstMissedDay = FMath::Max(2, FMath::FloorToInt(LastWeatherDay) + 1);
     if (CurrentDayIndex < FirstMissedDay) return 0.0f;
+    // Bound deterministic lazy weather reconstruction; very old passive history is intentionally
+    // approximated rather than blocking a frame with an unbounded per-day loop.
+    FirstMissedDay = FMath::Max(FirstMissedDay, CurrentDayIndex - MaxRainfallDaysToReconstruct + 1);
 
     float TotalRainfall = 0.0f;
     // Reconstruct historical days from the same seed. Use the live weather value for today,
@@ -189,18 +323,63 @@ float UWorldStateSubsystem::ComputeRainfallSince(float LastWeatherDay, int32 Cur
 
 void UWorldStateSubsystem::RequestChunkSimulation(UChunkState* Chunk,float Days)
 {
-    if (!Chunk || Days <= 0.0f) return;
+    if (!Chunk || !FMath::IsFinite(Days) || Days <= 0.0f) return;
     const float CurrentTotalDay=WorldTime.ToTotalDays();
     const int32 CurrentDayIndex=FMath::FloorToInt(CurrentTotalDay);
     const float MissedRainfallMm=ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay,CurrentDayIndex);
     if (MissedRainfallMm>0.0f && WaterSimulation) WaterSimulation->ApplyRainfall(Chunk,MissedRainfallMm);
     Chunk->Metadata.LastWeatherUpdateDay=FMath::Max(Chunk->Metadata.LastWeatherUpdateDay,(float)CurrentDayIndex);
-    SimulateChunk(Chunk,Days,CurrentTotalDay);
+    Chunk->Metadata.LastObservedWorldDay=FMath::Max(Chunk->Metadata.LastObservedWorldDay,CurrentTotalDay);
+    const float PendingCap=FMath::Clamp(MaxAccumulatedSimulationDays,1.0f,365.0f);
+    Chunk->Metadata.AccumulatedDeltaDays=FMath::Clamp(Chunk->Metadata.AccumulatedDeltaDays+Days,0.0f,PendingCap);
+    const float StepDays=FMath::Min(Chunk->Metadata.AccumulatedDeltaDays,FMath::Clamp(MaxSimulationDaysPerStep,0.01f,1.0f));
+    if(StepDays>KINDA_SMALL_NUMBER)
+    {
+        SimulateChunk(Chunk,StepDays,Chunk->Metadata.LastUpdateDay+StepDays);
+        Chunk->Metadata.AccumulatedDeltaDays=FMath::Max(0.0f,Chunk->Metadata.AccumulatedDeltaDays-StepDays);
+    }
     Chunk->Metadata.LastSimulationTime=FPlatformTime::Seconds();
 }
+
 void UWorldStateSubsystem::SimulateChunk(UChunkState* Chunk,float Days,float TargetDay)
 {
-    if(!Chunk||Days<=0)return; if(WaterSimulation) WaterSimulation->SimulateChunk(Chunk,Days); if(SoilSimulation) SoilSimulation->SimulateChunk(Chunk,Days,TemperatureC);
-    if(FireSimulation) FireSimulation->SimulateChunk(Chunk,Days,WindSpeed,FVector2D::ZeroVector); if(DecaySimulation)DecaySimulation->SimulateChunk(Chunk,Days,TemperatureC);
-    if(ChemistrySimulation)ChemistrySimulation->SimulateChunk(Chunk,Days); Chunk->Metadata.LastUpdateDay=(TargetDay>=0.0f)?TargetDay:WorldTime.ToTotalDays(); Chunk->Metadata.bHasPendingEvents=false;
+    const float StepDays = FMath::Min(FMath::Clamp(Days, 0.0f, 1.0f),
+        FMath::Clamp(MaxSimulationDaysPerStep, 0.01f, 1.0f));
+    if(!Chunk || !FMath::IsFinite(StepDays) || StepDays<=0.0f) return;
+    if(WaterSimulation) WaterSimulation->SimulateChunk(Chunk,StepDays);
+    if(SoilSimulation) SoilSimulation->SimulateChunk(Chunk,StepDays,TemperatureC);
+    if(ChemistrySimulation) ChemistrySimulation->SimulateChunk(Chunk,StepDays);
+    ApplyCrossDomainCoupling(Chunk,StepDays);
+    // Vegetation cells now consume their synchronized moisture/health state; the same chunk
+    // fire simulation owns ignition/spread, and its direction comes from the shared weather state.
+    if(FireSimulation) FireSimulation->SimulateChunk(Chunk,StepDays,WindSpeed,WindDirection);
+    if(DecaySimulation) DecaySimulation->SimulateChunk(Chunk,StepDays,TemperatureC);
+    Chunk->Metadata.LastUpdateDay=(TargetDay>=0.0f)?FMath::Min(TargetDay,Chunk->Metadata.LastUpdateDay+StepDays):Chunk->Metadata.LastUpdateDay+StepDays;
+    Chunk->Metadata.bHasPendingEvents=false;
+}
+
+void UWorldStateSubsystem::ApplyCrossDomainCoupling(UChunkState* Chunk,float Days)
+{
+    if(!Chunk||!FMath::IsFinite(Days)||Days<=0.0f) return;
+    const float MoistureRate=FMath::Clamp(BiomassMoistureResponsePerDay,0.0f,10.0f);
+    const float ToxinRate=FMath::Clamp(ToxinBiomassDamagePerDay,0.0f,1.0f);
+    const float ResponseAlpha=1.0f-FMath::Exp(-MoistureRate*Days);
+    for(FChunkCell& Cell:Chunk->Cells)
+    {
+        FBiomassCell& Biomass=Cell.Biomass;
+        if(Biomass.Biomass<=0.0f) continue;
+        const float TargetMoisture=FMath::Clamp(Cell.SoilMoisture,0.0f,1.0f);
+        const float OldMoisture=FMath::Clamp(FMath::IsFinite(Biomass.MoistureContent)?Biomass.MoistureContent:0.5f,0.0f,1.0f);
+        const float NewMoisture=FMath::Clamp(FMath::Lerp(OldMoisture,TargetMoisture,ResponseAlpha),0.0f,1.0f);
+        const float Toxin=FMath::Clamp(FMath::IsFinite(Cell.Chemistry.ToxinConcentration)?Cell.Chemistry.ToxinConcentration:0.0f,0.0f,1.0f);
+        const float OldHealth=FMath::Clamp(FMath::IsFinite(Biomass.Health)?Biomass.Health:1.0f,0.0f,1.0f);
+        const float NewHealth=FMath::Clamp(OldHealth-Toxin*ToxinRate*Days,0.0f,1.0f);
+        if(!FMath::IsNearlyEqual(OldMoisture,NewMoisture)||!FMath::IsNearlyEqual(OldHealth,NewHealth))
+        {
+            Biomass.MoistureContent=NewMoisture;
+            Biomass.Health=NewHealth;
+            Cell.bIsDirty=true;
+        }
+    }
+    Chunk->MarkDirty();
 }
