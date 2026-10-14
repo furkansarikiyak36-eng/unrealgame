@@ -92,3 +92,10 @@ Faz 0–14 tamamlandıktan ve Faz 14 bütünsel analizindeki kritik kusurlar gid
 - `ReplaceDamaged`, eski eklem kayıtlarını yenileme parçasına kopyalarken işlemi yedek mesh ile korur. Herhangi bir kesim yeniden üretilemezse geometri, eklem aralıkları ve yerleşim geri yüklenir; kısmi kesim başarılı onarım olarak bildirilmez.
 - Onarım tamamlandığında mevcut `StructureLink::Settle` akışı yeniden çalıştırılır; destek grafı ve önbelleğe alınan yapı türleri eski geometride kalmaz. Mevcut `MechanicsDemo` carving/repair delegate bağlantıları korunur.
 - `Scripts/tests/test_carvable_log_contract.py` statik entegrasyon sözleşmesi eklendi ve Python CI runner'a bağlandı. Bu testler source contract'larını doğrular; Unreal Engine 5.8 C++ derlemesi veya oyun içi görsel kanıt yerine geçmez. Faz 5 görsel/runtime kabul kanıtı final kabul turunda tamamlanacak; bütünsel çapraz-faz audit Faz 14'tedir.
+
+## Faz 6 — Envanter transfer işlem sınırı
+
+- `UInventoryComponent::TransferItem` mevcut envanter sistemine eklenir; ayrı bir inventory/physical-item mimarisi açmaz. Aynı kaynak-hedef, geçersiz kimlik/miktar ve yetersiz stok reddedilir.
+- Transfer, kaynak yığınının kanonik `FInventoryItem` payload'ını korur. Hedef kapasitesi önce kontrol edilir; kaynak ancak sonrasında düşülür. Hedef ekleme beklenmedik biçimde başarısız olursa kaynak stoğu geri eklenmeye çalışılır ve rollback başarısızlığı açıkça loglanır.
+- `DropItem` içindeki `bCanBeDropped` politikası değiştirilmez; transfer API'si dünya aktörü spawn etmez ve fiziksel item üretimini taklit etmez.
+- `Scripts/tests/test_inventory_transfer_contract.py` statik sözleşme kontrolleri Python runner'a bağlandı. Bunlar C++ derlemesi veya UE Automation testi değildir. Fiziksel taş/çubuk aktörleri, storage, processing, construction/salvage ve save/load uçtan uca bağlantıları Faz 6 içinde devam edecek; genel 485 mekanik denetimi Faz 14'tedir.
