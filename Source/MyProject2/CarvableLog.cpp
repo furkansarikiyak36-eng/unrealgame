@@ -622,7 +622,7 @@ bool ACarvableLog::CutGroove(float SideAngleDeg)
 		return false;
 	}
 
-	JointCuts.Add({ ECarveTool::Groove, GetCenterX(), FlatAngle, 0.f, 0.f, GrooveRadius, 0.f });
+	JointCuts.Add({ ECarveTool::Groove, GetCenterX(), FlatAngle, 0.f, 0.f, GrooveRadius, GrooveRadius });
 	if (!(SourceMesh && bStartAsleep))
 	{
 		Resettle();
