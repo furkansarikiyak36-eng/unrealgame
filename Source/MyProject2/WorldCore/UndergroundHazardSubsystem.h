@@ -96,6 +96,8 @@ public:
     int32 MaxSnapshotSupports = 4096;
     UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Underground|Persistence", meta = (ClampMin = "1", ClampMax = "50000"))
     int32 MaxSnapshotWaterPockets = 20000;
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Underground|Persistence", meta = (ClampMin = "1", ClampMax = "50000"))
+    int32 MaxSnapshotSurfaceCells = 20000;
 
 protected:
     UFUNCTION()
