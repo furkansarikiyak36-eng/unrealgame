@@ -23,8 +23,9 @@ bool UStickBreakingComponent::BeginBreak(AStickActor* Stick)
 
 bool UStickBreakingComponent::CompleteBreak()
 {
-    if (!IsValid(BreakingStick) || !GetWorld())
+    if (!IsValid(BreakingStick) || !GetWorld() || !BreakingStick->GetDefinition())
     {
+        // Without a definition, produced fragments would lose the source material/shape identity.
         return false;
     }
 
