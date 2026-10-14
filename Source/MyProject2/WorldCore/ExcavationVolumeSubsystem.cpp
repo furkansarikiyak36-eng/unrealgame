@@ -53,6 +53,11 @@ bool UExcavationVolumeSubsystem::TryWorldToCell(const FVector& WorldPositionCm, 
     {
         return false;
     }
+    if (CellOverrides.Num() > 0 && LockedCellSizeCm > 0.0f
+        && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
+    {
+        return false;
+    }
 
     FIntVector Candidate;
     if (!IsValidCellCoordinate(WorldPositionCm.X, CellSizeCm, Candidate.X)
@@ -68,7 +73,9 @@ bool UExcavationVolumeSubsystem::TryWorldToCell(const FVector& WorldPositionCm, 
 
 FVector UExcavationVolumeSubsystem::CellToWorldCenter(const FIntVector& Cell) const
 {
-    if (!FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0f)
+    if (!FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0f
+        || (CellOverrides.Num() > 0 && LockedCellSizeCm > 0.0f
+            && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm)))
     {
         return FVector::ZeroVector;
     }
@@ -175,16 +182,16 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
                 if (FVector::DistSquared(CellCenter, CenterCm) <= RadiusSquared)
                 {
                     const FExcavationCellOverride* Existing = CellOverrides.Find(Cell);
-                    if (!Existing || !FMath::IsNearlyEqual(Existing->Density, TargetDensity))
-                    {
-                        FExcavationCellChange Change;
-                        Change.Cell = Cell;
-                        Change.bHadPreviousOverride = Existing != nullptr;
-                        Change.PreviousDensity = Existing ? Existing->Density : 1.0f;
-                        Change.PreviousOperationId = Existing ? Existing->LastOperationId : FGuid();
-                        Change.NewDensity = TargetDensity;
-                        CandidateRecord.Changes.Add(Change);
-                    }
+                    // Even if the density is unchanged, this edit takes ownership
+                    // of the cell. That preserves correct LIFO rollback semantics
+                    // for overlapping/repeated edits of the same shape.
+                    FExcavationCellChange Change;
+                    Change.Cell = Cell;
+                    Change.bHadPreviousOverride = Existing != nullptr;
+                    Change.PreviousDensity = Existing ? Existing->Density : 1.0f;
+                    Change.PreviousOperationId = Existing ? Existing->LastOperationId : FGuid();
+                    Change.NewDensity = TargetDensity;
+                    CandidateRecord.Changes.Add(Change);
                 }
 
                 if (Z == MaxCell.Z) break;
@@ -192,6 +199,11 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
             if (Y == MaxCell.Y) break;
         }
         if (X == MaxCell.X) break;
+    }
+
+    if (CellOverrides.Num() == 0 && CandidateRecord.Changes.Num() > 0)
+    {
+        LockedCellSizeCm = CellSizeCm;
     }
 
     for (const FExcavationCellChange& Change : CandidateRecord.Changes)
@@ -250,6 +262,11 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
         {
             CellOverrides.Remove(Change.Cell);
         }
+    }
+
+    if (CellOverrides.Num() == 0)
+    {
+        LockedCellSizeCm = 0.0f;
     }
 
     return true;
