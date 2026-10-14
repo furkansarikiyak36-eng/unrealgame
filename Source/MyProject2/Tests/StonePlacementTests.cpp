@@ -466,8 +466,8 @@ bool FStonePlacementStructuralConnectionTest::RunTest(const FString& Parameters)
     Placement->CycleFace();
     TestFalse(TEXT("Occupied target socket rejects a second structural link"),
         Placement->ConfirmPlacement());
-    TestEqual(TEXT("Blocked source remains in placement preview"),
-        Placement->GetPreviewStone(), SecondStone);
+    TestTrue(TEXT("Blocked source remains in placement preview"),
+        Placement->GetPreviewStone() == SecondStone);
     TestTrue(TEXT("No duplicate support connection was added"),
         SupportStone->ConnectionGraph->Connections.Num() == 1);
     TestTrue(TEXT("Failed link did not install second stone"),
