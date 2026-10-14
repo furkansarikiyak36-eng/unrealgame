@@ -44,7 +44,7 @@ class InventoryTransferContractTests(unittest.TestCase):
     def test_does_not_create_resources_or_allow_drop_bypass(self):
         self.assertIn("Source->HasItem(ItemID, Count)", CPP)
         self.assertIn("Definition->bCanBeDropped", CPP)
-        self.assertIn("CanDropItem(ItemID, Count)", CPP)
+        self.assertIn("if (!CanDropItem(ID, Count))", CPP)
 
 
 if __name__ == "__main__":
