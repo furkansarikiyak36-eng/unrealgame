@@ -13,6 +13,8 @@ def row(**overrides):
     value.update({
         "Mechanic_ID": "LOG-001",
         "Sistem": "LOG",
+        "Katalog_ID": "LOG-001",
+        "Teslim_Fazi": "5",
         "Mekanik": "Ağacı kesme",
         "Durum": "U5 — görsel olarak doğrulanmış",
         "Kod_Kaniti_ve_Cagri_Zinciri": "ForestCharacter -> TreeActor::Chop",
@@ -58,6 +60,12 @@ class CatalogAuditTests(unittest.TestCase):
         self.assertEqual(report["duplicate_ids"], ["LOG-001"])
         self.assertTrue(any(error.get("type") == "duplicate_ids"
                             for error in report["errors"]))
+
+    def test_catalog_id_and_delivery_phase_are_required_values(self):
+        report = audit_rows([row(Katalog_ID="", Teslim_Fazi="")], list(REQUIRED_COLUMNS))
+        self.assertEqual(report["summary"]["unmapped_or_unproven"], 1)
+        self.assertIn("Katalog_ID boş", report["errors"][0]["issues"])
+        self.assertIn("Teslim_Fazi boş", report["errors"][0]["issues"])
 
     def test_missing_required_column_fails_schema(self):
         headers = [column for column in REQUIRED_COLUMNS if column != "Mekanik"]
