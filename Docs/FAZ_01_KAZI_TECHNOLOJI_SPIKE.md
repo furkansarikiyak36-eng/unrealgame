@@ -23,11 +23,13 @@
 
 Kaynak koduna şu başlangıç veri katmanı eklendi:
 
-- `WorldCore/ExcavationTypes.h`: edit türü, hücre override/change ve rollback receipt veri tipleri.
-- `WorldCore/ExcavationVolumeSubsystem.h/.cpp`: dünya cm koordinatını 3B cell'e çevirme; sparse density override sorgusu; sınırlı aday hacmiyle küresel carve/fill işlemi; işlem ID'siyle güvenli rollback; negatif koordinatlarda floor-based chunk hesabı; chunk başına override cell indeksi ve mesh seam yenilemesi için komşu chunk listesi.
-- Aktif override varken cellSize/chunkSize ayarı değiştirilmiyor; aynı hücreyi etkileyen tekrarlı işlemler sahiplik zincirini koruyor.
+- `WorldCore/ExcavationTypes.h`: sphere/capsule/box edit kimlikleri, hücre override/change kayıtları, rollback receipt ve sürümlü snapshot veri tipleri.
+- `WorldCore/ExcavationVolumeSubsystem.h/.cpp`: dünya cm→3B cell dönüşümü; sparse override ve final density sorgusu; sphere, capsule ve AABB box carve/fill; tüm hücre listesini önce hazırlayan transaction; işlem ID'siyle çakışma-korumalı rollback; negatif koordinatlar için floor-based 3B chunk hesabı; chunk başına override cell indeksi ve seam komşu chunk listesi.
+- `WorldCore/ExcavationBaseDensitySource.h`: mevcut arazi/terrain sağlayıcısının değişmemiş temel yoğunluğu örnekleyebileceği BlueprintNativeEvent interface. Kazı override'ı önce gelir; temel world density onun altında kalır.
+- `ExportSnapshot/ImportSnapshot`: sıralı ve sürümlü sparse override snapshot'ı, duplicate/bozuk hücre reddi, boyut limiti, all-or-nothing import ve chunk indeksinin yeniden kurulması. Snapshot ve ayarlar doğrulanmadan canlı durum değişmez.
+- Aktif override varken cellSize/chunkSize ayarı değiştirilmiyor; aynı hücreye yazan sonraki edit sahipliği devralıyor. Eski edit, yeni edit'in hücrelerini rollback ile silemez.
 
-Bu ilk katman veri otoritesi ve değişiklik günlüğü sınırıdır. Henüz yüzey mesh'i, collision mesh'i, navmesh, procedural base-density provider veya save-game serializer üretmez. Bunlar sonraki katmanlardan bağlanacaktır; olmayan işlevler varmış gibi kabul edilmez.
+Bu katman veri otoritesi ve değişiklik günlüğü sınırıdır. Henüz yüzey mesh'i, collision mesh'i veya navmesh üretmez; temel yoğunluk kaynağına bağlanmaya hazırdır ama mevcut world terrain sınıfına özgü bir implementasyon henüz kaydedilmemiştir. Snapshot verisi vardır, fakat oyunun genel save-game akışına bağlantı Faz 2 sorumluluğudur.
 
 ## Karşılaştırılacak adaylar
 
