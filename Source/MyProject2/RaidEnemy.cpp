@@ -14,6 +14,7 @@
 #include "RaidCore/RaidDirectorSubsystem.h"
 #include "RaidPhaseR2_Difficulty/RaidStageTableAsset.h"
 #include "RaidPhaseR3_Planner/HordePlanAsset.h"
+#include "RaidPhaseR8_Defense/StructureDamageResolver.h"
 
 namespace
 {
@@ -42,6 +43,12 @@ ARaidEnemy::ARaidEnemy()
 		Material->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.7f, 0.05f, 0.04f));
 		Body->SetMaterial(0, Material);
 	}
+}
+
+void ARaidEnemy::BeginPlay()
+{
+    Super::BeginPlay();
+    DamageResolver=NewObject<UStructureDamageResolver>(this);
 }
 
 void ARaidEnemy::TakeHit(float Amount)
@@ -143,17 +150,64 @@ void ARaidEnemy::StepAI(float Dt)
 		{
 			Player->TakeEnemyHit(PlayerDps * Dt);
 		}
+		else if (DamageResolver)
+		{
+			DamageResolver->ApplyDamageToBlock(Target, WoodDps * Dt * 100.0f);
+		}
 		return;
 	}
 
-	// Walk towards it; wood in the way is hit instead of walked through.
+	// Use the Raid Director's per-frame navigation query budget when a navmesh exists.
+	// Greybox levels without navigation data retain the original collision-swept direct mover.
+	FVector MoveDirection = ToGoal.GetSafeNormal();
+	if (URaidDirectorSubsystem* Director = World->GetSubsystem<URaidDirectorSubsystem>(); Director && Director->HasNavigationData())
+	{
+		const double NowSeconds = World->GetTimeSeconds();
+		const bool bTargetChanged = CachedNavTarget.Get() != Target;
+		const bool bGoalMoved = FVector::DistSquared(CachedNavGoal, Goal) > FMath::Square(200.0f);
+		if (bTargetChanged || bGoalMoved || NowSeconds >= NextPathRefreshTime)
+		{
+			CachedNavPath.Reset();
+			CachedNavWaypoint = 0;
+			CachedNavTarget = Target;
+			CachedNavGoal = Goal;
+			NextPathRefreshTime = NowSeconds + 0.35;
+			TArray<FVector> NewPath;
+			if (!Director->FindPathForEnemy(this, Goal, NewPath))
+			{
+				return; // Never bypass an available navmesh when its budget/path query fails.
+			}
+			CachedNavPath = MoveTemp(NewPath);
+			CachedNavWaypoint = 1; // the first point is normally this actor's projected start
+		}
+		while (CachedNavPath.IsValidIndex(CachedNavWaypoint))
+		{
+			const FVector Delta = CachedNavPath[CachedNavWaypoint] - Here;
+			if (Delta.Size2D() > 55.0f)
+			{
+				MoveDirection = FVector(Delta.X, Delta.Y, 0.0f).GetSafeNormal();
+				break;
+			}
+			++CachedNavWaypoint;
+		}
+		if (!CachedNavPath.IsValidIndex(CachedNavWaypoint))
+		{
+			return;
+		}
+	}
+
 	FHitResult Hit;
-	AddActorWorldOffset(ToGoal.GetSafeNormal() * MoveSpeed * Dt, true, &Hit);
+	AddActorWorldOffset(MoveDirection * MoveSpeed * Dt, true, &Hit);
 	if (Hit.bBlockingHit)
 	{
-		if (ACarvableLog* Blocker = Cast<ACarvableLog>(Hit.GetActor()); Blocker && Blocker->IsAnchored())
+		AActor* BlockerActor = Hit.GetActor();
+		if (ACarvableLog* Blocker = Cast<ACarvableLog>(BlockerActor); Blocker && Blocker->IsAnchored())
 		{
 			Blocker->AddDamage(WoodDps * Dt);
+		}
+		else if (DamageResolver && IsValid(BlockerActor))
+		{
+			DamageResolver->ApplyDamageToBlock(BlockerActor, WoodDps * Dt * 100.0f);
 		}
 	}
 	// Keep to the ground.
@@ -217,13 +271,11 @@ bool RaidKit::StartDefaultRaid(UWorld* World)
 
 void RaidKit::StopRaid(UWorld* World)
 {
+	// The director is the single owner of spawned raid actors. Never destroy every
+	// ARaidEnemy in the world; that could remove actors belonging to another system.
 	if (URaidDirectorSubsystem* Director = World ? World->GetSubsystem<URaidDirectorSubsystem>() : nullptr)
 	{
 		Director->CancelRaid(TEXT("Stopped"));
-	}
-	for (TActorIterator<ARaidEnemy> It(World); It; ++It)
-	{
-		It->Destroy();
 	}
 }
 

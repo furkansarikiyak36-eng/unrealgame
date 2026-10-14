@@ -11,19 +11,32 @@ USTRUCT(BlueprintType)
 struct FInventoryItem
 {
     GENERATED_BODY()
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) FName ItemID = NAME_None;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) FText DisplayName;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) FText Description;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) EInventoryCategory Category = EInventoryCategory::Resource;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) EItemRarity Rarity = EItemRarity::Common;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Count = 0;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 MaxStack = 20;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) float Weight = 0.1f;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bConsumable = false;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bQuestItem = false;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) TSoftObjectPtr<UTexture2D> Icon;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) FName ItemID = NAME_None;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) FText DisplayName;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) FText Description;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) EInventoryCategory Category = EInventoryCategory::Resource;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) EItemRarity Rarity = EItemRarity::Common;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) int32 Count = 0;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) int32 MaxStack = 20;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) float Weight = 0.1f;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) bool bConsumable = false;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) bool bQuestItem = false;
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite) TSoftObjectPtr<UTexture2D> Icon;
     bool IsFull() const { return Count >= MaxStack; }
     bool IsEmpty() const { return Count <= 0 || ItemID.IsNone(); }
+};
+
+/** Canonical saved stack payload for one placed inventory storage actor. */
+USTRUCT(BlueprintType)
+struct FInventoryStorageSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadOnly)
+    FName StorageKey = NAME_None;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly)
+    TArray<FInventoryItem> Items;
 };
 
 USTRUCT(BlueprintType)

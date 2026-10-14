@@ -24,6 +24,7 @@ MESHES = GB + '/Meshes'
 MATS = GB + '/Materials'
 MAP_PATH = '/Game/Maps/Greybox_Mechanics'
 DEMO_MAP_PATH = '/Game/Maps/Demo_WoodChain'
+CONTEXTUAL_DEMO_MAP_PATH = '/Game/Maps/Demo_Contextual_01'
 
 asset_lib = unreal.EditorAssetLibrary
 asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
@@ -224,6 +225,11 @@ def build_meshes(m):
     mesh = new_mesh()
     append_log(mesh, 45.0, 14.0, steps=10)
     made['Firewood'] = save_mesh('SM_GB_Firewood', mesh, [bark, cut])
+
+    # A separate small physical stick; the countable item is not a log cutout.
+    mesh = new_mesh()
+    append_log(mesh, 55.0, 2.8, steps=8)
+    made['Stick'] = save_mesh('SM_GB_Stick', mesh, [bark, cut])
 
     # Wood chips thrown off by axe hits.
     mesh = new_mesh()
@@ -463,16 +469,173 @@ def build_demo_map(made):
     ok = unreal.EditorLoadingAndSavingUtils.save_map(world, DEMO_MAP_PATH)
     log('map saved', DEMO_MAP_PATH, ok)
 
+def spawn_harvestable(harvest_class, mesh, harvest_type, loc, rot=(0, 0, 0), scale=(1, 1, 1),
+                      label='Harvestable', folder='Resources'):
+    """Replace a temporary mesh prop with the real damageable tree/rock actor."""
+    source = spawn_mesh(mesh, loc, rot, scale, label='Source_' + label, folder='TempSources')
+    actor = spawn(harvest_class, loc, rot, label, folder)
+    if not source or not actor:
+        if source:
+            unreal.get_editor_subsystem(unreal.EditorActorSubsystem).destroy_actor(source)
+        return None
+    actor.set_actor_scale3d(unreal.Vector(*scale))
+    actor.init_from(source.static_mesh_component, harvest_type)
+    unreal.get_editor_subsystem(unreal.EditorActorSubsystem).destroy_actor(source)
+    return actor
+
+
+def spawn_raw_carvable(carvable_class, mesh, loc, label, folder='WoodStock'):
+    actor = spawn(carvable_class, loc, (0, 0, 0), label, folder)
+    if actor:
+        actor.set_editor_property('source_mesh', mesh)
+    return actor
+
+
+def spawn_path(cube, material, start, end, width=180.0, label='Path'):
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = math.sqrt(dx * dx + dy * dy)
+    centre = ((start[0] + end[0]) * 0.5, (start[1] + end[1]) * 0.5, -3.0)
+    yaw = math.degrees(math.atan2(dy, dx))
+    return spawn_mesh(cube, centre, (0, yaw, 0), (length / 100.0, width / 100.0, 0.06),
+                      label=label, folder='Paths', material=material)
+
+
+def load_contextual_materials():
+    return {
+        'ground': unreal.load_asset(MATS + '/MI_GB_Ground'),
+        'trail': unreal.load_asset(MATS + '/MI_GB_Trail'),
+        'pad': unreal.load_asset(MATS + '/MI_GB_BuildPad'),
+        'soil': unreal.load_asset(MATS + '/MI_GB_SpikeSoil'),
+    }
+
+
+def build_contextual_demo_map(made, m):
+    """
+    A small playable scene, deliberately separate from Demo_WoodChain.
+    Test fixtures in Demo_WoodChain use fixed coordinates; do not populate that map with live logs.
+    """
+    world = new_template_map()
+    actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    cube = unreal.load_asset('/Engine/BasicShapes/Cube')
+    harvest_class = unreal.load_class(None, '/Script/MyProject2.HarvestableActor')
+    carvable_class = unreal.load_class(None, '/Script/MyProject2.CarvableLog')
+
+    # A 70 x 70 m playable valley: restrained colours and clear, walkable paths instead of a world-grid floor.
+    spawn_mesh(cube, (0, 0, -50), scale=(70, 70, 1), label='Ground', folder='Ground', material=m['ground'])
+    spawn(unreal.PlayerStart, (-900, 0, 100), (0, 0, 0), 'PlayerStart', 'Start')
+    spawn_mesh(cube, (-900, 0, -4), scale=(5, 5, 0.08), label='StartClearing', folder='Pads', material=m['trail'])
+
+    # Paths are only layout cues: they connect the actual interactive stations and do not block movement.
+    spawn_path(cube, m['trail'], (-650, 0), (650, -650), 160, 'Path_Start_To_Forest')
+    spawn_path(cube, m['trail'], (-650, 0), (-1350, 450), 160, 'Path_Start_To_Workshop')
+    spawn_path(cube, m['trail'], (-650, 0), (800, 600), 160, 'Path_Start_To_BuildYard')
+    spawn_path(cube, m['trail'], (800, 600), (2100, 950), 160, 'Path_BuildYard_To_Quarry')
+    spawn_path(cube, m['trail'], (800, 600), (2000, -1050), 160, 'Path_BuildYard_To_StakeSoil')
+    spawn_path(cube, m['trail'], (-650, 0), (-1750, -1200), 160, 'Path_Start_To_FireSite')
+
+    # FOREST: every trunk here is the real HarvestableActor, not a decorative static mesh.
+    if harvest_class:
+        spawn_harvestable(harvest_class, made['TreePine'], unreal.EHarvestType.TREE,
+                          (950, -1350, 0), (0, 18, 0), (1.0, 1.0, 1.0), 'Pine_Harvest_01', 'Forest')
+        spawn_harvestable(harvest_class, made['TreePine'], unreal.EHarvestType.TREE,
+                          (1550, -1700, 0), (0, 75, 0), (1.0, 1.0, 1.0), 'Pine_Harvest_02', 'Forest')
+        spawn_harvestable(harvest_class, made['TreePine'], unreal.EHarvestType.TREE,
+                          (900, -2200, 0), (0, 130, 0), (0.95, 0.95, 0.95), 'Pine_Harvest_03', 'Forest')
+        spawn_harvestable(harvest_class, made['TreeBroad'], unreal.EHarvestType.TREE,
+                          (1750, -2250, 0), (0, 40, 0), (1.0, 1.0, 1.0), 'Broad_Harvest_04', 'Forest')
+    else:
+        log('HarvestableActor class missing; forest would be scenery only')
+        spawn_mesh(made['TreePine'], (950, -1350, 0), label='Pine_Fallback', folder='Forest')
+
+    # WORKSHOP: raw full-size stock sits on two stone rests. A round log has no groove option;
+    # the player must split it lengthwise to a half-log before the channel can be cut.
+    spawn_mesh(cube, (-1450, 650, -5), scale=(16, 12, 0.1), label='CarvingPad', folder='Pads', material=m['pad'])
+    for index, length in enumerate((500, 375, 250)):
+        y = 400 + index * 260
+        for side in (-1, 1):
+            spawn_mesh(made['StoneBlock'], (-1450 + side * length * 0.30, y, 0), (0, 90, 0),
+                       label='CarvingRest_%d_%d' % (index, side), folder='Workshop')
+        if carvable_class:
+            spawn_raw_carvable(carvable_class, made['RawLog_%d' % length], (-1450, y, 46),
+                               'RawLog_%d' % length, 'Workshop')
+
+    # BUILD YARD: materials are loose and selectable; there is no prebuilt hut hiding support/collapse behaviour.
+    spawn_mesh(cube, (900, 600, -5), scale=(16, 12, 0.1), label='BuildYardPad', folder='Pads', material=m['pad'])
+    if carvable_class:
+        spawn_raw_carvable(carvable_class, made['RawLog_500'], (500, 850, 16), 'Stock_Raw_500', 'WoodStock')
+        spawn_raw_carvable(carvable_class, made['RawLog_375'], (1050, 950, 16), 'Stock_Raw_375', 'WoodStock')
+        spawn_raw_carvable(carvable_class, made['RawLog_250'], (1500, 850, 16), 'Stock_Raw_250', 'WoodStock')
+    # One usable cart and sled sit beside the stock, not randomly scattered across the map.
+    cart_class = unreal.load_class(None, '/Script/MyProject2.HaulCart')
+    if cart_class:
+        cart = spawn(cart_class, (650, 1450, 0), label='Working_Cart', folder='Hauling')
+        sled = spawn(cart_class, (1120, 1450, 0), label='Working_Sled', folder='Hauling')
+        if cart:
+            cart.set_kind(unreal.EHaulKind.CART)
+        if sled:
+            sled.set_kind(unreal.EHaulKind.SLED)
+    else:
+        log('HaulCart class missing; skip cart/sled placement')
+
+    # QUARRY: a small group of damageable rocks; break them to obtain inventory stones for the fire pit.
+    spawn_mesh(cube, (2250, 1150, -5), scale=(10, 9, 0.1), label='QuarryPad', folder='Pads', material=m['trail'])
+    if harvest_class:
+        for index, (loc, scale) in enumerate([
+            ((2100, 900, 0), (1.0, 1.0, 1.0)),
+            ((2550, 1150, 0), (1.35, 1.1, 1.25)),
+            ((2200, 1500, 0), (1.55, 1.4, 1.35)),
+        ]):
+            spawn_harvestable(harvest_class, made['Rock'], unreal.EHarvestType.ROCK, loc, (0, index * 33, 0),
+                              scale, 'Rock_Harvest_%02d' % index, 'Quarry')
+
+    # FIRE SITE: empty ground to place seven stones; don't pre-build the pit for the player.
+    spawn_mesh(cube, (-1750, -1250, -5), scale=(10, 10, 0.1), label='FireSitePad', folder='Pads', material=m['soil'])
+    # SPIKE PLANTING: designated soil only. No unanchored pointed logs are placed here as fake traps.
+    spawn_mesh(cube, (2050, -1050, -5), scale=(12, 7, 0.1), label='StakePlantingSoil', folder='Pads', material=m['soil'])
+    for index in range(3):
+        spawn_mesh(cube, (1750 + index * 300, -1050, 0.5), scale=(0.35, 0.35, 0.025),
+                   label='StakePlantingMark_%02d' % index, folder='PlantingMarks', material=m['trail'])
+
+    # Only concise, contextual signs: a sign at the station entrance, not a label on every object.
+    sign('DEMO / KAYNAK → İŞLE → İNŞA ET', (-850, -180, 250), (-650, 0), size=55)
+    sign('ORMAN / Ağaç gövdesi → büyük kütük → taşınabilir kütük', (1120, -1000, 260), (950, -1350), size=40)
+    sign('İŞLEME / Yuvarlak loga oluk yok; önce boyuna yar', (-1450, 1200, 230), (-1450, 650), size=40)
+    sign('İNŞA / Direk + kiriş; desteği sökersen yükü kontrol et', (900, 1050, 250), (900, 600), size=40)
+    sign('TAŞ OCAĞI / Kayayı kır; taşları topla', (2530, 1650, 230), (2250, 1150), size=40)
+    sign('ATEŞ / Önce 7 taşı yerleştir, sonra yakıt ekle', (-1750, -1650, 220), (-1750, -1250), size=40)
+    sign('KAZIK TOPRAĞI / Sivri uç yukarı; taban zemine bağlı olmalı', (2050, -1450, 230), (2050, -1050), size=40)
+    sign('TAŞIMA / Arabaya ve kızağa yükle; kapasiteyi aşma', (900, 1700, 230), (850, 1450), size=40)
+
+    demo_class = unreal.load_class(None, '/Script/MyProject2.MechanicsDemo')
+    if demo_class:
+        # The guided log lives in the start clearing, separate from the stock at the workshop.
+        spawn(demo_class, (-450, 0, 0), (0, 0, 0), 'MechanicsDemo_Contextual', 'Demo')
+    else:
+        log('MechanicsDemo class missing: build the C++ module first')
+
+    ok = unreal.EditorLoadingAndSavingUtils.save_map(world, CONTEXTUAL_DEMO_MAP_PATH)
+    log('map saved', CONTEXTUAL_DEMO_MAP_PATH, ok)
+
+
+
 
 def load_made():
-    names = {'TreePine': 'SM_GB_Tree_Pine', 'TreeBroad': 'SM_GB_Tree_Broad'}
+    names = {
+        'TreePine': 'SM_GB_Tree_Pine', 'TreeBroad': 'SM_GB_Tree_Broad', 'Rock': 'SM_GB_Rock',
+        'Stone': 'SM_GB_Stone', 'StoneBlock': 'SM_GB_StoneBlock', 'Plank': 'SM_GB_Plank',
+        'RawLog_500': 'SM_GB_RawLog_500', 'RawLog_375': 'SM_GB_RawLog_375', 'RawLog_250': 'SM_GB_RawLog_250',
+    }
     return {key: unreal.load_asset(MESHES + '/' + name) for key, name in names.items()}
 
 
 def main():
     import os
-    if os.environ.get('GREYBOX_BUILD') == 'demo':
+    mode = os.environ.get('GREYBOX_BUILD')
+    if mode == 'demo':
         build_demo_map(load_made())
+        return
+    if mode == 'contextual':
+        build_contextual_demo_map(load_made(), load_contextual_materials())
         return
 
     for path in (GB, MESHES, MATS, '/Game/Maps'):
@@ -486,6 +649,9 @@ def main():
         'handle': make_colour_material('MI_GB_Handle', (0.45, 0.30, 0.15)),
         'metal': make_colour_material('MI_GB_Metal', (0.12, 0.12, 0.13)),
         'pad': make_colour_material('MI_GB_BuildPad', (0.18, 0.16, 0.13)),
+        'ground': make_colour_material('MI_GB_Ground', (0.16, 0.19, 0.14)),
+        'trail': make_colour_material('MI_GB_Trail', (0.28, 0.23, 0.17)),
+        'soil': make_colour_material('MI_GB_SpikeSoil', (0.13, 0.10, 0.07)),
         'cut': unreal.load_asset('/Game/Building/Materials/M_CutWood'),
     }
     if m['cut'] is None:
@@ -495,6 +661,7 @@ def main():
     made = build_meshes(m)
     build_map(made, m)
     build_demo_map(made)
+    build_contextual_demo_map(made, m)
 
 
 try:

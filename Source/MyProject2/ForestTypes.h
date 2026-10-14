@@ -30,7 +30,9 @@ enum class EForestItem : uint8
 	Stone,
 	StoneBlock,
 	WindowBuck UMETA(DisplayName = "Pencere Kasası (Window Buck)"),
-	DoorBuck UMETA(DisplayName = "Kapı Kasası (Door Buck)")
+	DoorBuck UMETA(DisplayName = "Kapı Kasası (Door Buck)"),
+	/** Stackable small timber resource; distinct from physical ACarvableLog pieces. */
+	Stick UMETA(DisplayName = "Çubuk")
 };
 
 UENUM(BlueprintType)
@@ -57,6 +59,9 @@ namespace ForestItems
 
 	MYPROJECT2_API FString GetDisplayName(EForestItem Item);
 
+	/** Stable item ID shared by the character inventory and modular InventoryCore. */
+	MYPROJECT2_API FName GetInventoryID(EForestItem Item);
+
 	/** Any of the three log stages (trunk, big log, log): they nest when stacked. */
 	MYPROJECT2_API bool IsLogItem(EForestItem Item);
 
@@ -71,6 +76,9 @@ namespace ForestItems
 	 * Lets a piece read bigger without touching its mesh asset.
 	 */
 	MYPROJECT2_API FVector GetItemScale(EForestItem Item);
+
+	/** Approximate stack weight used by storage and transfer policies (kg per item). */
+	MYPROJECT2_API float GetItemWeight(EForestItem Item);
 
 	/**
 	 * Big logs left by a felled tree. Stage 1 is the trunk, cutting it gives two stage 2 logs,

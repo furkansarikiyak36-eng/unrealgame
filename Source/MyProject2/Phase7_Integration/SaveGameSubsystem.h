@@ -13,6 +13,7 @@ USTRUCT(BlueprintType) struct FLogSaveData
     UPROPERTY() float Health = 100.0f;
     UPROPERTY() float CurrentLength = 65.0f;
     UPROPERTY() uint8 Shape = 0;
+    UPROPERTY() FName InfrastructureLinkKey = NAME_None;
 };
 UCLASS() class MYPROJECT2_API ULogSaveGame:public USaveGame
 {GENERATED_BODY() public: UPROPERTY() TArray<FLogSaveData> Logs; };

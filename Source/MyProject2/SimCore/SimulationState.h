@@ -16,6 +16,7 @@ public:
  UPROPERTY(BlueprintReadOnly, Category="Weather") bool bIsRaining=false;
  UPROPERTY(BlueprintReadOnly, Category="Weather") bool bIsSnowing=false;
  UPROPERTY(BlueprintReadOnly, Category="Weather") float WindSpeed=0.f;
+ UPROPERTY(BlueprintReadOnly, Category="Weather") FVector2D WindDirection=FVector2D(1.f,0.f);
  UPROPERTY(BlueprintReadOnly, Category="RNG") int32 RandomSeed=12345;
  UFUNCTION(BlueprintCallable, Category="Simulation") void Reset();
 };

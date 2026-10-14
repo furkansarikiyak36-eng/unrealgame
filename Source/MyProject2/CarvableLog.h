@@ -14,6 +14,7 @@ class UStaticMesh;
 class UStaticMeshComponent;
 class UPointLightComponent;
 class APickupItem;
+class UMaterialDefinition;
 
 UENUM()
 enum class ECarveTool : uint8
@@ -153,6 +154,11 @@ public:
 	void AddDamage(float Amount);
 	void SetDamage(float Value);
 
+	/** Apply one bounded world-weather interval to this existing wood condition state. */
+	void SimulateMaterialEnvironment(float ElapsedDays, float AmbientTemperatureC, bool bRainExposed, float RainfallMm);
+	UFUNCTION(BlueprintPure, Category = "Material|Condition") float GetMoistureContent() const { return MoistureContent; }
+	UFUNCTION(BlueprintPure, Category = "Material|Condition") float GetMaterialAgeDays() const { return MaterialAgeDays; }
+
 	// --- Fire. Any piece of wood burns. It takes heat to catch (thin pieces quickly, thick ones slowly), burns for as long as
 	// the wood it holds (see ACampfire::FuelSecondsOf) taking damage all the while, and ends up charred. Burning pieces
 	// heat the wood around them and light fires (UBurnSubsystem drives all of it). ---
@@ -223,7 +229,7 @@ public:
 	 */
 	ACarvableLog* CutOpening(float CentreX, int32 Modules);
 
-	/** Cuts a channel along the whole log, opening towards SideAngleDeg (0 = top). */
+	/** Cuts one longitudinal channel into the exposed flat face of a once-split half-log. Round logs and quarter pieces are rejected. */
 	bool CutGroove(float SideAngleDeg);
 
 	/** Any cut on any log; the mechanics demo ticks off its carving goals with it. */
@@ -386,6 +392,17 @@ private:
 	float Radius = 0.f;
 
 	float Damage = 0.f;
+
+	/** Optional project-tuned material profile; absent profiles use the timber defaults in CarvableLog.cpp. */
+	UPROPERTY(EditDefaultsOnly, Category = "Material|Profile")
+	TObjectPtr<UMaterialDefinition> MaterialDefinition = nullptr;
+
+	/** Moisture is a material condition, while Damage remains the single shared structural integrity value. */
+	UPROPERTY(VisibleInstanceOnly, SaveGame, BlueprintReadOnly, Category = "Material|Condition")
+	float MoistureContent = 0.0f;
+
+	UPROPERTY(VisibleInstanceOnly, SaveGame, BlueprintReadOnly, Category = "Material|Condition")
+	float MaterialAgeDays = 0.0f;
 	bool bTemporary = false;
 	TArray<FJointCut> JointCuts;
 	UPROPERTY(Transient)

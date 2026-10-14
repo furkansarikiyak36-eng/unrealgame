@@ -1,6 +1,13 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestCharacter.h"
+#include "InventoryCore/InventoryComponent.h"
+#include "InventoryCore/InventoryItem.h"
+#include "StickPhaseS1_Core/StickActor.h"
+#include "StickCore/StickDefinition.h"
+#include "StoneCore/StoneDefinition.h"
+#include "Core/StructuralMaterialTypes.h"
+#include "UObject/SoftObjectPath.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
 #include "LogConstructionActor.h"
@@ -34,6 +41,10 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneDefinition.h"
+#include "StonePhaseB_Placement/StoneCarryComponent.h"
+#include "StonePhaseB_Placement/StonePlacementComponent.h"
 
 namespace
 {
@@ -79,6 +90,11 @@ AForestCharacter::AForestCharacter()
 	GetCharacterMovement()->AirControl = 0.3f;
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
+	CoreInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("CoreInventory"));
+	CoreInventory->MaxSlots = InventorySlots;
+	CoreInventory->bIgnoreWeight = true; // Preserve the playable character's existing 24-slot rule.
+	StoneCarry = CreateDefaultSubobject<UStoneCarryComponent>(TEXT("StoneCarry"));
+	StonePlacement = CreateDefaultSubobject<UStonePlacementComponent>(TEXT("StonePlacement"));
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
@@ -137,6 +153,7 @@ AForestCharacter::AForestCharacter()
 void AForestCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	InitializeCoreInventoryDefinitions();
 
 	Structures = GetWorld()->SpawnActor<AStructureManager>();
 	RespawnTransform = GetActorTransform();
@@ -156,6 +173,65 @@ void AForestCharacter::BeginPlay()
 		WallPreview->SetMaterial(Slot, GhostMaterial);
 	}
 	ShowMessage(TEXT("Ormana hoş geldin. Ağaçları kes, kayaları kır."));
+}
+
+void AForestCharacter::InitializeCoreInventoryDefinitions()
+{
+	if (!CoreInventory)
+	{
+		return;
+	}
+
+	for (const EForestItem Item : ForestItems::GetAllItems())
+	{
+		// Trunk, big-log and carried-log stages are physical actors, never stack entries.
+		if (Item == EForestItem::None || ForestItems::IsCarriedItem(Item))
+		{
+			continue;
+		}
+
+		const FName ItemID = ForestItems::GetInventoryID(Item);
+		if (ItemID.IsNone())
+		{
+			continue;
+		}
+
+		bool bHasDefinition = false;
+		for (UInventoryItemData* Existing : CoreInventory->ItemDefinitions)
+		{
+			if (Existing && Existing->ItemID == ItemID)
+			{
+				bHasDefinition = true; // Respect a project's configured definition.
+				break;
+			}
+		}
+		if (bHasDefinition)
+		{
+			continue;
+		}
+
+		const FName ObjectName(*FString::Printf(TEXT("RuntimeItem_%s"), *ItemID.ToString()));
+		UInventoryItemData* Definition = NewObject<UInventoryItemData>(CoreInventory, ObjectName);
+		if (!Definition)
+		{
+			continue;
+		}
+		Definition->ItemID = ItemID;
+		Definition->DisplayName = FText::FromString(ForestItems::GetDisplayName(Item));
+		Definition->Description = FText::FromString(FString::Printf(
+			TEXT("Stackable survival resource: %s"), *ForestItems::GetDisplayName(Item)));
+		Definition->Category = EInventoryCategory::Resource;
+		Definition->Rarity = EItemRarity::Common;
+		Definition->MaxStack = StackSize;
+		Definition->Weight = ForestItems::GetItemWeight(Item);
+		Definition->bCanBeDropped = true;
+		Definition->bStackable = true;
+		Definition->bCanBeIngredient = true;
+		CoreInventory->ItemDefinitions.Add(Definition);
+	}
+
+	// The component may have begun play before this actor populated its runtime definitions.
+	CoreInventory->InitializeRuntimeInventory();
 }
 
 UInputAction* AForestCharacter::MakeAction(const TCHAR* Name, EInputActionValueType Type)
@@ -570,7 +646,14 @@ void AForestCharacter::HandleDeath()
 float AForestCharacter::CarrySpeed() const
 {
 	float Speed = WalkSpeed;
-	if (CarriedItem == EForestItem::TrunkLog)
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		const AStoneActor* Stone = StoneCarry->GetCarried();
+		const UStoneDefinition* Definition = Stone ? Stone->GetDefinition() : nullptr;
+		const float Mass = Definition ? FMath::Max(0.0f, Definition->Mass) : 20.0f;
+		Speed = FMath::Clamp(WalkSpeed - Mass * 1.5f, 180.0f, WalkSpeed);
+	}
+	else if (CarriedItem == EForestItem::TrunkLog)
 	{
 		Speed = 150.f;
 	}
@@ -592,7 +675,7 @@ float AForestCharacter::CarrySpeed() const
 
 bool AForestCharacter::IsHandsBusy() const
 {
-	return CarriedItem != EForestItem::None;
+	return CarriedItem != EForestItem::None || (StoneCarry && StoneCarry->IsCarrying());
 }
 
 void AForestCharacter::RefreshToolVisibility()
@@ -1509,6 +1592,35 @@ void AForestCharacter::UpdateFocus()
 
 void AForestCharacter::PrimaryAction()
 {
+	// Physical-stone placement takes priority over legacy log/build placement input.
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (StonePlacement->ConfirmPlacement())
+		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
+			ShowMessage(TEXT("Taş yerleştirildi."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taşı yerleştirmek için geçerli bir yüzeye nişan al."));
+		}
+		return;
+	}
+
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		if (StonePlacement && StonePlacement->BeginPlacement(StoneCarry->GetCarried()))
+		{
+			ShowMessage(TEXT("Taş yerleştirme: Q/tekerlek ile yüz-soket seç, R ile döndür, sol tık onayla."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taş yerleştirme başlatılamadı."));
+		}
+		return;
+	}
+
 	if (bBuildMode)
 	{
 		if (IsWallTool())
@@ -1657,6 +1769,24 @@ void AForestCharacter::Interact()
 	ALogWallBlueprint* Blueprint = FocusedBlueprint.Get();
 	APickupItem* FocusedLog = FocusedPickup.Get();
 
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		ShowMessage(TEXT("Taş yerleştirme açık. Sol tık onaylar, sağ tık iptal eder."));
+		return;
+	}
+
+	// A physical stone is a world actor, not an item count in the legacy backpack.
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		if (StoneCarry->Drop())
+		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
+			ShowMessage(TEXT("Taş yere bırakıldı."));
+		}
+		return;
+	}
+
 	// Untying the rope comes first: it is the only thing E does while dragging a trunk.
 	if (CarriedItem == EForestItem::TrunkLog)
 	{
@@ -1672,6 +1802,59 @@ void AForestCharacter::Interact()
 			if (AHaulCart* Cart = Cast<AHaulCart>(CartHit.GetActor()); Cart && Cart->GetLoadCount() > 0)
 			{
 				TestUnload(Cart);
+				return;
+			}
+		}
+	}
+
+	// Pick up the same physical stone actor that will later be installed in the world.
+	if (CarriedItem == EForestItem::None && StoneCarry && !StoneCarry->IsCarrying())
+	{
+		FHitResult StoneHit;
+		if (TraceFromView(400.f, StoneHit, true))
+		{
+			if (AStoneActor* Stone = Cast<AStoneActor>(StoneHit.GetActor()))
+			{
+				UStoneDefinition* Definition = Stone->GetDefinition();
+				if (!Definition)
+				{
+					ShowMessage(TEXT("Bu taşın tanımı eksik; güvenli biçimde alınamıyor."));
+					return;
+				}
+
+				const EStoneCarryMode Mode = Definition->Mass <= StoneCarry->MaxSingleHandMass
+					? EStoneCarryMode::SingleHand
+					: EStoneCarryMode::TwoHands;
+				if (StoneCarry->PickUp(Stone, Mode))
+				{
+					RefreshToolVisibility();
+					GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
+					ShowMessage(TEXT("Taş alındı. Sol tıkla yerleştirme önizlemesini başlat."));
+				}
+				else
+				{
+					ShowMessage(TEXT("Bu taş çok ağır veya şu anda alınamıyor."));
+				}
+				return;
+			}
+
+			if (AStickActor* Stick = Cast<AStickActor>(StoneHit.GetActor()))
+			{
+				UStickDefinition* StickDefinition = Stick->GetDefinition();
+				if (!StickDefinition ||
+					Stick->GetStructuralState_Implementation() != EStructuralNodeState::Loose ||
+					StickDefinition->Shape != EStickShape::Raw)
+				{
+					ShowMessage(TEXT("Yalnızca serbest ve işlenmemiş çubuk stoğa alınabilir."));
+					return;
+				}
+				if (!CanAddItem(EForestItem::Stick, 1) || AddItem(EForestItem::Stick, 1) != 1)
+				{
+					ShowMessage(TEXT("Çanta dolu; çubuk dünyada bırakıldı."));
+					return;
+				}
+				Stick->Destroy();
+				ShowMessage(TEXT("+1 Çubuk"));
 				return;
 			}
 		}
@@ -1743,10 +1926,171 @@ void AForestCharacter::Interact()
 		ShowMessage(TEXT("\u00C7anta dolu"));
 		return;
 	}
-	AddItem(Pickup->GetItem(), Pickup->GetCount());
-	ShowMessage(FString::Printf(TEXT("+%d %s"), Pickup->GetCount(), *ForestItems::GetDisplayName(Pickup->GetItem())));
+	const int32 PickupCount = Pickup->GetCount();
+	const int32 AddedCount = AddItem(Pickup->GetItem(), PickupCount);
+	if (AddedCount != PickupCount)
+	{
+		ShowMessage(TEXT("Alım tamamlanamadı; dünyadaki kaynak korunuyor."));
+		return;
+	}
+	ShowMessage(FString::Printf(TEXT("+%d %s"), PickupCount, *ForestItems::GetDisplayName(Pickup->GetItem())));
 	Pickup->Destroy();
 	FocusedPickup = nullptr;
+}
+
+AActor* AForestCharacter::DropInventoryItem(EForestItem Item, int32 Count)
+{
+	if (!CoreInventory || !GetWorld() || Count <= 0 || Item == EForestItem::None ||
+		ForestItems::IsCarriedItem(Item))
+	{
+		return nullptr;
+	}
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	if (ItemID.IsNone() || !CoreInventory->CanDropItem(ItemID, Count))
+	{
+		return nullptr;
+	}
+
+	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.0f).GetSafeNormal();
+	const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward).GetSafeNormal();
+	const FVector BaseLocation = GetActorLocation() + Forward * 105.0f + FVector(0.0f, 0.0f, 35.0f);
+	TArray<AActor*> SpawnedActors;
+	SpawnedActors.Reserve((Item == EForestItem::Stone || Item == EForestItem::Stick) ? Count : 1);
+
+	auto RollbackSpawnedActors = [&SpawnedActors]()
+	{
+		for (AActor* Spawned : SpawnedActors)
+		{
+			if (IsValid(Spawned))
+			{
+				Spawned->Destroy();
+			}
+		}
+	};
+
+	if (Item == EForestItem::Stone)
+	{
+		UStaticMesh* StoneMesh = ForestItems::GetMesh(Item);
+		if (!StoneMesh)
+		{
+			return nullptr;
+		}
+
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const FVector Location = BaseLocation + Right * (static_cast<float>(Index) * 42.0f);
+			AStoneActor* Stone = GetWorld()->SpawnActor<AStoneActor>(
+				AStoneActor::StaticClass(), Location, FRotator::ZeroRotator);
+			if (!Stone)
+			{
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+
+			UStoneDefinition* Definition = NewObject<UStoneDefinition>(Stone, TEXT("InventoryStoneDefinition"));
+			if (!Definition)
+			{
+				Stone->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			Definition->StoneName = TEXT("InventoryStone");
+			Definition->Type = EStoneType::Granite;
+			Definition->Shape = EStoneShape::Small;
+			Definition->Role = EStoneRole::None;
+			Definition->Dimensions = FVector(13.0f, 10.0f, 9.0f);
+			Definition->Mass = 2.0f;
+			Definition->Volume = 0.0002f;
+			Definition->CompressiveStrength = 180.0f;
+			Definition->TensileStrength = 15.0f;
+			Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
+				FSoftObjectPath(TEXT("/Game/Greybox/Meshes/SM_GB_Stone.SM_GB_Stone")));
+			Stone->InitializeFromDefinition(Definition);
+			if (Stone->MeshComponent && !Stone->MeshComponent->GetStaticMesh())
+			{
+				Stone->MeshComponent->SetStaticMesh(StoneMesh);
+			}
+			if (!Stone->MeshComponent || !Stone->MeshComponent->GetStaticMesh())
+			{
+				Stone->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			SpawnedActors.Add(Stone);
+		}
+	}
+	else if (Item == EForestItem::Stick)
+	{
+		UStaticMesh* StickMesh = ForestItems::GetMesh(Item);
+		if (!StickMesh)
+		{
+			return nullptr;
+		}
+
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const FVector Location = BaseLocation + Right * (static_cast<float>(Index) * 12.0f);
+			AStickActor* Stick = GetWorld()->SpawnActor<AStickActor>(
+				AStickActor::StaticClass(), Location, GetActorRotation());
+			if (!Stick)
+			{
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+
+			UStickDefinition* Definition = NewObject<UStickDefinition>(Stick, TEXT("InventoryStickDefinition"));
+			if (!Definition)
+			{
+				Stick->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			Definition->StickName = TEXT("InventoryStick");
+			Definition->Shape = EStickShape::Raw;
+			Definition->Size = EStickSize::Short;
+			Definition->Role = EStickRole::Crafting;
+			Definition->Length = 55.0f;
+			Definition->Diameter = 2.8f;
+			Definition->Mass = 0.2f;
+			Definition->Volume = 0.0006f;
+			Definition->Durability = 30.0f;
+			Definition->MaxStackSize = StackSize;
+			Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
+				FSoftObjectPath(TEXT("/Game/Greybox/Meshes/SM_GB_Stick.SM_GB_Stick")));
+			Stick->InitializeFromDefinition(Definition);
+			if (Stick->MeshComponent && !Stick->MeshComponent->GetStaticMesh())
+			{
+				Stick->MeshComponent->SetStaticMesh(StickMesh);
+			}
+			if (!Stick->MeshComponent || !Stick->MeshComponent->GetStaticMesh())
+			{
+				Stick->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			SpawnedActors.Add(Stick);
+		}
+	}
+	else
+	{
+		const FTransform DropTransform(FRotator(0.0f, GetActorRotation().Yaw, 0.0f), BaseLocation);
+		APickupItem* Pickup = APickupItem::Spawn(
+			GetWorld(), Item, Count, DropTransform, Forward * 160.0f + FVector(0.0f, 0.0f, 90.0f));
+		if (!Pickup)
+		{
+			return nullptr;
+		}
+		SpawnedActors.Add(Pickup);
+	}
+
+	// One inventory debit commits the entire drop. If any physical spawn or the debit
+	// fails, every temporary actor is removed before returning.
+	if (CoreInventory->DropItem(ItemID, Count) != EInventoryResult::Success)
+	{
+		RollbackSpawnedActors();
+		return nullptr;
+	}
+	return SpawnedActors.IsEmpty() ? nullptr : SpawnedActors[0];
 }
 
 int32 AForestCharacter::GetItemCount(EForestItem Item) const
@@ -1765,63 +2109,35 @@ int32 AForestCharacter::GetItemCount(EForestItem Item) const
 		}
 		return Item == EForestItem::TrunkLog ? 0 : (CarriedItem == Item ? GetCarriedCount() : 0);
 	}
-	const int32* Count = Inventory.Find(Item);
-	return Count ? *Count : 0;
-}
 
-namespace
-{
-	int32 SlotsFor(int32 Count, int32 Stack)
-	{
-		return Count > 0 ? (Count + Stack - 1) / Stack : 0;
-	}
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory && !ItemID.IsNone() ? CoreInventory->GetItemCount(ItemID) : 0;
 }
 
 int32 AForestCharacter::GetUsedSlots() const
 {
-	int32 Used = 0;
-	for (const TPair<EForestItem, int32>& Entry : Inventory)
-	{
-		Used += SlotsFor(Entry.Value, StackSize);
-	}
-	return Used;
+	return CoreInventory ? CoreInventory->GetUsedSlotCount() : 0;
 }
 
-bool AForestCharacter::CanAddItem(EForestItem Item, int32 Count, EForestItem FreedItem, int32 Freed) const
+bool AForestCharacter::CanAddItem(EForestItem Item, int32 Count) const
 {
-	int32 Used = 0;
-	for (const TPair<EForestItem, int32>& Entry : Inventory)
+	if (!CoreInventory || Count <= 0 || Item == EForestItem::None ||
+		ForestItems::IsCarriedItem(Item))
 	{
-		int32 Amount = Entry.Value;
-		if (Entry.Key == FreedItem)
-		{
-			Amount = FMath::Max(0, Amount - Freed);
-		}
-		if (Entry.Key == Item)
-		{
-			Amount += Count;
-		}
-		Used += SlotsFor(Amount, StackSize);
+		return false;
 	}
-	if (!Inventory.Contains(Item))
-	{
-		Used += SlotsFor(Count, StackSize);
-	}
-	return Used <= InventorySlots;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return !ItemID.IsNone() && CoreInventory->CanAddItem(ItemID, Count);
 }
 
 int32 AForestCharacter::AddItem(EForestItem Item, int32 Count)
 {
-	int32 Added = 0;
-	while (Added < Count && CanAddItem(Item, Added + 1))
+	if (!CanAddItem(Item, Count))
 	{
-		++Added;
+		return 0;
 	}
-	if (Added > 0)
-	{
-		Inventory.FindOrAdd(Item) += Added;
-	}
-	return Added;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory->AddItem(ItemID, Count) == EInventoryResult::Success ? Count : 0;
 }
 
 void AForestCharacter::GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutSlots) const
@@ -1829,8 +2145,12 @@ void AForestCharacter::GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutS
 	OutSlots.Reset();
 	for (const EForestItem Item : ForestItems::GetAllItems())
 	{
-		const int32* Count = Inventory.Find(Item);
-		for (int32 Left = Count ? *Count : 0; Left > 0; Left -= StackSize)
+		if (ForestItems::IsCarriedItem(Item))
+		{
+			continue;
+		}
+		const int32 Count = GetItemCount(Item);
+		for (int32 Left = Count; Left > 0; Left -= StackSize)
 		{
 			OutSlots.Emplace(Item, FMath::Min(Left, StackSize));
 		}
@@ -1844,34 +2164,68 @@ void AForestCharacter::ToggleInventory()
 
 bool AForestCharacter::RemoveItem(EForestItem Item, int32 Count)
 {
+	if (Count <= 0 || Item == EForestItem::None)
+	{
+		return false;
+	}
 	if (ForestItems::IsCarriedItem(Item))
 	{
 		return ConsumeCarried(Item, Count);
 	}
-	int32* Current = Inventory.Find(Item);
-	if (!Current || *Current < Count)
-	{
-		return false;
-	}
-	*Current -= Count;
-	return true;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory && !ItemID.IsNone() &&
+		CoreInventory->RemoveItem(ItemID, Count) == EInventoryResult::Success;
 }
 
 void AForestCharacter::Craft(EForestItem Input, int32 InputCount, EForestItem Output, int32 OutputCount)
 {
-	if (GetItemCount(Input) < InputCount)
+	if (InputCount <= 0 || OutputCount <= 0 || GetItemCount(Input) < InputCount)
 	{
-		ShowMessage(FString::Printf(TEXT("Yetersiz malzeme: %d %s gerekli"), InputCount, *ForestItems::GetDisplayName(Input)));
+		ShowMessage(FString::Printf(TEXT("Yetersiz malzeme: %d %s gerekli"),
+			InputCount, *ForestItems::GetDisplayName(Input)));
 		return;
 	}
-	if (!CanAddItem(Output, OutputCount, Input, ForestItems::IsCarriedItem(Input) ? 0 : InputCount))
+	if (!CoreInventory)
 	{
-		ShowMessage(TEXT("\u00C7anta dolu"));
+		ShowMessage(TEXT("Envanter sistemi hazır değil."));
 		return;
 	}
-	RemoveItem(Input, InputCount);
-	AddItem(Output, OutputCount);
-	ShowMessage(FString::Printf(TEXT("%d %s -> %d %s"), InputCount, *ForestItems::GetDisplayName(Input), OutputCount, *ForestItems::GetDisplayName(Output)));
+
+	if (ForestItems::IsCarriedItem(Input))
+	{
+		// Physical log consumption is separate from stack inventory. Preflight the
+		// output first; no callback is emitted between preflight and the synchronous
+		// actor removal/addition on this game-thread transaction.
+		if (!CanAddItem(Output, OutputCount))
+		{
+			ShowMessage(TEXT("Çanta dolu"));
+			return;
+		}
+		if (!ConsumeCarried(Input, InputCount))
+		{
+			ShowMessage(TEXT("Kütük işlemi tamamlanamadı; malzeme korunuyor."));
+			return;
+		}
+		if (AddItem(Output, OutputCount) != OutputCount)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Phase 6: output inventory preflight drifted while consuming physical wood."));
+			ShowMessage(TEXT("Üretim işlemi durduruldu; envanter durumu kontrol edilmeli."));
+			return;
+		}
+	}
+	else
+	{
+		const FName InputID = ForestItems::GetInventoryID(Input);
+		const FName OutputID = ForestItems::GetInventoryID(Output);
+		if (InputID.IsNone() || OutputID.IsNone() ||
+			!CoreInventory->ExchangeItems(InputID, InputCount, OutputID, OutputCount))
+		{
+			ShowMessage(TEXT("Üretim reddedildi: kapasite veya kaynak durumu değişti."));
+			return;
+		}
+	}
+	ShowMessage(FString::Printf(TEXT("%d %s -> %d %s"), InputCount,
+		*ForestItems::GetDisplayName(Input), OutputCount, *ForestItems::GetDisplayName(Output)));
 }
 
 void AForestCharacter::CraftBeam()
@@ -1911,6 +2265,17 @@ void AForestCharacter::CraftPlank()
 
 void AForestCharacter::ToggleBuildMode()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		ShowMessage(TEXT("Önce taş yerleştirmesini onayla veya iptal et."));
+		return;
+	}
+	if (!bBuildMode && StoneCarry && StoneCarry->IsCarrying())
+	{
+		ShowMessage(TEXT("Fiziksel taşı yerleştirme modundayken klasik inşa moduna geçemezsin."));
+		return;
+	}
+
 	bBuildMode = !bBuildMode;
 	BuildPreview->SetVisibility(false);
 	RefreshToolVisibility();
@@ -2047,6 +2412,21 @@ void AForestCharacter::DebugBuildRoom()
 
 void AForestCharacter::CancelBuild()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (StonePlacement->CancelPlacement())
+		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
+			ShowMessage(TEXT("Taş yerleştirme iptal edildi; taş eski konumuna döndü."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taş yerleştirme iptal edilemedi."));
+		}
+		return;
+	}
+
 	if (bBuildMode && bWallStartSet)
 	{
 		bWallStartSet = false;
@@ -2160,6 +2540,12 @@ void AForestCharacter::WallClick()
 
 void AForestCharacter::RotateBuild()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		StonePlacement->RotateStone(1.0f);
+		return;
+	}
+
 	if (bBuildMode)
 	{
 		BuildYawOffset = FMath::Fmod(BuildYawOffset + 90.f, 360.f);
@@ -2196,6 +2582,14 @@ void AForestCharacter::RotateBuild()
 void AForestCharacter::CycleBuildItem(const FInputActionValue& Value)
 {
 	const float Axis = Value.Get<float>();
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (!FMath::IsNearlyZero(Axis))
+		{
+			StonePlacement->CycleFace();
+		}
+		return;
+	}
 	if (bBuildMode && !FMath::IsNearlyZero(Axis))
 	{
 		SelectNextAvailable(Axis > 0.f ? 1 : -1);
@@ -2621,7 +3015,18 @@ void AForestCharacter::ApplyCarveHit(ACarvableLog* Log)
 {
 	if (!bCarveSpotValid)
 	{
-		ShowMessage(TEXT("Bu kütükte bu kesim için yer kalmadı"));
+		if (CarveTool == ECarveTool::Groove && Log && Log->GetSplitCount() != 1)
+		{
+			ShowMessage(TEXT("Oluk için önce kütüğü boyuna yarıp yarım kütük oluştur"));
+		}
+		else if (CarveTool == ECarveTool::Groove && Log && Log->GetSplitCount() == 1)
+		{
+			ShowMessage(TEXT("Bu yarım kütükte oluk zaten var veya uygun kanal noktası kalmadı"));
+		}
+		else
+		{
+			ShowMessage(TEXT("Bu kütükte bu kesim için yer kalmadı"));
+		}
 		return;
 	}
 	const float ShapeKey = IsProfileTool(CarveTool) ? CarveWidth * 1000.f + CarveDepth : CarveAngle;
@@ -2679,8 +3084,14 @@ void AForestCharacter::ApplyCarveHit(ACarvableLog* Log)
 		}
 		break;
 	case ECarveTool::Groove:
-		Log->CutGroove(CarveSide);
-		ShowMessage(TEXT("Oluk açıldı"));
+		if (Log->CutGroove(CarveSide))
+		{
+			ShowMessage(TEXT("Yarım kütük boyunca oluk açıldı"));
+		}
+		else
+		{
+			ShowMessage(TEXT("Oluk için önce kütüğü boyuna yarıp yarım kütük oluştur"));
+		}
 		break;
 	case ECarveTool::Dovetail:
 		Log->CutDovetail(CarveX, CarveSide, CarveWidth, FMath::Min(CarveDepth, R));

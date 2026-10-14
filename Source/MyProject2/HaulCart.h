@@ -9,7 +9,7 @@
 class ACarvableLog;
 class UStaticMeshComponent;
 
-UENUM()
+UENUM(BlueprintType)
 enum class EHaulKind : uint8
 {
 	/** A hand cart: two wheels, carries two shoulder loads, rolls easily. */
@@ -39,6 +39,10 @@ public:
 	EHaulKind GetKind() const { return Kind; }
 
 	/** Wood the thing holds (cm3): this many shoulder loads of one whole log each. */
+	/** Selects a cart/sled/rack variant only while it has no cargo. */
+	UFUNCTION(BlueprintCallable, Category = "Hauling")
+	void SetKind(EHaulKind NewKind);
+
 	float GetCapacity() const;
 	float GetLoadVolume() const;
 	int32 GetLoadCount() const { return Loaded.Num(); }

@@ -13,17 +13,26 @@ class MYPROJECT2_API UInventoryComponent : public UActorComponent
 public:
     UInventoryComponent();
     virtual void BeginPlay() override;
+    /** Idempotently prepares runtime slots and registers current item definitions. */
+    void InitializeRuntimeInventory();
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult AddItem(FName ItemID, int32 Count=1);
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult AddItemData(const FInventoryItem& Item);
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult RemoveItem(FName ItemID, int32 Count=1);
     UFUNCTION(BlueprintCallable, Category="Inventory") EInventoryResult DropItem(FName ItemID, int32 Count=1);
+    UFUNCTION(BlueprintPure, Category="Inventory") bool CanDropItem(FName ItemID, int32 Count=1) const;
+    // Atomic in-memory transfer: either both inventories reflect the transfer or source stock is restored.
+    UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") static bool TransferItem(UInventoryComponent* Source, UInventoryComponent* Destination, FName ItemID, int32 Count=1);
+    /** Atomically consumes inputs and adds outputs, restoring the exact slot state on failure. */
+    UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") bool ExchangeItems(FName InputID, int32 InputCount, FName OutputID, int32 OutputCount);
+    /** Atomic multi-item transaction. Inputs are debited and outputs credited, with exact slot rollback on any failure. Either side may be empty for reservation/refund or output release. */
+    UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") static bool ExchangeItemBatches(UInventoryComponent* Source, UInventoryComponent* Destination, const TArray<FInventoryItem>& Inputs, const TArray<FInventoryItem>& Outputs);
     UFUNCTION(BlueprintPure, Category="Inventory") int32 GetItemCount(FName ItemID) const;
     UFUNCTION(BlueprintPure, Category="Inventory") bool HasItem(FName ItemID, int32 Count=1) const;
     UFUNCTION(BlueprintPure, Category="Inventory") bool HasAllItems(const TArray<FInventoryItem>& Required) const;
     UFUNCTION(BlueprintPure, Category="Inventory") TArray<FInventorySlot> GetSlots() const { return Slots; }
     UFUNCTION(BlueprintPure, Category="Inventory") TArray<FInventorySlot> GetSlotsByCategory(EInventoryCategory Category) const;
     UFUNCTION(BlueprintPure, Category="Inventory") int32 GetUsedSlotCount() const;
-    UFUNCTION(BlueprintPure, Category="Inventory") int32 GetFreeSlotCount() const { return FMath::Max(0, MaxSlots-GetUsedSlotCount()); }
+    UFUNCTION(BlueprintPure, Category="Inventory") int32 GetFreeSlotCount() const { return FMath::Max(0, FMath::Min(MaxSlots, Slots.Num())-GetUsedSlotCount()); }
     UFUNCTION(BlueprintPure, Category="Inventory") bool IsFull() const { return GetFreeSlotCount() <= 0; }
     UFUNCTION(BlueprintPure, Category="Inventory") float GetTotalWeight() const;
     UFUNCTION(BlueprintCallable, Category="Inventory") bool CanAddItem(FName ItemID, int32 Count=1) const;
@@ -31,6 +40,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="Inventory") void SortByName();
     UFUNCTION(BlueprintCallable, Category="Inventory") void SortByRarity();
     UFUNCTION(BlueprintCallable, Category="Inventory") void ClearAll();
+    UFUNCTION(BlueprintPure, Category="Save") bool CanRestoreFromSavedItems(const TArray<FInventoryItem>& SavedItems) const;
     UFUNCTION(BlueprintCallable, Category="Save") bool RestoreFromSavedItems(const TArray<FInventoryItem>& SavedItems);
     UPROPERTY(BlueprintAssignable, Category="Events") FOnInventoryChanged OnInventoryChanged;
     UPROPERTY(BlueprintAssignable, Category="Events") FOnItemAdded OnItemAdded;
@@ -47,4 +57,5 @@ protected:
     void BroadcastChanged();
     bool CanFitItem(const FInventoryItem& Item, int32 Count) const;
     void NormalizeSlotIndexes();
+    bool bSuppressInventoryEvents = false;
 };

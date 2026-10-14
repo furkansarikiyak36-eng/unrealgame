@@ -32,6 +32,8 @@ public:
     virtual float GetStructuralStrength_Implementation() const override;
     virtual bool IsGrounded_Implementation() const override;
     UFUNCTION(BlueprintCallable) void SetHealth(float NewHealth);
+    /** Optional canonical logistics segment this physical piece supports (e.g. a bridge plank). */
+    UPROPERTY(SaveGame, VisibleInstanceOnly, BlueprintReadOnly, Category="Logistics") FName InfrastructureLinkKey = NAME_None;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UStaticMeshComponent> MeshComponent;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<ULogStateMachine> StateMachine;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<ULogConnectionGraph> ConnectionGraph;
