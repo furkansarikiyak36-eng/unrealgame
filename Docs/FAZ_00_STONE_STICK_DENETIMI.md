@@ -47,3 +47,16 @@ Son kaynak düzenlemeleri:
 - `HollowGroove`, `EngraveJoint` ve `SmoothSurface` şimdilik `false` dönüyor. Bunlar geometriyi değiştirmeden başarı bildiriyordu; artık sahte başarı üretmiyorlar. Bu metotların gerçek geometrik işlemi hâlâ uygulanmayı bekliyor.
 
 **Doğrulama sınırı:** Bu güncellemeler kaynak seviyesinde işlendi ancak UE 5.8 derleme/oyun içi test koşusu henüz alınmadı. P0-024 ve P0-026, motor testi olmadan kapatılmaz.
+
+
+## Taş yerleştirme yüzü/socket seçimi — kod ve otomasyon testleri eklendi
+
+`UStonePlacementComponent` artık:
+- `BeginPlacement(AStoneActor*)` ile yalnızca tanımı olan Loose/Carried taşın yerleştirmesini başlatıyor; özgün transform, state, attach parent ve socket bilgisini tutuyor.
+- `UpdatePlacementTarget` ile nokta/normal girişini doğruluyor; yüzey normali boyunca yerel Z eksenini hizalıyor.
+- `CycleFace` ile geçerli `UStoneDefinition::Faces` seçeneklerini, ardından geçerli `Sockets` seçeneklerini dolaşıyor; yüz normalini temas yönüne çeviriyor ve socket yerel konumunu temas noktasına oturtuyor.
+- `ConfirmPlacement` için gerçek geçerli hedef şartı koyuyor; `CancelPlacement` taşın önceki fiziksel konum/durum/attach durumuna dönmesini deniyor.
+
+`Source/MyProject2/Tests/StonePlacementTests.cpp` üç Unreal Automation Test içeriyor: begin/cancel, yüz ve socket hizalaması, geçerli hedef olmadan onayın reddi.
+
+**Kabul durumu:** Kod/test kaynakları branch'e eklendi; UE 5.8 derlemesi ve test çalıştırması bu ortamda yapılmadığından P0-023 kapanmış sayılmaz. Otomasyon sonucu, preview collision ve gerçek Blueprint input bağlantısı motor hostunda doğrulanmalı.
