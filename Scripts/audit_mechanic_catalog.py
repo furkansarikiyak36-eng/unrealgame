@@ -128,7 +128,7 @@ def audit_rows(rows: list[dict[str, str]], headers: list[str]) -> dict[str, Any]
             result["warnings"].append({
                 "line": line_no, "mechanic_id": mechanic_id, "issues": item_warnings,
             })
-        if not mechanic_id or not status or level is None or level == 0 or missing_evidence:
+        if item_errors or not mechanic_id or not status or level is None or level == 0 or missing_evidence:
             result["unmapped_rows"].append({
                 "line": line_no, "mechanic_id": mechanic_id, "status": status,
             })
