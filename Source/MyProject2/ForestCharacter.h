@@ -52,7 +52,7 @@ public:
 	/** Canonical stack inventory shared with storage, crafting and persistence. */
 	UInventoryComponent* GetInventoryComponent() const { return CoreInventory; }
 	/** Drop stackable inventory resources into the world; stock is consumed only after spawn succeeds. */
-	UFUNCTION(BlueprintCallable, Category = "Inventory") APickupItem* DropInventoryItem(EForestItem Item, int32 Count = 1);
+	UFUNCTION(BlueprintCallable, Category = "Inventory") AActor* DropInventoryItem(EForestItem Item, int32 Count = 1);
 
 	/** Backpack (GDD 6.3): 24 slots, stacks of 20. */
 	static constexpr int32 InventorySlots = 24;
