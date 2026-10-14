@@ -356,3 +356,14 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Kaynak düşümü sonrası hedef eklemesi beklenmedik şekilde başarısız olursa kaynak stoğu geri eklenmeye çalışılıyor; rollback de başarısızsa hata loglanıyor. Mevcut `DropItem` ve `bCanBeDropped` politikası değişmeden kaldı.
 - `Scripts/tests/test_inventory_transfer_contract.py` eklendi ve Python runner'a bağlandı. Testler kaynak sözleşmesini kontrol eder; UE C++ build/Automation sonucu değildir.
 - **Faz 6 devam ediyor:** fiziksel taş/çubuk aktörleri, storage, processing, construction/salvage ve save/load uçtan uca akışları henüz bu commit'te bağlanmadı. Bu nedenle faz tamamlandı olarak işaretlenmedi; genel çapraz-sistem audit Faz 14'te.
+
+
+### 2026-10-14 — Faz 6: fiziksel taş/çubuk ve storage save/load entegrasyonu
+
+- `AForestCharacter` stack kaynaklarını artık `UInventoryComponent` üzerinden sayar, ekler, siler ve tarif üretir; eski `TMap<EForestItem,int32>` stok kopyası kaldırıldı. Kütük/gövde taşıma yine `ACarvableLog`/mevcut fiziksel gövde akışında kalır.
+- `ForestItems::GetInventoryID` ve `GetItemWeight` eklendi; `Stick` item ID'si, görünür `SM_GB_Stick` greybox mesh'i ve runtime item tanımı eklendi. Yalnızca serbest ham `AStickActor` stoğa dönüştürülür; işlenmiş/yapıya bağlanmış parça silinmez.
+- `DropInventoryItem` envanterden önce miktar/politika önkontrolü yapar. Genel kaynakları pickup yığını olarak, taş ve çubuğu gerçek fiziksel aktör olarak çıkarır; kısmi spawn başarısızlığında geçici aktörleri temizler, başarılı spawn grubundan sonra kaynağı bir defa düşer. Envantere tam sığmayan pickup dünyada kalır.
+- `TransferItem` kaynak/hedefin slot snapshot'larını ve event suppression durumunu saklar; commit başarısızsa iki tarafın eski slot düzeni aynen geri gelir. `ExchangeItems` processing/tarif girdisi ile çıktısını aynı işlemde günceller; başarısızlıkta stok kaybı/çoğalması önlenir.
+- `AInventoryStorageActor` aynı envanter ve transfer API'sini kullanır. World save schema 3 oyuncu stack stoğuna ek olarak her depoyu benzersiz anahtarla sıralı snapshot'a alır; load sırasında tüm depoların anahtarı/miktarı/kapasitesi önceden doğrulanır. Schema 1/2 kayıtları geriye dönük desteklenir.
+- Statik kontratlara fiziksel kaynak, storage ve schema-3 doğrulamaları eklendi. CI #675'te görülen tek hata test beklentisinin eski `CanDropItem(ItemID, Count)` metnini aramasıydı; gerçek API `CanDropItem(ID, Count)` olduğundan test bu sözleşmeye düzeltildi. Son dal head'i için temiz CI koşusu henüz doğrulanmış değil. Unreal Engine 5.8 C++ build/Automation bu ortamda çalıştırılmadı.
+- **Açık:** gerçek UE E2E'de depo transferi, processing, physical drop/pickup, build/salvage ve save/load turları. Bu fazlar arası bilanço ve tam çapraz-sistem audit Faz 14'e ayrıldı; bu log ara demo/paket teslimi anlamına gelmez.
