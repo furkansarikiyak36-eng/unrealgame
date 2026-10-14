@@ -381,3 +381,13 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Faz 6 tracker'ı artık `Implemented` durumunda: tek envanter sahibi, atomik transfer/tarif dönüşümü, fiziksel taş/çubuk drop/salvage köprüsü, storage aktörü ve schema-3 oyuncu/depo snapshot'ları kodlandı.
 - Python tooling CI #696 başarılıdır (run [38530520494](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38530520494)); source sözleşmelerinin geçtiğini doğrular, UE C++ build veya oyun testi değildir.
 - Kalan motor kabulü Faz 14'e taşındı; sonraki kod fazına geçişi bloke etmez. Demo/paket yalnızca son bütünsel denetimden sonra.
+
+
+### 2026-10-14 — Faz 7: tek malzeme durumu ve bütçeli hava entegrasyonu
+
+- `ACarvableLog` içine `MoistureContent`, `MaterialAgeDays` ve `SimulateMaterialEnvironment` eklendi. Hasar/çürüme bütünlüğün tek `Damage` değerine yazar; mevcut gevşeyen eklem/taşıma eşiği geçilince `StructureLink::Settle` çalışır.
+- `UWoodMaterialSubsystem`, `UWorldStateSubsystem` günlük saatini, sıcaklığı ve yağışını kullanır. Yağmur gökyüzü görüşüyle sınırlanır; log listesi ada/path ismine göre sıralanır ve tick başına işleme `MaxLogsProcessedPerTick` ile sınırlandırılır.
+- `UBurnSubsystem` mevcut yanma sahibi olarak tutuldu. Nemli ahşabın tutuşma süresi ve yakıt süresi uzar; malzeme adaptörü yangın durumu/yanan listesi oluşturmaz.
+- Opsiyonel `UMaterialDefinition` profilinden WaterAbsorption/WaterDamageRate/DecayRate okunur; profil yoksa varsayılan ahşap katsayıları kullanılır. Hasar etkileri mevcut ACarvableLog/StructureLink zincirine döner.
+- `Scripts/tests/test_wood_material_integration_contract.py` oluşturuldu ve Python CI runner'a bağlandı. CI henüz bu yeni kaynak üzerinde yeniden çalıştırılmadı. UE 5.8 build/Automation çalıştırılmadı.
+- **Açık:** ortak world-save zarfının dinamik ahşap aktörlerini yeniden oluşturmaması nedeniyle nem/yaş alanları şu anda yalnızca aktör durumudur; kalıcılık, dünya hücresi nemiyle korelasyon, yangın/çürüme denge ölçümü ve uzun süreli performans Faz 14'te çapraz sistem denetimine bırakıldı. Faz 7 tracker bu nedenle In Progress.
