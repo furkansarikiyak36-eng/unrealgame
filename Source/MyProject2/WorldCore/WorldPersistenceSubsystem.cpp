@@ -4,6 +4,7 @@
 #include "UndergroundHazardSubsystem.h"
 #include "WorldStateSubsystem.h"
 #include "RegionLogisticsSubsystem.h"
+#include "Phase11_Production/ProductionChainComponent.h"
 #include "ForestCharacter.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryStorageActor.h"
@@ -274,6 +275,14 @@ void UWorldPersistenceSubsystem::IncrementWorldRevision()
     }
 }
 
+void UWorldPersistenceSubsystem::NotifyProductionChanged(FName StationKey)
+{
+    if (!bApplyingLoadedState && !StationKey.IsNone())
+    {
+        IncrementWorldRevision();
+    }
+}
+
 void UWorldPersistenceSubsystem::RememberCommandId(const FGuid& CommandId)
 {
     if (!CommandId.IsValid() || ProcessedCommandIdSet.Contains(CommandId))
@@ -372,6 +381,41 @@ bool UWorldPersistenceSubsystem::SaveCoreStateToSlot(const FString& SlotName, in
     SaveObject->bHasRegionLogistics = true;
     SaveObject->RegionLogistics = MoveTemp(RegionLogisticsSnapshot);
 
+    SaveObject->bHasProductionChains = true;
+    TSet<FName> SeenProductionStationKeys;
+    for (TActorIterator<AActor> It(World); It; ++It)
+    {
+        AActor* Actor = *It;
+        if (!IsValid(Actor))
+        {
+            continue;
+        }
+        TArray<UProductionChainComponent*> ActorProductionChains;
+        Actor->GetComponents<UProductionChainComponent>(ActorProductionChains);
+        for (UProductionChainComponent* Production : ActorProductionChains)
+        {
+            if (!IsValid(Production))
+            {
+                continue;
+            }
+            const FName StationKey = Production->GetStableStationKey();
+            FProductionChainSnapshot ProductionSnapshot;
+            if (StationKey.IsNone() || SeenProductionStationKeys.Contains(StationKey)
+                || SaveObject->ProductionChains.Num() >= MaxProductionStationsInSave
+                || !Production->ExportSnapshot(ProductionSnapshot))
+            {
+                UE_LOG(LogTemp, Error, TEXT("Core save rejected: production station keys must be valid/unique and queue snapshots valid."));
+                return false;
+            }
+            SeenProductionStationKeys.Add(StationKey);
+            SaveObject->ProductionChains.Add(MoveTemp(ProductionSnapshot));
+        }
+    }
+    SaveObject->ProductionChains.Sort([](const FProductionChainSnapshot& A, const FProductionChainSnapshot& B)
+    {
+        return A.StationKey.ToString() < B.StationKey.ToString();
+    });
+
     // Preserve the currently playable character's stack inventory in the same
     // versioned envelope. World-piece actors (notably ACarvableLog) stay world-owned.
     if (AForestCharacter* Player = FindWorldSavePlayer(World))
@@ -452,7 +496,7 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     }
 
     const FWorldCoreSaveManifest& Manifest = LoadedSave->Manifest;
-    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2 && Manifest.SchemaVersion != 3 && Manifest.SchemaVersion != 4 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
+    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2 && Manifest.SchemaVersion != 3 && Manifest.SchemaVersion != 4 && Manifest.SchemaVersion != 5 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
         || !Manifest.WorldId.IsValid()
         || Manifest.WorldRevision < 0
         || LoadedSave->ProcessedCommandIds.Num() > MaxRetainedLedgerEntries
@@ -491,9 +535,61 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     URegionLogisticsSubsystem* Logistics = LoadWorld ? LoadWorld->GetSubsystem<URegionLogisticsSubsystem>() : nullptr;
     if (!Excavation || !Hazards || !Hazards->ValidateSnapshot(LoadedSave->UndergroundHazards) ||
         (LoadedSave->bHasWorldState && (!WorldState || !WorldState->ValidateSnapshot(LoadedSave->WorldState))) ||
-        (LoadedSave->bHasRegionLogistics && (!Logistics || !Logistics->ValidateSnapshot(LoadedSave->RegionLogistics))))
+        (LoadedSave->bHasRegionLogistics && (!Logistics || !Logistics->ValidateSnapshot(LoadedSave->RegionLogistics))) ||
+        LoadedSave->ProductionChains.Num() > MaxProductionStationsInSave)
     {
         return false;
+    }
+
+    TMap<FName, UProductionChainComponent*> ProductionChainsByKey;
+    TMap<FName, FProductionChainSnapshot> PreviousProductionSnapshots;
+    for (TActorIterator<AActor> It(LoadWorld); It; ++It)
+    {
+        AActor* Actor = *It;
+        if (!IsValid(Actor))
+        {
+            continue;
+        }
+        TArray<UProductionChainComponent*> ActorProductionChains;
+        Actor->GetComponents<UProductionChainComponent>(ActorProductionChains);
+        for (UProductionChainComponent* Production : ActorProductionChains)
+        {
+            if (!IsValid(Production))
+            {
+                return false;
+            }
+            const FName StationKey = Production->GetStableStationKey();
+            FProductionChainSnapshot PreviousSnapshot;
+            if (StationKey.IsNone() || ProductionChainsByKey.Contains(StationKey)
+                || !Production->ExportSnapshot(PreviousSnapshot))
+            {
+                UE_LOG(LogTemp, Error, TEXT("Core load rejected: active production station keys must be valid and unique."));
+                return false;
+            }
+            ProductionChainsByKey.Add(StationKey, Production);
+            PreviousProductionSnapshots.Add(StationKey, MoveTemp(PreviousSnapshot));
+        }
+    }
+    if (LoadedSave->bHasProductionChains)
+    {
+        if (LoadedSave->ProductionChains.Num() != ProductionChainsByKey.Num())
+        {
+            return false;
+        }
+        TSet<FName> SnapshotStationKeys;
+        for (const FProductionChainSnapshot& ProductionSnapshot : LoadedSave->ProductionChains)
+        {
+            if (ProductionSnapshot.StationKey.IsNone() || SnapshotStationKeys.Contains(ProductionSnapshot.StationKey))
+            {
+                return false;
+            }
+            UProductionChainComponent* const* Found = ProductionChainsByKey.Find(ProductionSnapshot.StationKey);
+            if (!Found || !IsValid(*Found) || !(*Found)->ValidateSnapshot(ProductionSnapshot))
+            {
+                return false;
+            }
+            SnapshotStationKeys.Add(ProductionSnapshot.StationKey);
+        }
     }
 
     AForestCharacter* SavedPlayer = nullptr;
@@ -638,6 +734,43 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
         UE_LOG(LogTemp, Error, TEXT("Core save load: prevalidated region-logistics import failed."));
         bApplyingLoadedState = false;
         return false;
+    }
+    if (LoadedSave->bHasProductionChains)
+    {
+        bool bProductionImported = true;
+        for (const FProductionChainSnapshot& ProductionSnapshot : LoadedSave->ProductionChains)
+        {
+            UProductionChainComponent* const* Found = ProductionChainsByKey.Find(ProductionSnapshot.StationKey);
+            if (!Found || !IsValid(*Found) || !(*Found)->ImportSnapshot(ProductionSnapshot))
+            {
+                bProductionImported = false;
+                break;
+            }
+        }
+        if (!bProductionImported)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Core save load: validated production queue import failed; restoring previous production queues/inventory."));
+            if (PlayerInventory)
+            {
+                PlayerInventory->RestoreFromSavedItems(PreviousPlayerInventory);
+            }
+            for (const TPair<FName, TArray<FInventoryItem>>& Previous : PreviousStorageItems)
+            {
+                if (AInventoryStorageActor* const* PreviousActor = StorageActorsByKey.Find(Previous.Key))
+                {
+                    (*PreviousActor)->GetInventory()->RestoreFromSavedItems(Previous.Value);
+                }
+            }
+            for (const TPair<FName, FProductionChainSnapshot>& Previous : PreviousProductionSnapshots)
+            {
+                if (UProductionChainComponent* const* PreviousComponent = ProductionChainsByKey.Find(Previous.Key))
+                {
+                    (*PreviousComponent)->ImportSnapshot(Previous.Value);
+                }
+            }
+            bApplyingLoadedState = false;
+            return false;
+        }
     }
     bApplyingLoadedState = false;
 
