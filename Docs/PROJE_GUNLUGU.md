@@ -449,3 +449,12 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 
 - GitHub Actions Python tooling CI #938 başarılıdır: https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38537881165
 - Faz 11 üretim zinciri sözleşme testinin 12 kontrolü ve mevcut Python/katalog kontrolleri geçti. Bu iş akışı Unreal Engine C++ derlemesi veya oyun içi üretim/save-load testi değildir; motor kabulü Faz 14'te yapılacak.
+
+
+### 2026-10-14 — Faz 12: Raid Director ve baskın yaşam döngüsü
+
+- Mevcut \`URaidDirectorSubsystem\` tek spawn otoritesi olarak korundu ve sertleştirildi. Plan, stage, weighted enemy pool, dalga toplamları, spawn kapasitesi ve event bütçesi etkinleşme öncesi doğrulanıyor; event-wide bütçe dalgalar arasında yeniden dolmuyor.
+- Auto scheduler opt-in/jitter'lı hale getirildi, lifecycle fazları açıkça yayımlanıyor. İptal, yalnızca mevcut event'in Director'a ait düşmanlarını siler. \`RaidKit::StopRaid\` artık dünyadaki bütün raid enemy aktörlerini global şekilde temizlemiyor.
+- \`ARaidEnemy\` navmesh varsa Director'ın kare başına bütçeli path query'sini kullanıyor; navmesh yoksa eski collision-swept greybox hareketi çalışıyor. Yapı hasarı ortak resolver'a bağlı; yapı parçası yok olunca nav dirty area güncelleniyor.
+- Köprü log parçaları canonical \`InfrastructureLinkKey\` taşır. Bir parçanın yıkılması \`URegionLogisticsSubsystem\` üzerindeki ilgili köprü rotasını kapatır; fiziksel log SaveGame veri sözleşmesi link anahtarını da round-trip yapar.
+- Raid runtime harness'e dört motor-içi kontrol eklendi. \`Scripts/tests/test_phase12_raid_director_contract.py\` ve runner kaydı eklendi; CI sonucu son head için kontrol edilecek. Unreal Engine 5.8 derleme ve in-world raid/AI/route/save-load testleri yapılmadı; Faz 14 bütünsel doğrulamaya bırakıldı.
