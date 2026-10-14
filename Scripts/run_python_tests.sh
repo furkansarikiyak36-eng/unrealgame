@@ -78,7 +78,7 @@ bash -n "$ROOT/Scripts/run_python_tests.sh"
   "$ROOT/Scripts/tests/test_wood_material_integration_contract.py" \
   "$ROOT/Scripts/tests/test_phase8_world_state_integration_contract.py" \
   "$ROOT/Scripts/tests/test_phase9_farming_integration_contract.py" \
-  "$ROOT/Scripts/tests/test_phase10_region_logistics_contract.py"
+  "$ROOT/Scripts/tests/test_phase10_region_logistics_contract.py" \
   "$ROOT/Scripts/tests/test_phase11_production_chain_contract.py"
 
 echo "[19/31] Auditing the 76-row LOG map..."
