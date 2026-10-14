@@ -1,0 +1,5 @@
+Aday,Çözünürlük,Senaryo,UE_Sürümü,Commit_SHA,Build_Config,CPU_GPU_RAM,Seed,Volume_Chunk_Sayısı,Vertex_Sayısı,Triangle_Sayısı,Kazı_GameThread_ms,Mesh_Update_ms,Collision_Update_ms,Worst_Frame_Spike_ms,Delta_or_Snapshot_Bytes,Reload_ms,Seam_Test,Physics_Nav_Test,Save_Load_Hash,Kısmi_İşlem_Rollback,Kanıt_Log_Link,Açık_Risk,Karar
+A_Sparse_3D_SDF,25cm,Kuyu+Tünel+Oda,,,,,,,,,,,,,,,,,,,,,Bekliyor
+A_Sparse_3D_SDF,50cm,Kuyu+Tünel+Oda,,,,,,,,,,,,,,,,,,,,,Bekliyor
+B_DynamicMesh_CSG,25cm,Kuyu+Tünel+Oda,,,,,,,,,,,,,,,,,,,,,Bekliyor
+B_DynamicMesh_CSG,50cm,Kuyu+Tünel+Oda,,,,,,,,,,,,,,,,,,,,,Bekliyor
