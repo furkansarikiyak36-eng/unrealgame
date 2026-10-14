@@ -398,3 +398,12 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Python tooling CI **#737 başarılı** (run `38531310496`); Phase 7 wood material/structure sözleşme testinin 6 kontrolü geçti. Runner toplam katalog/araç testlerini de başarıyla tamamladı.
 - Bu CI Unreal Engine 5.8 C++ build/Automation, aydınlatma/görsel test, dünya aktörü save/load veya uzun süreli çürüme/yanma dengesi testi değildir.
 - Tracker Faz 7'yi `Implemented` durumuna aldı. Nem/yaşlanma alanlarının ortak dünya-kayıt zarfında dinamik aktörleri yeniden oluşturmaması, dünya hücresi nemiyle tam eşleme ve performans/denge kabulü Faz 14 çapraz-sistem audit'inde kalacak; sonraki faz kodlamasını bloke etmez.
+
+
+### 2026-10-14 — Faz 8: ortak World State ve kayıt katmanı
+
+- UWorldStateSubsystem su/toprak/kimya/biyokütle/yangın/çürüme akışını tek işlem sırasına bağladı. Toprak nemi biyokütle nemine taşınır; toksin, biyokütle sağlığını ayarlanabilir ve sınırlandırılmış katsayıyla etkiler. Hücre yangını, aynı nem alanını ateşleme/yayılım kararında kullanır.
+- Ortak USimulationState günlük deterministik rüzgâr yönü taşır; world-state yönü bu kaynaktan okuyup hücre yangınına verir. Kütük yangını UBurnSubsystem sahibi olmaya devam eder.
+- LastObservedWorldDay ile AccumulatedDeltaDays birbirinden ayrıldı. Her simülasyon adımı en fazla bir gün, pending catch-up en fazla 365 gün; tarihsel yağış tekrar üretimi en fazla 365 günle sınırlı. Daha eski pasif geçmiş performans için yaklaşık ele alınır, eksiksiz tarihsel replay garantisi verilmez.
+- FChunkStateSnapshot / FWorldStateSnapshot ve schema-4 UWorldCoreSaveGame bağlantısı eklendi. Saat/hava/seed ve chunk/cell state doğrulanır; chunk-store için yeni map kurulmadan mevcut map değiştirilmez. Schema 1–3 kayıtlar geriye dönük okunabilir; bu kayıtlarda world-state snapshot yoksa mevcut hücre durumu otomatik silinmez.
+- Statik sözleşme testi Scripts/tests/test_phase8_world_state_integration_contract.py eklendi ve Python runner'a bağlandı. CI/UE doğrulama sonucu ayrıca kaydedilecek; burada Unreal Engine 5.8 derlemesi veya oyun içi save/load koşturulmuş kabul edilmiyor. Daha derin cross-domain rollback ve performans ölçümü Faz 14'te.
