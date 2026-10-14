@@ -22,6 +22,7 @@ AStoneTrapActor::AStoneTrapActor()
     TriggerVolume->SetCollisionObjectType(ECC_WorldDynamic);
     TriggerVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
     TriggerVolume->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+    TriggerVolume->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Overlap);
     TriggerVolume->SetGenerateOverlapEvents(true);
     TriggerVolume->OnComponentBeginOverlap.AddDynamic(this, &AStoneTrapActor::HandleTriggerOverlap);
 }
