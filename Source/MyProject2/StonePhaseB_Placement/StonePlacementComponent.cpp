@@ -394,11 +394,19 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
 
     UStructuralGraph* MyGraph = StoneToPlace->FindComponentByClass<UStructuralGraph>();
     UStructuralGraph* TargetGraph = Target->FindComponentByClass<UStructuralGraph>();
-    if (!MyGraph || !TargetGraph)
+    AStoneActor* TargetStone = Cast<AStoneActor>(Target);
+    UStoneDefinition* MyDefinition = StoneToPlace->GetDefinition();
+    UStoneDefinition* TheirDefinition = TargetStone ? TargetStone->GetDefinition() : nullptr;
+    if (!MyGraph || !TargetGraph || !TargetStone || !MyDefinition || !TheirDefinition)
     {
-        // Fail closed: an actor that participates in structural simulation must expose a graph.
+        // Other legacy structural actor families still need a deliberate adapter; do not silently
+        // call a stone "installed" against a structural target we cannot connect.
         return false;
     }
+
+    TArray<int32> FaceIndices;
+    TArray<int32> SocketIndices;
+    CollectValidPlacementOptions(StoneToPlace, FaceIndices, SocketIndices);
 
     FName MySocket = NAME_None;
     FName TheirSocket = NAME_None;
@@ -406,80 +414,126 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
         ? EConnectionType::Stacked
         : EConnectionType::ButtJoint;
 
-    // If the player explicitly selected a source socket, require a nearby authored socket on
-    // the target stone. Do not mark a mismatched socket as a load-bearing connection.
-    UStoneDefinition* MyDefinition = StoneToPlace->GetDefinition();
-    if (!MyDefinition)
+    FVector SourcePortWorld = TargetSurfacePoint;
+    FVector SourcePortNormal = -TargetSurfaceNormal.GetSafeNormal();
+
+    const bool bSelectedSocket = PlacementOptionIndex != INDEX_NONE &&
+        PlacementOptionIndex >= FaceIndices.Num() &&
+        (PlacementOptionIndex - FaceIndices.Num()) < SocketIndices.Num();
+    const bool bSelectedFace = PlacementOptionIndex != INDEX_NONE &&
+        PlacementOptionIndex >= 0 && PlacementOptionIndex < FaceIndices.Num();
+
+    if (bSelectedSocket)
+    {
+        const int32 SocketOffset = PlacementOptionIndex - FaceIndices.Num();
+        const FStoneSocket& SourceSocket = MyDefinition->Sockets[SocketIndices[SocketOffset]];
+        MySocket = SourceSocket.SocketName;
+        SourcePortWorld = TargetTransform.TransformPosition(SourceSocket.LocalPosition);
+        SourcePortNormal = TargetTransform.TransformVectorNoScale(
+            SourceSocket.LocalRotation.RotateVector(FVector::UpVector)).GetSafeNormal();
+    }
+    else
+    {
+        // A face-mode placement uses the authored face name as the local connection endpoint.
+        // If the user left the default orientation selected, choose the face best aligned to the
+        // support plane instead of creating an anonymous NAME_None connection.
+        int32 SelectedFaceIndex = INDEX_NONE;
+        if (bSelectedFace)
+        {
+            SelectedFaceIndex = FaceIndices[PlacementOptionIndex];
+        }
+        else
+        {
+            float BestAlignment = -1.0f;
+            for (const int32 FaceIndex : FaceIndices)
+            {
+                const FVector WorldNormal = TargetTransform.TransformVectorNoScale(
+                    MyDefinition->Faces[FaceIndex].LocalNormal.GetSafeNormal()).GetSafeNormal();
+                const float Alignment = FVector::DotProduct(WorldNormal, SourcePortNormal);
+                if (Alignment > BestAlignment)
+                {
+                    BestAlignment = Alignment;
+                    SelectedFaceIndex = FaceIndex;
+                }
+            }
+        }
+
+        if (SelectedFaceIndex == INDEX_NONE)
+        {
+            return false;
+        }
+
+        MySocket = MyDefinition->Faces[SelectedFaceIndex].FaceName;
+        SourcePortNormal = TargetTransform.TransformVectorNoScale(
+            MyDefinition->Faces[SelectedFaceIndex].LocalNormal.GetSafeNormal()).GetSafeNormal();
+        if (FVector::DotProduct(SourcePortNormal, -TargetSurfaceNormal.GetSafeNormal()) < 0.5f)
+        {
+            return false;
+        }
+    }
+
+    // A structural target must expose an actual nearby, unoccupied socket whose normal faces
+    // the source port. Shared UStoneDefinition occupancy fields are intentionally not consulted.
+    float BestDistanceSq = TNumericLimits<float>::Max();
+    int32 BestTargetSocket = INDEX_NONE;
+    for (int32 Index = 0; Index < TheirDefinition->Sockets.Num(); ++Index)
+    {
+        const FStoneSocket& Candidate = TheirDefinition->Sockets[Index];
+        if (Candidate.SocketName.IsNone() || Candidate.LocalPosition.ContainsNaN() ||
+            Candidate.LocalRotation.ContainsNaN() || !FMath::IsFinite(Candidate.SocketRadius) ||
+            Candidate.SocketRadius <= 0.0f)
+        {
+            continue;
+        }
+
+        bool bSocketOccupied = false;
+        for (const FStructuralConnection& Existing : TargetGraph->Connections)
+        {
+            if (Existing.MySocket == Candidate.SocketName &&
+                Existing.ConnectedNode.Get() != StoneToPlace)
+            {
+                bSocketOccupied = true;
+                break;
+            }
+        }
+        if (bSocketOccupied)
+        {
+            continue;
+        }
+
+        const FVector CandidateWorld = TargetStone->GetActorTransform().TransformPosition(Candidate.LocalPosition);
+        const FVector CandidateNormal = TargetStone->GetActorTransform().TransformVectorNoScale(
+            Candidate.LocalRotation.RotateVector(FVector::UpVector)).GetSafeNormal();
+        if (FVector::DotProduct(CandidateNormal, TargetSurfaceNormal.GetSafeNormal()) < 0.5f ||
+            FVector::DotProduct(SourcePortNormal, CandidateNormal) > -0.5f)
+        {
+            continue;
+        }
+
+        const float DistanceSq = FVector::DistSquared(SourcePortWorld, CandidateWorld);
+        const float AllowedDistance = FMath::Max(2.0f,
+            FMath::Max(0.0f, bSelectedSocket
+                ? MyDefinition->Sockets[SocketIndices[PlacementOptionIndex - FaceIndices.Num()]].SocketRadius
+                : FaceSnapRadius,
+                Candidate.SocketRadius));
+        if (DistanceSq <= FMath::Square(AllowedDistance) && DistanceSq < BestDistanceSq)
+        {
+            BestDistanceSq = DistanceSq;
+            BestTargetSocket = Index;
+        }
+    }
+
+    if (BestTargetSocket == INDEX_NONE)
     {
         return false;
     }
 
-    TArray<int32> FaceIndices;
-    TArray<int32> SocketIndices;
-    CollectValidPlacementOptions(StoneToPlace, FaceIndices, SocketIndices);
-    const int32 SocketOffset = PlacementOptionIndex - FaceIndices.Num();
-    const bool bSelectedSocket = PlacementOptionIndex != INDEX_NONE &&
-        SocketOffset >= 0 && SocketOffset < SocketIndices.Num();
+    TheirSocket = TheirDefinition->Sockets[BestTargetSocket].SocketName;
+    ConnectionType = TargetSurfaceNormal.Z >= 0.7f
+        ? EConnectionType::Stacked
+        : EConnectionType::ButtJoint;
 
-    if (bSelectedSocket)
-    {
-        AStoneActor* TargetStone = Cast<AStoneActor>(Target);
-        UStoneDefinition* TheirDefinition = TargetStone ? TargetStone->GetDefinition() : nullptr;
-        if (!TargetStone || !TheirDefinition)
-        {
-            return false;
-        }
-
-        const FStoneSocket& SourceSocket = MyDefinition->Sockets[SocketIndices[SocketOffset]];
-        const FVector SourceSocketWorld = TargetTransform.TransformPosition(SourceSocket.LocalPosition);
-        float BestDistanceSq = TNumericLimits<float>::Max();
-        int32 BestTargetSocket = INDEX_NONE;
-        for (int32 Index = 0; Index < TheirDefinition->Sockets.Num(); ++Index)
-        {
-            const FStoneSocket& Candidate = TheirDefinition->Sockets[Index];
-            if (Candidate.SocketName.IsNone() || Candidate.LocalPosition.ContainsNaN() ||
-                Candidate.LocalRotation.ContainsNaN() || !FMath::IsFinite(Candidate.SocketRadius) ||
-                Candidate.SocketRadius <= 0.0f)
-            {
-                continue;
-            }
-
-            bool bSocketOccupied = false;
-            for (const FStructuralConnection& Existing : TargetGraph->Connections)
-            {
-                if (Existing.MySocket == Candidate.SocketName)
-                {
-                    bSocketOccupied = true;
-                    break;
-                }
-            }
-            if (bSocketOccupied)
-            {
-                continue;
-            }
-
-            const FVector CandidateWorld = TargetStone->GetActorTransform().TransformPosition(Candidate.LocalPosition);
-            const float DistanceSq = FVector::DistSquared(SourceSocketWorld, CandidateWorld);
-            const float AllowedDistance = FMath::Max(2.0f,
-                FMath::Max(0.0f, SourceSocket.SocketRadius) + FMath::Max(0.0f, Candidate.SocketRadius));
-            if (DistanceSq <= FMath::Square(AllowedDistance) && DistanceSq < BestDistanceSq)
-            {
-                BestDistanceSq = DistanceSq;
-                BestTargetSocket = Index;
-            }
-        }
-
-        if (BestTargetSocket == INDEX_NONE)
-        {
-            return false;
-        }
-
-        MySocket = SourceSocket.SocketName;
-        TheirSocket = TheirDefinition->Sockets[BestTargetSocket].SocketName;
-        ConnectionType = EConnectionType::Stacked;
-    }
-
-    // If the same relationship already exists, retain it rather than asking ConnectTo to duplicate it.
+    // Keep an already-existing exact connection rather than asking the graph to duplicate it.
     for (const FStructuralConnection& Existing : MyGraph->Connections)
     {
         if (Existing.ConnectedNode.Get() == Target &&
