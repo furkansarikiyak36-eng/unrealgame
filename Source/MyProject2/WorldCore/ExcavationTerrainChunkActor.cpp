@@ -44,7 +44,7 @@ namespace
         const double DensityA = Densities[A];
         const double DensityB = Densities[B];
         const double Denominator = DensityB - DensityA;
-        if (FMath::Abs(Denominator) <= UE_DOUBLE_SMALL_NUMBER)
+        if (FMath::Abs(Denominator) <= SMALL_NUMBER)
         {
             return (Positions[A] + Positions[B]) * 0.5;
         }
@@ -95,7 +95,7 @@ namespace
             return;
         }
 
-        if (Mesh.AppendTriangle(V0, V1, V2, 0) == UE::Geometry::FDynamicMesh3::InvalidID)
+        if (Mesh.AppendTriangle(V0, V1, V2, 0) < 0)
         {
             // Vertices are unique per triangle; a rejected primitive indicates the candidate is unusable.
             bExceededTriangleLimit = true;
@@ -114,8 +114,8 @@ namespace
         int32 EmptyNodes[4];
         int32 SolidCount = 0;
         int32 EmptyCount = 0;
-        FVector3d SolidCentroid = FVector3d::Zero();
-        FVector3d EmptyCentroid = FVector3d::Zero();
+        FVector3d SolidCentroid(0.0, 0.0, 0.0);
+        FVector3d EmptyCentroid(0.0, 0.0, 0.0);
 
         for (int32 I = 0; I < 4; ++I)
         {
@@ -317,7 +317,8 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
         World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
 
     FIntVector BaseCell;
-    if (!DynamicMeshComponent || !TryGetChunkBaseCell(Excavation, BaseCell))
+    if (!DynamicMeshComponent || !RefreshChunkWorldTransform()
+        || !TryGetChunkBaseCell(Excavation, BaseCell))
     {
         ClearMeshAndCollision();
         return false;
