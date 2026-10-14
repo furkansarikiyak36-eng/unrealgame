@@ -433,3 +433,13 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Köprü \`BuildBridge\` ve zipline \`BeginPlay\` akışları, sadece \`LogisticsLinkKey\` ayarlandığında rota grafına opsiyonel kayıt yapar. Ortak junction için aynı node key'leri kullanılır; anahtar verilmezse eski fiziksel davranış sürer.
 - \`UWorldCoreSaveGame\` schema 5 route metadata snapshot'ını saklar. Schema 1–4 geriye uyumlu kalır; eski kayıtlar yeni boş grafla mevcut durumu silmez. Lojistik değişiklikleri ortak world revision/event akışına bildirilir.
 - \`Scripts/tests/test_phase10_region_logistics_contract.py\` ve Python runner bağlantısı eklendi. GitHub Actions Python tooling CI #879 başarılıdır (run [38536422646](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38536422646)); Faz 10 sözleşme kontrolleri ve mevcut Python/katalog testleri geçti. Unreal Engine 5.8 C++ compile/oyun içi rota, köprü/zipline ve save/load E2E bu ortamda çalıştırılmadı. Tam motor ve çapraz-sistem kabulü Faz 14'te.
+
+
+### 2026-10-14 — Faz 11: üretim kuyruğu ve üretim stok zinciri (uygulama)
+
+- \`UProductionRecipeAsset\`, \`UProductionChainComponent\` ve üretim job/snapshot sözleşmeleri eklendi. Mevcut \`ACraftingBench\` bileşeni kullanır; \`FBenchRecipe\` ile tanımlı girdiler artık stok tüketimi ve çıktı eklemesi yapan gerçek queue job oluşturabilir.
+- \`UInventoryComponent::ExchangeItemBatches\`, çoklu girdileri topluca doğrular ve bütün slot düzenini snapshot/rollback ile atomik tutar. Kuyruk iş başlarken girdiyi tek defa ayırır; iptal girdileri aynı depoya geri verir. Çıktı kapasitesi doluysa job \`BlockedOutput\` olur ve ürün miktarı kaybolmaz.
+- Sınırlı FIFO queue, batch miktarı, recipe doğrulaması, progress kaydı, pause/resume/cancel, power/worker gates eklendi. Yerleşik örnek \`HalfLog x1 -> Plank x2\`, 5 saniye, 100 W, 1 işçi; diğer tarifler data asset veya Blueprint plan API'siyle konfigüre edilebilir.
+- World SaveGame schema 6, kararlı station key ile kuyruk snapshot'larını kaydeder. Envanter stok sahipliği yine player/AInventoryStorageActor/UInventoryComponent'te kalır; aktif queue kaydı için input ve output inventory sahiplerinin core save'da kaydediliyor olması doğrulanır. Schema 1–5 okunmaya devam eder.
+- Repo içinde mevcut shared generator/power-grid sahibi bulunmadığından üretim gücü \`AvailablePowerWatts\` dış girdisidir; güç koşulu var ama generator/grid ekonomisine bağlanmış sayılmaz. Fiziksel kütükten stackable HalfLog üretimini otomatikleştirme, Unreal Engine 5.8 compile ve oyun içi queue/save-load E2E de henüz kabul edilmedi; Faz 14'e bırakıldı.
+- \`Scripts/tests/test_phase11_production_chain_contract.py\` Python runner'a eklendi; CI sonucu son dal başında doğrulanacaktır.
