@@ -48,8 +48,11 @@ class Phase6InventoryIntegrationTests(unittest.TestCase):
 
     def test_physical_drop_and_pickup_preserve_stock_on_failure(self):
         drop = section(CHARACTER_CPP, "APickupItem* AForestCharacter::DropInventoryItem", "int32 AForestCharacter::GetItemCount")
-        self.assertLess(drop.index("APickupItem::Spawn"), drop.index("CoreInventory->DropItem"))
-        self.assertIn("Pickup->Destroy()", drop)
+        self.assertLess(drop.index("CoreInventory->CanDropItem"), drop.index("CoreInventory->DropItem"))
+        self.assertIn("Item == EForestItem::Stone", drop)
+        self.assertIn("Item == EForestItem::Stick", drop)
+        self.assertIn("RollbackSpawnedActors()", drop)
+        self.assertIn("APickupItem::Spawn", drop)
         pickup = section(CHARACTER_CPP, "void AForestCharacter::Interact()", "int32 AForestCharacter::GetItemCount")
         self.assertIn("if (AddedCount != PickupCount)", pickup)
         self.assertLess(pickup.index("if (AddedCount != PickupCount)"), pickup.index("Pickup->Destroy()"))
