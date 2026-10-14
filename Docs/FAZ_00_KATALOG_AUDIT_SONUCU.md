@@ -67,3 +67,10 @@ P0-027 için kaynak düzeltmesi ve testler branch'e eklendi. `UCraftingComponent
 - [Matrisi ve kanıt kapısını doğrulayan araç](../Scripts/validate_excavation_spike.py)
 
 Matriste iki aday ve iki çözünürlük için dört koşu bulunuyor. Mevcut satırların tüm kararları “Bekliyor”; bu doğru durumdur. Validator yalnızca şemanın ve gerekli ölçüm kanıtının varlığını denetler, gerçek fizik/mesh/performance ölçümü yapmaz.
+
+
+## Taş yerleştirme — güncel kaynak/entegrasyon durumu
+
+Taş yerleştirme çalışması, bağımsız component seviyesinden `AForestCharacter` girişlerine genişletildi. Fiziksel pickup, carry state, face/socket önizlemesi, collision-clearance ve graph-bearing hedefte reciprocal bağlantı commit/rollback davranışı kaynak kodunda var. Dolu hedef socket'i ikinci bir taşın kullanması reddediliyor.
+
+Bunlar kaynak kodu ve beş Unreal Automation Test kaydıdır; UE 5.8 build/test çalıştırma kanıtı değildir. P0-023, P0-030, P0-032 ve P0-033 bu nedenle “In Progress” kalır; graph save/load, karma ahşap-taş yapılar ve oyun içi çarpışma/görsel kabul hâlâ açık.
