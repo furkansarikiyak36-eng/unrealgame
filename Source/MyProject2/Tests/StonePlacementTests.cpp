@@ -420,6 +420,60 @@ bool FStonePlacementStructuralConnectionTest::RunTest(const FString& Parameters)
         Stone->ConnectionGraph->Connections.Num() == 1 &&
         SupportStone->ConnectionGraph->Connections.Num() == 1);
 
+    // A second source must not reuse the target's already-occupied authored socket.
+    AStoneActor* SecondStone = World->SpawnActor<AStoneActor>(
+        FVector(100.0f, 0.0f, 100.0f), FRotator::ZeroRotator);
+    TestNotNull(TEXT("Second source stone created"), SecondStone);
+    if (!SecondStone)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+
+    UStoneDefinition* SecondDefinition = NewObject<UStoneDefinition>(SecondStone);
+    TestNotNull(TEXT("Second source definition created"), SecondDefinition);
+    if (!SecondDefinition)
+    {
+        DestroyStonePlacementTestWorld(World);
+        return false;
+    }
+    SecondDefinition->StoneName = FName(TEXT("SecondStone"));
+    SecondDefinition->Dimensions = FVector(30.0f, 20.0f, 20.0f);
+    SecondDefinition->Mesh = TSoftObjectPtr<UStaticMesh>(
+        FSoftObjectPath(TEXT("/Engine/BasicShapes/Cube.Cube")));
+    FStoneFace SecondBottomFace;
+    SecondBottomFace.FaceName = FName(TEXT("Bottom"));
+    SecondBottomFace.LocalNormal = FVector::DownVector;
+    SecondDefinition->Faces.Add(SecondBottomFace);
+    FStoneFace SecondSideFace;
+    SecondSideFace.FaceName = FName(TEXT("Side"));
+    SecondSideFace.LocalNormal = FVector::RightVector;
+    SecondDefinition->Faces.Add(SecondSideFace);
+    FStoneSocket SecondSocket;
+    SecondSocket.SocketName = FName(TEXT("TopSocket"));
+    SecondSocket.LocalPosition = FVector(10.0f, 0.0f, 0.0f);
+    SecondSocket.LocalRotation = FRotator::ZeroRotator;
+    SecondSocket.SocketRadius = 12.0f;
+    SecondDefinition->Sockets.Add(SecondSocket);
+    SecondStone->InitializeFromDefinition(SecondDefinition);
+
+    TestTrue(TEXT("Second source begins placement"), Placement->BeginPlacement(SecondStone));
+    TestTrue(TEXT("Second source targets the same support"),
+        Placement->UpdatePlacementTarget(
+            FVector(80.0f, 0.0f, 50.0f), FVector::UpVector, SupportStone));
+    Placement->CycleFace();
+    Placement->CycleFace();
+    Placement->CycleFace();
+    TestFalse(TEXT("Occupied target socket rejects a second structural link"),
+        Placement->ConfirmPlacement());
+    TestEqual(TEXT("Blocked source remains in placement preview"),
+        Placement->GetPreviewStone(), SecondStone);
+    TestTrue(TEXT("No duplicate support connection was added"),
+        SupportStone->ConnectionGraph->Connections.Num() == 1);
+    TestTrue(TEXT("Failed link did not install second stone"),
+        SecondStone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
+
+    Placement->CancelPlacement();
     DestroyStonePlacementTestWorld(World);
     return true;
 }
