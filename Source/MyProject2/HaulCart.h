@@ -9,7 +9,7 @@
 class ACarvableLog;
 class UStaticMeshComponent;
 
-UENUM()
+UENUM(BlueprintType)
 enum class EHaulKind : uint8
 {
 	/** A hand cart: two wheels, carries two shoulder loads, rolls easily. */
@@ -33,6 +33,7 @@ public:
 	AHaulCart();
 
 	/** A cart, sled or rack standing on Ground, facing Yaw. */
+	UFUNCTION(BlueprintCallable, Category = "Hauling")
 	static AHaulCart* Spawn(UWorld* World, const FVector& Ground, float Yaw, EHaulKind Kind);
 
 	static FString KindName(EHaulKind Kind);
