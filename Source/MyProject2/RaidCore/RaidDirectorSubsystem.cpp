@@ -90,8 +90,22 @@ void URaidDirectorSubsystem::StartRaid(FName ID,ERaidEventType Type)
         UE_LOG(LogTemp,Warning,TEXT("Raid '%s' rejected before activation: %s"),*ID.ToString(),*ValidationError);
         Context.bEventActive=false;Context.Lifecycle=ERaidLifecycleState::Cancelled;CurrentPlan=nullptr;Debouncer->ReleaseEventLock(ID);return;
     }
+    int64 PlanSpawnTotal=0;
+    for(const FWavePlan& Wave:CurrentPlan->Waves)PlanSpawnTotal+=Wave.TotalCount;
+    EventBudgetRemaining=static_cast<int32>(FMath::Min<int64>(PlanSpawnTotal,100000));
+    if(StageTable)
+    {
+        if(const FRaidStageConfig* Config=StageTable->FindStageConfig(Context.DifficultyStage))
+        {
+            EventBudgetRemaining=FMath::Min(EventBudgetRemaining,Config->Budget.TotalBudget);
+        }
+    }
+    if(EventBudgetRemaining<=0)
+    {
+        Context.bEventActive=false;Context.Lifecycle=ERaidLifecycleState::Cancelled;CurrentPlan=nullptr;Debouncer->ReleaseEventLock(ID);return;
+    }
     WaveStateMachine->Initialize(CurrentPlan->Waves.Num());BudgetWaveIndex=0;
-    Budget->Initialize(CurrentPlan->Waves[0].TotalCount);Capacity->WaveCapacity=CurrentPlan->Waves[0].MaxAlive;
+    Budget->Initialize(FMath::Min(CurrentPlan->Waves[0].TotalCount,EventBudgetRemaining));Capacity->WaveCapacity=CurrentPlan->Waves[0].MaxAlive;
     Lifecycle->BeginEvent(Context);OnEventStarted.Broadcast(ID);
     if(bAutomaticSchedulingEnabled&&Scheduler)Scheduler->ScheduleNextEvent(GetWorld()->GetTimeSeconds()+AutoScheduleIntervalSeconds,AutoScheduleJitterMinSeconds,AutoScheduleJitterMaxSeconds);
     FRaidFeedbackEvent Event;Event.Type=Type;Event.SourceModule=TEXT("Trigger");Event.TargetModule=TEXT("Difficulty");
@@ -138,7 +152,7 @@ void URaidDirectorSubsystem::ProcessWaveTick(float Dt)
         const int32 NewIndex=WaveStateMachine->CurrentWaveIndex;
         if(CurrentPlan->Waves.IsValidIndex(NewIndex))
         {
-            const FWavePlan&Next=CurrentPlan->Waves[NewIndex];Budget->Initialize(Next.TotalCount);
+            const FWavePlan&Next=CurrentPlan->Waves[NewIndex];Budget->Initialize(FMath::Min(Next.TotalCount,EventBudgetRemaining));
             Capacity->WaveCapacity=Next.MaxAlive;BudgetWaveIndex=NewIndex;
             OnWaveChanged.Broadcast(NewIndex,CurrentPlan->Waves.Num());
             FRaidFeedbackEvent E;E.Type=Context.EventType;E.SourceModule=TEXT("WaveState");E.TargetModule=TEXT("Budget");
@@ -151,7 +165,7 @@ void URaidDirectorSubsystem::ProcessWaveTick(float Dt)
     }
     if(WaveStateMachine->IsComplete())EndRaid();
 }
-void URaidDirectorSubsystem::ProcessSpawns(float Dt){if(!CurrentPlan||WaveStateMachine->CurrentState!=EWaveState::Producing||!EnemyGroups||!Enemies)return;const int32 WI=WaveStateMachine->CurrentWaveIndex;if(!CurrentPlan->Waves.IsValidIndex(WI))return;const FWavePlan&Wave=CurrentPlan->Waves[WI];Capacity->WaveCapacity=Wave.MaxAlive;const int32 Free=Capacity->ComputeFreeCapacity(Counter->GetLiveCount());int32 Request=Limiter->ComputeSpawnRequest(Budget->GetRemainingBudget(),Free);/* FrameBudget and TimeBudget enforce per-frame work limits; detailed rate shaping is a follow-up tuning pass. */if(Request<=0)return;const TArray<FWeightedEntry> Pool=UHordeGroupResolver::ResolveGroup(Wave.GroupID,EnemyGroups);if(Pool.IsEmpty())return;FVector Target=FVector::ZeroVector;for(const FPlayerStateSnapshot&P:Context.Players)if(P.bIsAlive){Target=P.Location;break;}for(int32 I=0;I<Request&&TimeBudget->HasTimeRemaining();++I){if(!FrameBudget->TryConsumeSpawn())break;const FName EnemyID=UHordeCompositionPicker::PickWeightedEnemy(Pool);const FEnemyDefinition*Def=Enemies->FindEnemy(EnemyID);if(!Def||!Def->EnemyClass)continue;const FVector Pos=Finder->FindValidSpawnPosition(GetWorld(),Target);if(Pos.IsZero()||!Finder->IsPositionValid(GetWorld(),Pos))continue;FActorSpawnParameters Params;Params.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;AActor*Enemy=GetWorld()->SpawnActor<AActor>(Def->EnemyClass,Pos,FRotator::ZeroRotator,Params);if(!Enemy)continue;Budget->OnSpawned();Counter->OnEntitySpawned(Enemy,EnemyID);ManagedEnemies.AddUnique(Enemy);Enemy->OnDestroyed.AddDynamic(this,&URaidDirectorSubsystem::HandleEnemyDestroyed);OnEnemySpawned.Broadcast(Enemy);if(Context.Lifecycle!=ERaidLifecycleState::Active)Lifecycle->SetPhase(Context,ERaidLifecycleState::Active);}}
+void URaidDirectorSubsystem::ProcessSpawns(float Dt){if(!CurrentPlan||WaveStateMachine->CurrentState!=EWaveState::Producing||!EnemyGroups||!Enemies)return;const int32 WI=WaveStateMachine->CurrentWaveIndex;if(!CurrentPlan->Waves.IsValidIndex(WI))return;const FWavePlan&Wave=CurrentPlan->Waves[WI];Capacity->WaveCapacity=Wave.MaxAlive;const int32 Free=Capacity->ComputeFreeCapacity(Counter->GetLiveCount());int32 Request=Limiter->ComputeSpawnRequest(FMath::Min(Budget->GetRemainingBudget(),EventBudgetRemaining),Free);/* FrameBudget and TimeBudget enforce per-frame work limits; detailed rate shaping is a follow-up tuning pass. */if(Request<=0)return;const TArray<FWeightedEntry> Pool=UHordeGroupResolver::ResolveGroup(Wave.GroupID,EnemyGroups);if(Pool.IsEmpty())return;FVector Target=FVector::ZeroVector;for(const FPlayerStateSnapshot&P:Context.Players)if(P.bIsAlive){Target=P.Location;break;}for(int32 I=0;I<Request&&TimeBudget->HasTimeRemaining();++I){if(!FrameBudget->TryConsumeSpawn())break;const FName EnemyID=UHordeCompositionPicker::PickWeightedEnemy(Pool);const FEnemyDefinition*Def=Enemies->FindEnemy(EnemyID);if(!Def||!Def->EnemyClass)continue;const FVector Pos=Finder->FindValidSpawnPosition(GetWorld(),Target);if(Pos.IsZero()||!Finder->IsPositionValid(GetWorld(),Pos))continue;FActorSpawnParameters Params;Params.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;AActor*Enemy=GetWorld()->SpawnActor<AActor>(Def->EnemyClass,Pos,FRotator::ZeroRotator,Params);if(!Enemy)continue;Budget->OnSpawned();EventBudgetRemaining=FMath::Max(0,EventBudgetRemaining-1);Counter->OnEntitySpawned(Enemy,EnemyID);ManagedEnemies.AddUnique(Enemy);Enemy->OnDestroyed.AddDynamic(this,&URaidDirectorSubsystem::HandleEnemyDestroyed);OnEnemySpawned.Broadcast(Enemy);if(Context.Lifecycle!=ERaidLifecycleState::Active)Lifecycle->SetPhase(Context,ERaidLifecycleState::Active);}}
 
 bool URaidDirectorSubsystem::ValidateCurrentPlan(FString& OutError) const
 {
@@ -167,16 +181,21 @@ bool URaidDirectorSubsystem::ValidateCurrentPlan(FString& OutError) const
         {
             OutError=FString::Printf(TEXT("Wave references missing or empty enemy group '%s'."),*Wave.GroupID.ToString());return false;
         }
-        bool bHasSpawnableMember=false;
+        if(Group->Members.IsEmpty())
+        {
+            OutError=FString::Printf(TEXT("Enemy group '%s' has no members."),*Wave.GroupID.ToString());return false;
+        }
         for(const FWeightedEntry& Member:Group->Members)
         {
-            if(!FMath::IsFinite(Member.Weight)||Member.Weight<=0.f)continue;
+            if(Member.EnemyID.IsNone()||!FMath::IsFinite(Member.Weight)||Member.Weight<=0.f)
+            {
+                OutError=FString::Printf(TEXT("Enemy group '%s' contains an invalid weighted member."),*Wave.GroupID.ToString());return false;
+            }
             const FEnemyDefinition* Definition=Enemies->FindEnemy(Member.EnemyID);
-            if(Definition&&Definition->EnemyClass)bHasSpawnableMember=true;
-        }
-        if(!bHasSpawnableMember)
-        {
-            OutError=FString::Printf(TEXT("Enemy group '%s' has no valid weighted spawnable members."),*Wave.GroupID.ToString());return false;
+            if(!Definition||!Definition->EnemyClass)
+            {
+                OutError=FString::Printf(TEXT("Enemy group '%s' references missing/unspawnable enemy '%s'."),*Wave.GroupID.ToString(),*Member.EnemyID.ToString());return false;
+            }
         }
     }
     OutError.Empty();return true;
