@@ -23,6 +23,12 @@
 #include "DayLoopSubsystem.h"
 #include "LooseResources.h"
 #include "StickStructure.h"
+#include "FarmKit.h"
+#include "WorldFeatures.h"
+#include "ScenarioSubsystem.h"
+#include "WorldCore/RegionLogisticsSubsystem.h"
+#include "PhaseT2_Plant/CropFieldActor.h"
+#include "PhaseT6_Animal/AnimalActor.h"
 #include "Components/LineBatchComponent.h"
 #include "MechanicsDemo.h"
 #include "StructureManager.h"
@@ -358,6 +364,9 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UInputAction* FirePitAction = MakeAction(TEXT("IA_FirePit"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(FirePitAction, EKeys::C);
 	Input->BindAction(FirePitAction, ETriggerEvent::Started, this, &AForestCharacter::PlaceFireStone);
+	UInputAction* EatAction = MakeAction(TEXT("IA_Eat"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(EatAction, EKeys::Eight);
+	Input->BindAction(EatAction, ETriggerEvent::Started, this, &AForestCharacter::EatFood);
 	UInputAction* StickAction = MakeAction(TEXT("IA_StickMode"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(StickAction, EKeys::I);
 	Input->BindAction(StickAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleStickMode);
@@ -414,6 +423,11 @@ void AForestCharacter::Tick(float DeltaSeconds)
 	Survival->SetSprinting(bSprinting);
 	GetCharacterMovement()->MaxWalkSpeed = bCarrying ? CarrySpeed() : (bSprinting ? SprintSpeed : WalkSpeed);
 	UpdateCarry(DeltaSeconds);
+	if (ARiverStrip::IsInWater(GetWorld(), GetActorLocation() - FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight())))
+	{
+		GetCharacterMovement()->MaxWalkSpeed *= ARiverStrip::WadeSpeedFactor;
+	}
+	UpdateRide(DeltaSeconds);
 
 	FOVPunch = FMath::FInterpTo(FOVPunch, 0.f, DeltaSeconds, 12.f);
 	Camera->SetFieldOfView(BaseFOV - FOVPunch);
@@ -425,15 +439,16 @@ void AForestCharacter::DrawPreviewLines()
 	const FLinearColor PlanColor = bGhostValid ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
 
 	// Stick building: the footprint of the chosen build where it would stand.
-	if (bStickMode && !IsHandsBusy())
+	if (bStickMode && !IsHandsBusy() && StickBuildIndex < 4)
 	{
 		FHitResult Spot;
 		if (StickBuildSpot(Spot))
 		{
-			const EStickBuild Kind = static_cast<EStickBuild>(StickBuildIndex);
-			const bool bAfford = GetItemCount(EForestItem::Stick) >= AStickStructure::SticksFor(Kind);
+			const EStickBuild Kind = static_cast<EStickBuild>(FMath::Min<uint8>(StickBuildIndex, 2));
+			const bool bAfford = GetItemCount(EForestItem::Stick) >= (StickBuildIndex == 3 ? 2 : AStickStructure::SticksFor(Kind));
 			const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
-			const FVector Half = Kind == EStickBuild::Torch ? FVector(10.f, 10.f, 80.f) : (Kind == EStickBuild::Fence ? FVector(8.f, 100.f, 60.f) : FVector(30.f, 75.f, 35.f));
+			const FVector Half = StickBuildIndex == 3 ? FVector(100.f, 100.f, 5.f)
+				: (Kind == EStickBuild::Torch ? FVector(10.f, 10.f, 80.f) : (Kind == EStickBuild::Fence ? FVector(8.f, 100.f, 60.f) : FVector(30.f, 75.f, 35.f)));
 			ForestOutline::DrawBox(PreviewLines, FTransform(Forward.Rotation(), Spot.ImpactPoint + FVector(0.f, 0.f, Half.Z)), FBox(-Half, Half),
 				bAfford ? ForestOutline::ValidColor() : ForestOutline::InvalidColor());
 		}
@@ -1311,6 +1326,160 @@ void AForestCharacter::OpenAimed()
 	}
 }
 
+FString AForestCharacter::CraftEntryName(uint8 Entry)
+{
+	switch (Entry)
+	{
+	case 6: return TEXT("İp hattı");
+	case 3: return TEXT("Tarla");
+	case 4: return TEXT("Deri giysi");
+	case 5: return TEXT("İp");
+	default: return AStickStructure::NameOf(static_cast<EStickBuild>(Entry));
+	}
+}
+
+bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
+{
+	StickBuildIndex = Entry % CraftEntryCount;
+	switch (StickBuildIndex)
+	{
+	case 3:
+		if (GetItemCount(EForestItem::Stick) < 2)
+		{
+			ShowMessage(TEXT("Tarla sınırı için 2 çubuk gerek"));
+			return false;
+		}
+		if (!FarmKit::MakeField(GetWorld(), Hit.ImpactPoint))
+		{
+			return false;
+		}
+		RemoveItem(EForestItem::Stick, 2);
+		ShowMessage(TEXT("Tarla açıldı  —  [E] ile tohum ek"));
+		return true;
+	case 4:
+		if (FarmKit::MakeHideGarment(this))
+		{
+			ShowMessage(FString::Printf(TEXT("Deri giysi yapıldı: soğuğa yalıtım %%%.0f"), Survival->Insulation * 100.f));
+			return true;
+		}
+		ShowMessage(FString::Printf(TEXT("Deri giysi için %d deri gerek (giysiler zaten tamsa daha fazlası işe yaramaz)"), FarmKit::HidesPerGarment));
+		return false;
+	case 5:
+		if (GetItemCount(EForestItem::Wool) >= 2)
+		{
+			RemoveItem(EForestItem::Wool, 2);
+		}
+		else if (GetItemCount(EForestItem::Hide) >= 1)
+		{
+			RemoveItem(EForestItem::Hide, 1);
+		}
+		else
+		{
+			ShowMessage(TEXT("İp için 2 yün ya da 1 deri gerek"));
+			return false;
+		}
+		AddItem(EForestItem::Rope, 1);
+		ShowMessage(FString::Printf(TEXT("İp büküldü (%d ip)"), GetItemCount(EForestItem::Rope)));
+		return true;
+	case 6:
+	{
+		if (!bRopeAnchorSet)
+		{
+			if (GetItemCount(EForestItem::Rope) < 1)
+			{
+				ShowMessage(TEXT("İp hattı için 1 ip gerek: [I] listesinden yün ya da deriden ip bük"));
+				return false;
+			}
+			bRopeAnchorSet = true;
+			RopeAnchor = Hit.ImpactPoint;
+			ShowMessage(TEXT("İpin bir ucu bağlandı  —  öbür ucu için bak ve [Sol tık]"));
+			return true;
+		}
+		ARopeLine* NewLine = ARopeLine::Span(GetWorld(), RopeAnchor, Hit.ImpactPoint);
+		if (!NewLine)
+		{
+			ShowMessage(FString::Printf(TEXT("İp %.0f-%.0f m arası olmalı"), ARopeLine::MinLengthCm / 100.f, ARopeLine::MaxLengthCm / 100.f));
+			return false;
+		}
+		bRopeAnchorSet = false;
+		RemoveItem(EForestItem::Rope, 1);
+		ShowMessage(FString::Printf(TEXT("İp hattı gerildi (%.0f m)  —  bir ucunda [E] ile kay ya da tırman"), FVector::Dist(NewLine->GetA(), NewLine->GetB()) / 100.f));
+		return true;
+	}
+	default:
+		return BuildStickAt(Hit);
+	}
+}
+
+bool AForestCharacter::TestReadNote(ARemnantNote* Note)
+{
+	if (!Note)
+	{
+		return false;
+	}
+	UScenarioSubsystem* Scenario = UScenarioSubsystem::Get(GetWorld());
+	const bool bNew = Scenario && Scenario->RecordNote(Note->Title);
+	ShowMessage(FString::Printf(TEXT("%s%s: %s"), bNew ? TEXT("[Yeni not] ") : TEXT(""), *Note->Title, *Note->Text));
+	return bNew;
+}
+
+bool AForestCharacter::IsWaterAtHand() const
+{
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, 90.f);
+	const FVector Ahead = Feet + FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal() * 150.f;
+	return ARiverStrip::IsInWater(GetWorld(), Feet) || ARiverStrip::IsInWater(GetWorld(), Ahead);
+}
+
+bool AForestCharacter::TestDrink()
+{
+	if (!IsWaterAtHand())
+	{
+		return false;
+	}
+	Survival->Drink(30.f);
+	ShowMessage(TEXT("Su içildi"));
+	return true;
+}
+
+bool AForestCharacter::TestRideRope(ARopeLine* Line)
+{
+	if (!Line)
+	{
+		return false;
+	}
+	bool bAtB = false;
+	Line->EndNear(GetActorLocation(), bAtB);
+	RideRope = Line;
+	RideFrom = bAtB ? Line->GetB() : Line->GetA();
+	RideTo = bAtB ? Line->GetA() : Line->GetB();
+	RideT = 0.f;
+	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+	ShowMessage(TEXT("İpte..."));
+	return true;
+}
+
+void AForestCharacter::UpdateRide(float DeltaSeconds)
+{
+	if (!RideRope.IsValid())
+	{
+		return;
+	}
+	const float Length = FMath::Max(1.f, FVector::Dist(RideFrom, RideTo));
+	RideT = FMath::Min(1.f, RideT + DeltaSeconds * ARopeLine::RideSpeed / Length);
+	SetActorLocation(FMath::Lerp(RideFrom, RideTo, RideT) + FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), false, nullptr, ETeleportType::TeleportPhysics);
+	if (RideT >= 1.f)
+	{
+		RideRope.Reset();
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	}
+}
+
+void AForestCharacter::EatFood()
+{
+	const FString Eaten = FarmKit::Eat(this);
+	ShowMessage(Eaten.IsEmpty() ? FString(TEXT("Yiyecek yok: tahıl ek, hayvan besle ya da avla")) : FString::Printf(TEXT("Yendi: %s"), *Eaten));
+}
+
 void AForestCharacter::ToggleStickMode()
 {
 	bStickMode = !bStickMode;
@@ -1319,9 +1488,21 @@ void AForestCharacter::ToggleStickMode()
 
 FString AForestCharacter::GetStickModeLabel() const
 {
-	const EStickBuild Kind = static_cast<EStickBuild>(StickBuildIndex);
-	return FString::Printf(TEXT("Çubuk: %s (%d çubuk, çantada %d)  —  [Q] değiştir, [Sol tık] kur, [I] kapat"),
-		*AStickStructure::NameOf(Kind), AStickStructure::SticksFor(Kind), GetItemCount(EForestItem::Stick));
+	FString Cost;
+	switch (StickBuildIndex)
+	{
+	case 3: Cost = FString::Printf(TEXT("2 çubuk, çantada %d"), GetItemCount(EForestItem::Stick)); break;
+	case 4: Cost = FString::Printf(TEXT("%d deri, çantada %d"), FarmKit::HidesPerGarment, GetItemCount(EForestItem::Hide)); break;
+	case 5: Cost = FString::Printf(TEXT("2 yün ya da 1 deri; yün %d, deri %d"), GetItemCount(EForestItem::Wool), GetItemCount(EForestItem::Hide)); break;
+	case 6: Cost = FString::Printf(TEXT("1 ip, çantada %d; %s"), GetItemCount(EForestItem::Rope), bRopeAnchorSet ? TEXT("ikinci ucu seç") : TEXT("birinci ucu seç")); break;
+	default:
+	{
+		const EStickBuild Kind = static_cast<EStickBuild>(StickBuildIndex);
+		Cost = FString::Printf(TEXT("%d çubuk, çantada %d"), AStickStructure::SticksFor(Kind), GetItemCount(EForestItem::Stick));
+		break;
+	}
+	}
+	return FString::Printf(TEXT("Yapım: %s (%s)  —  [Q] değiştir, [Sol tık] yap, [I] kapat"), *CraftEntryName(StickBuildIndex), *Cost);
 }
 
 bool AForestCharacter::StickBuildSpot(FHitResult& OutHit) const
@@ -1739,9 +1920,16 @@ void AForestCharacter::PrimaryAction()
 	if (bStickMode && !IsHandsBusy())
 	{
 		FHitResult Spot;
-		if (StickBuildSpot(Spot))
+		if (StickBuildIndex == 6)
 		{
-			BuildStickAt(Spot);
+			if (TraceFromView(600.f, Spot, true))
+			{
+				TestCraft(StickBuildIndex, Spot);
+			}
+		}
+		else if (StickBuildIndex >= 4 || StickBuildSpot(Spot))
+		{
+			TestCraft(StickBuildIndex, Spot);
 		}
 		else
 		{
@@ -1828,6 +2016,14 @@ void AForestCharacter::PerformHit()
 	if (ACarvableLog* Carvable = Cast<ACarvableLog>(Hit.GetActor()))
 	{
 		ApplyCarveHit(Carvable);
+		return;
+	}
+	if (AAnimalActor* Animal = Cast<AAnimalActor>(Hit.GetActor()))
+	{
+		if (FarmKit::Butcher(Animal, this))
+		{
+			ShowMessage(TEXT("Hayvan kesildi: et ve deri çantaya girdi"));
+		}
 		return;
 	}
 	if (ARaidEnemy* Enemy = Cast<ARaidEnemy>(Hit.GetActor()))
@@ -1949,6 +2145,65 @@ void AForestCharacter::Interact()
 	{
 		StopRopeDrag();
 		return;
+	}
+	// A rope end within reach: ride it. A note in sight: read it. Water: drink.
+	if (CarriedItem == EForestItem::None && !IsRiding())
+	{
+		for (TActorIterator<ARopeLine> It(GetWorld()); It; ++It)
+		{
+			bool bAtB = false;
+			if (It->EndNear(GetActorLocation() - FVector(0.f, 0.f, 90.f), bAtB))
+			{
+				TestRideRope(*It);
+				return;
+			}
+		}
+		FHitResult NoteHit;
+		if (TraceFromView(400.f, NoteHit, true))
+		{
+			if (ARemnantNote* Note = Cast<ARemnantNote>(NoteHit.GetActor()))
+			{
+				TestReadNote(Note);
+				return;
+			}
+		}
+		if (IsWaterAtHand())
+		{
+			TestDrink();
+			return;
+		}
+	}
+	// A field: sow it, or bring in a ripe crop. An animal: take what it has made.
+	if (CarriedItem == EForestItem::None)
+	{
+		FHitResult FarmHit;
+		if (TraceFromView(400.f, FarmHit, true))
+		{
+			if (ACropFieldActor* Field = Cast<ACropFieldActor>(FarmHit.GetActor()))
+			{
+				if (FarmKit::IsRipe(Field))
+				{
+					const int32 Grain = FarmKit::Harvest(Field, this);
+					ShowMessage(FString::Printf(TEXT("Hasat: +%d tahıl, +%d tohum"), Grain, FarmKit::SeedsPerField + 2));
+				}
+				else if (!FarmKit::IsSown(Field))
+				{
+					ShowMessage(FarmKit::Sow(Field, this) ? FString(TEXT("Tarla ekildi: günler geçtikçe büyür"))
+						: FString::Printf(TEXT("Ekmek için %d tohum gerek (%d var)"), FarmKit::SeedsPerField, GetItemCount(EForestItem::Seed)));
+				}
+				else
+				{
+					ShowMessage(TEXT("Ekin büyüyor  —  henüz olgun değil"));
+				}
+				return;
+			}
+			if (AAnimalActor* Animal = Cast<AAnimalActor>(FarmHit.GetActor()))
+			{
+				const int32 Got = FarmKit::CollectProducts(Animal, this);
+				ShowMessage(Got > 0 ? FString::Printf(TEXT("+%d ürün (yumurta / yün)"), Got) : FString(TEXT("Şimdilik verecek bir şeyi yok")));
+				return;
+			}
+		}
 	}
 	// A loaded cart, sled or rack in sight: E takes the last piece off it.
 	if (CarriedItem == EForestItem::None)
@@ -2761,7 +3016,7 @@ void AForestCharacter::CycleBuildItem(const FInputActionValue& Value)
 	}
 	if (bStickMode && !FMath::IsNearlyZero(Axis))
 	{
-		StickBuildIndex = static_cast<uint8>((StickBuildIndex + (Axis > 0.f ? 1 : static_cast<uint8>(EStickBuild::Count) - 1)) % static_cast<uint8>(EStickBuild::Count));
+		StickBuildIndex = static_cast<uint8>((StickBuildIndex + (Axis > 0.f ? 1 : CraftEntryCount - 1)) % CraftEntryCount);
 		ShowMessage(GetStickModeLabel());
 		return;
 	}

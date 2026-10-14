@@ -60,6 +60,8 @@ public:
 	static constexpr float FreezeDamagePerSecond = 0.5f;
 	/** Runs the warmth rules for Seconds (the tick does it; the mechanics test calls it to skip time). */
 	void StepWarmth(float Seconds);
+	/** For the mechanics test: hunger and thirst set directly. */
+	void SetNeedsForTest(float InHunger, float InThirst) { Hunger = FMath::Clamp(InHunger, 0.f, MaxValue); Thirst = FMath::Clamp(InThirst, 0.f, MaxValue); }
 
 	/** Called once when health reaches zero. */
 	TFunction<void()> OnDeath;

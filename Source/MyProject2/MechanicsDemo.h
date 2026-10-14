@@ -169,6 +169,9 @@ private:
 	void AddPhaseScript(class AForestCharacter* Character);
 	void AddDayLoopScript(class AForestCharacter* Character);
 	void AddStoneStickScript(class AForestCharacter* Character);
+	void AddFarmScript(class AForestCharacter* Character);
+	void AddWorldScript(class AForestCharacter* Character);
+	float RopeTopZ = 0.f;
 	int32 ExpectedTreeLogs = 4;
 	FVector PushStart = FVector::ZeroVector;
 	FVector HaulStart = FVector::ZeroVector;

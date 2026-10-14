@@ -1,5 +1,8 @@
 # MyProject2 — Durum Raporu (13 Ekim 2026, akşam)
 
+> **14 Ekim güncellemesi:** Web Claude'un dalı entegre edildi ve derleniyor. Üstüne oynanır hâle getirilenler: günlük döngü (soğuk iklim, gün/gece, vücut ısısı, ateş ve çatıyla ısınma), her 3. gece baskın, fiziksel taş ve çubuk (diken, çit, meşale), tarım ve hayvancılık (tarla, hasat, yumurta, et, deri, deri giysi, ip), nehir, yar ve ip hattı, önceki yerleşimcilerin 5 notu, üç bölge (Kayalık, Orman, Nehir kıyısı). Testler: mekanik 119/119, Wood 12/12, envanter 5/5, çubuk tarif 3/3, taş tuzağı 4/4, taş yerleştirme 4/5. Voxel kazı ve beton en sona bırakıldı. Ayrıntı: `PROJE_GUNLUGU.md`.
+
+
 ## Özet
 
 `MyProject2`, eski projedeki (`Downloads/MyProject`) hayatta kalma ve kütük inşa mekaniklerinin sanat varlıklarından arındırılmış **greybox** sürümü. Unreal Engine 5.8, C++.

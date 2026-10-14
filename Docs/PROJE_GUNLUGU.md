@@ -487,3 +487,20 @@ Test: mekanik 110/110 (+3).
 - Kaya kırılınca fiziksel taşlar düşer (1 yapı taşı 40 kg + küçük taşlar; `AHarvestableActor::DropRockResources`, `LooseResources`). Küçük taş [E] ile çantaya (ateş halkası, taş blok), yapı taşı iki elle taşınır ve web Claude'un yerleştirme önizlemesiyle konur.
 - Devrilen ağaç 3 ham çubuk bırakır (`DropBranchSticks`); [E] ile çantaya.
 - **[I] çubuk yapımı** (`AStickStructure`): diken (4 çubuk; düşmana 20 can/sn), çit (6 çubuk; yolu kapatır, düşman yıpratır), meşale (2 çubuk; ışık, 3 m'de +12°C). [Q]/tekerlek seçer, sol tık kurar, yerde yeşil/kırmızı çerçeve önizleme.
+
+### 2026-10-14 — Tarım ve hayvancılık (çiftlik oyunları) (CC)
+Test: mekanik 115/115 (+5). Web Claude'un ekin (`ACropFieldActor`, GDD büyüme) ve hayvan (`AAnimalActor`) sınıfları oyuna bağlandı (`FarmKit`).
+- Yeni eşyalar: tohum, tahıl, et, deri, yün, yumurta, süt, ip.
+- Yabani tahıl (olgun hâlde; ilk tohumlar buradan), [I] → **Tarla** (2 çubuk), [E] ile ek / hasat; ekin ortak saatin günleriyle büyür (greybox tahıl ~5–6 günde olgun), hasat en az 3 tahıl + tohum geri.
+- Tavuk yumurtlar, koyun yün verir ([E] toplar); baltayla kesilen koyun 4 et, 2 deri, 1 yün. **Not:** koyun beslenmeden 5 günde yün vermedi (yem bağlantısı yok).
+- **[8] ye:** ateş yanında pişmiş et (+45) çiğ etten (+15) çok doyurur; sonra yumurta, tahıl, süt.
+- [I] → **Deri giysi** (3 deri, parça başına %40 yalıtım, en çok %80; vücut ısısı kaybını azaltır), **İp** (2 yün ya da 1 deri).
+
+### 2026-10-14 — Nehir, yar, ip hattı, kalıntılar, bölgeler (Death Stranding / Subnautica / Long Dark) (CC)
+Test: mekanik 119/119 (+4). Senaryo ayrıca bir kez grafiksiz oyunla kuruldu, hata yok.
+- `ARiverStrip`: suda yürüyüş %45 hız, ıslaklık −8°C, [E] ile su içilir; köprü yüksekliğinde kuru.
+- `ACliffBlock` (4,5 m yar) ve `ARopeLine`: [I] → **İp hattı** (1 ip; iki tıklamayla iki uç, 2–30 m). Her ip, web Claude'un rota ağında (`URegionLogisticsSubsystem`) ip yolu olarak kaydolur. Ucunda [E] ile kayılır / tırmanılır.
+- `ARemnantNote` ve `UScenarioSubsystem`: önceki yerleşimcilerin 5 notu (ateş, nehir ve köprü, yar ve ip, üçüncü gece baskınları, yanık kulübe). [E] ile okunur, günlüğe girer.
+- Senaryo yerleşimi (otomatik test sırasında değil): batıda **Kayalık** (yar, tepede yapı taşları, dağınık taşlar, −4°C), ortada **Orman** (yanık kulübe), doğuda **Nehir kıyısı** (haritayı boydan geçen nehir, öte yakada yabani tahıl, koyun, tavuk, −2°C).
+- HUD üst satırı: ıslaklık, altyapı (ip ve köprü sayısı), not sayısı.
+- **Yapılmayanlar:** toprak sıkıştırma ve beton (voxel ile birlikte sona bırakıldı); voxel kazı; "günlük seçim" için ayrıca bir arayüz yok (soğuk, yakıt, yemek ve baskın baskısından doğuyor); taş duvarın oyuncu yolunda denenmesi; koyunun beslenmesi; ses.

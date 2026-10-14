@@ -12,6 +12,13 @@
 #include "DayLoopSubsystem.h"
 #include "SurvivalComponent.h"
 #include "LooseResources.h"
+#include "FarmKit.h"
+#include "WorldFeatures.h"
+#include "ScenarioSubsystem.h"
+#include "WorldCore/RegionLogisticsSubsystem.h"
+#include "PhaseT2_Plant/CropFieldActor.h"
+#include "PhaseT6_Animal/AnimalActor.h"
+#include "SimCore/SimulationSubsystem.h"
 #include "StickStructure.h"
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "StickPhaseS1_Core/StickActor.h"
@@ -2148,6 +2155,205 @@ void AMechanicsDemo::AddStoneStickScript(AForestCharacter* Character)
 	});
 }
 
+void AMechanicsDemo::AddFarmScript(AForestCharacter* Character)
+{
+	const FVector Area(1800.f, 2600.f, 0.f);
+
+	// Seeds from wild grain, a field sown and grown, the crop brought in.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		Character->TestRemoveItem(EForestItem::Seed, Character->GetItemCount(EForestItem::Seed));
+		ACropFieldActor* Wild = FarmKit::MakeWildPatch(World, GroundAt(World, Area + FVector(0.f, -600.f, 0.f)).ImpactPoint);
+		const bool bWildRipe = FarmKit::IsRipe(Wild);
+		FarmKit::Harvest(Wild, Character);
+		const int32 Seeds = Character->GetItemCount(EForestItem::Seed);
+
+		FHitResult Ground = GroundAt(World, Area);
+		Character->TestGiveSticks(2);
+		const bool bField = Character->TestCraft(3, Ground);
+		ACropFieldActor* Field = nullptr;
+		for (TActorIterator<ACropFieldActor> It(World); It; ++It)
+		{
+			if (FVector::Dist2D(It->GetActorLocation(), Ground.ImpactPoint) < 50.f)
+			{
+				Field = *It;
+			}
+		}
+		const bool bSown = Field && FarmKit::Sow(Field, Character) && FarmKit::IsSown(Field) && !FarmKit::IsRipe(Field);
+		Report(bWildRipe && Seeds >= FarmKit::SeedsPerField && bField && bSown && Character->GetItemCount(EForestItem::Seed) == Seeds - FarmKit::SeedsPerField,
+			FString::Printf(TEXT("Tarım: yabani tahıldan %d tohum toplandı; 2 çubukla tarla açıldı, %d tohum ekildi"), Seeds, FarmKit::SeedsPerField));
+
+		USimulationSubsystem* Clock = World->GetSubsystem<USimulationSubsystem>();
+		int32 Days = 0;
+		while (Field && !FarmKit::IsRipe(Field) && Days < 30)
+		{
+			Clock->AdvanceDays(1);
+			++Days;
+		}
+		const int32 GrainBefore = Character->GetItemCount(EForestItem::Grain);
+		const int32 Grain = FarmKit::Harvest(Field, Character);
+		Report(Field && Days > 1 && Days < 30 && Grain > 0 && Character->GetItemCount(EForestItem::Grain) == GrainBefore + Grain && !FarmKit::IsSown(Field),
+			FString::Printf(TEXT("Tarım: ekin %d günde olgunlaştı, hasatta %d tahıl ve tohum geri geldi; tarla yeniden boş"), Days, Grain));
+		if (UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(World))
+		{
+			Loop->SetTimeForTest(1, 10.f);
+		}
+		return 0.2f;
+	});
+
+	// Animals: a hen lays eggs, a sheep grows wool; slaughtered, a sheep gives meat, hide and wool.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Ground = GroundAt(World, Area + FVector(600.f, 0.f, 0.f)).ImpactPoint;
+		AAnimalActor* Hen = FarmKit::SpawnAnimal(World, Ground + FVector(0.f, 0.f, 20.f), EAnimalSpecies::Chicken);
+		AAnimalActor* Sheep = FarmKit::SpawnAnimal(World, Ground + FVector(0.f, 300.f, 40.f), EAnimalSpecies::Sheep);
+		World->GetSubsystem<USimulationSubsystem>()->AdvanceDays(5);
+		const int32 Eggs = Character->GetItemCount(EForestItem::Egg);
+		const int32 Wool = Character->GetItemCount(EForestItem::Wool);
+		const int32 FromHen = FarmKit::CollectProducts(Hen, Character);
+		const int32 FromSheep = FarmKit::CollectProducts(Sheep, Character);
+		const int32 Meat = Character->GetItemCount(EForestItem::Meat);
+		const int32 Hide = Character->GetItemCount(EForestItem::Hide);
+		const bool bButchered = FarmKit::Butcher(Sheep, Character);
+		Report(FromHen > 0 && Character->GetItemCount(EForestItem::Egg) > Eggs && bButchered && Character->GetItemCount(EForestItem::Meat) == Meat + 4
+			&& Character->GetItemCount(EForestItem::Hide) == Hide + 2 && !IsValid(Sheep),
+			FString::Printf(TEXT("Hayvancılık: 5 günde tavuk %d yumurta, koyun %d yün verdi; kesilen koyun 4 et, 2 deri, 1 yün"), FromHen, FromSheep));
+		(void)Wool;
+		if (UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(World))
+		{
+			Loop->SetTimeForTest(1, 10.f);
+		}
+		return 0.2f;
+	});
+
+	// Food: raw meat fills little, meat by a fire is cooked and fills much more. Hide makes clothes; wool or hide, rope.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		USurvivalComponent* Body = Character->GetSurvivalForTest();
+		Body->ResetAll();
+		Character->TestGiveItem(EForestItem::Meat, 2);
+		Character->TestRemoveItem(EForestItem::Egg, Character->GetItemCount(EForestItem::Egg));
+		Body->SetNeedsForTest(20.f, 100.f);
+		Face(Character, World, Area + FVector(-2000.f, 0.f, 0.f), 0.f);
+		const FString Raw = FarmKit::Eat(Character);
+		const float AfterRaw = Body->GetHunger();
+		Face(Character, World, Area + FVector(-400.f, 0.f, 0.f), 0.f);
+		ACampfire* Pit = Character->TestBuildFirePit(GroundAt(World, Area + FVector(-280.f, 0.f, 0.f)), true);
+		ACarvableLog* Fuel = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Area + FVector(-280.f, 900.f, 70.f)));
+		const bool bLit = Pit && Pit->AddFuel(Fuel) && Pit->Ignite();
+		Body->SetNeedsForTest(20.f, 100.f);
+		const FString Cooked = FarmKit::Eat(Character);
+		const float AfterCooked = Body->GetHunger();
+		Report(Raw == TEXT("Çiğ et") && bLit && Cooked == TEXT("Pişmiş et") && AfterCooked - 20.f > (AfterRaw - 20.f) * 2.f,
+			FString::Printf(TEXT("Yemek: çiğ et açlığı %.0f'a, ateş yanında pişmiş et %.0f'a çıkardı"), AfterRaw, AfterCooked));
+
+		Body->Insulation = 0.f;
+		Character->TestRemoveItem(EForestItem::Hide, Character->GetItemCount(EForestItem::Hide));
+		Character->TestGiveItem(EForestItem::Hide, FarmKit::HidesPerGarment * 2 + 1);
+		FHitResult None;
+		const bool bFirst = Character->TestCraft(4, None);
+		const float One = Body->Insulation;
+		const bool bSecond = Character->TestCraft(4, None);
+		const bool bNoThird = !Character->TestCraft(4, None);
+		const int32 RopesBefore = Character->GetItemCount(EForestItem::Rope);
+		const bool bRope = Character->TestCraft(5, None) && Character->GetItemCount(EForestItem::Rope) == RopesBefore + 1;
+		Report(bFirst && FMath::IsNearlyEqual(One, FarmKit::InsulationPerGarment) && bSecond && FMath::IsNearlyEqual(Body->Insulation, FarmKit::MaxInsulation) && bNoThird && bRope,
+			FString::Printf(TEXT("Deri giysi: her parça %%%.0f yalıtım, en çok %%%.0f; ip yündan ya da deriden büküldü"), FarmKit::InsulationPerGarment * 100.f, FarmKit::MaxInsulation * 100.f));
+		Body->ResetAll();
+		Body->Insulation = 0.f;
+		return 0.2f;
+	});
+}
+
+void AMechanicsDemo::AddWorldScript(AForestCharacter* Character)
+{
+	const FVector Area(1000.f, -1600.f, 0.f);
+
+	// The river: wading is wet and cold; its water can be drunk; standing on a bridge above it keeps one dry.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Ground = GroundAt(World, Area).ImpactPoint;
+		ARiverStrip* River = ARiverStrip::Spawn(World, Ground, FVector2D(150.f, 300.f));
+		const bool bIn = River && River->Contains(Ground + FVector(0.f, 100.f, 0.f));
+		const bool bAbove = River && !River->Contains(Ground + FVector(0.f, 100.f, 80.f));
+		const bool bOutside = River && !River->Contains(Ground + FVector(400.f, 0.f, 0.f));
+		const UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(World);
+		const FTemperatureReading Wet = Loop->GetTemperatureAt(Ground + FVector(0.f, 0.f, 90.f));
+		const FTemperatureReading Dry = Loop->GetTemperatureAt(Ground + FVector(400.f, 0.f, 90.f));
+		USurvivalComponent* Body = Character->GetSurvivalForTest();
+		Body->SetNeedsForTest(100.f, 20.f);
+		Face(Character, World, Area + FVector(0.f, 100.f, 0.f), 0.f);
+		const bool bDrank = Character->TestDrink() && Body->GetThirst() > 45.f;
+		Face(Character, World, Area + FVector(600.f, 0.f, 0.f), 0.f);
+		const bool bNoWater = !Character->TestDrink();
+		Report(bIn && bAbove && bOutside && Wet.Wet < -5.f && Dry.Wet == 0.f && bDrank && bNoWater,
+			FString::Printf(TEXT("Nehir: suda ıslak (%.0f°C), köprü yüksekliğinde ve kıyıda kuru; nehirden su içildi, kurudan içilmedi"), Wet.Wet));
+		Body->ResetAll();
+		return 0.2f;
+	});
+
+	// A rope up a cliff: strung from the foot to the top with [I], it is a ropeway in the route graph and is ridden.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		const FVector Ground = GroundAt(World, Area + FVector(0.f, 900.f, 0.f)).ImpactPoint;
+		ACliffBlock* Cliff = ACliffBlock::Spawn(World, Ground + FVector(300.f, 0.f, 0.f), FVector(300.f, 300.f, 450.f));
+		const float Top = Cliff ? Cliff->GetTopZ() : 0.f;
+		Character->TestRemoveItem(EForestItem::Rope, Character->GetItemCount(EForestItem::Rope));
+		FHitResult Foot;
+		Foot.ImpactPoint = Ground;
+		FHitResult Summit;
+		Summit.ImpactPoint = FVector(Ground.X + 300.f, Ground.Y, Top);
+		const bool bNoRope = !Character->TestCraft(6, Foot);
+		Character->TestGiveItem(EForestItem::Rope, 1);
+		const int32 Before = ARopeLine::CountAll(World);
+		const bool bStrung = Character->TestCraft(6, Foot) && Character->TestCraft(6, Summit) && ARopeLine::CountAll(World) == Before + 1
+			&& Character->GetItemCount(EForestItem::Rope) == 0;
+		ARopeLine* Rope = nullptr;
+		for (TActorIterator<ARopeLine> It(World); It; ++It)
+		{
+			Rope = *It;
+		}
+		FRegionRouteResult Route;
+		URegionLogisticsSubsystem* Routes = World->GetSubsystem<URegionLogisticsSubsystem>();
+		const bool bRouted = Rope && Routes && Routes->FindLowestCostRouteByKey(Rope->GetNodeKey(false), Rope->GetNodeKey(true), 50.f, Route) && Route.bFound;
+		const bool bTooLong = ARopeLine::Span(World, Ground, Ground + FVector(0.f, 4000.f, 0.f)) == nullptr;
+		Face(Character, World, Ground + FVector(-60.f, 0.f, 0.f), 0.f);
+		const bool bRiding = Rope && Character->TestRideRope(Rope);
+		RopeTopZ = Top;
+		Report(Cliff && bNoRope && bStrung && bRouted && bTooLong && bRiding,
+			FString::Printf(TEXT("İp hattı: ipsiz kurulmadı; 1 iple yarın dibinden %.1f m tepesine gerildi, rota ağında ip yolu, 30 m'den uzun ip olmuyor"), (Top - Ground.Z) / 100.f));
+		return 2.f;
+	});
+	Script.Add([this, Character]()
+	{
+		const float Feet = Character->GetActorLocation().Z - 92.f;
+		Report(!Character->IsRiding() && FMath::Abs(Feet - RopeTopZ) < 30.f,
+			FString::Printf(TEXT("İpe binildi: oyuncu yarın tepesine çıktı (ayakları %.0f cm, tepe %.0f cm)"), Feet, RopeTopZ));
+		Face(Character, GetWorld(), FVector(1000.f, -1600.f, 0.f) + FVector(-500.f, 0.f, 0.f), 0.f);
+		return 0.2f;
+	});
+
+	// Notes of those before: read once into the journal.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		const TArray<TPair<FString, FString>>& Story = UScenarioSubsystem::StoryNotes();
+		ARemnantNote* Note = ARemnantNote::Place(World, GroundAt(World, Area + FVector(-400.f, 0.f, 0.f)).ImpactPoint, Story[0].Key, Story[0].Value);
+		UScenarioSubsystem* Scenario = UScenarioSubsystem::Get(World);
+		const int32 Before = Scenario ? Scenario->GetJournal().Num() : -1;
+		const bool bFirst = Character->TestReadNote(Note);
+		const bool bAgain = Character->TestReadNote(Note);
+		Report(Story.Num() == 5 && Scenario && bFirst && !bAgain && Scenario->GetJournal().Num() == Before + 1,
+			FString::Printf(TEXT("Kalıntılar: not okundu ve günlüğe girdi (%d/%d); ikinci okumada tekrar girmedi"), Scenario ? Scenario->GetJournal().Num() : 0, Story.Num()));
+		return 0.1f;
+	});
+}
+
 void AMechanicsDemo::AddCollapseScript(AForestCharacter* Character)
 {
 	// Take the first log of the cabin out from under the rest: what rested on it only through it falls too.
@@ -2181,6 +2387,8 @@ void AMechanicsDemo::BuildScript(AForestCharacter* Character)
 	AddPhaseScript(Character);
 	AddDayLoopScript(Character);
 	AddStoneStickScript(Character);
+	AddFarmScript(Character);
+	AddWorldScript(Character);
 	AddCollapseScript(Character);
 }
 

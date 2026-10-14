@@ -19,7 +19,9 @@ const TArray<EForestItem>& ForestItems::GetAllItems()
 		EForestItem::TrunkLog, EForestItem::BigLog, EForestItem::Log,
 		EForestItem::HalfLog, EForestItem::ShortLog, EForestItem::HollowLog, EForestItem::Plank,
 		EForestItem::Beam, EForestItem::Firewood, EForestItem::Stone, EForestItem::StoneBlock,
-		EForestItem::WindowBuck, EForestItem::DoorBuck, EForestItem::Stick };
+		EForestItem::WindowBuck, EForestItem::DoorBuck, EForestItem::Stick,
+		EForestItem::Seed, EForestItem::Grain, EForestItem::Meat, EForestItem::Hide, EForestItem::Wool, EForestItem::Egg,
+		EForestItem::Milk, EForestItem::Rope };
 	return Items;
 }
 
@@ -41,6 +43,14 @@ FString ForestItems::GetDisplayName(EForestItem Item)
 	case EForestItem::WindowBuck: return TEXT("Pencere Kasası");
 	case EForestItem::DoorBuck:   return TEXT("Kapı Kasası");
 	case EForestItem::Stick:      return TEXT("Çubuk");
+	case EForestItem::Seed:       return TEXT("Tohum");
+	case EForestItem::Grain:      return TEXT("Tahıl");
+	case EForestItem::Meat:       return TEXT("Et");
+	case EForestItem::Hide:       return TEXT("Deri");
+	case EForestItem::Wool:       return TEXT("Yün");
+	case EForestItem::Egg:        return TEXT("Yumurta");
+	case EForestItem::Milk:       return TEXT("Süt");
+	case EForestItem::Rope:       return TEXT("İp");
 	default:                      return TEXT("");
 	}
 }
@@ -62,6 +72,14 @@ float ForestItems::GetItemWeight(EForestItem Item)
 	switch (Item)
 	{
 	case EForestItem::Stick:      return 0.2f;
+	case EForestItem::Seed:       return 0.05f;
+	case EForestItem::Grain:      return 0.3f;
+	case EForestItem::Meat:       return 0.8f;
+	case EForestItem::Hide:       return 1.5f;
+	case EForestItem::Wool:       return 0.3f;
+	case EForestItem::Egg:        return 0.1f;
+	case EForestItem::Milk:       return 1.0f;
+	case EForestItem::Rope:       return 0.6f;
 	case EForestItem::Firewood:   return 0.8f;
 	case EForestItem::Stone:      return 2.0f;
 	case EForestItem::StoneBlock: return 45.0f;

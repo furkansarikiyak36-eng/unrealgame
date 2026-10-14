@@ -32,7 +32,16 @@ enum class EForestItem : uint8
 	WindowBuck UMETA(DisplayName = "Pencere Kasası (Window Buck)"),
 	DoorBuck UMETA(DisplayName = "Kapı Kasası (Door Buck)"),
 	/** Stackable small timber resource; distinct from physical ACarvableLog pieces. */
-	Stick UMETA(DisplayName = "Çubuk")
+	Stick UMETA(DisplayName = "Çubuk"),
+	/** Farming and animals: seeds to sow, grain and meat to eat, hide and wool to wear and twist into rope. */
+	Seed UMETA(DisplayName = "Tohum"),
+	Grain UMETA(DisplayName = "Tahıl"),
+	Meat UMETA(DisplayName = "Et"),
+	Hide UMETA(DisplayName = "Deri"),
+	Wool UMETA(DisplayName = "Yün"),
+	Egg UMETA(DisplayName = "Yumurta"),
+	Milk UMETA(DisplayName = "Süt"),
+	Rope UMETA(DisplayName = "İp")
 };
 
 UENUM(BlueprintType)

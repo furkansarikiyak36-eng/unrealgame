@@ -5,6 +5,7 @@
 #include "CarvableLog.h"
 #include "RaidEnemy.h"
 #include "StickStructure.h"
+#include "WorldFeatures.h"
 #include "Components/LightComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/World.h"
@@ -93,6 +94,11 @@ FTemperatureReading UDayLoopSubsystem::GetTemperatureAt(const FVector& Where) co
 	if (!World)
 	{
 		return Reading;
+	}
+	// In the river: wet.
+	if (ARiverStrip::IsInWater(World, Where - FVector(0.f, 0.f, 90.f)))
+	{
+		Reading.Wet = -ARiverStrip::WetColdC;
 	}
 	// Shelter: something built overhead (a roof, a floor above).
 	FHitResult Roof;

@@ -2,6 +2,9 @@
 
 #include "ForestHUD.h"
 #include "DayLoopSubsystem.h"
+#include "ScenarioSubsystem.h"
+#include "WorldFeatures.h"
+#include "StructureLink.h"
 #include "ForestCharacter.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
@@ -359,6 +362,21 @@ void AForestHUD::DrawHUD()
 		{
 			Line += FString::Printf(TEXT(" (çatı +%.0f)"), Air.Shelter);
 		}
+		if (Air.Wet < -0.5f)
+		{
+			Line += TEXT(" (ıslak)");
+		}
+		// Civilising the world: ropes strung and bridges built; the notes of those before.
+		int32 Bridges = 0;
+		for (const StructureLink::FFeatureInfo& Feature : StructureLink::Features(GetWorld()))
+		{
+			Bridges += Feature.Kind == EWoodFeatureKind::Bridge ? 1 : 0;
+		}
+		Line += FString::Printf(TEXT("  |  altyapı: %d ip, %d köprü"), ARopeLine::CountAll(GetWorld()), Bridges);
+		if (const UScenarioSubsystem* Scenario = UScenarioSubsystem::Get(GetWorld()))
+		{
+			Line += FString::Printf(TEXT("  |  notlar %d/%d"), Scenario->GetJournal().Num(), UScenarioSubsystem::StoryNotes().Num());
+		}
 		const int32 NextRaid = Loop->GetNextRaidDay();
 		Line += Loop->IsRaidRunning() ? FString(TEXT("  |  BASKIN")) : FString::Printf(TEXT("  |  baskın: %d. gece"), NextRaid);
 		float LineW = 0.f, LineH = 0.f;
@@ -376,7 +394,7 @@ void AForestHUD::DrawHUD()
 		TEXT("[P] Admin modu: [G] malzeme, [H] oda, [J] kes, [N] aç, [M] hasar, [K] oyma kütüğü, [L] demo, [Y] hasar"),
 		TEXT("[B] İnşa modu  |  Tekerlek / [Q]: seç  |  [R] döndür  |  Sağ tık: iptal"),
 		TEXT("Kütük Duvar: köşelere tıkla, plana bakıp [E] ile kütük ekle"),
-		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik / eğik  |  [F] çakmak (basılı tut)  |  [C] taş koy (7 taş = ateş yeri)  |  [X] it  |  [O] açıklık aç  |  [V] iskele işareti  |  [I] çubuk yapımı"),
+		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik / eğik  |  [F] çakmak (basılı tut)  |  [C] taş koy (7 taş = ateş yeri)  |  [X] it  |  [O] açıklık aç  |  [V] iskele işareti  |  [I] yapım (diken, çit, meşale, tarla, deri giysi, ip, ip hattı)  |  [8] ye  |  [E] su iç, not oku, ipe bin"),
 		TEXT("Oyma: [R] alet (çentik, enine kesim, yarma, oval, düz, sivri uç, pah, uç düzeltme, kırlangıç)  |  [E] parçayı omza al"),
 	};
 	DrawPanel(20.f, 20.f, 620.f, 16.f + 20.f * Help.Num());

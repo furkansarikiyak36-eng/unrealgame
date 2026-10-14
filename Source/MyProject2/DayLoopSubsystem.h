@@ -18,7 +18,9 @@ struct FTemperatureReading
 	float Shelter = 0.f;
 	/** A fire nearby: a lit fire pit or burning wood. */
 	float Fire = 0.f;
-	float Total() const { return Air + Shelter + Fire; }
+	/** Standing in water: wet clothes take the warmth away. */
+	float Wet = 0.f;
+	float Total() const { return Air + Shelter + Fire + Wet; }
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnDayLoopAnnouncement, const FString&);

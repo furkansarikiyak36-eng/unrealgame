@@ -24,6 +24,8 @@ class ACampfire;
 class AHaulCart;
 class AFireStone;
 class AStickStructure;
+class ARopeLine;
+class ARemnantNote;
 enum class EStickBuild : uint8;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
@@ -246,6 +248,23 @@ public:
 	void TestDropStone();
 	void TestUseUpSticks();
 	void TestGiveSticks(int32 Count);
+	/** For the mechanics test and the farm code: items into and out of the pack. */
+	int32 TestGiveItem(EForestItem Item, int32 Count) { return AddItem(Item, Count); }
+	bool TestRemoveItem(EForestItem Item, int32 Count) { return RemoveItem(Item, Count); }
+	/** What [I] can make: the three stick builds, a field, hide clothing and rope. */
+	static constexpr uint8 CraftEntryCount = 7;
+	static FString CraftEntryName(uint8 Entry);
+	/** For the mechanics test: [I] entry Entry made (on Hit when it is placed on the ground). */
+	bool TestCraft(uint8 Entry, const FHitResult& Hit);
+	/** [8]: eats the most filling food in the pack. */
+	void EatFood();
+	/** For the mechanics test: E on a note, drinking where the player stands, riding a rope from its near end. */
+	bool TestReadNote(ARemnantNote* Note);
+	bool TestDrink();
+	bool TestRideRope(ARopeLine* Line);
+	/** The rope line being strung: its first end is set. */
+	bool HasRopeAnchor() const { return bRopeAnchorSet; }
+	bool IsRiding() const { return RideRope.IsValid(); }
 	bool IsStickMode() const { return bStickMode; }
 	FString GetStickModeLabel() const;
 	/** For the mechanics test: the lighter held on Target for Seconds. */
@@ -402,6 +421,17 @@ private:
 	bool bLighterHeld = false;
 	/** [I]: stick building on/off; Q / the wheel picks what, left click builds it where the ground is aimed at. */
 	bool bStickMode = false;
+	/** [I] rope line: the first end, set by the first click. */
+	bool bRopeAnchorSet = false;
+	FVector RopeAnchor = FVector::ZeroVector;
+	/** Riding a rope: from one end to the other. */
+	TWeakObjectPtr<ARopeLine> RideRope;
+	FVector RideFrom = FVector::ZeroVector;
+	FVector RideTo = FVector::ZeroVector;
+	float RideT = 0.f;
+	void UpdateRide(float DeltaSeconds);
+	/** Water where the player stands, or a step ahead. */
+	bool IsWaterAtHand() const;
 	uint8 StickBuildIndex = 0;
 	void ToggleStickMode();
 	/** Builds the chosen stick build on the aimed ground, paying its sticks from the pack. */
