@@ -67,6 +67,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Excavation")
     void UnregisterBaseDensitySource(UObject* Source);
 
+    UFUNCTION(BlueprintCallable, Category = "Excavation")
+    void UnregisterFallbackBaseDensitySource(UObject* Source);
+
     UFUNCTION(BlueprintCallable, Category = "Excavation|Persistence")
     bool ExportSnapshot(FExcavationVolumeSnapshot& OutSnapshot) const;
 
