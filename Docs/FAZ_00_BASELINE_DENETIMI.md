@@ -129,3 +129,20 @@ python Scripts/audit_mechanic_catalog.py path/to/MEKANIK_KATALOG_TAKIP_CSV.csv -
 ```
 
 İlk komut keşif sırasında boşlukları raporlar; ikinci komut boşluk varsa non-zero çıkışla kabul kapısını kapalı tutar. Katalog-denetleyici için 9 birim test izole Python ortamında çalıştırıldı ve geçti. Testler yerel denetim kopyasında yapıldı; GitHub Actions sonucu henüz görünür değil. GitHub Actions sonucu görünmeden CI geçişi; Unreal Engine 5.8 hostunda build/automation yapılmadan da motor geçişi iddia edilmez.
+
+
+## Ek kaynak denetimleri — 14 Ekim 2026
+
+İlk LOG denetimi: [FAZ_00_LOG_KANIT_DENETIMI.md](./FAZ_00_LOG_KANIT_DENETIMI.md). LOG-001–076 için kaynak yolu mevcut, kısmi ve kanıtlanmamış özellikler birbirinden ayrılmıştır. Bu kaynak taraması editör/oyun içi doğrulama yerine geçmez.
+
+Sistem entegrasyonu taraması: [FAZ_00_SISTEM_ENTEGRASYON_DENETIMI.md](./FAZ_00_SISTEM_ENTEGRASYON_DENETIMI.md). En önemli engeller:
+- fiziksel kaynak köprüsünün `ACarvableLog` yerine farklı `ALogActor` türünü kabul etmesi;
+- envanter `DropItem` metodunun kendi başına fiziksel aktör oluşturmaması;
+- dünya kayıt metotlarının world/chunk state'i kaydetmesi ama bu metotlarda canlı yapı/araç/oyuncu aktörlerini kapsamaması;
+- Raid Director'ın doğrudan spawn yolu ile ayrı SpawnDecisionPipeline arasında canonical sahiplik göstermemesi;
+- raid structural resolver'ın `ACarvableLog` adaptörünü ve yıkım sonrası rota yenilemesini içermemesi;
+- `AAnimalActor` güncellemesinin `FeedStorageComponent`, ayrı `FeedCycleComponent`'in ise başka bir stok haritası kullanması;
+- material ID çözümlenemezse Wood fallback'e gidilebilmesi;
+- runtime 3B kazı geometrisi/çarpışma delta'sı için bu kaynaklarda uçtan uca pipeline bulunmaması.
+
+Bu bulgular kodu doğrudan yeniden yazmak için değil, fazlar arası sahiplik sözleşmesini netleştirmek ve yanlışlıkla birden fazla otoriter sistem üretmemek için kaydedildi. Kaynakları bulunmayan ya da çağrı zinciri kanıtlanmamış mekanikler U0 olarak kalır. Faz 0 kapısı, 485 satırın her biri için ID bazlı durum + kanıt/test/engel eşleştirmesi tamamlanana kadar açıktır.
