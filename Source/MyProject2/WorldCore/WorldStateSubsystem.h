@@ -22,18 +22,26 @@ public:
     UFUNCTION(BlueprintPure, Category="World") FWorldTime GetWorldTime() const { return WorldTime; }
     UFUNCTION(BlueprintCallable, Category="World") void AdvanceWorldTime(float DeltaDays);
     UFUNCTION(BlueprintCallable, Category="World") void SynchronizeAfterLoad();
+    UFUNCTION(BlueprintCallable, Category="World|Persistence") bool ExportSnapshot(FWorldStateSnapshot& OutSnapshot) const;
+    UFUNCTION(BlueprintCallable, Category="World|Persistence") bool ValidateSnapshot(const FWorldStateSnapshot& Snapshot) const;
+    UFUNCTION(BlueprintCallable, Category="World|Persistence") bool ImportSnapshot(const FWorldStateSnapshot& Snapshot);
     UFUNCTION(BlueprintCallable, Category="World") void RequestChunkSimulation(UChunkState* Chunk, float ElapsedDays);
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Config") FWorldChunkSettings ChunkSettings;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="State") TObjectPtr<UChunkStateStore> StateStore;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="State") FWorldTime WorldTime;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Simulation") float GameHoursPerRealSecond=1.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Simulation") int32 MaxChunksSimulatedPerFrame=8;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Simulation") float MaxSimulationDaysPerStep=1.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Simulation") float MaxAccumulatedSimulationDays=365.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Simulation") float BiomassMoistureResponsePerDay=0.75f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Simulation") float ToxinBiomassDamagePerDay=0.02f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Simulation") float DefaultTemperatureC=20.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") float TemperatureC=20.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") float TempMinC=15.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") float TempMaxC=25.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") float RainfallMm=0.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") float WindSpeed=0.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") FVector2D WindDirection=FVector2D(1.0f, 0.0f);
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") bool bIsRaining=false;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") bool bIsSnowing=false;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weather") int32 RandomSeed=12345;
@@ -48,7 +56,11 @@ protected:
     double HourAccumulator=0.0;
     int32 SimulationCursor=0;
     void UpdateWorldTimeTick(float DeltaTime);
+    void ApplyCrossDomainCoupling(UChunkState* Chunk, float DeltaDays);
     float ComputeRainfallForDay(int32 DayNumber) const;
     float ComputeRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const;
     void SimulateChunk(UChunkState* Chunk, float DeltaDays, float TargetDay=-1.0f);
+    static constexpr int32 MaxSnapshotChunks = 16384;
+    static constexpr int64 MaxSnapshotCells = 4194304;
+    static constexpr int32 MaxRainfallDaysToReconstruct = 365;
 };
