@@ -330,3 +330,12 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Mesh değişikliği ve temizliği sonrasında NavigationSystem nav octree güncelleme çağrısı eklendi; Python kontrat testleri material-ID, Landscape map ve nav update davranışlarını kapsayacak şekilde genişletildi.
 - Açık kalan ana blocker: ayrı voxel mesh üretmek Landscape'in orijinal render surface/collision'unu otomatik kaldırmaz. Gerçek runtime delik/yetki devri veya Landscape collision'ını güvenli şekilde yönetme entegrasyonu ve UE 5.8 build/oyun içi kabul bitene kadar Faz 3 In Progress kalır.
 
+### 2026-10-14 — Faz 4: yeraltı desteği, çökme, sızıntı ve tuzaklar
+
+- AUndergroundSupportActor, mevcut ABuildingNodeActor/UStructuralIntegritySubsystem bağlantısına katılan dört destek profiliyle eklendi: timber post, timber brace, stone pillar ve reinforced beam. Varsayılan temel mesh görünürdür; BP sınıfı ile özelleştirilebilir. Islaklık temelli dayanıklılık kaybı ve destek durumu event'i var.
+- UUndergroundHazardSubsystem, sparse excavation density event'lerine bağlı çatı açıklığı hesabı, çalışan desteğin yakınlık kontrolü ve sınırlı otomatik roof-cell carve ile cave-in davranışı sağlar. Large edit reconciliation ve stability işi tick bütçeleriyle kuyruklanır.
+- Mevcut UWorldStateSubsystem 2B hücresinden yalnızca mevcut yüzey suyu hacmi veya eşik üstü soil moisture varsa sınırlı su çıkarılır; 3B cave cell water pocket oluşur ve açık alt hücreye sınırlı yerçekimi akışı yapar. Kaynak 2B hücredeki debit ile 3B pocket ayrı ayrı kaydedilir; kuru zeminde kaynaksız su oluşturulmaz.
+- AUndergroundTrapActor, mevcut AStoneTrapActor hasar davranışını ve overlap akışını kullanır; oyuk boşluğu doğrulaması ve su cebi hacmi ile tetikleme girişi ekler.
+- UWorldCoreSaveGame schema 2: underground support kimliği/transform/tip/dayanıklılık profili, 3D water pockets ve sızıntıdan etkilenen yüzey hücrelerinin su/nem değerleri eklenmiştir. Schema 1 core kayıtları için uyumluluk yolu korunur.
+- `Scripts/tests/test_underground_hazard_contract.py` CI'a bağlandı; statik Python kontrat testleri başarılı (#587/#588). Unreal Engine 5.8 C++ build/gameplay testi çalıştırılmadı. Çökme/sızıntı denge ayarı ve bütünsel entegrasyon analizi Faz 14'te.
+
