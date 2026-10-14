@@ -98,7 +98,7 @@ namespace
 bool UExcavationVolumeSubsystem::IsGridConfigurationCompatible() const
 {
     if (!FMath::IsFinite(CellSizeCm)
-        || CellSizeCm <= 0.0f
+        || CellSizeCm < 1.0f
         || CellsPerChunkAxis < 4
         || MaxCellsPerEdit <= 0
         || !IsValidDensity(DefaultBaseDensity))
@@ -307,7 +307,7 @@ bool UExcavationVolumeSubsystem::ImportSnapshot(
 {
     if (Snapshot.SchemaVersion != 1
         || !FMath::IsFinite(Snapshot.CellSizeCm)
-        || Snapshot.CellSizeCm <= 0.0f
+        || Snapshot.CellSizeCm < 1.0f
         || Snapshot.CellsPerChunkAxis < 4
         || !IsValidDensity(Snapshot.DefaultBaseDensity)
         || MaxSnapshotOverrideCells <= 0
@@ -514,14 +514,16 @@ bool UExcavationVolumeSubsystem::ApplyCapsuleEdit(
     }
 
     const FVector RadiusVector(RadiusCm, RadiusCm, RadiusCm);
-    const FVector MinBounds(
-        FMath::Min(StartCm.X, EndCm.X) - RadiusCm,
-        FMath::Min(StartCm.Y, EndCm.Y) - RadiusCm,
-        FMath::Min(StartCm.Z, EndCm.Z) - RadiusCm);
-    const FVector MaxBounds(
-        FMath::Max(StartCm.X, EndCm.X) + RadiusCm,
-        FMath::Max(StartCm.Y, EndCm.Y) + RadiusCm,
-        FMath::Max(StartCm.Z, EndCm.Z) + RadiusCm);
+    const FVector MinEndpoint(
+        FMath::Min(StartCm.X, EndCm.X),
+        FMath::Min(StartCm.Y, EndCm.Y),
+        FMath::Min(StartCm.Z, EndCm.Z));
+    const FVector MaxEndpoint(
+        FMath::Max(StartCm.X, EndCm.X),
+        FMath::Max(StartCm.Y, EndCm.Y),
+        FMath::Max(StartCm.Z, EndCm.Z));
+    const FVector MinBounds = MinEndpoint - RadiusVector;
+    const FVector MaxBounds = MaxEndpoint + RadiusVector;
 
     return ApplyBoundedEdit(
         MinBounds,
