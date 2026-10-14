@@ -108,7 +108,7 @@ def verify_stick_inventory(path: Path, minimum_tests: int = 3) -> tuple[int, int
     )
 
 
-def verify_stone_placement(path: Path, minimum_tests: int = 3) -> tuple[int, int]:
+def verify_stone_placement(path: Path, minimum_tests: int = 4) -> tuple[int, int]:
     return verify_automation_suite(
         path, "Stone placement", "MyProject2.StonePlacement", minimum_tests
     )
@@ -126,8 +126,8 @@ def main() -> int:
                         help="Fail if fewer than this many unique Wood tests passed (default: 12).")
     parser.add_argument("--minimum-stick-inventory-tests", type=int, default=3,
                         help="Fail if fewer than this many unique stick crafting tests passed (default: 3).")
-    parser.add_argument("--minimum-stone-placement-tests", type=int, default=3,
-                        help="Fail if fewer than this many unique stone placement tests passed (default: 3).")
+    parser.add_argument("--minimum-stone-placement-tests", type=int, default=4,
+                        help="Fail if fewer than this many unique stone placement tests passed (default: 4).")
     args = parser.parse_args()
     if min(args.minimum_mechanics_checks, args.minimum_wood_tests,
            args.minimum_stick_inventory_tests, args.minimum_stone_placement_tests) < 1:
