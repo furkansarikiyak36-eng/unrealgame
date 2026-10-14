@@ -41,6 +41,7 @@ public:
     bool HasOperationalSupportNear(const FVector& LocationCm, float RadiusCm) const;
     void RegisterSupportActor(AUndergroundSupportActor* Support);
     void UnregisterSupportActor(AUndergroundSupportActor* Support);
+    void NotifySupportActorChanged(AUndergroundSupportActor* Support);
 
     UFUNCTION(BlueprintPure, Category = "Underground|Water")
     bool TryGetWaterPocketAtCell(const FIntVector& Cell, FUndergroundWaterPocket& OutPocket) const;
