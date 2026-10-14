@@ -328,6 +328,167 @@ bool UInventoryComponent::ExchangeItems(FName InputID, int32 InputCount, FName O
     }
     return true;
 }
+bool UInventoryComponent::ExchangeItemBatches(
+    UInventoryComponent* Source,
+    UInventoryComponent* Destination,
+    const TArray<FInventoryItem>& Inputs,
+    const TArray<FInventoryItem>& Outputs)
+{
+    if (Inputs.IsEmpty() && Outputs.IsEmpty())
+    {
+        return false;
+    }
+    if ((!Inputs.IsEmpty() && !IsValid(Source)) || (!Outputs.IsEmpty() && !IsValid(Destination)))
+    {
+        return false;
+    }
+
+    TMap<FName, int64> RequiredInputs;
+    TArray<FName> InputIds;
+    TArray<FName> OutputIds;
+    for (const FInventoryItem& Input : Inputs)
+    {
+        if (Input.ItemID.IsNone() || Input.Count <= 0 || !FMath::IsFinite(Input.Weight) || Input.Weight < 0.0f)
+        {
+            return false;
+        }
+        int64& Total = RequiredInputs.FindOrAdd(Input.ItemID);
+        Total += Input.Count;
+        if (Total > TNumericLimits<int32>::Max())
+        {
+            return false;
+        }
+        InputIds.AddUnique(Input.ItemID);
+    }
+    for (const TPair<FName, int64>& Pair : RequiredInputs)
+    {
+        if (!Source || !Source->HasItem(Pair.Key, static_cast<int32>(Pair.Value)))
+        {
+            return false;
+        }
+        if (!Source->GetItemData(Pair.Key))
+        {
+            return false;
+        }
+    }
+    for (const FInventoryItem& Output : Outputs)
+    {
+        if (Output.ItemID.IsNone() || Output.Count <= 0 || !FMath::IsFinite(Output.Weight) || Output.Weight < 0.0f)
+        {
+            return false;
+        }
+        if (!Destination || !Destination->GetItemData(Output.ItemID))
+        {
+            return false;
+        }
+        OutputIds.AddUnique(Output.ItemID);
+    }
+
+    TArray<FName> ChangedIds = InputIds;
+    for (const FName OutputId : OutputIds)
+    {
+        ChangedIds.AddUnique(OutputId);
+    }
+    ChangedIds.Sort([](const FName A, const FName B)
+    {
+        return A.ToString() < B.ToString();
+    });
+
+    const TArray<FInventorySlot> OriginalSourceSlots = Source ? Source->Slots : TArray<FInventorySlot>();
+    const TArray<FInventorySlot> OriginalDestinationSlots =
+        Destination && Destination != Source ? Destination->Slots : TArray<FInventorySlot>();
+    const bool bWasSuppressingSourceEvents = Source ? Source->bSuppressInventoryEvents : false;
+    const bool bWasSuppressingDestinationEvents =
+        Destination && Destination != Source ? Destination->bSuppressInventoryEvents : bWasSuppressingSourceEvents;
+
+    if (Source)
+    {
+        Source->bSuppressInventoryEvents = true;
+    }
+    if (Destination)
+    {
+        Destination->bSuppressInventoryEvents = true;
+    }
+
+    bool bCommitted = true;
+    for (const FInventoryItem& Input : Inputs)
+    {
+        if (Source->RemoveItem(Input.ItemID, Input.Count) != EInventoryResult::Success)
+        {
+            bCommitted = false;
+            break;
+        }
+    }
+    if (bCommitted)
+    {
+        for (const FInventoryItem& Output : Outputs)
+        {
+            if (Destination->AddItem(Output.ItemID, Output.Count) != EInventoryResult::Success)
+            {
+                bCommitted = false;
+                break;
+            }
+        }
+    }
+
+    if (!bCommitted)
+    {
+        if (Source)
+        {
+            Source->Slots = OriginalSourceSlots;
+            Source->NormalizeSlotIndexes();
+            Source->bSuppressInventoryEvents = bWasSuppressingSourceEvents;
+        }
+        if (Destination && Destination != Source)
+        {
+            Destination->Slots = OriginalDestinationSlots;
+            Destination->NormalizeSlotIndexes();
+            Destination->bSuppressInventoryEvents = bWasSuppressingDestinationEvents;
+        }
+        return false;
+    }
+
+    if (Source)
+    {
+        Source->bSuppressInventoryEvents = bWasSuppressingSourceEvents;
+    }
+    if (Destination && Destination != Source)
+    {
+        Destination->bSuppressInventoryEvents = bWasSuppressingDestinationEvents;
+    }
+
+    if (Source && !bWasSuppressingSourceEvents)
+    {
+        for (const FName InputId : InputIds)
+        {
+            if (Source->OnItemRemoved.IsBound())
+            {
+                Source->OnItemRemoved.Broadcast(InputId, Source->GetItemCount(InputId));
+            }
+        }
+        for (const FName OutputId : OutputIds)
+        {
+            if (Source == Destination && Source->OnItemAdded.IsBound())
+            {
+                Source->OnItemAdded.Broadcast(OutputId, Source->GetItemCount(OutputId));
+            }
+        }
+        Source->BroadcastChanged();
+    }
+    if (Destination && Destination != Source && !bWasSuppressingDestinationEvents)
+    {
+        for (const FName OutputId : OutputIds)
+        {
+            if (Destination->OnItemAdded.IsBound())
+            {
+                Destination->OnItemAdded.Broadcast(OutputId, Destination->GetItemCount(OutputId));
+            }
+        }
+        Destination->BroadcastChanged();
+    }
+    return true;
+}
+
 int32 UInventoryComponent::GetItemCount(FName ID) const { int32 N=0; for(const FInventorySlot& S:Slots) if(S.IsOccupied()&&S.Item.ItemID==ID) N+=S.Item.Count; return N; }
 bool UInventoryComponent::HasItem(FName ID,int32 Count) const { return Count>=0 && GetItemCount(ID)>=Count; }
 bool UInventoryComponent::HasAllItems(const TArray<FInventoryItem>& Req) const { for(const FInventoryItem& I:Req) if(!HasItem(I.ItemID,I.Count)) return false; return true; }
