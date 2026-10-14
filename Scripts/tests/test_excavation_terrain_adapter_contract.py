@@ -56,6 +56,9 @@ class ExcavationTerrainAdapterContractTests(unittest.TestCase):
         self.assertLess(SUBSYSTEM_CPP.find("Actor->ChunkCoordinate = Coordinate"),
                         SUBSYSTEM_CPP.find("Actor->FinishSpawning(FTransform::Identity)"))
         self.assertIn("ManagedChunkActors", SUBSYSTEM_H)
+        self.assertIn("TerrainChunkActorClass", SUBSYSTEM_H)
+        self.assertIn("SpawnActorDeferred<AExcavationTerrainChunkActor>", SUBSYSTEM_CPP)
+        self.assertIn("const TSubclassOf", SUBSYSTEM_CPP) if "const TSubclassOf" in SUBSYSTEM_CPP else self.assertIn("TerrainChunkActorClass.Get()", SUBSYSTEM_CPP)
 
     def test_loaded_landscape_proxies_can_feed_the_base_density_layer(self):
         self.assertIn('"Landscape"', BUILD_SPEC)
