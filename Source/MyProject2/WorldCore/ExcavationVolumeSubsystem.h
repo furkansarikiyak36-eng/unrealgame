@@ -32,6 +32,23 @@ public:
         EExcavationEditType EditType,
         FExcavationEditRecord& OutRecord);
 
+    /** Apply a rounded-capsule carve/fill. Useful for continuous horizontal or sloped tunnel segments. */
+    UFUNCTION(BlueprintCallable, Category = "Excavation")
+    bool ApplyCapsuleEdit(
+        const FVector& StartCm,
+        const FVector& EndCm,
+        float RadiusCm,
+        EExcavationEditType EditType,
+        FExcavationEditRecord& OutRecord);
+
+    /** Apply an axis-aligned box carve/fill. Useful for rooms, shafts and rectangular chambers. */
+    UFUNCTION(BlueprintCallable, Category = "Excavation")
+    bool ApplyBoxEdit(
+        const FVector& MinWorldCm,
+        const FVector& MaxWorldCm,
+        EExcavationEditType EditType,
+        FExcavationEditRecord& OutRecord);
+
     /** Roll back a previous edit only when every changed cell is still owned by that edit. */
     UFUNCTION(BlueprintCallable, Category = "Excavation")
     bool RollbackEdit(const FExcavationEditRecord& Record);
@@ -88,6 +105,18 @@ protected:
     float LockedCellSizeCm = 0.0f;
     int32 LockedCellsPerChunkAxis = 0;
     bool IsGridConfigurationCompatible() const;
+    /** Shared atomic implementation used by all supported geometric edit shapes. */
+    bool ApplyBoundedEdit(
+        const FVector& MinBoundsCm,
+        const FVector& MaxBoundsCm,
+        EExcavationShapeType ShapeType,
+        const FVector& CenterCm,
+        const FVector& EndCm,
+        const FVector& HalfExtentCm,
+        float RadiusCm,
+        EExcavationEditType EditType,
+        FExcavationEditRecord& OutRecord);
+
 
     /** Derived index for localized mesh/collision updates; rebuilt from CellOverrides after restore. */
     TMap<FIntVector, TSet<FIntVector>> CellsByChunk;
