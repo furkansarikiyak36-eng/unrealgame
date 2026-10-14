@@ -153,3 +153,8 @@ Bu bulgular kodu doğrudan yeniden yazmak için değil, fazlar arası sahiplik s
 `Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv`, LOG-001–LOG-076 için kaynak/kanıt eşleştirmesini içerir. Mevcut statik kaynak taramasında **59 satır U2** (yerel davranış izi var) ve **17 satır U0** (davranış zinciri bulunmadı/ayrı özellik) olarak sınıflandırıldı. Hiçbir satır U4/U5/U6 olarak yükseltilmedi; 59 U2 satırının da satıra özel otomatik test ve editör kanıtı bekliyor. Diğer 409 mekanik aynı satır bazlı derinlikte henüz işlenmedi.
 
 `Scripts/run_python_tests.sh` artık bu dosyayı beklenen 76 satırla keşif modunda kontrol eder. Bu, katalog formatını/kimliklerini ve kanıt metaverisini denetler; UE 5.8 derlemesi veya editör kabulünün yerine geçmez.
+
+
+## Envanter sahipliği engeli
+
+`AForestCharacter` içinde eski `EForestItem` tabanlı 24 slot/20 stack stoğu var; ayrıca generic `UInventoryComponent`, kategori/ağırlık kuralları, ayrı UI/crafting ve save subsystem bulunuyor. Oyuncu karakteri constructor'ında generic komponentlerin yaratıldığı görünmüyor; Blueprint eklemesi de bu oturumda doğrulanmadı. Dolayısıyla çift envanter sahibi olasılığı bir blocker olarak kaydedildi; `Docs/FAZ_00_ENVANTER_KATALOG_ESLESTIRME.csv` her INV satırının kaynak/kanıt durumunu takip ediyor. Bu sahiplik kararı çözülmeden Faz 6 entegrasyonuna başlanmamalı.
