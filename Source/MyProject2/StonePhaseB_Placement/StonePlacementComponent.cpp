@@ -93,6 +93,7 @@ bool UStonePlacementComponent::BeginPlacement(AStoneActor* Stone)
     PreviewStone = Stone;
     bAiming = true;
     bHasPlacementTarget = false;
+    TargetSurfaceActor.Reset();
     PlacementOptionIndex = INDEX_NONE;
     ManualYawDegrees = 0.0f;
     TargetTransform = OriginalActorTransform;
@@ -109,6 +110,7 @@ bool UStonePlacementComponent::CancelPlacement()
         PreviewStone = nullptr;
         bAiming = false;
         bHasPlacementTarget = false;
+        TargetSurfaceActor.Reset();
         PlacementOptionIndex = INDEX_NONE;
         return false;
     }
@@ -139,6 +141,7 @@ bool UStonePlacementComponent::CancelPlacement()
     PreviewStone = nullptr;
     bAiming = false;
     bHasPlacementTarget = false;
+    TargetSurfaceActor.Reset();
     PlacementOptionIndex = INDEX_NONE;
     ManualYawDegrees = 0.0f;
     OriginalAttachComponent.Reset();
@@ -161,6 +164,7 @@ void UStonePlacementComponent::ExitAimMode()
 
     bAiming = false;
     bHasPlacementTarget = false;
+    TargetSurfaceActor.Reset();
     PlacementOptionIndex = INDEX_NONE;
     ManualYawDegrees = 0.0f;
 }
