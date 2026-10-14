@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Character.h"
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "StoneCore/StoneDefinition.h"
 #include "StonePhaseB_Placement/StonePlacementComponent.h"
@@ -48,7 +49,8 @@ namespace
             return false;
         }
 
-        OutOwner = World->SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator);
+        // ACharacter provides a root capsule and mesh component; tests cover the no-skeletal-socket fallback.
+        OutOwner = World->SpawnActor<ACharacter>(FVector::ZeroVector, FRotator::ZeroRotator);
         OutStone = World->SpawnActor<AStoneActor>(
             FVector(17.0f, 23.0f, 41.0f), FRotator::ZeroRotator);
         if (!OutOwner || !OutStone)
@@ -233,7 +235,12 @@ bool FStonePlacementConfirmGateTest::RunTest(const FString& Parameters)
         Placement->ConfirmPlacement());
     TestTrue(TEXT("Rejected commit preserves carried state"),
         Stone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
+    TestTrue(TEXT("Cancel restores carried state"), Placement->CancelPlacement());
+    TestTrue(TEXT("Cancel retains carry ownership"), Carry->GetCarried() == Stone);
+    TestTrue(TEXT("Cancelled stone remains carried"),
+        Stone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
 
+    TestTrue(TEXT("Placement can be started again"), Placement->BeginPlacement(Carry->GetCarried()));
     TestTrue(TEXT("A valid target can be set"),
         Placement->UpdatePlacementTarget(FVector(80.0f, 0.0f, 25.0f), FVector::UpVector));
     TestTrue(TEXT("Placement commits after a valid target"), Placement->ConfirmPlacement());
