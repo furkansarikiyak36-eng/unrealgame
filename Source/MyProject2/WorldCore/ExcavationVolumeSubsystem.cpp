@@ -123,6 +123,7 @@ void UExcavationVolumeSubsystem::Deinitialize()
     CellOverrides.Reset();
     CellsByChunk.Reset();
     BaseDensitySourceObject = nullptr;
+    FallbackBaseDensitySourceObject = nullptr;
     LockedCellSizeCm = 0.0f;
     LockedCellsPerChunkAxis = 0;
     Super::Deinitialize();
@@ -208,10 +209,13 @@ bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
         return true;
     }
 
-    if (BaseDensitySourceObject != nullptr)
+    UObject* DensitySource = IsValid(BaseDensitySourceObject)
+        ? BaseDensitySourceObject.Get()
+        : FallbackBaseDensitySourceObject.Get();
+    if (DensitySource != nullptr)
     {
-        if (!IsValid(BaseDensitySourceObject)
-            || !BaseDensitySourceObject->GetClass()->ImplementsInterface(
+        if (!IsValid(DensitySource)
+            || !DensitySource->GetClass()->ImplementsInterface(
                 UExcavationBaseDensitySource::StaticClass()))
         {
             return false;
@@ -219,7 +223,7 @@ bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
 
         const float SampledDensity =
             IExcavationBaseDensitySource::Execute_SampleBaseDensityAtWorld(
-                BaseDensitySourceObject,
+                DensitySource,
                 WorldPositionCm);
         if (!IsValidDensity(SampledDensity))
         {
@@ -248,6 +252,18 @@ bool UExcavationVolumeSubsystem::RegisterBaseDensitySource(UObject* Source)
     }
 
     BaseDensitySourceObject = Source;
+    return true;
+}
+
+bool UExcavationVolumeSubsystem::RegisterFallbackBaseDensitySource(UObject* Source)
+{
+    if (!IsValid(Source)
+        || !Source->GetClass()->ImplementsInterface(UExcavationBaseDensitySource::StaticClass()))
+    {
+        return false;
+    }
+
+    FallbackBaseDensitySourceObject = Source;
     return true;
 }
 
