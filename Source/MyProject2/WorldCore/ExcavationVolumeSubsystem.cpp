@@ -259,6 +259,109 @@ void UExcavationVolumeSubsystem::UnregisterBaseDensitySource(UObject* Source)
     }
 }
 
+bool UExcavationVolumeSubsystem::ExportSnapshot(FExcavationVolumeSnapshot& OutSnapshot) const
+{
+    OutSnapshot = FExcavationVolumeSnapshot();
+
+    if (!IsGridConfigurationCompatible()
+        || MaxSnapshotOverrideCells <= 0
+        || CellOverrides.Num() > MaxSnapshotOverrideCells)
+    {
+        return false;
+    }
+
+    FExcavationVolumeSnapshot Candidate;
+    Candidate.SchemaVersion = 1;
+    Candidate.CellSizeCm = CellSizeCm;
+    Candidate.CellsPerChunkAxis = CellsPerChunkAxis;
+    Candidate.DefaultBaseDensity = DefaultBaseDensity;
+    Candidate.Overrides.Reserve(CellOverrides.Num());
+
+    for (const TPair<FIntVector, FExcavationCellOverride>& Pair : CellOverrides)
+    {
+        if (!IsValidDensity(Pair.Value.Density))
+        {
+            return false;
+        }
+
+        FExcavationCellSnapshot Row;
+        Row.Cell = Pair.Key;
+        Row.Density = Pair.Value.Density;
+        Candidate.Overrides.Add(Row);
+    }
+
+    Candidate.Overrides.Sort([](const FExcavationCellSnapshot& A, const FExcavationCellSnapshot& B)
+    {
+        if (A.Cell.X != B.Cell.X) return A.Cell.X < B.Cell.X;
+        if (A.Cell.Y != B.Cell.Y) return A.Cell.Y < B.Cell.Y;
+        return A.Cell.Z < B.Cell.Z;
+    });
+
+    OutSnapshot = MoveTemp(Candidate);
+    return true;
+}
+
+bool UExcavationVolumeSubsystem::ImportSnapshot(
+    const FExcavationVolumeSnapshot& Snapshot,
+    bool bReplaceExistingState)
+{
+    if (Snapshot.SchemaVersion != 1
+        || !FMath::IsFinite(Snapshot.CellSizeCm)
+        || Snapshot.CellSizeCm <= 0.0f
+        || Snapshot.CellsPerChunkAxis < 4
+        || !IsValidDensity(Snapshot.DefaultBaseDensity)
+        || MaxSnapshotOverrideCells <= 0
+        || Snapshot.Overrides.Num() > MaxSnapshotOverrideCells
+        || (!bReplaceExistingState && CellOverrides.Num() > 0))
+    {
+        return false;
+    }
+
+    TMap<FIntVector, FExcavationCellOverride> NewOverrides;
+    TMap<FIntVector, TSet<FIntVector>> NewCellsByChunk;
+    NewOverrides.Reserve(Snapshot.Overrides.Num());
+    NewCellsByChunk.Reserve(Snapshot.Overrides.Num());
+
+    // Imported cells share a baseline owner ID. Edit receipts are transient,
+    // so no old operation is allowed to roll back across a save/load boundary.
+    const FGuid ImportedBaselineId = FGuid::NewGuid();
+
+    for (const FExcavationCellSnapshot& Row : Snapshot.Overrides)
+    {
+        if (!IsValidDensity(Row.Density) || NewOverrides.Contains(Row.Cell))
+        {
+            return false;
+        }
+
+        FExcavationCellOverride Override;
+        Override.Density = Row.Density;
+        Override.LastOperationId = ImportedBaselineId;
+        NewOverrides.Add(Row.Cell, Override);
+        NewCellsByChunk.FindOrAdd(
+            ChunkForCellAtSize(Row.Cell, Snapshot.CellsPerChunkAxis)).Add(Row.Cell);
+    }
+
+    // All data and index validation completed; commit the replacement as one swap.
+    CellOverrides = MoveTemp(NewOverrides);
+    CellsByChunk = MoveTemp(NewCellsByChunk);
+    CellSizeCm = Snapshot.CellSizeCm;
+    CellsPerChunkAxis = Snapshot.CellsPerChunkAxis;
+    DefaultBaseDensity = Snapshot.DefaultBaseDensity;
+
+    if (CellOverrides.Num() > 0)
+    {
+        LockedCellSizeCm = CellSizeCm;
+        LockedCellsPerChunkAxis = CellsPerChunkAxis;
+    }
+    else
+    {
+        LockedCellSizeCm = 0.0f;
+        LockedCellsPerChunkAxis = 0;
+    }
+
+    return true;
+}
+
 bool UExcavationVolumeSubsystem::ResolveDensityAtCell(
     const FIntVector& Cell,
     float BaseDensity,
