@@ -15,6 +15,13 @@ bool UStoneWorkingComponent::CrushBoulder(AStoneActor* Boulder, int32 Pieces)
         return false;
     }
 
+    UStoneDefinition* SourceDefinition = Boulder->GetDefinition();
+    if (!SourceDefinition)
+    {
+        // Do not convert an undefined source into generic/default stone fragments.
+        return false;
+    }
+
     const FVector Origin = Boulder->GetActorLocation();
     TArray<AStoneActor*> SpawnedPieces;
     SpawnedPieces.Reserve(Pieces);
