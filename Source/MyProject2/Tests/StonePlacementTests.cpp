@@ -235,6 +235,9 @@ bool FStonePlacementConfirmGateTest::RunTest(const FString& Parameters)
         Placement->ConfirmPlacement());
     TestTrue(TEXT("Rejected commit preserves carried state"),
         Stone->GetStructuralState_Implementation() == EStructuralNodeState::Carried);
+    TestFalse(TEXT("A zero surface normal is rejected"),
+        Placement->UpdatePlacementTarget(FVector(80.0f, 0.0f, 25.0f), FVector::ZeroVector));
+    TestFalse(TEXT("Invalid target still cannot be committed"), Placement->ConfirmPlacement());
     TestTrue(TEXT("Cancel restores carried state"), Placement->CancelPlacement());
     TestTrue(TEXT("Cancel retains carry ownership"), Carry->GetCarried() == Stone);
     TestTrue(TEXT("Cancelled stone remains carried"),
