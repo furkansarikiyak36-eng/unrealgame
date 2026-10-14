@@ -2,6 +2,9 @@
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "StonePhaseB_Placement/StoneCarryComponent.h"
 #include "StoneCore/StoneDefinition.h"
+#include "StoneCore/StoneConnectionGraph.h"
+#include "Core/StructuralGraph.h"
+#include "Core/StructuralNode.h"
 #include "Components/SceneComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -356,6 +359,113 @@ bool UStonePlacementComponent::IsPlacementClear(const FTransform& CandidateTrans
     return !bHasOverlap;
 }
 
+bool UStonePlacementComponent::TryConnectStructuralTarget(
+    AStoneActor* StoneToPlace, bool& bOutCreatedConnection)
+{
+    bOutCreatedConnection = false;
+    if (!IsValid(StoneToPlace))
+    {
+        return false;
+    }
+
+    AActor* Target = TargetSurfaceActor.Get();
+    if (!IsValid(Target) ||
+        !Target->GetClass()->ImplementsInterface(UStructuralNode::StaticClass()))
+    {
+        // Terrain/static scenery can support a stone physically without becoming a structural node.
+        return true;
+    }
+
+    UStructuralGraph* MyGraph = StoneToPlace->FindComponentByClass<UStructuralGraph>();
+    UStructuralGraph* TargetGraph = Target->FindComponentByClass<UStructuralGraph>();
+    if (!MyGraph || !TargetGraph)
+    {
+        // Fail closed: an actor that participates in structural simulation must expose a graph.
+        return false;
+    }
+
+    FName MySocket = NAME_None;
+    FName TheirSocket = NAME_None;
+    EConnectionType ConnectionType = TargetSurfaceNormal.Z >= 0.7f
+        ? EConnectionType::Stacked
+        : EConnectionType::ButtJoint;
+
+    // If the player explicitly selected a source socket, require a nearby authored socket on
+    // the target stone. Do not mark a mismatched socket as a load-bearing connection.
+    UStoneDefinition* MyDefinition = StoneToPlace->GetDefinition();
+    if (!MyDefinition)
+    {
+        return false;
+    }
+
+    TArray<int32> FaceIndices;
+    TArray<int32> SocketIndices;
+    CollectValidPlacementOptions(MyDefinition, FaceIndices, SocketIndices);
+    const int32 SocketOffset = PlacementOptionIndex - FaceIndices.Num();
+    const bool bSelectedSocket = PlacementOptionIndex != INDEX_NONE &&
+        SocketOffset >= 0 && SocketOffset < SocketIndices.Num();
+
+    if (bSelectedSocket)
+    {
+        AStoneActor* TargetStone = Cast<AStoneActor>(Target);
+        UStoneDefinition* TheirDefinition = TargetStone ? TargetStone->GetDefinition() : nullptr;
+        if (!TargetStone || !TheirDefinition)
+        {
+            return false;
+        }
+
+        const FStoneSocket& SourceSocket = MyDefinition->Sockets[SocketIndices[SocketOffset]];
+        const FVector SourceSocketWorld = TargetTransform.TransformPosition(SourceSocket.LocalPosition);
+        float BestDistanceSq = TNumericLimits<float>::Max();
+        int32 BestTargetSocket = INDEX_NONE;
+        for (int32 Index = 0; Index < TheirDefinition->Sockets.Num(); ++Index)
+        {
+            const FStoneSocket& Candidate = TheirDefinition->Sockets[Index];
+            if (Candidate.SocketName.IsNone() || Candidate.LocalPosition.ContainsNaN() ||
+                Candidate.LocalRotation.ContainsNaN() || !FMath::IsFinite(Candidate.SocketRadius) ||
+                Candidate.SocketRadius <= 0.0f)
+            {
+                continue;
+            }
+
+            const FVector CandidateWorld = TargetStone->GetActorTransform().TransformPosition(Candidate.LocalPosition);
+            const float DistanceSq = FVector::DistSquared(SourceSocketWorld, CandidateWorld);
+            const float AllowedDistance = FMath::Max(2.0f,
+                FMath::Max(0.0f, SourceSocket.SocketRadius) + FMath::Max(0.0f, Candidate.SocketRadius));
+            if (DistanceSq <= FMath::Square(AllowedDistance) && DistanceSq < BestDistanceSq)
+            {
+                BestDistanceSq = DistanceSq;
+                BestTargetSocket = Index;
+            }
+        }
+
+        if (BestTargetSocket == INDEX_NONE)
+        {
+            return false;
+        }
+
+        MySocket = SourceSocket.SocketName;
+        TheirSocket = TheirDefinition->Sockets[BestTargetSocket].SocketName;
+        ConnectionType = EConnectionType::Stacked;
+    }
+
+    // If the same relationship already exists, retain it rather than asking ConnectTo to duplicate it.
+    for (const FStructuralConnection& Existing : MyGraph->Connections)
+    {
+        if (Existing.ConnectedNode.Get() == Target &&
+            Existing.MySocket == MySocket &&
+            Existing.TheirSocket == TheirSocket &&
+            Existing.bLoadBearing)
+        {
+            return true;
+        }
+    }
+
+    bOutCreatedConnection = MyGraph->ConnectTo(
+        Target, MySocket, TheirSocket, ConnectionType, true);
+    return bOutCreatedConnection;
+}
+
 bool UStonePlacementComponent::ConfirmPlacement()
 {
     if (!IsValid(PreviewStone) || !bAiming || !bHasPlacementTarget ||
@@ -366,8 +476,26 @@ bool UStonePlacementComponent::ConfirmPlacement()
 
     AStoneActor* StoneToPlace = PreviewStone;
     StoneToPlace->SetActorTransform(TargetTransform, false, nullptr, ETeleportType::TeleportPhysics);
+
+    bool bCreatedStructuralConnection = false;
+    if (!TryConnectStructuralTarget(StoneToPlace, bCreatedStructuralConnection))
+    {
+        // A structural actor is never treated as supported unless its graph accepted the link.
+        return false;
+    }
+
     if (!StoneToPlace->SetStructuralState_Implementation(EStructuralNodeState::Installed))
     {
+        if (bCreatedStructuralConnection)
+        {
+            if (UStructuralGraph* Graph = StoneToPlace->FindComponentByClass<UStructuralGraph>())
+            {
+                if (AActor* Target = TargetSurfaceActor.Get())
+                {
+                    Graph->DisconnectFrom(Target);
+                }
+            }
+        }
         CancelPlacement();
         return false;
     }
