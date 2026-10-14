@@ -278,6 +278,7 @@ namespace
 		{ TEXT("Oyma: düz çentik"), TEXT("[R] Düz çentik: köşe, orta ya da tam uç (uç geçmesi)  |  [Tekerlek] derinlik  |  2 vuruş") },
 		{ TEXT("Oyma: enine kesim"), TEXT("[R] Enine kesim: 65 cm'lik modül çizgilerinden birine bak  |  2 vuruş") },
 		{ TEXT("Oyma: boyuna yarma"), TEXT("[R] Boyuna yarma  |  [Tekerlek] dikey/yatay  |  2 vuruş") },
+		{ TEXT("Oluk: önce boyuna yar, sonra yarım kütüğe kanal aç"), TEXT("Yuvarlak kütüğe oluk açılmaz. [R] Boyuna yarma yap; yarım kütüğün düz yüzüne bakıp [R] Oluk seç ve aynı yere 2 vuruş yap.") },
 		{ TEXT("Uç: sivriltme (kazık)"), TEXT("[R] Sivri uç, kütüğün ucuna bak, 2 vuruş") },
 		{ TEXT("Uç: pah kırma"), TEXT("[R] Pah, diğer ucuna bak, 2 vuruş") },
 		{ TEXT("Uç: düzeltme"), TEXT("[R] Uç düzeltme, sivri ya da pahlı uca bak, 2 vuruş (sivri uç geri kesilir)") },
@@ -291,7 +292,7 @@ namespace
 		{ TEXT("Ateş yak"), TEXT("7 taş topla, düz yere bakıp [C] ile ateş yeri kur; küçük bir parçayı omza alıp ateşe bak, [Sol tık]; sonra [F] çakmağı ateşe tutup bekle") },
 		{ TEXT("Hasarlı parçayı onar"), TEXT("Yapıdaki yanık parçaya (ateşin yanında ya da [Y] admin) aynı boyda sağlam parçayla bak, [Sol tık]") },
 	};
-	static_assert(UE_ARRAY_COUNT(GoalTexts) == 20, "one text per goal");
+	static_assert(UE_ARRAY_COUNT(GoalTexts) == 21, "one text per goal");
 }
 
 void AMechanicsDemo::GetGuide(TArray<FDemoGoalLine>& OutLines, FString& OutHint) const
@@ -386,6 +387,12 @@ void AMechanicsDemo::HandleLogCarved(ACarvableLog* Log, ECarveTool Tool)
 	case ECarveTool::NotchFlat:  CompleteGoal(GoalNotchFlat); break;
 	case ECarveTool::CrossCut:   CompleteGoal(GoalCrossCut); break;
 	case ECarveTool::Split:      CompleteGoal(GoalSplit); break;
+	case ECarveTool::Groove:
+		if (Log->GetSplitCount() == 1)
+		{
+			CompleteGoal(GoalGroove);
+		}
+		break;
 	case ECarveTool::Point:      CompleteGoal(GoalPoint); break;
 	case ECarveTool::Chamfer:    CompleteGoal(GoalChamfer); break;
 	case ECarveTool::Trim:       CompleteGoal(GoalTrim); break;
