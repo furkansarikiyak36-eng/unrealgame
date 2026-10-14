@@ -229,7 +229,7 @@ public:
 	 */
 	ACarvableLog* CutOpening(float CentreX, int32 Modules);
 
-	/** Cuts a channel along the whole log, opening towards SideAngleDeg (0 = top). */
+	/** Cuts one longitudinal channel into the exposed flat face of a once-split half-log. Round logs and quarter pieces are rejected. */
 	bool CutGroove(float SideAngleDeg);
 
 	/** Any cut on any log; the mechanics demo ticks off its carving goals with it. */
