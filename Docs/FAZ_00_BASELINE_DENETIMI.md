@@ -204,3 +204,8 @@ P0-025 için StoneTrapActor'ın trigger volume overlap olayı bağlandı. Trigge
 ### Stone Trap güncellemesi
 
 P0-025 trigger volume'u Pawn ve PhysicsBody kanallarında overlap yapıyor. Bu, yalnızca karakter overlap'ini değil, fiziksel taş/kütük gövdelerini de aday tetikleyici olarak içerir. StoneTrapTests.cpp query-only/overlap ayarlarını, hedef hasarını, cooldown ve null-victim durumunu test ediyor; gerçek overlap ve fizik davranışı UE 5.8 runtime kabulü bekliyor.
+
+
+### Stone Trap test kapsamı güncellemesi
+
+P0-025 için test suite iki senaryodan dört senaryoya genişledi: düşman hasarı + cooldown, null victim, fiziksel taş canı ve kütük normalized damage. Scripts/verify_test_logs.py minimum dört benzersiz MyProject2.StoneTrap sonucu olmadan testi kabul etmiyor. Motor doğrulaması beklemede.
