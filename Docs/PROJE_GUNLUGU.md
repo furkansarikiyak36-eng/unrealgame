@@ -111,3 +111,13 @@ Bu çalışma, önceki kod geliştirme fazlarından ayrı bir kabul/kanıt turud
 - LOG-001–LOG-076 için kaynak kanıt denetimi `Docs/FAZ_00_LOG_KANIT_DENETIMI.md` içine yazıldı. Ana `ACarvableLog` ağacı/kütük/kesim/taşıma/yapı/fire loop çekirdeği korunacak; uzun halat/zipline, su üstü taşıma, bazı yapı türleri, makine/tuzak ve genel salvage kapsamları ayrı kanıt veya geliştirme istiyor.
 - Kaynak denetimi, fiziksel envanter köprüsünün `ALogActor/AStoneActor/AStickActor` sınıflarıyla çalıştığını ama oynanış kütüğünün `ACarvableLog` olduğunu; inventory drop metodunun doğrudan fiziksel aktör üretmediğini; raid yapısal hasar resolver'ının `ACarvableLog` yolunu göstermediğini; WorldPersistence'in chunk/world-state verisini kaydedip tek başına canlı yapı/araç/oyuncu aktör state'ini kapsamadığını teyit eden riskleri belgeledi.
 - 485 katalog kaydının tümünü kaynak zinciri, test kimliği ve editör kanıtıyla eşleştirme bitmedi. Faz 0 açık. UE 5.8 derleme, editör ve paket testi gerçek hostta yapılmadan başarılı olarak işaretlenmeyecek.
+
+
+### 2026-10-14 — LOG kataloğu satır statüsü güncellemesi
+
+`Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv` içindeki 76 LOG satırı kaynak taramasıyla sınıflandırıldı:
+- **59 U2:** kaynakta yerel davranış izi var; satır özelinde otomatik test/editör kanıtı bekliyor.
+- **17 U0:** bu statik incelemede uygulanmış davranış zinciri bulunamadı veya özellik başka bir geliştirme gerektiriyor.
+- **0 U4/U5/U6:** bu tur satır özelinde otomatik test, editör görsel doğrulaması veya uzun oturum/kayıt/performance kabulü iddia etmiyor.
+
+Python tooling CI, bu CSV'yi beklenen 76 satırla keşif modunda denetleyecek şekilde güncellendi. Bu ilerleme LOG ailesinin kaynak haritalamasıdır; kalan 409 katalog maddesini ya da UE 5.8 oyun içi doğrulamasını kapatmıyor.
