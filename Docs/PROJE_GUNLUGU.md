@@ -347,3 +347,12 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - `ReplaceDamaged` joint replay'i backup mesh üzerinden transaction yaptı. Bilinmeyen/başarısız kesim türü veya sınır dışı joint konumu onarımı iptal eder ve replacement mesh/metadata/transform geri alınır.
 - Başarılı onarım mevcut `StructureLink::Settle` ile tekrar değerlendirilir; ardından `OnLogRepaired` yayınlanır. Mevcut MechanicsDemo gözlemcileri değişmeden kaldı.
 - Yeni statik kontrat testi runner'a eklendi. UE 5.8 build ve görsel oyun içi doğrulama bu ortamda çalıştırılmadı; 485 mekanik için genel bütünsel denetim Faz 14'e bırakıldı.
+
+
+### 2026-10-14 — Faz 6: envanter transfer işlem sınırı (devam ediyor)
+
+- Mevcut `UInventoryComponent` API'sine `TransferItem` eklendi; ikinci bir envanter sistemi oluşturulmadı.
+- Aynı kaynak/hedef, boş kimlik, geçersiz miktar ve yetersiz stok reddediliyor. Kaynaktaki canonical `FInventoryItem` payload korunuyor; hedef kapasitesi kaynak düşülmeden önce kontrol ediliyor.
+- Kaynak düşümü sonrası hedef eklemesi beklenmedik şekilde başarısız olursa kaynak stoğu geri eklenmeye çalışılıyor; rollback de başarısızsa hata loglanıyor. Mevcut `DropItem` ve `bCanBeDropped` politikası değişmeden kaldı.
+- `Scripts/tests/test_inventory_transfer_contract.py` eklendi ve Python runner'a bağlandı. Testler kaynak sözleşmesini kontrol eder; UE C++ build/Automation sonucu değildir.
+- **Faz 6 devam ediyor:** fiziksel taş/çubuk aktörleri, storage, processing, construction/salvage ve save/load uçtan uca akışları henüz bu commit'te bağlanmadı. Bu nedenle faz tamamlandı olarak işaretlenmedi; genel çapraz-sistem audit Faz 14'te.
