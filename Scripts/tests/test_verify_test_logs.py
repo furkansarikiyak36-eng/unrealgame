@@ -19,6 +19,7 @@ class LogVerifierTests(unittest.TestCase):
         self.stick_inventory = self.root / "stick_inventory.log"
         self.stone_placement = self.root / "stone_placement.log"
         self.stone_trap = self.root / "stone_trap.log"
+        self.inventory_capacity = self.root / "inventory_capacity.log"
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -178,6 +179,32 @@ class LogVerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expected at least 101"):
             VERIFY.verify_mechanics(self.mechanics, minimum_passed=101)
 
+
+    def test_valid_inventory_capacity_log_passes(self):
+        self.inventory_capacity.write_text(
+            "Test Completed. Result={Success} Name={ShrinkRollsBack} "
+            "Path={MyProject2.Inventory.Core.Capacity.ShrinkRollsBack}\n"
+            "Test Completed. Result={Success} Name={ValidAdd} "
+            "Path={MyProject2.Inventory.Core.Capacity.ValidAdd}\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(VERIFY.verify_inventory_capacity(self.inventory_capacity), (2, 0))
+
+    def test_inventory_capacity_failure_is_rejected(self):
+        self.inventory_capacity.write_text(
+            "Test Completed. Result={Success} Name={ShrinkRollsBack} "
+            "Path={MyProject2.Inventory.Core.Capacity.ShrinkRollsBack}\n"
+            "Test Completed. Result={Fail} Name={ValidAdd} "
+            "Path={MyProject2.Inventory.Core.Capacity.ValidAdd}\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "1 failed"):
+            VERIFY.verify_inventory_capacity(self.inventory_capacity)
+
+    def test_missing_inventory_capacity_results_are_rejected(self):
+        self.inventory_capacity.write_text("Automation suite aborted\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "no parseable"):
+            VERIFY.verify_inventory_capacity(self.inventory_capacity)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

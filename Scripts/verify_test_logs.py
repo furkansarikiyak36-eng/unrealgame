@@ -119,6 +119,12 @@ def verify_stone_trap(path: Path, minimum_tests: int = 4) -> tuple[int, int]:
     )
 
 
+def verify_inventory_capacity(path: Path, minimum_tests: int = 2) -> tuple[int, int]:
+    return verify_automation_suite(
+        path, "Inventory capacity", "MyProject2.Inventory.Core.Capacity", minimum_tests
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mechanics", required=True, type=Path)
@@ -126,6 +132,7 @@ def main() -> int:
     parser.add_argument("--stick-inventory", required=True, type=Path)
     parser.add_argument("--stone-placement", required=True, type=Path)
     parser.add_argument("--stone-trap", required=True, type=Path)
+    parser.add_argument("--inventory-capacity", required=True, type=Path)
     parser.add_argument("--minimum-mechanics-checks", type=int, default=101,
                         help="Fail if fewer than this many MechanicsDemo checks passed (default: 101).")
     parser.add_argument("--minimum-wood-tests", type=int, default=12,
@@ -153,6 +160,7 @@ def main() -> int:
         trap_passed, trap_failed = verify_stone_trap(
             args.stone_trap, args.minimum_stone_trap_tests
         )
+        inventory_passed, inventory_failed = verify_inventory_capacity(args.inventory_capacity)
     except ValueError as exc:
         print(f"TEST VERIFICATION FAILED: {exc}", file=sys.stderr)
         return 1
@@ -161,6 +169,7 @@ def main() -> int:
     print(f"Stick inventory automation: {stick_passed} passed, {stick_failed} failed")
     print(f"Stone placement automation: {stone_passed} passed, {stone_failed} failed")
     print(f"Stone trap automation: {trap_passed} passed, {trap_failed} failed")
+    print(f"Inventory capacity automation: {inventory_passed} passed, {inventory_failed} failed")
     print("TEST VERIFICATION PASSED")
     return 0
 

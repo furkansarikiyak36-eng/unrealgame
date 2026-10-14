@@ -3,7 +3,7 @@
 # The script validates process exit codes AND the result lines in fresh test logs.
 # Unreal Editor must be closed so the tested DLL is not stale.
 #
-#   bash Scripts/run_tests.sh            # build + Wood + crafting + stone + trap + MechanicsDemo
+#   bash Scripts/run_tests.sh            # build + Wood + crafting + inventory capacity + stone + trap + MechanicsDemo
 #   bash Scripts/run_tests.sh --no-build # skip only the build step
 set -Eeuo pipefail
 
@@ -25,7 +25,7 @@ if [[ ${1:-} == "--no-build" ]]; then SKIP_BUILD=1; fi
 
 mkdir -p "$RUNS" "$LOGS"
 
-echo "[1/9] Running platform-independent Python unit tests and catalog audits..."
+echo "[1/10] Running platform-independent Python unit tests and catalog audits..."
 bash "$ROOT/Scripts/run_python_tests.sh"
 
 if [[ ! -f "$PROJECT" ]]; then
@@ -43,7 +43,7 @@ if tasklist 2>/dev/null | grep -qi "UnrealEditor.exe"; then
 fi
 
 if (( SKIP_BUILD == 0 )); then
-  echo "[2/9] Building MyProject2Editor..."
+  echo "[2/10] Building MyProject2Editor..."
   rm -f "$ROOT"/Binaries/Win64/UnrealEditor-MyProject2.patch_*
   BUILD_CMD=("$UE/Build/BatchFiles/Build.bat" MyProject2Editor Win64 Development "-Project=$PROJECT_WIN" -WaitMutex)
   if "${BUILD_CMD[@]}" >"$BUILD_LOG" 2>&1; then
@@ -55,7 +55,7 @@ if (( SKIP_BUILD == 0 )); then
     exit "$BUILD_RC"
   fi
 else
-  echo "[2/9] Build skipped by --no-build."
+  echo "[2/10] Build skipped by --no-build."
 fi
 
 run_ue_test() {
@@ -90,7 +90,7 @@ run_ue_test() {
   return 0
 }
 
-echo "[3/9] Running Wood automation tests..."
+echo "[3/10] Running Wood automation tests..."
 if run_ue_test "Wood automation" 400 "WoodTests.log" "wood_$STAMP.log" \
   -ExecCmds="Automation RunTests MyProject2.Wood; Quit" -unattended -nullrhi -nosplash -nop4 -log=WoodTests.log; then
   WOOD_RC=0
@@ -98,7 +98,7 @@ else
   WOOD_RC=$?
 fi
 
-echo "[4/9] Running stick crafting transaction automation tests..."
+echo "[4/10] Running stick crafting transaction automation tests..."
 if run_ue_test "Stick inventory automation" 300 "StickInventoryTests.log" "stick_inventory_$STAMP.log" \
   -ExecCmds="Automation RunTests MyProject2.Inventory.StickCraftTransaction; Quit" -unattended -nullrhi -nosplash -nop4 -log=StickInventoryTests.log; then
   STICK_RC=0
@@ -106,7 +106,15 @@ else
   STICK_RC=$?
 fi
 
-echo "[5/9] Running stone placement automation tests..."
+echo "[5/10] Running inventory capacity automation tests..."
+if run_ue_test "Inventory capacity automation" 300 "InventoryCapacityTests.log" "inventory_capacity_$STAMP.log" \
+  -ExecCmds="Automation RunTests MyProject2.Inventory.Core.Capacity; Quit" -unattended -nullrhi -nosplash -nop4 -log=InventoryCapacityTests.log; then
+  INV_CAPACITY_RC=0
+else
+  INV_CAPACITY_RC=$?
+fi
+
+echo "[6/10] Running stone placement automation tests..."
 if run_ue_test "Stone placement automation" 300 "StonePlacementTests.log" "stone_placement_$STAMP.log" \
   -ExecCmds="Automation RunTests MyProject2.StonePlacement; Quit" -unattended -nullrhi -nosplash -nop4 -log=StonePlacementTests.log; then
   STONE_RC=0
@@ -114,7 +122,7 @@ else
   STONE_RC=$?
 fi
 
-echo "[6/9] Running stone trap damage automation tests..."
+echo "[7/10] Running stone trap damage automation tests..."
 if run_ue_test "Stone trap automation" 300 "StoneTrapTests.log" "stone_trap_$STAMP.log" \
   -ExecCmds="Automation RunTests MyProject2.StoneTrap; Quit" -unattended -nullrhi -nosplash -nop4 -log=StoneTrapTests.log; then
   TRAP_RC=0
@@ -122,7 +130,7 @@ else
   TRAP_RC=$?
 fi
 
-echo "[7/9] Running MechanicsDemo checks..."
+echo "[8/10] Running MechanicsDemo checks..."
 if run_ue_test "MechanicsDemo" 600 "MyProject2.log" "mekanik_$STAMP.log" \
   /Game/Maps/Demo_WoodChain -game -unattended -nullrhi -nosplash -nop4 -log -MechanicsDemoQuit; then
   MECHANICS_RC=0
@@ -130,23 +138,26 @@ else
   MECHANICS_RC=$?
 fi
 
-echo "[8/9] Verifying all fresh logs and updating generated docs..."
+echo "[9/10] Verifying all fresh logs and updating generated docs..."
 WOOD_LOG="$RUNS/wood_$STAMP.log"
 STICK_LOG="$RUNS/stick_inventory_$STAMP.log"
 STONE_LOG="$RUNS/stone_placement_$STAMP.log"
 TRAP_LOG="$RUNS/stone_trap_$STAMP.log"
+INV_CAPACITY_LOG="$RUNS/inventory_capacity_$STAMP.log"
 MECHANICS_LOG="$RUNS/mekanik_$STAMP.log"
 OVERALL_RC=0
 (( WOOD_RC == 0 )) || OVERALL_RC="$WOOD_RC"
 if (( STICK_RC != 0 && OVERALL_RC == 0 )); then OVERALL_RC="$STICK_RC"; fi
 if (( STONE_RC != 0 && OVERALL_RC == 0 )); then OVERALL_RC="$STONE_RC"; fi
+if (( INV_CAPACITY_RC != 0 && OVERALL_RC == 0 )); then OVERALL_RC="$INV_CAPACITY_RC"; fi
 if (( TRAP_RC != 0 && OVERALL_RC == 0 )); then OVERALL_RC="$TRAP_RC"; fi
 if (( MECHANICS_RC != 0 && OVERALL_RC == 0 )); then OVERALL_RC="$MECHANICS_RC"; fi
 
-if [[ -s "$WOOD_LOG" && -s "$STICK_LOG" && -s "$STONE_LOG" && -s "$TRAP_LOG" && -s "$MECHANICS_LOG" ]]; then
+if [[ -s "$WOOD_LOG" && -s "$STICK_LOG" && -s "$INV_CAPACITY_LOG" && -s "$STONE_LOG" && -s "$TRAP_LOG" && -s "$MECHANICS_LOG" ]]; then
   if python "$ROOT/Scripts/verify_test_logs.py" \
     --mechanics "$MECHANICS_LOG" --wood "$WOOD_LOG" \
-    --stick-inventory "$STICK_LOG" --stone-placement "$STONE_LOG" \
+    --stick-inventory "$STICK_LOG" --inventory-capacity "$INV_CAPACITY_LOG" \
+    --stone-placement "$STONE_LOG" \
     --stone-trap "$TRAP_LOG"; then
     VERIFY_RC=0
   else
@@ -159,8 +170,8 @@ else
   if (( OVERALL_RC == 0 )); then OVERALL_RC=81; fi
 fi
 
-echo "[9/9] Pruning old logs..."
-for pattern in "mekanik_*.log" "wood_*.log" "stick_inventory_*.log" "stone_placement_*.log" "stone_trap_*.log" "build_*.log"; do
+echo "[10/10] Pruning old logs..."
+for pattern in "mekanik_*.log" "wood_*.log" "stick_inventory_*.log" "inventory_capacity_*.log" "stone_placement_*.log" "stone_trap_*.log" "build_*.log"; do
   ls -1t "$RUNS"/$pattern 2>/dev/null | tail -n +16 | xargs -r rm -f || true
 done
 
