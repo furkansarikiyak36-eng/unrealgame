@@ -2,6 +2,7 @@
 
 #include "ExcavationVolumeSubsystem.h"
 #include "UndergroundHazardSubsystem.h"
+#include "WorldStateSubsystem.h"
 #include "ForestCharacter.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryStorageActor.h"
@@ -332,6 +333,16 @@ bool UWorldPersistenceSubsystem::SaveCoreStateToSlot(const FString& SlotName, in
     }
     SaveObject->UndergroundHazards = MoveTemp(HazardSnapshot);
 
+    UWorldStateSubsystem* WorldState = World ? World->GetSubsystem<UWorldStateSubsystem>() : nullptr;
+    FWorldStateSnapshot WorldStateSnapshot;
+    if (!WorldState || !WorldState->ExportSnapshot(WorldStateSnapshot))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Core save rejected: world-state snapshot failed validation."));
+        return false;
+    }
+    SaveObject->bHasWorldState = true;
+    SaveObject->WorldState = MoveTemp(WorldStateSnapshot);
+
     // Preserve the currently playable character's stack inventory in the same
     // versioned envelope. World-piece actors (notably ACarvableLog) stay world-owned.
     if (AForestCharacter* Player = FindWorldSavePlayer(World))
@@ -412,7 +423,7 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     }
 
     const FWorldCoreSaveManifest& Manifest = LoadedSave->Manifest;
-    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
+    if ((Manifest.SchemaVersion != 1 && Manifest.SchemaVersion != 2 && Manifest.SchemaVersion != 3 && Manifest.SchemaVersion != CurrentSaveSchemaVersion)
         || !Manifest.WorldId.IsValid()
         || Manifest.WorldRevision < 0
         || LoadedSave->ProcessedCommandIds.Num() > MaxRetainedLedgerEntries
@@ -447,7 +458,9 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     UExcavationVolumeSubsystem* Excavation = GetExcavationSubsystem();
     UWorld* LoadWorld = GetWorld();
     UUndergroundHazardSubsystem* Hazards = LoadWorld ? LoadWorld->GetSubsystem<UUndergroundHazardSubsystem>() : nullptr;
-    if (!Excavation || !Hazards || !Hazards->ValidateSnapshot(LoadedSave->UndergroundHazards))
+    UWorldStateSubsystem* WorldState = LoadWorld ? LoadWorld->GetSubsystem<UWorldStateSubsystem>() : nullptr;
+    if (!Excavation || !Hazards || !Hazards->ValidateSnapshot(LoadedSave->UndergroundHazards) ||
+        (LoadedSave->bHasWorldState && (!WorldState || !WorldState->ValidateSnapshot(LoadedSave->WorldState))))
     {
         return false;
     }
@@ -540,6 +553,13 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
     const bool bHazardsImported = Hazards->ImportSnapshot(LoadedSave->UndergroundHazards);
     if (!bHazardsImported)
     {
+        bApplyingLoadedState = false;
+        return false;
+    }
+
+    if (LoadedSave->bHasWorldState && !WorldState->ImportSnapshot(LoadedSave->WorldState))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Core save load: prevalidated world-state import failed."));
         bApplyingLoadedState = false;
         return false;
     }
