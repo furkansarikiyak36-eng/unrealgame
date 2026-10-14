@@ -19,9 +19,9 @@ ACropFieldActor::ACropFieldActor(){PrimaryActorTick.bCanEverTick=false;FieldMesh
 void ACropFieldActor::BeginPlay(){Super::BeginPlay();if(USimulationSubsystem* Sim=GetWorld()->GetSubsystem<USimulationSubsystem>())Sim->OnDayTick.AddDynamic(this,&ACropFieldActor::HandleSimulationDay);if(StageComponent)StageComponent->OnStageChanged.AddDynamic(this,&ACropFieldActor::HandleStageChanged);}
 void ACropFieldActor::PlantCrop(UPlantDefinition* Def,int32 Count)
 {
- if(!Def||!GrowthComponent||Count<=0)return;
+ if(!Def||!GrowthComponent||Count<=0||bCropPlanted)return;
  FString Error;if(!Def->ValidateDefinition(Error)){UE_LOG(LogTemp,Warning,TEXT("Crop planting rejected: %s"),*Error);return;}
- GrowthComponent->SetDefinition(Def);GrowthComponent->PlantState.SeedCount=Count;
+ GrowthComponent->SetDefinition(Def);GrowthComponent->PlantState.SeedCount=Count;bCropPlanted=true;
  if(VisualComponent)VisualComponent->SetDefinition(Def);
  if(StageComponent)StageComponent->CheckStageTransition(EGrowthStage::Seed);
  if(UWorldStateSubsystem* WS=GetWorld()?GetWorld()->GetSubsystem<UWorldStateSubsystem>():nullptr)
@@ -30,7 +30,7 @@ void ACropFieldActor::PlantCrop(UPlantDefinition* Def,int32 Count)
 }
 bool ACropFieldActor::PlantCropFromInventory(UPlantDefinition* Def,UInventoryComponent* Inventory,FName SeedItemID,int32 SeedCount)
 {
- if(!Def||!Inventory||SeedItemID.IsNone()||SeedCount<=0||!GrowthComponent||!Inventory->HasItem(SeedItemID,SeedCount))return false;
+ if(!Def||!Inventory||SeedItemID.IsNone()||SeedCount<=0||!GrowthComponent||bCropPlanted||!Inventory->HasItem(SeedItemID,SeedCount))return false;
  FString Error;if(!Def->ValidateDefinition(Error))return false;
  if(Inventory->RemoveItem(SeedItemID,SeedCount)!=EInventoryResult::Success)return false;
  PlantCrop(Def,SeedCount);
@@ -51,6 +51,7 @@ float ACropFieldActor::HarvestToFeedStorage(UFeedStorageComponent* Destination,F
    Destination->ConsumeFeed(FeedID,ExpectedYield);
    return 0.0f;
  }
+ bCropPlanted=false;
  return ActualYield;
 }
 void ACropFieldActor::HandleSimulationDay(int32){UpdateDaily();}
