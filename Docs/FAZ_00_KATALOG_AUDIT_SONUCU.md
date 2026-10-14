@@ -1,6 +1,6 @@
 # Faz 0 — Mekanik kataloğu ilk audit sonucu
 
-**Durum:** ENGEL VAR — Faz 0 açık  
+**Durum:** Kanonik kaynak triage eşitlendi — baseline kapısı tamam; uygulama blokajları kendi fazlarına taşındı  
 **Beklenen satır:** 485  
 **Kaynak:** Repo içindeki kanonik snapshot `Docs/MEKANIK_KATALOG_TAKIP_CSV.csv`  
 **Denetleyici:** `Scripts/audit_mechanic_catalog.py`
@@ -12,12 +12,12 @@
 | Katalog satırı | 485 |
 | Benzersiz ID | 485 |
 | Yinelenen ID | 0 |
-| Şema/kimlik/kanıt alanı hatası | 485 |
-| U0 — denetim gerekli | 485 |
-| Kanıtlanmış U1–U6 satırı | 0 |
-| Kanıtlanmamış/haritalanmamış satır | 485 |
+| Şema/kimlik/zorunlu kaynak triage alanı hatası | 0 |
+| U0 — denetim gerekli | 64 |
+| U1 — veri/model veya kısmi sistem izi | 88 |\n| U2 — kaynakta yerel davranış izi | 333 |\n| U3–U6 — entegrasyon/test/oyun/kalıcılık kanıtı | 0 |
+| U0 seviyesinde açık kalan satır | 64 |
 
-Bu raporun ana sonucu “485 mekanik başarısız” değildir. Sonuç, **485 mekanik için henüz satır bazlı çağrı zinciri ve doğrulama kanıtı kaydedilmediği** anlamına gelir. İlk sıkı denetimde 485 satırın tamamında `Bagimlilik_Bloker` ve `Acik_Notlar` alanları boştu; bu nedenle satır başına kanıt/meta veri boşluğu sayıldı. Dizin/sınıf adı veya genel test raporu tek başına belirli katalog maddesini U3–U6 seviyesine yükseltmez.
+Bu rapor “485 mekanik başarısız” anlamına gelmez. Aile eşleştirmelerinde bulunan kaynak-triage durumları 14 Ekim 2026'da kanonik CSV'ye senkronlandı: 333 U2, 88 U1 ve 64 U0. U1/U2 yalnızca kaynak/model veya yerel davranış izini bildirir; oyuncudan dünya sonucuna entegrasyon, olumlu/olumsuz testler, görsel kabul veya kalıcılık kanıtı anlamına gelmez. U0 kayıtları tahminle yükseltilmedi.
 
 `audit_mechanic_catalog.py` birim testleri, katalog satırlarının kanıt seviyesine göre gereken alanları denetler. Ayrı `validate_catalog_mapping.py` testi, ana katalogdaki kimliklerin dokuz aile dosyasına doğru sistemde bire bir eşlendiğini doğrular. Bu Python araçları mekanik davranışını kanıtlamaz; UE 5.8 derlemesi veya oyun içi testi yerine geçmez.
 
@@ -38,7 +38,7 @@ python Scripts/audit_mechanic_catalog.py <katalog.csv> --expected-count 485 --js
 python Scripts/audit_mechanic_catalog.py <katalog.csv> --expected-count 485 --strict
 ```
 
-İlk komut keşif raporu üretir. İkinci komut kanıt boşluğu, eksik/tekrarlı ID veya beklenmeyen satır sayısı olduğunda sıfır olmayan çıkış vermelidir. Faz 1 ancak tüm katalog satırları gözden geçirilip denetim kapsamı yeterli kanıta bağlandığında başlar.
+İlk komut keşif raporu üretir. İkinci komut kanıt boşluğu, eksik/tekrarlı ID veya beklenmeyen satır sayısı olduğunda sıfır olmayan çıkış vermelidir. 485 satırın tümü dokuz aile dosyasına eşlendi ve U0/U1/U2 kaynak triage durumu kanonik kayda aktarıldı. Faz 1 kaynak kodu çalışması artık bu katalogdaki U0 maddelerinin tamamının uygulanmasını beklemez; bu maddeler kendi teslim fazlarının blocker/backlog kayıtlarında kalır. Kazı adayları arasında nihai teknoloji seçimi ise ölçüm kanıtı gelmeden yapılmaz.
  
 
 ## Sonraki ilerleme — LOG alanının satır satır eşleştirilmesi
@@ -99,4 +99,4 @@ StonePlacementTests.cpp beş otomasyon senaryosu içeriyor; bunlar UE 5.8 hostun
 - `Scripts/tests/test_validate_catalog_mapping.py` için 8 test, Python CI çalıştırıcısına bağlandı.
 - GitHub Actions [run #38515014058](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38515014058) bu snapshot, dokuz eşleştirme ve araç testleri eklendikten sonra başarılı oldu. Bu yalnızca platformdan bağımsız Python/CSV/shell doğrulamasıdır.
 - Ayrı kaynak brief başlığında RAID için 69 alt mekanik yazarken yedi alt bölüm toplamı ve ayrıntılı liste 63 adlandırılmış madde veriyor. P0-001 açık kaldı; karar verilene kadar altı yeni madde uydurulmuyor.
-- **Faz 0 hâlâ açık:** ana CSV satırlarının kaynak triage statüsünün boşlukları, satıra özgü çağrı/test/editör kanıtları, açık sistem sahipliği kararları ve Windows + UE 5.8 motor baseline doğrulaması bekleniyor.
+- **Kalan işler faz sahiplerine taşındı:** 64 U0 kayıt uygulama/araştırma kuyruğunda; U1/U2 satırların test ve editör kanıtları ilgili özellik fazlarında üretilecek. UE 5.8 testlerinin Claude Code üzerinden çalıştırılması kod geliştirmesini burada bekletmez; sonuçlar doğrulanmadan özellikler U4–U6 olarak işaretlenmez.
