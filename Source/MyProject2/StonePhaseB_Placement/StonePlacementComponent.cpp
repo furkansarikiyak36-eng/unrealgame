@@ -511,11 +511,11 @@ bool UStonePlacementComponent::TryConnectStructuralTarget(
         }
 
         const float DistanceSq = FVector::DistSquared(SourcePortWorld, CandidateWorld);
-        const float AllowedDistance = FMath::Max(2.0f,
-            FMath::Max(0.0f, bSelectedSocket
-                ? MyDefinition->Sockets[SocketIndices[PlacementOptionIndex - FaceIndices.Num()]].SocketRadius
-                : FaceSnapRadius,
-                Candidate.SocketRadius));
+        const float SourcePortRadius = bSelectedSocket
+            ? FMath::Max(0.0f, MyDefinition->Sockets[SocketIndices[PlacementOptionIndex - FaceIndices.Num()]].SocketRadius)
+            : 25.0f;
+        const float AllowedDistance = FMath::Max(
+            2.0f, SourcePortRadius + FMath::Max(0.0f, Candidate.SocketRadius));
         if (DistanceSq <= FMath::Square(AllowedDistance) && DistanceSq < BestDistanceSq)
         {
             BestDistanceSq = DistanceSq;
