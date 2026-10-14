@@ -14,6 +14,14 @@ enum class EExcavationEditType : uint8
     Fill UMETA(DisplayName = "Fill")
 };
 
+UENUM(BlueprintType)
+enum class EExcavationShapeType : uint8
+{
+    Sphere UMETA(DisplayName = "Sphere"),
+    Capsule UMETA(DisplayName = "Capsule"),
+    Box UMETA(DisplayName = "Box")
+};
+
 /** Current explicit density for a cell modified by an excavation edit. */
 USTRUCT(BlueprintType)
 struct MYPROJECT2_API FExcavationCellOverride
@@ -70,8 +78,21 @@ struct MYPROJECT2_API FExcavationEditRecord
     EExcavationEditType EditType = EExcavationEditType::Carve;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
+    EExcavationShapeType ShapeType = EExcavationShapeType::Sphere;
+
+    /** Sphere center, capsule start, or box center. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
     FVector CenterCm = FVector::ZeroVector;
 
+    /** Capsule end point; unused for sphere and box. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
+    FVector EndCm = FVector::ZeroVector;
+
+    /** Box half-extents; unused for sphere and capsule. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
+    FVector HalfExtentCm = FVector::ZeroVector;
+
+    /** Sphere/capsule radius; zero for box. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
     float RadiusCm = 0.0f;
 
