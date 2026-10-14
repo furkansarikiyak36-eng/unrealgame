@@ -105,8 +105,8 @@ class Phase10RegionLogisticsContract(unittest.TestCase):
         self.assertLess(importer.find("if (!ValidateSnapshot(Snapshot))"), importer.find("Nodes = MoveTemp(NewNodes)"))
         self.assertLess(importer.find("if (!ValidateSnapshot(Snapshot))"), importer.find("Links = MoveTemp(NewLinks)"))
 
-    def test_schema_five_saves_and_loads_routes_while_accepting_schemas_one_through_four(self):
-        self.assertIn("CurrentSaveSchemaVersion = 5", PERSIST_H)
+    def test_schema_six_saves_and_loads_routes_while_accepting_schemas_one_through_five(self):
+        self.assertIn("CurrentSaveSchemaVersion = 6", PERSIST_H)
         self.assertIn("bool bHasRegionLogistics = false", PERSIST_H)
         self.assertIn("FRegionLogisticsSnapshot RegionLogistics", PERSIST_H)
         self.assertIn("SaveObject->bHasRegionLogistics = true", PERSIST_CPP)
