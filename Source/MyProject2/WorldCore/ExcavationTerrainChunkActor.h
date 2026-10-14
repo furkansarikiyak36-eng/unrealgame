@@ -9,6 +9,19 @@ class UExcavationTerrainChunkSubsystem;
 class UExcavationVolumeSubsystem;
 class UMaterialInterface;
 
+USTRUCT(BlueprintType)
+struct MYPROJECT2_API FExcavationTerrainMaterialLayer
+{
+    GENERATED_BODY()
+
+    /** ID returned by the base density provider. ID 0 uses SurfaceMaterial. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Terrain|Materials", meta = (ClampMin = "1", ClampMax = "31"))
+    int32 BaseMaterialId = 1;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Terrain|Materials")
+    TObjectPtr<UMaterialInterface> Material;
+};
+
 /**
  * Render/collision adapter for one 3D excavation chunk.
  * All density values remain owned by UExcavationVolumeSubsystem.
@@ -37,8 +50,12 @@ public:
     UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Excavation|Terrain")
     FIntVector ChunkCoordinate = FIntVector::ZeroValue;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Terrain")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Terrain|Materials")
     TObjectPtr<UMaterialInterface> SurfaceMaterial;
+
+    /** Optional material slots indexed by stable material IDs from the base density provider. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Terrain|Materials")
+    TArray<FExcavationTerrainMaterialLayer> StratifiedMaterialLayers;
 
     /** A hard ceiling prevents pathological density fields producing an unbounded mesh. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Terrain", meta = (ClampMin = "1000", ClampMax = "1000000"))
