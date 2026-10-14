@@ -73,6 +73,10 @@ public:
     int32 MaxStabilityChecksPerTick = 24;
     UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Underground|Stability", meta = (ClampMin = "1", ClampMax = "50000"))
     int32 MaxPendingStabilityCells = 20000;
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Underground|Stability", meta = (ClampMin = "1", ClampMax = "2048"))
+    int32 MaxVolumeReconciliationChecksPerTick = 256;
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Underground|Stability", meta = (ClampMin = "1", ClampMax = "300000"))
+    int32 MaxPendingVolumeReconciliations = 250000;
     UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Underground|Support", meta = (ClampMin = "1.0"))
     float SupportInfluenceRadiusCm = 150.0f;
 
@@ -106,6 +110,7 @@ protected:
     void HandleExcavationReset();
 
     void EnqueueStabilityCell(const FIntVector& Cell);
+    void EnqueueVolumeReconciliation(const FIntVector& Cell);
     void RefreshOpenCellTracking(const FIntVector& Cell);
     void SeedOpenCellTrackingFromSnapshot();
     bool ProcessStabilityCell(const FIntVector& Cell);
@@ -131,6 +136,9 @@ protected:
     TSet<FIntVector> OpenCaveCellSet;
     TArray<FIntVector> PendingStabilityCells;
     TSet<FIntVector> PendingStabilityCellSet;
+    TArray<FIntVector> PendingVolumeReconciliations;
+    TSet<FIntVector> PendingVolumeReconciliationSet;
+    int32 VolumeReconciliationCursor = 0;
     int32 StabilityQueueCursor = 0;
     int32 HydrologyCursor = 0;
     float HydrologyAccumulatorSeconds = 0.0f;
