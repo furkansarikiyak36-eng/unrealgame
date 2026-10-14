@@ -128,4 +128,4 @@ python Scripts/audit_mechanic_catalog.py path/to/MEKANIK_KATALOG_TAKIP_CSV.csv -
 python Scripts/audit_mechanic_catalog.py path/to/MEKANIK_KATALOG_TAKIP_CSV.csv --expected-count 485 --strict
 ```
 
-İlk komut keşif sırasında boşlukları raporlar; ikinci komut boşluk varsa non-zero çıkışla kabul kapısını kapalı tutar. Katalog-denetleyici için 7 birim test izole Python ortamında çalıştırıldı ve geçti. GitHub Actions sonucu görünmeden CI geçişi; Unreal Engine 5.8 hostunda build/automation yapılmadan da motor geçişi iddia edilmez.
+İlk komut keşif sırasında boşlukları raporlar; ikinci komut boşluk varsa non-zero çıkışla kabul kapısını kapalı tutar. Katalog-denetleyici için 9 birim test izole Python ortamında çalıştırıldı ve geçti. Testler yerel denetim kopyasında yapıldı; GitHub Actions sonucu henüz görünür değil. GitHub Actions sonucu görünmeden CI geçişi; Unreal Engine 5.8 hostunda build/automation yapılmadan da motor geçişi iddia edilmez.
