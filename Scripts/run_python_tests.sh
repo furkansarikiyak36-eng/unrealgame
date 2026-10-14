@@ -34,7 +34,7 @@ bash -n "$ROOT/Scripts/run_python_tests.sh"
   "$ROOT/Scripts/tests/test_runner_fail_closed.py" \
   "$ROOT/Scripts/tests/test_audit_mechanic_catalog.py" \
   "$ROOT/Scripts/tests/test_validate_catalog_mapping.py" \
-  "$ROOT/Scripts/tests/test_validate_excavation_spike.py" \\
+  "$ROOT/Scripts/tests/test_validate_excavation_spike.py" \
   "$ROOT/Scripts/tests/test_inventory_drop_bridge_contract.py"
 
 echo "[8/20] Auditing the 76-row LOG map..."
