@@ -180,3 +180,10 @@ Satır bazlı eşleştirme dosyaları dokuz katalog ailesinin tamamını kapsıy
 ## Yeni kaynak düzeltmesi — taş yerleştirme
 
 P0-023 için `UStonePlacementComponent` yüz/socket seçimi ve placement lifecycle davranışını uygulayacak şekilde güncellendi; üç Unreal Automation Test yazıldı. Log parserı ve UE host test runner'ı artık `MyProject2.StonePlacement` suite'ini zorunlu doğrulamaya dahil ediyor. Bu C++ kaynaklar UE 5.8 hostunda henüz derlenip çalıştırılmadığından bulgu “In Progress” kalır; yüz/socket preview ve attach/iptal davranışı oyun içinde gözlenmeden U5/U6 kanıtı verilmez.
+
+
+## Yeni kaynak ilerlemesi — fiziksel taş yerleştirme
+
+`AForestCharacter` gerçek fiziksel `AStoneActor` pickup/taşıma/yerleştirme akışını input kontrollerine bağladı. Taş önizlemesi aynı fiziksel aktörü korur; iptal state/transform/attach bilgisini geri yüklemeye çalışır. Yerleştirmeden önce component overlap kontrolü çalışır. Yapısal hedef bir graph sahibiyse, seçilen kaynak socket'i yakındaki boş hedef taşı socket'iyle eşleşmeli ve karşılıklı `UStructuralGraph::ConnectTo` kaydı alınmalıdır; aksi halde taş kurulmuş sayılmaz.
+
+Beş test `Source/MyProject2/Tests/StonePlacementTests.cpp` içine eklendi: yaşam döngüsü, yüz/socket transformu, carry rollback, çarpışma engeli ve reciprocal socket graph bağlantısı/dolu socket reddi. Windows/UE 5.8 çalıştırıcısı bu suite'i ayrı logda zorunlu doğruluyor. **C++ build ve test sonucu hâlâ beklemede**; Python CI sonucu bu kabulün yerine geçmez.
