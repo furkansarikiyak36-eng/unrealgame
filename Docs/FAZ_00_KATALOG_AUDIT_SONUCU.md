@@ -74,3 +74,10 @@ Matriste iki aday ve iki çözünürlük için dört koşu bulunuyor. Mevcut sat
 Taş yerleştirme çalışması, bağımsız component seviyesinden `AForestCharacter` girişlerine genişletildi. Fiziksel pickup, carry state, face/socket önizlemesi, collision-clearance ve graph-bearing hedefte reciprocal bağlantı commit/rollback davranışı kaynak kodunda var. Dolu hedef socket'i ikinci bir taşın kullanması reddediliyor.
 
 Bunlar kaynak kodu ve beş Unreal Automation Test kaydıdır; UE 5.8 build/test çalıştırma kanıtı değildir. P0-023, P0-030, P0-032 ve P0-033 bu nedenle “In Progress” kalır; graph save/load, karma ahşap-taş yapılar ve oyun içi çarpışma/görsel kabul hâlâ açık.
+
+
+## Güncel taş yerleştirme graph kapısı
+
+Son kaynak turunda yapısal hedefe anonim (NAME_None) bağlantı bırakma davranışı kaldırıldı. Yerleştirme kaynak yüzünün/socket'inin yerel kimliğini kaydeder ve hedef AStoneActor üzerindeki yakın, doğru yöne bakan, boş socket bulunmadan yapısal commit yapmaz. UStructuralGraph::ConnectTo reciprocal link'i iki uçta kaydeder; hedef socket doluysa commit reddedilir. Diğer legacy structural actor ailelerine adapter bu değişiklikte eklenmedi ve fail-closed kalıyor.
+
+StonePlacementTests.cpp beş otomasyon senaryosu içeriyor; bunlar UE 5.8 hostunda henüz çalıştırılmadı. Faz 0 açık kalır.
