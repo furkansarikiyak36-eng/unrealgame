@@ -2,7 +2,7 @@
 
 **Durum:** ENGEL VAR — Faz 0 açık  
 **Beklenen satır:** 485  
-**Kaynak:** Çalışma dosyasındaki `MEKANIK_KATALOG_TAKIP_CSV.csv`  
+**Kaynak:** Repo içindeki kanonik snapshot `Docs/MEKANIK_KATALOG_TAKIP_CSV.csv`  
 **Denetleyici:** `Scripts/audit_mechanic_catalog.py`
 
 ## Sonuç
@@ -19,7 +19,7 @@
 
 Bu raporun ana sonucu “485 mekanik başarısız” değildir. Sonuç, **485 mekanik için henüz satır bazlı çağrı zinciri ve doğrulama kanıtı kaydedilmediği** anlamına gelir. İlk sıkı denetimde 485 satırın tamamında `Bagimlilik_Bloker` ve `Acik_Notlar` alanları boştu; bu nedenle satır başına kanıt/meta veri boşluğu sayıldı. Dizin/sınıf adı veya genel test raporu tek başına belirli katalog maddesini U3–U6 seviyesine yükseltmez.
 
-Denetleyici için 9 birim test izole Python ortamında geçti (kaynak-konum zorunluluğu, açıklanmamış blocker/not alanı, U0, bilinmeyen seviye, duplicate ID ve eksik şema dahil). Unreal Engine derlemesi veya GitHub Actions sonucu bu testin parçası değildir.
+`audit_mechanic_catalog.py` birim testleri, katalog satırlarının kanıt seviyesine göre gereken alanları denetler. Ayrı `validate_catalog_mapping.py` testi, ana katalogdaki kimliklerin dokuz aile dosyasına doğru sistemde bire bir eşlendiğini doğrular. Bu Python araçları mekanik davranışını kanıtlamaz; UE 5.8 derlemesi veya oyun içi testi yerine geçmez.
 
 ## Sonraki denetim düzeni
 
@@ -90,3 +90,13 @@ StonePlacementTests.cpp beş otomasyon senaryosu içeriyor; bunlar UE 5.8 hostun
 - Rearm cooldown'u atlayamaz.
 - İki motor otomasyon testi eklendi; Windows test runner ayrı StoneTrap suite'ini çalıştırıp en az iki benzersiz başarılı sonuç ister.
 - Unreal Engine 5.8 testleri henüz çalıştırılmadı. Damage tuning/physics/overlap kabulü açık.
+
+
+## 14 Ekim 2026 — kanonik kaynak ve eşleştirme kapısı
+
+- Orijinal 485 satırlık gereksinim CSV'si, kütüphane girdisinden alınarak `Docs/MEKANIK_KATALOG_TAKIP_CSV.csv` yoluna sürüm kontrollü kaynak snapshot'ı olarak eklendi. Orijinal satırlardaki U0 değerleri korunmuştur; bu kayıtlar doğrulanmış mekanik anlamına gelmez.
+- `Scripts/validate_catalog_mapping.py`, ana katalog ID'leri ile dokuz aile eşleştirmesini karşılaştırır. Beklenen aile sayıları LOG 76, STONE 96, STICK 76, INVENTORY 32, RAID 63, FARMING 57, WORLD 35, MATERIAL 38, CORE 12'dir. Kontrol, eksik/fazla ID, çift ID, yanlış sistem ve satır sayısı sapmalarında başarısız olur.
+- `Scripts/tests/test_validate_catalog_mapping.py` için 8 test, Python CI çalıştırıcısına bağlandı.
+- GitHub Actions [run #38515014058](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38515014058) bu snapshot, dokuz eşleştirme ve araç testleri eklendikten sonra başarılı oldu. Bu yalnızca platformdan bağımsız Python/CSV/shell doğrulamasıdır.
+- Ayrı kaynak brief başlığında RAID için 69 alt mekanik yazarken yedi alt bölüm toplamı ve ayrıntılı liste 63 adlandırılmış madde veriyor. P0-001 açık kaldı; karar verilene kadar altı yeni madde uydurulmuyor.
+- **Faz 0 hâlâ açık:** ana CSV satırlarının kaynak triage statüsünün boşlukları, satıra özgü çağrı/test/editör kanıtları, açık sistem sahipliği kararları ve Windows + UE 5.8 motor baseline doğrulaması bekleniyor.

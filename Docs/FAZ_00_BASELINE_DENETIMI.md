@@ -209,3 +209,14 @@ P0-025 trigger volume'u Pawn ve PhysicsBody kanallarında overlap yapıyor. Bu, 
 ### Stone Trap test kapsamı güncellemesi
 
 P0-025 için test suite iki senaryodan dört senaryoya genişledi: düşman hasarı + cooldown, null victim, fiziksel taş canı ve kütük normalized damage. Scripts/verify_test_logs.py minimum dört benzersiz MyProject2.StoneTrap sonucu olmadan testi kabul etmiyor. Motor doğrulaması beklemede.
+
+
+
+
+## 14 Ekim 2026 — kanonik katalog ve CI kabul noktası
+
+- Kaynak gereksinim snapshot'ı `Docs/MEKANIK_KATALOG_TAKIP_CSV.csv` altında repo'ya eklendi; 485 satır ve 485 benzersiz Mechanic_ID içeriyor.
+- `Scripts/validate_catalog_mapping.py` ve 8 birim testi, ana katalog ile LOG/INVENTORY/RAID/WORLD/MATERIAL/FARMING/CORE/STONE/STICK eşleştirme CSV'lerinin kimlik ve sistem kapsamını bire bir uzlaştırıyor.
+- Python CI run #38515014058 başarılıdır. Bu kontrol kodun UE C++ derlemesini veya oyun içi davranışını sınamaz.
+- RAID kaynağındaki 69 başlık / 63 detay sayımı P0-001 olarak açık kalıyor. Sayı kararını kaynak gereksinim sahibi doğrulamadan yeni mekanik ID'leri oluşturulmayacak.
+- Faz 0 kapanışı için 485 mekanik kaydının her birinde kaynak/çağrı zinciri ve test kanıtı, ilgili U0/U1 boşluklarının çözümü, kalan sistem sahipliği kararları ve Windows + UE 5.8 baseline testleri gerekiyor.
