@@ -414,3 +414,5 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - GitHub Actions Python tooling CI **#794 başarılı** (run [38534211068](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38534211068)). Faz 8'in 7 statik dünya-durumu sözleşme testi ve mevcut tüm Python, save-contract, envanter, yeraltı ve 485 katalog kontrolleri geçti.
 - CI sırasında şema 3'ü zorunlu bekleyen eski Faz 4 ve Faz 6 test kabulleri schema 4 ile uyumlu hale getirildi; yükleme kodu schema 1–4'ü kabul eder, schema 1–3 için yeni world-state snapshot alanı yoksa eski dünya hücreleri üzerine boş snapshot zorla uygulanmaz.
 - Bu CI Python/shell/statik kaynak kontrolleridir; Unreal Engine 5.8 C++ derlemesi, gerçek SaveGame round-trip, uzun süreli simülasyon veya oyun içi E2E çalıştırılmadı. Bunlar, diğer fazlar arası state rollback ve performans kabulüyle birlikte Faz 14'e bırakılır.
+
+<!-- phase9-ci-trigger -->
