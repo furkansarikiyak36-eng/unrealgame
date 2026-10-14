@@ -176,7 +176,7 @@ namespace
             const FVector3d A = InterpolateIsoSurface(EmptyNodes[0], SolidNodes[0], Densities, Positions);
             const FVector3d B = InterpolateIsoSurface(EmptyNodes[0], SolidNodes[1], Densities, Positions);
             const FVector3d C = InterpolateIsoSurface(EmptyNodes[0], SolidNodes[2], Densities, Positions);
-            AddOrientedTriangle(Mesh, A, B, C, SolidCentroid, EmptyCentroid, TriangleLimit, bExceededTriangleLimit);
+            AddOrientedTriangle(Mesh, A, B, C, SolidCentroid, EmptyCentroid, MaterialSlotId, TriangleLimit, bExceededTriangleLimit);
         }
         else
         {
