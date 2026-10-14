@@ -391,5 +391,3 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Opsiyonel `UMaterialDefinition` profilinden WaterAbsorption/WaterDamageRate/DecayRate okunur; profil yoksa varsayılan ahşap katsayıları kullanılır. Hasar etkileri mevcut ACarvableLog/StructureLink zincirine döner.
 - `Scripts/tests/test_wood_material_integration_contract.py` oluşturuldu ve Python CI runner'a bağlandı. CI henüz bu yeni kaynak üzerinde yeniden çalıştırılmadı. UE 5.8 build/Automation çalıştırılmadı.
 - **Açık:** ortak world-save zarfının dinamik ahşap aktörlerini yeniden oluşturmaması nedeniyle nem/yaş alanları şu anda yalnızca aktör durumudur; kalıcılık, dünya hücresi nemiyle korelasyon, yangın/çürüme denge ölçümü ve uzun süreli performans Faz 14'te çapraz sistem denetimine bırakıldı. Faz 7 tracker bu nedenle In Progress.
-
-<!-- transient Phase 7 validation trigger 2 -->
