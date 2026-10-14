@@ -24,6 +24,8 @@ public:
     UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") static bool TransferItem(UInventoryComponent* Source, UInventoryComponent* Destination, FName ItemID, int32 Count=1);
     /** Atomically consumes inputs and adds outputs, restoring the exact slot state on failure. */
     UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") bool ExchangeItems(FName InputID, int32 InputCount, FName OutputID, int32 OutputCount);
+    /** Atomic multi-item transaction. Inputs are debited and outputs credited, with exact slot rollback on any failure. Either side may be empty for reservation/refund or output release. */
+    UFUNCTION(BlueprintCallable, Category="Inventory|Transactions") static bool ExchangeItemBatches(UInventoryComponent* Source, UInventoryComponent* Destination, const TArray<FInventoryItem>& Inputs, const TArray<FInventoryItem>& Outputs);
     UFUNCTION(BlueprintPure, Category="Inventory") int32 GetItemCount(FName ItemID) const;
     UFUNCTION(BlueprintPure, Category="Inventory") bool HasItem(FName ItemID, int32 Count=1) const;
     UFUNCTION(BlueprintPure, Category="Inventory") bool HasAllItems(const TArray<FInventoryItem>& Required) const;
