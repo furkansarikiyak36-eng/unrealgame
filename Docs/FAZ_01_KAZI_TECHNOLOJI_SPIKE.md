@@ -74,7 +74,7 @@ Her aday/çözünürlük koşusunda şu alanlar doldurulacak:
 - Tünelin sınırdan geçiş durumu, fizik test sonucu, hata/rollback sonucu.
 - Ekran görüntüsü/recording, Unreal logu, test raporu.
 
-`Docs/FAZ_01_KAZI_SPIKE_SABLONU.csv` ölçüm satırlarını tutar. Tüm sonuçlar doldurulmadan A veya B seçilmiş sayılmaz.
+`Docs/FAZ_01_KAZI_SPIKE_SABLONU.csv` ölçüm satırlarını tutar. Matris nihai performans/alternatif analizini destekler; tüm satırların doldurulması ilk backend kodlamasının ön koşulu değildir. İlk sparse 3B delta backend'i uygulanmıştır; ileride gerçek ölçümler farklı bir uygulamayı gerektirirse aynı API arkasındaki backend değiştirilebilir.
 
 ## Başarı/kabul koşulları
 
