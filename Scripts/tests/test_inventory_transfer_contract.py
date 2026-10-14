@@ -46,7 +46,12 @@ class InventoryTransferContractTests(unittest.TestCase):
         self.assertIn("Source->HasItem(ItemID, Count)", CPP)
         self.assertIn("Definition->bCanBeDropped", CPP)
         self.assertIn("if (!CanDropItem(ID, Count))", CPP)
-        self.assertIn("if (!CanDropItem(ID, Count))", CPP)
+
+    def test_restore_reuses_the_same_non_mutating_preflight(self):
+        restore = CPP[CPP.index("bool UInventoryComponent::RestoreFromSavedItems"):CPP.index("void UInventoryComponent::BroadcastChanged")]
+        self.assertIn("if (!CanRestoreFromSavedItems(Saved))", restore)
+        self.assertIn("RejectRestore()", restore)
+        self.assertIn("AddItemData(Item)", restore)
 
 
 if __name__ == "__main__":
