@@ -1,6 +1,7 @@
 #include "StonePlacementComponent.h"
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "StoneCore/StoneDefinition.h"
+#include "Components/SceneComponent.h"
 #include "Engine/World.h"
 #include "CollisionQueryParams.h"
 
@@ -55,16 +56,109 @@ UStonePlacementComponent::UStonePlacementComponent()
     PrimaryComponentTick.bCanEverTick = true;
 }
 
+bool UStonePlacementComponent::BeginPlacement(AStoneActor* Stone)
+{
+    if (PreviewStone || !IsValid(Stone) || !Stone->GetDefinition() || !GetOwner())
+    {
+        return false;
+    }
+
+    const EStructuralNodeState State = Stone->GetStructuralState_Implementation();
+    if (State != EStructuralNodeState::Loose && State != EStructuralNodeState::Carried)
+    {
+        return false;
+    }
+
+    OriginalActorTransform = Stone->GetActorTransform();
+    OriginalStructuralState = State;
+    OriginalAttachComponent.Reset();
+    OriginalAttachSocket = NAME_None;
+
+    if (USceneComponent* Root = Stone->GetRootComponent())
+    {
+        OriginalAttachComponent = Root->GetAttachParent();
+        OriginalAttachSocket = Root->GetAttachSocketName();
+    }
+
+    if (State == EStructuralNodeState::Loose &&
+        !Stone->SetStructuralState_Implementation(EStructuralNodeState::Carried))
+    {
+        return false;
+    }
+
+    // If the stone was held, detach it from the hand/shoulder while preserving its state.
+    Stone->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+
+    PreviewStone = Stone;
+    bAiming = true;
+    bHasPlacementTarget = false;
+    PlacementOptionIndex = INDEX_NONE;
+    ManualYawDegrees = 0.0f;
+    TargetTransform = OriginalActorTransform;
+    TargetSurfacePoint = OriginalActorTransform.GetLocation();
+    TargetSurfaceNormal = FVector::UpVector;
+    return true;
+}
+
+bool UStonePlacementComponent::CancelPlacement()
+{
+    AStoneActor* Stone = PreviewStone;
+    if (!IsValid(Stone))
+    {
+        PreviewStone = nullptr;
+        bAiming = false;
+        bHasPlacementTarget = false;
+        PlacementOptionIndex = INDEX_NONE;
+        return false;
+    }
+
+    Stone->SetActorTransform(OriginalActorTransform, false, nullptr, ETeleportType::TeleportPhysics);
+
+    if (USceneComponent* AttachParent = OriginalAttachComponent.Get())
+    {
+        if (Stone->GetStructuralState_Implementation() != OriginalStructuralState &&
+            !Stone->SetStructuralState_Implementation(OriginalStructuralState))
+        {
+            return false;
+        }
+        Stone->AttachToComponent(
+            AttachParent,
+            FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+            OriginalAttachSocket);
+    }
+    else if (Stone->GetStructuralState_Implementation() != OriginalStructuralState)
+    {
+        if (!Stone->SetStructuralState_Implementation(OriginalStructuralState))
+        {
+            return false;
+        }
+    }
+
+    PreviewStone = nullptr;
+    bAiming = false;
+    bHasPlacementTarget = false;
+    PlacementOptionIndex = INDEX_NONE;
+    ManualYawDegrees = 0.0f;
+    OriginalAttachComponent.Reset();
+    OriginalAttachSocket = NAME_None;
+    return true;
+}
+
 void UStonePlacementComponent::EnterAimMode()
 {
     bAiming = true;
-    PlacementOptionIndex = INDEX_NONE;
-    ManualYawDegrees = 0.0f;
 }
 
 void UStonePlacementComponent::ExitAimMode()
 {
+    if (PreviewStone)
+    {
+        CancelPlacement();
+        return;
+    }
+
     bAiming = false;
+    bHasPlacementTarget = false;
     PlacementOptionIndex = INDEX_NONE;
     ManualYawDegrees = 0.0f;
 }
@@ -107,7 +201,7 @@ void UStonePlacementComponent::RotateStone(float Delta)
 
 void UStonePlacementComponent::ApplySelectedPlacementOption()
 {
-    if (!PreviewStone)
+    if (!PreviewStone || !bHasPlacementTarget)
     {
         return;
     }
@@ -118,25 +212,21 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
     CollectValidPlacementOptions(Definition, FaceIndices, SocketIndices);
 
     const int32 OptionCount = FaceIndices.Num() + SocketIndices.Num();
+    if (OptionCount > 0 && (PlacementOptionIndex < 0 || PlacementOptionIndex >= OptionCount))
+    {
+        PlacementOptionIndex = 0;
+    }
     if (OptionCount <= 0)
     {
         PlacementOptionIndex = INDEX_NONE;
-        TargetTransform.SetLocation(TargetSurfacePoint);
-        TargetTransform.SetRotation(
-            FQuat(TargetSurfaceNormal.GetSafeNormal(), FMath::DegreesToRadians(ManualYawDegrees)) *
-            TargetSurfaceNormal.Rotation().Quaternion());
-        return;
-    }
-
-    if (PlacementOptionIndex < 0 || PlacementOptionIndex >= OptionCount)
-    {
-        PlacementOptionIndex = 0;
     }
 
     FQuat BaseRotation = TargetSurfaceNormal.Rotation().Quaternion();
     FVector PlacementLocation = TargetSurfacePoint;
+    bool bSelectedSocket = false;
+    const FStoneSocket* SelectedSocket = nullptr;
 
-    if (PlacementOptionIndex < FaceIndices.Num())
+    if (PlacementOptionIndex != INDEX_NONE && PlacementOptionIndex < FaceIndices.Num())
     {
         const FStoneFace& Face = Definition->Faces[FaceIndices[PlacementOptionIndex]];
         const FVector WorldFaceNormal = BaseRotation.RotateVector(Face.LocalNormal.GetSafeNormal());
@@ -144,47 +234,57 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
             WorldFaceNormal.GetSafeNormal(), -TargetSurfaceNormal.GetSafeNormal());
         BaseRotation = AlignRotation * BaseRotation;
     }
-    else
+    else if (PlacementOptionIndex != INDEX_NONE && PlacementOptionIndex >= FaceIndices.Num())
     {
         const int32 SocketOptionIndex = PlacementOptionIndex - FaceIndices.Num();
-        const FStoneSocket& Socket = Definition->Sockets[SocketIndices[SocketOptionIndex]];
-        const FVector LocalSocketNormal = Socket.LocalRotation.RotateVector(FVector::UpVector);
-        const FVector WorldSocketNormal = BaseRotation.RotateVector(LocalSocketNormal.GetSafeNormal());
-        const FQuat AlignRotation = FQuat::FindBetweenNormals(
-            WorldSocketNormal.GetSafeNormal(), -TargetSurfaceNormal.GetSafeNormal());
-        BaseRotation = AlignRotation * BaseRotation;
-
-        const FQuat YawRotation(
-            TargetSurfaceNormal.GetSafeNormal(), FMath::DegreesToRadians(ManualYawDegrees));
-        const FQuat FinalSocketRotation = YawRotation * BaseRotation;
-        PlacementLocation = TargetSurfacePoint - FinalSocketRotation.RotateVector(Socket.LocalPosition);
-        TargetTransform.SetLocation(PlacementLocation);
-        TargetTransform.SetRotation(FinalSocketRotation);
-        return;
+        if (SocketOptionIndex >= 0 && SocketOptionIndex < SocketIndices.Num())
+        {
+            SelectedSocket = &Definition->Sockets[SocketIndices[SocketOptionIndex]];
+            const FVector LocalSocketNormal = SelectedSocket->LocalRotation.RotateVector(FVector::UpVector);
+            const FVector WorldSocketNormal = BaseRotation.RotateVector(LocalSocketNormal.GetSafeNormal());
+            const FQuat AlignRotation = FQuat::FindBetweenNormals(
+                WorldSocketNormal.GetSafeNormal(), -TargetSurfaceNormal.GetSafeNormal());
+            BaseRotation = AlignRotation * BaseRotation;
+            bSelectedSocket = true;
+        }
     }
 
     const FQuat YawRotation(
         TargetSurfaceNormal.GetSafeNormal(), FMath::DegreesToRadians(ManualYawDegrees));
+    const FQuat FinalRotation = YawRotation * BaseRotation;
+    if (bSelectedSocket && SelectedSocket)
+    {
+        PlacementLocation = TargetSurfacePoint - FinalRotation.RotateVector(SelectedSocket->LocalPosition);
+    }
+
     TargetTransform.SetLocation(PlacementLocation);
-    TargetTransform.SetRotation(YawRotation * BaseRotation);
+    TargetTransform.SetRotation(FinalRotation);
+    PreviewStone->SetActorTransform(TargetTransform, false, nullptr, ETeleportType::TeleportPhysics);
 }
 
 bool UStonePlacementComponent::ConfirmPlacement()
 {
-    if (!PreviewStone)
+    if (!IsValid(PreviewStone) || !bAiming || !bHasPlacementTarget)
     {
         return false;
     }
 
-    PreviewStone->SetActorTransform(TargetTransform);
-    if (!PreviewStone->SetStructuralState_Implementation(EStructuralNodeState::Installed))
+    AStoneActor* StoneToPlace = PreviewStone;
+    StoneToPlace->SetActorTransform(TargetTransform, false, nullptr, ETeleportType::TeleportPhysics);
+    if (!StoneToPlace->SetStructuralState_Implementation(EStructuralNodeState::Installed))
     {
+        CancelPlacement();
         return false;
     }
 
-    PlacementHistory.Add(PreviewStone);
+    PlacementHistory.Add(StoneToPlace);
     PreviewStone = nullptr;
+    bAiming = false;
+    bHasPlacementTarget = false;
     PlacementOptionIndex = INDEX_NONE;
+    ManualYawDegrees = 0.0f;
+    OriginalAttachComponent.Reset();
+    OriginalAttachSocket = NAME_None;
     return true;
 }
 
@@ -203,7 +303,7 @@ void UStonePlacementComponent::TickComponent(
     float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-    if (!bAiming || !GetOwner() || !GetWorld())
+    if (!bAiming || !PreviewStone || !GetOwner() || !GetWorld())
     {
         return;
     }
@@ -222,8 +322,15 @@ void UStonePlacementComponent::TickComponent(
             TargetSurfaceNormal = FVector::UpVector;
         }
 
+        bHasPlacementTarget = true;
         TargetTransform.SetLocation(TargetSurfacePoint);
         TargetTransform.SetRotation(TargetSurfaceNormal.Rotation().Quaternion());
         ApplySelectedPlacementOption();
+    }
+    else
+    {
+        bHasPlacementTarget = false;
+        TargetTransform = OriginalActorTransform;
+        PreviewStone->SetActorTransform(OriginalActorTransform, false, nullptr, ETeleportType::TeleportPhysics);
     }
 }
