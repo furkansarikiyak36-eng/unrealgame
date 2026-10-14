@@ -77,7 +77,7 @@ class FarmingIntegrationTests(unittest.TestCase):
         self.assertIn("EInventoryResult::Success", INVENTORY_CPP)
 
     def test_manure_is_debited_once_and_nutrients_return_to_the_world_cell(self):
-        manure = section(ANIMAL_CPP, "bool AAnimalActor::ApplyManureToSoil", "\\n}\\n")
+        manure = section(ANIMAL_CPP, "bool AAnimalActor::ApplyManureToSoil", "\n}\n")
         self.assertIn("ManureComponent->CollectManure(Amount)", manure)
         self.assertIn("WorldState->GetCellAtWorld(SoilWorldLocation)", manure)
         self.assertIn("Cell->SoilNitrogen", manure)
