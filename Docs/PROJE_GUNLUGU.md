@@ -414,3 +414,12 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - GitHub Actions Python tooling CI **#794 başarılı** (run [38534211068](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38534211068)). Faz 8'in 7 statik dünya-durumu sözleşme testi ve mevcut tüm Python, save-contract, envanter, yeraltı ve 485 katalog kontrolleri geçti.
 - CI sırasında şema 3'ü zorunlu bekleyen eski Faz 4 ve Faz 6 test kabulleri schema 4 ile uyumlu hale getirildi; yükleme kodu schema 1–4'ü kabul eder, schema 1–3 için yeni world-state snapshot alanı yoksa eski dünya hücreleri üzerine boş snapshot zorla uygulanmaz.
 - Bu CI Python/shell/statik kaynak kontrolleridir; Unreal Engine 5.8 C++ derlemesi, gerçek SaveGame round-trip, uzun süreli simülasyon veya oyun içi E2E çalıştırılmadı. Bunlar, diğer fazlar arası state rollback ve performans kabulüyle birlikte Faz 14'e bırakılır.
+
+
+### 2026-10-14 — Faz 9: tarım ve hayvancılık entegrasyonu
+
+- ACropFieldActor mevcut UInventoryComponent ile tohumları ekim öncesi doğrular/düşer; büyüme mümkün olduğunda UWorldStateSubsystem hücresindeki nem, su ve NPK değerlerini kullanır. Hasat, kapasite ve feed tanımı doğrulandıktan sonra mevcut hayvan UFeedStorageComponent stoğuna aktarılır.
+- AAnimalActor tüketilen yemden sınırlı manure biriktirir. Süt/yumurta/yün toplama ürün miktarını önce inventory'ye başarıyla ekler ve sonra üretim komponentinden düşer; kapasite yoksa hayvanın ürün stoku korunur. Manure, geçerli ortak dünya hücresine N/P/K olarak uygulanır.
+- Eski UFeedCycleComponent kendi TMap<FName,float> feed stokunu tutan ikinci bir sahip olmaktan çıkarıldı; var olan UFeedStorageComponent üzerine çalışan bir adaptördür. Feed/seed/product ID'leri proje inventory tanımlarına göre sağlanmalıdır.
+- Scripts/tests/test_phase9_farming_integration_contract.py sekiz statik sözleşme kontrolüyle runner'a eklendi. Son GitHub Actions Python tooling CI #837 başarılı (run 38535234996); yeni Faz 9 ve tüm mevcut Python/katalog kontrolleri geçti.
+- Bu CI Unreal Engine 5.8 derlemesi, oyuncu envanteri ve hayvan/bitki actor SaveGame round-trip'i veya gerçek tarım ekonomisi E2E testi değildir. Dinamik actor kalıcılığı, kaynak bilançosu ve uzun oturum ayarı Faz 14'te toplu doğrulanacaktır.
