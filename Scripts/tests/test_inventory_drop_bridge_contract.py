@@ -10,13 +10,14 @@ INVENTORY = (ROOT / "Source/MyProject2/InventoryCore/InventoryComponent.cpp").re
 
 class InventoryDropBridgeContractTests(unittest.TestCase):
     def test_bridge_checks_world_inventory_and_item(self):
-        self.assertIn("if (!World || !Inventory || !Inventory->HasItem(ItemID, 1))", BRIDGE)
+        self.assertIn("if (!World || !Inventory || !Inventory->CanDropItem(ItemID, 1))", BRIDGE)
         self.assertIn("if (!Self || ItemID.IsNone() || !ActorClass)", BRIDGE)
 
     def test_bridge_uses_drop_policy(self):
         self.assertIn("Inventory->DropItem(ItemID, 1)", BRIDGE)
         self.assertNotIn("Inventory->RemoveItem(ItemID, 1)", BRIDGE)
-        self.assertIn("!D->bCanBeDropped", INVENTORY)
+        self.assertIn("Definition->bCanBeDropped", INVENTORY)
+        self.assertIn("bool UInventoryComponent::CanDropItem", INVENTORY)
 
 
 if __name__ == "__main__":
