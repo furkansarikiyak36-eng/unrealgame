@@ -1,11 +1,13 @@
 #include "ExcavationTerrainChunkActor.h"
 
 #include "DynamicMesh/DynamicMesh3.h"
+#include "DynamicMesh/DynamicMeshAttributeSet.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
 #include "ExcavationTerrainChunkSubsystem.h"
 #include "Engine/World.h"
+#include "NavigationSystem.h"
 
 namespace
 {
@@ -60,6 +62,7 @@ namespace
         const FVector3d& C,
         const FVector3d& SolidCentroid,
         const FVector3d& EmptyCentroid,
+        int32 MaterialSlotId,
         int32 TriangleLimit,
         bool& bExceededTriangleLimit)
     {
@@ -95,10 +98,17 @@ namespace
             return;
         }
 
-        if (Mesh.AppendTriangle(V0, V1, V2, 0) < 0)
+        const int32 TriangleId = Mesh.AppendTriangle(V0, V1, V2, 0);
+        if (TriangleId < 0)
         {
             // Vertices are unique per triangle; a rejected primitive indicates the candidate is unusable.
             bExceededTriangleLimit = true;
+            return;
+        }
+
+        if (Mesh.Attributes() && Mesh.Attributes()->HasMaterialID())
+        {
+            Mesh.Attributes()->GetMaterialID()->SetValue(TriangleId, MaterialSlotId);
         }
     }
 
@@ -107,6 +117,9 @@ namespace
         const int32 TetraNodeIds[4],
         const TArray<float>& Densities,
         const TArray<FVector3d>& Positions,
+        const FVector3d& WorldOrigin,
+        const UExcavationVolumeSubsystem* Excavation,
+        const TMap<int32, int32>& MaterialSlotByBaseId,
         int32 TriangleLimit,
         bool& bExceededTriangleLimit)
     {
@@ -140,12 +153,23 @@ namespace
         SolidCentroid /= static_cast<double>(SolidCount);
         EmptyCentroid /= static_cast<double>(EmptyCount);
 
+        int32 MaterialSlotId = 0;
+        int32 BaseMaterialId = 0;
+        if (Excavation
+            && Excavation->TrySampleBaseMaterialIdAtWorld(FVector(WorldOrigin + SolidCentroid), BaseMaterialId))
+        {
+            if (const int32* ResolvedSlot = MaterialSlotByBaseId.Find(BaseMaterialId))
+            {
+                MaterialSlotId = *ResolvedSlot;
+            }
+        }
+
         if (SolidCount == 1)
         {
             const FVector3d A = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[0], Densities, Positions);
             const FVector3d B = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[1], Densities, Positions);
             const FVector3d C = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[2], Densities, Positions);
-            AddOrientedTriangle(Mesh, A, B, C, SolidCentroid, EmptyCentroid, TriangleLimit, bExceededTriangleLimit);
+            AddOrientedTriangle(Mesh, A, B, C, SolidCentroid, EmptyCentroid, MaterialSlotId, TriangleLimit, bExceededTriangleLimit);
         }
         else if (SolidCount == 3)
         {
@@ -160,8 +184,8 @@ namespace
             const FVector3d P01 = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[1], Densities, Positions);
             const FVector3d P10 = InterpolateIsoSurface(SolidNodes[1], EmptyNodes[0], Densities, Positions);
             const FVector3d P11 = InterpolateIsoSurface(SolidNodes[1], EmptyNodes[1], Densities, Positions);
-            AddOrientedTriangle(Mesh, P00, P01, P11, SolidCentroid, EmptyCentroid, TriangleLimit, bExceededTriangleLimit);
-            AddOrientedTriangle(Mesh, P00, P11, P10, SolidCentroid, EmptyCentroid, TriangleLimit, bExceededTriangleLimit);
+            AddOrientedTriangle(Mesh, P00, P01, P11, SolidCentroid, EmptyCentroid, MaterialSlotId, TriangleLimit, bExceededTriangleLimit);
+            AddOrientedTriangle(Mesh, P00, P11, P10, SolidCentroid, EmptyCentroid, MaterialSlotId, TriangleLimit, bExceededTriangleLimit);
         }
 
         return !bExceededTriangleLimit;
@@ -180,6 +204,7 @@ AExcavationTerrainChunkActor::AExcavationTerrainChunkActor()
     DynamicMeshComponent->SetComplexAsSimpleCollisionEnabled(true, false);
     DynamicMeshComponent->bUseAsyncCooking = true;
     DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    DynamicMeshComponent->SetCanEverAffectNavigation(true);
     DynamicMeshComponent->SetMaterial(0, UMaterial::GetDefaultMaterial(MD_Surface));
 }
 
@@ -308,6 +333,7 @@ void AExcavationTerrainChunkActor::ClearMeshAndCollision()
     DynamicMeshComponent->SetMesh(MoveTemp(EmptyMesh));
     DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     DynamicMeshComponent->UpdateCollision(false);
+    UNavigationSystemV1::UpdateComponentInNavOctree(*DynamicMeshComponent);
 }
 
 bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
@@ -324,9 +350,22 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
         return false;
     }
 
-    if (SurfaceMaterial)
+    DynamicMeshComponent->SetMaterial(0, SurfaceMaterial ? SurfaceMaterial.Get() : UMaterial::GetDefaultMaterial(MD_Surface));
+
+    TMap<int32, int32> MaterialSlotByBaseId;
+    MaterialSlotByBaseId.Add(0, 0);
+    int32 NextMaterialSlot = 1;
+    for (const FExcavationTerrainMaterialLayer& Layer : StratifiedMaterialLayers)
     {
-        DynamicMeshComponent->SetMaterial(0, SurfaceMaterial);
+        if (Layer.BaseMaterialId <= 0 || Layer.BaseMaterialId > 31
+            || !IsValid(Layer.Material) || MaterialSlotByBaseId.Contains(Layer.BaseMaterialId))
+        {
+            continue;
+        }
+
+        MaterialSlotByBaseId.Add(Layer.BaseMaterialId, NextMaterialSlot);
+        DynamicMeshComponent->SetMaterial(NextMaterialSlot, Layer.Material);
+        ++NextMaterialSlot;
     }
 
     const int32 Cells = Excavation->CellsPerChunkAxis;
@@ -367,6 +406,8 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
     }
 
     UE::Geometry::FDynamicMesh3 CandidateMesh;
+    CandidateMesh.EnableAttributes();
+    CandidateMesh.Attributes()->EnableMaterialID();
     bool bExceededTriangleLimit = false;
 
     for (int32 Z = 0; Z < Cells && !bExceededTriangleLimit; ++Z)
@@ -398,6 +439,9 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
                         TetraNodes,
                         Densities,
                         Positions,
+                        FVector3d(GetActorLocation()),
+                        Excavation,
+                        MaterialSlotByBaseId,
                         FMath::Max(1000, MaxGeneratedTriangles),
                         bExceededTriangleLimit);
                 }
@@ -423,5 +467,6 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
         DynamicMeshComponent->UpdateCollision(false);
     }
 
+    UNavigationSystemV1::UpdateComponentInNavOctree(*DynamicMeshComponent);
     return true;
 }
