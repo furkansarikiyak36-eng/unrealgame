@@ -52,6 +52,12 @@ Mekanikleri sınıf/fonksiyon adlarıyla değil, gerçek oynanış akışı ve k
 
 **Karar:** Baskın sınıflarını tamamlandı işaretleme. Gerçek oyuncu/oyun state'inden zorluk, canlı hedef güncellemesi, düşmanın `ACarvableLog` ve ortak yapı durumuna hasarı, yok edilen engel sonrası rota güncellemesi uçtan uca kanıtlanmalı.
 
+### C2. Raid spawn işleme yolu iki ayrı biçimde tanımlı
+
+`RaidDirectorSubsystem::ProcessSpawns` doğrudan düşman sınıfını spawn ediyor ve budget/population counter güncelliyor. Ayrıca `RaidPhaseR5_Spawn/SpawnDecisionPipeline.cpp` içinde spawn doğrulama ve aynı türde budget/counter güncellemesi yapan ayrı bir `ExecuteSpawnDecision` var. İncelenen ana director çağrı zincirinde bu pipeline'ın kullanıldığı gösterilmedi.
+
+**Karar:** Tek spawn karar yolunu seç. Ya director pipeline'ı zorunlu çağırmalı ya da pipeline kaldırılmadan önce bütün çağrıları ve test bağımlılıkları kanıtlanmalı. Spawn reddi/konum yokluğu/limit doluluğu/bütçe tüketimi/population count senaryoları aynı yol üzerinden test edilmeli.
+
 ### D. Farming feed hesabı var, üretim zinciri sahipliği kanıtlanmadı
 
 `FeedCycleComponent` yerel bir stok haritası üzerinden yem ekleme/tüketme ve günlük toplam güncellemesi yapıyor. Bu dosya tek başına hasat çıktısının gerçek stoktan gelip hayvana ulaştığını veya gübrenin gerçek dünya toprağına döndüğünü kanıtlamaz.
