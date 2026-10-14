@@ -104,3 +104,8 @@ Otomasyon dosyası artık beş Unreal Automation Test içeriyor; beşinci test r
 Taş tuzağı artık sadece fiziği etkinleştirmiyor. Trigger volume QueryOnly / Pawn-overlap olarak ayarlanıyor ve BeginOverlap callback doğrudan Trigger(Victim) çağırıyor. Trigger, bilinen gameplay hedefleri için mevcut alıcı metotlarını kullanıyor: RaidEnemy, ForestCharacter, AStoneActor ve ACarvableLog; diğer aktörlere Unreal'ın standart ApplyDamage/TakeDamage yolunu iletiyor. Kütükte raw damage pointleri 0..1 normalized damage fraction'a editable çarpanla dönüştürülüyor.
 
 Cooldown işlemi de düzeltildi: bir tuzak cooldown bitmeden Rearm çağrısıyla yeniden kurulmuş sayılmıyor. İki Unreal Automation Test yazıldı: damage dispatch + cooldown ve null-victim safety. Bunlar UE 5.8'de henüz çalıştırılmadı; fiziksel rolling/falling impact, gerçek overlap ve damage tuning editörde doğrulanmalı.
+
+
+### Ek not — Stone Trap overlap kanalları
+
+Trap trigger volume artık Pawn **ve** PhysicsBody ile overlap yapacak şekilde ayarlı; böylece karakter/düşman yanında fiziksel taş ve kütük gövdeleri de tetik alanına girebilir. StoneTrapTests.cpp, bu iki collision cevabını açık assertion ile kontrol ediyor. Bu yalnızca test kodudur; gerçek Unreal overlap/physics davranışı UE 5.8'de çalıştırılana kadar onaylanmış sayılmaz.
