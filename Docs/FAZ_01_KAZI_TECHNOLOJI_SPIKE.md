@@ -1,9 +1,9 @@
 # Faz 1 — Runtime kazı teknolojisi spike şartnamesi
 
-**Durum:** Faz 1 geliştirmesi başladı — veri sözleşmesi ve ilk sparse 3B delta backend'i önce kuruluyor.  
+**Durum:** Faz 1 veri çekirdeği kodu uygulandı — kapsamlı çapraz sistem denetimi Faz 14'te yapılacak.  
 **Kapsam:** Yalnızca geliştirici iç test haritası. Kullanıcıya ara demo teslimi değildir.  
 **Bağımlılık:** Faz 0 kaynak triage tamamlandı; açık motor doğrulama/entegrasyon engelleri sürüyor.  
-**Kural:** Başlangıç kodu için A/Sparse 3D delta yaklaşımı kullanılır ve görsel mesh/collision üretiminden ayrılır. İki adayın ağır benchmark karşılaştırması kodlamayı bloke etmez; gerekiyorsa Faz 14'te nihai performans analizi yapılır.
+**Kural:** İlk veri backend'i Sparse 3D delta yaklaşımıdır ve görsel mesh/collision üretiminden ayrıdır. İki adayın ağır benchmark karşılaştırması kodlamayı bloke etmez; gerekiyorsa Faz 14'te nihai performans analizi yapılır.
 
 ## Mevcut repo zemini
 
@@ -98,6 +98,8 @@ Her aday/çözünürlük koşusunda şu alanlar doldurulacak:
 - Ölçüm sonucu, seçilmeyen yöntemin neden elendiğini ve kalan riskleri açıkça belgelemeli.
 
 **Başlangıç seçimi:** Sparse 3D delta backend'i ilk veri katmanı olarak kullanılacak. Bu, nihai performans kazananı ilanı değildir; mimariyi ilerletmek için değiştirilebilir bir uygulama tercihidir.
+
+**Faz 1 kod çıktısı:** data-core API'leri branch'e yazıldı. Bu fazın rolü temel 3B hücre ve değişiklik sözleşmesini kurmaktır; gerçek surface meshing/collision/nav ve genel world-save adaptörleri takip eden fazların işidir. Motor derlemesi bu oturumda çalıştırılmadı; kullanıcı tarafından belirlenen Claude Code/UE akışında ele alınır ve geliştirmeyi burada bekletmez.
 
 ## Unreal Engine 5.8 kaynakları
 
