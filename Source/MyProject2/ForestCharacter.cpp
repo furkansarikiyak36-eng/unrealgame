@@ -2006,7 +2006,7 @@ AActor* AForestCharacter::DropInventoryItem(EForestItem Item, int32 Count)
 			Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
 				FSoftObjectPath(TEXT("/Game/Greybox/Meshes/SM_GB_Stone.SM_GB_Stone")));
 			Stone->InitializeFromDefinition(Definition);
-			if (!Stone->MeshComponent || !Stone->MeshComponent->GetStaticMesh())
+			if (Stone->MeshComponent && !Stone->MeshComponent->GetStaticMesh())
 			{
 				Stone->MeshComponent->SetStaticMesh(StoneMesh);
 			}
@@ -2058,7 +2058,7 @@ AActor* AForestCharacter::DropInventoryItem(EForestItem Item, int32 Count)
 			Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
 				FSoftObjectPath(TEXT("/Game/Greybox/Meshes/SM_GB_Stick.SM_GB_Stick")));
 			Stick->InitializeFromDefinition(Definition);
-			if (!Stick->MeshComponent || !Stick->MeshComponent->GetStaticMesh())
+			if (Stick->MeshComponent && !Stick->MeshComponent->GetStaticMesh())
 			{
 				Stick->MeshComponent->SetStaticMesh(StickMesh);
 			}
