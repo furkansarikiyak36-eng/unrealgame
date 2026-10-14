@@ -4,6 +4,7 @@
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 #include "CollisionQueryParams.h"
+#include "Math/RotationMatrix.h"
 
 namespace
 {
@@ -221,7 +222,7 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
         PlacementOptionIndex = INDEX_NONE;
     }
 
-    FQuat BaseRotation = TargetSurfaceNormal.Rotation().Quaternion();
+    FQuat BaseRotation = FRotationMatrix::MakeFromZ(TargetSurfaceNormal.GetSafeNormal()).ToQuat();
     FVector PlacementLocation = TargetSurfacePoint;
     bool bSelectedSocket = false;
     const FStoneSocket* SelectedSocket = nullptr;
@@ -324,7 +325,7 @@ void UStonePlacementComponent::TickComponent(
 
         bHasPlacementTarget = true;
         TargetTransform.SetLocation(TargetSurfacePoint);
-        TargetTransform.SetRotation(TargetSurfaceNormal.Rotation().Quaternion());
+        TargetTransform.SetRotation(FRotationMatrix::MakeFromZ(TargetSurfaceNormal.GetSafeNormal()).ToQuat());
         ApplySelectedPlacementOption();
     }
     else
