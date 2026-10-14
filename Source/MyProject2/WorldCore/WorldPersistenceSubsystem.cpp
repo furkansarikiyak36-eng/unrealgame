@@ -4,6 +4,7 @@
 #include "UndergroundHazardSubsystem.h"
 #include "ForestCharacter.h"
 #include "InventoryCore/InventoryComponent.h"
+#include "InventoryCore/InventoryStorageActor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/EngineUtils.h"
 #include "Engine/World.h"
@@ -349,6 +350,40 @@ bool UWorldPersistenceSubsystem::SaveCoreStateToSlot(const FString& SlotName, in
         }
     }
 
+    SaveObject->bHasStorageInventories = true;
+    TSet<FName> SeenStorageKeys;
+    for (TActorIterator<AInventoryStorageActor> It(World); It; ++It)
+    {
+        AInventoryStorageActor* Storage = *It;
+        if (!IsValid(Storage) || !Storage->GetInventory())
+        {
+            return false;
+        }
+
+        const FName StorageKey = Storage->GetStorageKey();
+        if (StorageKey.IsNone() || SeenStorageKeys.Contains(StorageKey))
+        {
+            UE_LOG(LogTemp, Error, TEXT("Core save rejected: storage keys must be valid and unique."));
+            return false;
+        }
+        SeenStorageKeys.Add(StorageKey);
+
+        FInventoryStorageSnapshot StorageSnapshot;
+        StorageSnapshot.StorageKey = StorageKey;
+        for (const FInventorySlot& Slot : Storage->GetInventory()->GetSlots())
+        {
+            if (Slot.IsOccupied() && !Slot.bLocked)
+            {
+                StorageSnapshot.Items.Add(Slot.Item);
+            }
+        }
+        SaveObject->StorageInventories.Add(MoveTemp(StorageSnapshot));
+    }
+    SaveObject->StorageInventories.Sort([](const FInventoryStorageSnapshot& A, const FInventoryStorageSnapshot& B)
+    {
+        return A.StorageKey.ToString() < B.StorageKey.ToString();
+    });
+
     SaveObject->ProcessedCommandIds = ProcessedCommandIdsInOrder;
     SaveObject->RecentWorldEventKeys = RecentWorldEventKeysInOrder;
 
@@ -429,12 +464,65 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
         {
             return false;
         }
-        const TArray<FInventorySlot> ExistingSlots = PlayerInventory->GetSlots();
-        for (const FInventorySlot& Slot : ExistingSlots)
+        for (const FInventorySlot& Slot : PlayerInventory->GetSlots())
         {
             if (Slot.IsOccupied() && !Slot.bLocked)
             {
                 PreviousPlayerInventory.Add(Slot.Item);
+            }
+        }
+    }
+
+    TMap<FName, AInventoryStorageActor*> StorageActorsByKey;
+    TMap<FName, TArray<FInventoryItem>> PreviousStorageItems;
+    for (TActorIterator<AInventoryStorageActor> It(LoadWorld); It; ++It)
+    {
+        AInventoryStorageActor* Storage = *It;
+        if (!IsValid(Storage) || !Storage->GetInventory())
+        {
+            return false;
+        }
+        const FName Key = Storage->GetStorageKey();
+        if (Key.IsNone() || StorageActorsByKey.Contains(Key))
+        {
+            UE_LOG(LogTemp, Error, TEXT("Core load rejected: active storage keys must be valid and unique."));
+            return false;
+        }
+        StorageActorsByKey.Add(Key, Storage);
+
+        TArray<FInventoryItem> ExistingItems;
+        for (const FInventorySlot& Slot : Storage->GetInventory()->GetSlots())
+        {
+            if (Slot.IsOccupied() && !Slot.bLocked)
+            {
+                ExistingItems.Add(Slot.Item);
+            }
+        }
+        PreviousStorageItems.Add(Key, MoveTemp(ExistingItems));
+    }
+
+    if (LoadedSave->bHasStorageInventories)
+    {
+        if (LoadedSave->StorageInventories.Num() != StorageActorsByKey.Num())
+        {
+            return false;
+        }
+
+        TSet<FName> SnapshotStorageKeys;
+        for (const FInventoryStorageSnapshot& StorageSnapshot : LoadedSave->StorageInventories)
+        {
+            if (StorageSnapshot.StorageKey.IsNone() ||
+                SnapshotStorageKeys.Contains(StorageSnapshot.StorageKey))
+            {
+                return false;
+            }
+            SnapshotStorageKeys.Add(StorageSnapshot.StorageKey);
+
+            AInventoryStorageActor* const* FoundStorage = StorageActorsByKey.Find(StorageSnapshot.StorageKey);
+            if (!FoundStorage || !IsValid(*FoundStorage) ||
+                !(*FoundStorage)->GetInventory()->CanRestoreFromSavedItems(StorageSnapshot.Items))
+            {
+                return false;
             }
         }
     }
@@ -456,8 +544,7 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
         return false;
     }
 
-    // Inventory was preflighted against the exact active slot/weight policy above.
-    // Restore it only after the other snapshots have accepted their own state.
+    // Inventory snapshots are restored only after all domain snapshots have accepted state.
     if (PlayerInventory && !PlayerInventory->RestoreFromSavedItems(LoadedSave->PlayerInventoryItems))
     {
         UE_LOG(LogTemp, Error, TEXT("Core save load: prevalidated player inventory restore failed."));
@@ -467,6 +554,33 @@ bool UWorldPersistenceSubsystem::LoadCoreStateFromSlot(const FString& SlotName, 
         }
         bApplyingLoadedState = false;
         return false;
+    }
+
+    if (LoadedSave->bHasStorageInventories)
+    {
+        for (const FInventoryStorageSnapshot& StorageSnapshot : LoadedSave->StorageInventories)
+        {
+            AInventoryStorageActor* const* FoundStorage = StorageActorsByKey.Find(StorageSnapshot.StorageKey);
+            AInventoryStorageActor* Storage = FoundStorage ? *FoundStorage : nullptr;
+            if (!Storage || !Storage->GetInventory()->RestoreFromSavedItems(StorageSnapshot.Items))
+            {
+                UE_LOG(LogTemp, Error, TEXT("Core save load: storage inventory restore failed for key '%s'."),
+                    *StorageSnapshot.StorageKey.ToString());
+                if (PlayerInventory)
+                {
+                    PlayerInventory->RestoreFromSavedItems(PreviousPlayerInventory);
+                }
+                for (const TPair<FName, TArray<FInventoryItem>>& Previous : PreviousStorageItems)
+                {
+                    if (AInventoryStorageActor* const* PreviousActor = StorageActorsByKey.Find(Previous.Key))
+                    {
+                        (*PreviousActor)->GetInventory()->RestoreFromSavedItems(Previous.Value);
+                    }
+                }
+                bApplyingLoadedState = false;
+                return false;
+            }
+        }
     }
     bApplyingLoadedState = false;
 
