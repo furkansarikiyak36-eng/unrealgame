@@ -1,4 +1,5 @@
 #include "RegionLogisticsSubsystem.h"
+#include "Algo/Reverse.h"
 
 #include "WorldStateSubsystem.h"
 #include "ChunkStateStore.h"
@@ -655,8 +656,8 @@ bool URegionLogisticsSubsystem::FindLowestCostRoute(
         return false;
     }
 
-    ReverseNodeIndices.Reverse();
-    ReverseLinkIndices.Reverse();
+    Algo::Reverse(ReverseNodeIndices);
+    Algo::Reverse(ReverseLinkIndices);
     OutRoute.bFound = true;
     OutRoute.EstimatedTravelSeconds = BestSeconds[DestinationIndex];
     OutRoute.BottleneckCapacityKg = TNumericLimits<float>::Max();

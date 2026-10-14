@@ -17,7 +17,8 @@ def section(source: str, start: str, end: str) -> str:
 class CarvableLogContractTests(unittest.TestCase):
     def test_replacement_requires_compatible_unmodified_stock(self):
         can_replace = section(LOG_CPP, "bool ACarvableLog::CanReplace", "bool ACarvableLog::ReplaceDamaged")
-        self.assertIn("Replacement->IsCarried()", can_replace)
+        # The player puts the replacement in from the shoulder: a carried piece must stay acceptable.
+        self.assertNotIn("Replacement->IsCarried()", can_replace)
         self.assertIn("Replacement->MeshComponent->IsSimulatingPhysics()", can_replace)
         self.assertIn("Replacement->BurnState != EBurnState::Intact", can_replace)
         self.assertIn("Old->GetSplitCount() != Replacement->GetSplitCount()", can_replace)
@@ -36,7 +37,7 @@ class CarvableLogContractTests(unittest.TestCase):
         self.assertIn("default:                     bCutRebuilt = false;", repair)
         self.assertIn("Replacement->JointCuts = OriginalJointCuts;", repair)
         self.assertIn("Replacement->CutSpans = OriginalCutSpans;", repair)
-        self.assertLess(repair.index("StructureLink::Settle(GetWorld())"), repair.index("OnLogRepaired.Broadcast(Replacement)"))
+        self.assertLess(repair.index("StructureLink::Settle(Old->GetWorld())"), repair.index("OnLogRepaired.Broadcast(Replacement)"))
 
     def test_damage_thresholds_re_evaluate_the_structure(self):
         damage = section(LOG_CPP, "void ACarvableLog::SetDamage", "float ACarvableLog::GetIgniteSeconds")

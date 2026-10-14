@@ -10,7 +10,7 @@ public class MyProject2 : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		bUseUnity = false; // many package files define same-named helpers in anonymous namespaces
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "CableComponent", "GeometryScriptingCore", "GeometryFramework", "Landscape", "PhysicsCore", "AIModule", "GameplayTasks", "NavigationSystem" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "CableComponent", "GeometryScriptingCore", "GeometryFramework", "GeometryCore", "DynamicMesh", "Landscape", "PhysicsCore", "AIModule", "GameplayTasks", "NavigationSystem" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "RenderCore", "RHI" });
 

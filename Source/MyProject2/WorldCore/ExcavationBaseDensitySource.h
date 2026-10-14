@@ -23,10 +23,10 @@ class MYPROJECT2_API IExcavationBaseDensitySource
     GENERATED_BODY()
 
 public:
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, BlueprintPure, Category = "Excavation|Base Density")
+    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Excavation|Base Density")
     float SampleBaseDensityAtWorld(const FVector& WorldPositionCm) const;
 
     /** Stable source material ID for the solid side of an exposed surface; 0 is the default surface layer. */
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, BlueprintPure, Category = "Excavation|Base Density")
+    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Excavation|Base Density")
     int32 SampleBaseMaterialIdAtWorld(const FVector& WorldPositionCm) const;
 };

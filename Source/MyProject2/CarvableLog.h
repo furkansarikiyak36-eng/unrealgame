@@ -398,10 +398,10 @@ private:
 	TObjectPtr<UMaterialDefinition> MaterialDefinition = nullptr;
 
 	/** Moisture is a material condition, while Damage remains the single shared structural integrity value. */
-	UPROPERTY(VisibleInstanceOnly, SaveGame, BlueprintReadOnly, Category = "Material|Condition")
+	UPROPERTY(VisibleInstanceOnly, SaveGame, Category = "Material|Condition")
 	float MoistureContent = 0.0f;
 
-	UPROPERTY(VisibleInstanceOnly, SaveGame, BlueprintReadOnly, Category = "Material|Condition")
+	UPROPERTY(VisibleInstanceOnly, SaveGame, Category = "Material|Condition")
 	float MaterialAgeDays = 0.0f;
 	bool bTemporary = false;
 	TArray<FJointCut> JointCuts;

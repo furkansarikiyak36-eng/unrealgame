@@ -8,7 +8,7 @@
 #include "WorldCore/ChunkState.h"
 #include "WorldCore/RegionLogisticsTypes.h"
 #include "Phase11_Production/ProductionChainTypes.h"
-#include "Engine/SaveGame.h"
+#include "GameFramework/SaveGame.h"
 #include "WorldPersistenceSubsystem.generated.h"
 
 class UExcavationVolumeSubsystem;

@@ -378,8 +378,9 @@ void ACarvableLog::ShowFlames(bool bShow, float Strength)
 
 bool ACarvableLog::CanReplace(const ACarvableLog* Old, const ACarvableLog* Replacement)
 {
+	// The replacement is normally on the player's shoulder when it is put in: carried is fine, falling is not.
 	if (!Old || !Replacement || Old == Replacement || !Old->IsAnchored() || Replacement->IsAnchored()
-		|| Replacement->IsCarried() || Replacement->MeshComponent->IsSimulatingPhysics()
+		|| Replacement->MeshComponent->IsSimulatingPhysics()
 		|| Replacement->BurnState != EBurnState::Intact || Old->GetDamage() < 0.2f
 		|| Replacement->GetDamage() >= Old->GetDamage() || Old->IsSplit() != Replacement->IsSplit()
 		|| Old->GetSplitCount() != Replacement->GetSplitCount()
@@ -465,7 +466,7 @@ bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
 
 	// The replacement's new geometry changes both the support graph and cached feature classification.
 	Old->Release();
-	StructureLink::Settle(GetWorld());
+	StructureLink::Settle(Old->GetWorld());
 	OnLogRepaired.Broadcast(Replacement);
 	return true;
 }

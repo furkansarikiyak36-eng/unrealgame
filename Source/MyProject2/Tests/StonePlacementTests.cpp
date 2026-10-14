@@ -15,12 +15,6 @@ namespace
 {
     UWorld* CreateStonePlacementTestWorld()
     {
-        UWorld* World = UWorld::CreateWorld(EWorldType::Game, false);
-        if (!World)
-        {
-            return nullptr;
-        }
-
         UWorld::InitializationValues Values;
         Values.AllowAudioPlayback(false);
         Values.RequiresHitProxies(false);
@@ -28,7 +22,13 @@ namespace
         Values.CreateNavigation(false);
         Values.CreateAISystem(false);
         Values.ShouldSimulatePhysics(false);
-        World->InitializeNewWorld(Values);
+
+        // CreateWorld initialises the world itself; a second InitializeNewWorld spawns a second WorldSettings and aborts.
+        UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, NAME_None, nullptr, true, ERHIFeatureLevel::Num, &Values);
+        if (!World)
+        {
+            return nullptr;
+        }
         return World;
     }
 

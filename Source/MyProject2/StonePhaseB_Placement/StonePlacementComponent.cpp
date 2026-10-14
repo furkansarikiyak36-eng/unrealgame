@@ -1,4 +1,5 @@
 #include "StonePlacementComponent.h"
+#include "Engine/OverlapResult.h"
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "StonePhaseB_Placement/StoneCarryComponent.h"
 #include "StoneCore/StoneDefinition.h"
@@ -302,7 +303,9 @@ void UStonePlacementComponent::ApplySelectedPlacementOption()
     const FTransform ContactTransform(FinalRotation, TargetSurfacePoint, TargetTransform.GetScale3D());
     const UStaticMeshComponent* MeshComponent =
         Cast<UStaticMeshComponent>(PreviewStone->GetRootComponent());
-    const FTransform MeshRelativeTransform = MeshComponent
+    // The mesh is the actor's root: its "relative" transform is the actor's world transform, which ContactTransform
+    // replaces. Only a mesh below the root would add an offset of its own.
+    const FTransform MeshRelativeTransform = (MeshComponent && MeshComponent != PreviewStone->GetRootComponent())
         ? MeshComponent->GetRelativeTransform()
         : FTransform::Identity;
 
@@ -366,7 +369,7 @@ bool UStonePlacementComponent::IsPlacementClear(const FTransform& CandidateTrans
     ObjectTypes.AddObjectTypesToQuery(ECC_PhysicsBody);
     ObjectTypes.AddObjectTypesToQuery(ECC_Pawn);
 
-    FComponentQueryParams QueryParams(SCENE_QUERY_STAT(StonePlacementClearance), false, GetOwner());
+    FComponentQueryParams QueryParams(SCENE_QUERY_STAT(StonePlacementClearance), GetOwner());
     QueryParams.AddIgnoredActor(PreviewStone);
     if (AActor* SurfaceActor = TargetSurfaceActor.Get())
     {

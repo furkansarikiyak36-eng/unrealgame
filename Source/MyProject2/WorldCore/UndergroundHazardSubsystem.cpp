@@ -276,9 +276,7 @@ AUndergroundSupportActor* UUndergroundHazardSubsystem::PlaceSupport(
 
     UWorld* World = GetWorld();
     UExcavationVolumeSubsystem* Excavation = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
-    UWorldStateSubsystem* WorldState = World ? World->GetSubsystem<UWorldStateSubsystem>() : nullptr;
-    if (!World || !Excavation || !SupportActorClass
-        || (!Snapshot.ModifiedSurfaceCells.IsEmpty() && !WorldState))
+    if (!World || !Excavation || !SupportActorClass)
     {
         return nullptr;
     }
@@ -892,7 +890,8 @@ bool UUndergroundHazardSubsystem::ImportSnapshot(const FUndergroundHazardSnapsho
 
     UWorld* World = GetWorld();
     UExcavationVolumeSubsystem* Excavation = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
-    if (!World || !Excavation || !SupportActorClass)
+    UWorldStateSubsystem* WorldState = World ? World->GetSubsystem<UWorldStateSubsystem>() : nullptr;
+    if (!World || !Excavation || !SupportActorClass || (!Snapshot.ModifiedSurfaceCells.IsEmpty() && !WorldState))
     {
         return false;
     }
