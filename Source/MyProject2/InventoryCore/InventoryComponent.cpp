@@ -290,7 +290,7 @@ bool UInventoryComponent::TransferItem(UInventoryComponent* Source, UInventoryCo
 
 bool UInventoryComponent::ExchangeItems(FName InputID, int32 InputCount, FName OutputID, int32 OutputCount)
 {
-    if (InputID.IsNone() || OutputID.IsNone() || InputCount <= 0 || OutputCount <= 0 ||
+    if (InputID.IsNone() || OutputID.IsNone() || InputID == OutputID || InputCount <= 0 || OutputCount <= 0 ||
         !HasItem(InputID, InputCount) || !GetItemData(InputID) || !GetItemData(OutputID))
     {
         return false;
@@ -429,10 +429,13 @@ bool UInventoryComponent::CanRestoreFromSavedItems(const TArray<FInventoryItem>&
 
 bool UInventoryComponent::RestoreFromSavedItems(const TArray<FInventoryItem>& Saved)
 {
+    // Use the same validator and stack definitions as preflight; do not run a
+    // second, weaker capacity calculation after the live inventory is cleared.
     if (!CanRestoreFromSavedItems(Saved))
     {
         return false;
     }
+
     const TArray<FInventorySlot> OriginalSlots = Slots;
     const bool bWasSuppressingEvents = bSuppressInventoryEvents;
     bSuppressInventoryEvents = true;
@@ -447,45 +450,12 @@ bool UInventoryComponent::RestoreFromSavedItems(const TArray<FInventoryItem>& Sa
         return false;
     };
 
-    float Weight = 0.0f;
-    int32 Needed = 0;
     for (const FInventoryItem& Item : Saved)
     {
-        // Check negative counts before the empty-item shortcut: IsEmpty() returns true
-        // for Count <= 0, which would otherwise silently ignore corrupted negative records.
-        if (Item.Count < 0)
-        {
-            return RejectRestore();
-        }
         if (Item.Count == 0)
         {
             continue;
         }
-        if (Item.ItemID.IsNone() || Item.MaxStack <= 0 ||
-            !FMath::IsFinite(Item.Weight) || Item.Weight < 0.0f)
-        {
-            return RejectRestore();
-        }
-
-        Weight += Item.Weight * Item.Count;
-        Needed += FMath::DivideAndRoundUp(Item.Count, Item.MaxStack);
-    }
-
-    const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
-    int32 Free = 0;
-    for (int32 i = 0; i < ActiveSlotCount; ++i)
-    {
-        if (!Slots[i].bLocked && !Slots[i].IsOccupied()) ++Free;
-    }
-
-    if (Needed > Free || (!bIgnoreWeight && Weight > MaxWeight + KINDA_SMALL_NUMBER))
-    {
-        return RejectRestore();
-    }
-
-    for (const FInventoryItem& Item : Saved)
-    {
-        if (Item.Count == 0) continue;
         if (AddItemData(Item) != EInventoryResult::Success)
         {
             return RejectRestore();
