@@ -164,3 +164,12 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - `Scripts/validate_excavation_spike.py` + 7 validator testi eklendi; Python CI, boş/yarım ölçümle “seçildi” kararına geçilmesini engelleyecek.
 - CI runner'ı 14 adımlı Python/shell/katalog/spike matrix check düzenine getirildi.
 - Durum: Faz 1 sadece şartname/validator hazır; ölçüm/teknoloji seçimi bekliyor ve Faz 0 kabul kapısına bağlı. Unreal 5.8 hostta benchmark yapılmadı.
+
+
+### 2026-10-14 — Taş yerleştirme lifecycle ve face/socket seçimi
+
+- `UStonePlacementComponent` için açık `BeginPlacement`, `CancelPlacement` ve doğrulamalı `UpdatePlacementTarget` eklendi.
+- `CycleFace` artık geçerli tanımlı yüzleri ve socket'leri sıralıyor; seçilen yüzün yerel normalini yüzeyin ters normaline, seçilen socket'in yerel konumunu temas noktasına hizalıyor. Yüzey normali Z ekseniyle hizalanıyor (normal vektörünün X yönüne çevrilmesi hatası önlendi).
+- Geçerli trace/placement hedefi olmadan `ConfirmPlacement` commit etmiyor. İptal, özgün actor transform/state/attach bilgilerini geri yüklemeyi dener.
+- `Source/MyProject2/Tests/StonePlacementTests.cpp` içine üç UE Automation Test eklendi. `Scripts/run_tests.sh` Stone Placement suite'ini ayrı logla çalıştırıp parser üzerinden minimum üç testi zorunlu kontrol ediyor.
+- Derleme ve UE 5.8 otomasyon sonucu henüz yok; bu nedenle bu kod düzeyi ilerlemedir, kabul edilmiş feature değildir.
