@@ -247,3 +247,12 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - \`AddItem\` ve \`AddItemData\` beklenmeyen yerleştirme başarısızlığında öncesindeki slot snapshot'ını geri yüklüyor.
 - \`Source/MyProject2/Tests/InventoryCapacityTests.cpp\` içinde kapasite küçülürken kısmi eklemeyi reddetme/rollback ve geçerli ekleme testleri eklendi.
 - Bu C++ testleri UE 5.8 hostunda henüz çalıştırılmadı; build/Automation kabulü bekliyor.
+
+
+### 2026-10-14 — Inventory save restore failure rollback
+
+- RestoreFromSavedItems önceki envanteri kapasite/ağırlık kontrolünden önce ClearAll ile siliyordu; reddedilen veya kısmen başarısız bir restore mevcut stoğu kaybettirebilirdi.
+- Restore artık mevcut slotların snapshot'ını alır; restore sırasında OnInventoryChanged ve OnItemAdded bildirimlerini bastırır, başarısızlıkta eski slotları geri koyup normalize eder ve tek nihai değişiklik bildirimi yapar.
+- Negatif count/weight veya geçersiz stack metadata içeren kayıtlar fail-closed reddedilir.
+- InventoryCapacityTests.cpp içine oversized save verisinin reddedilmesini ve eski stoğun korunmasını sınayan üçüncü UE Automation testi eklendi.
+- Unreal Engine 5.8 build/Automation bu ortamda çalıştırılmadı; motor doğrulaması beklemede.

@@ -47,4 +47,5 @@ protected:
     void BroadcastChanged();
     bool CanFitItem(const FInventoryItem& Item, int32 Count) const;
     void NormalizeSlotIndexes();
+    bool bSuppressInventoryEvents = false;
 };

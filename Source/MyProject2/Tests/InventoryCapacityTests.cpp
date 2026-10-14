@@ -116,4 +116,47 @@ bool FInventoryCapacityValidAddTest::RunTest(const FString& Parameters)
     DestroyInventoryCapacityTestWorld(World);
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FInventoryRestoreFailurePreservesCurrentTest,
+    "MyProject2.Inventory.Core.Capacity.RestoreFailurePreservesCurrent",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInventoryRestoreFailurePreservesCurrentTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateInventoryCapacityTestWorld();
+    if (!TestNotNull(TEXT("Test world created"), World)) return false;
+    AActor* Owner = nullptr;
+    UInventoryComponent* Inventory = nullptr;
+    UInventoryItemData* Existing = nullptr;
+    UInventoryItemData* NewItem = nullptr;
+    const bool bValid = CreateInventoryFixture(World, Owner, Inventory, Existing, NewItem);
+    TestTrue(TEXT("Inventory fixture created and slots initialized"), bValid);
+    if (!bValid) { DestroyInventoryCapacityTestWorld(World); return false; }
+
+    TestTrue(TEXT("Current inventory is seeded"),
+        Inventory->AddItem(Existing->ItemID, 1) == EInventoryResult::Success);
+    Inventory->MaxSlots = 2;
+
+    TArray<FInventoryItem> TooLargeSave;
+    for (int32 i = 0; i < 3; ++i)
+    {
+        FInventoryItem Saved;
+        Saved.ItemID = FName(*FString::Printf(TEXT("SavedItem%d"), i));
+        Saved.Count = 1;
+        Saved.MaxStack = 1;
+        Saved.Weight = 0.1f;
+        TooLargeSave.Add(Saved);
+    }
+
+    TestFalse(TEXT("Oversized saved inventory is rejected"),
+        Inventory->RestoreFromSavedItems(TooLargeSave));
+    TestEqual(TEXT("Failed restore preserves previous item"),
+        Inventory->GetItemCount(Existing->ItemID), 1);
+    TestEqual(TEXT("Failed restore inserts no partial saved item"),
+        Inventory->GetItemCount(FName(TEXT("SavedItem0"))), 0);
+    DestroyInventoryCapacityTestWorld(World);
+    return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

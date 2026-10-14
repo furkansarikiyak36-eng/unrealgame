@@ -81,7 +81,7 @@ EInventoryResult UInventoryComponent::AddItem(FName ID, int32 Count)
         }
         Slots[Index].Item.Count+=Add; Remaining-=Add;
     }
-    if (OnItemAdded.IsBound()) OnItemAdded.Broadcast(ID,GetItemCount(ID)); BroadcastChanged(); return EInventoryResult::Success;
+    if (!bSuppressInventoryEvents && OnItemAdded.IsBound()) OnItemAdded.Broadcast(ID,GetItemCount(ID)); BroadcastChanged(); return EInventoryResult::Success;
 }
 EInventoryResult UInventoryComponent::AddItemData(const FInventoryItem& Item)
 {
@@ -139,13 +139,59 @@ void UInventoryComponent::SortByRarity() { Slots.Sort([](const FInventorySlot&A,
 void UInventoryComponent::ClearAll() { for(int32 i=0;i<Slots.Num();++i){ if(!Slots[i].bLocked){Slots[i].Item=FInventoryItem();Slots[i].SlotIndex=i;} } BroadcastChanged(); }
 bool UInventoryComponent::RestoreFromSavedItems(const TArray<FInventoryItem>& Saved)
 {
+    const TArray<FInventorySlot> OriginalSlots = Slots;
+    const bool bWasSuppressingEvents = bSuppressInventoryEvents;
+    bSuppressInventoryEvents = true;
     ClearAll();
-    float Weight=0; int32 Needed=0;
-    for(const FInventoryItem& I:Saved){if(I.IsEmpty())continue; Weight+=I.Weight*I.Count; Needed+=FMath::DivideAndRoundUp(I.Count,FMath::Max(1,I.MaxStack));}
+
+    float Weight = 0.0f;
+    int32 Needed = 0;
+    for (const FInventoryItem& Item : Saved)
+    {
+        if (Item.IsEmpty()) continue;
+        if (Item.Count < 0 || Item.MaxStack <= 0 || Item.Weight < 0.0f)
+        {
+            Slots = OriginalSlots;
+            NormalizeSlotIndexes();
+            bSuppressInventoryEvents = bWasSuppressingEvents;
+            BroadcastChanged();
+            return false;
+        }
+        Weight += Item.Weight * Item.Count;
+        Needed += FMath::DivideAndRoundUp(Item.Count, FMath::Max(1, Item.MaxStack));
+    }
+
     const int32 ActiveSlotCount = FMath::Clamp(MaxSlots, 0, Slots.Num());
-    int32 Free=0;for(int32 i=0;i<ActiveSlotCount;++i)if(!Slots[i].bLocked&&!Slots[i].IsOccupied())++Free;
-    if(Needed>Free || (!bIgnoreWeight&&Weight>MaxWeight+KINDA_SMALL_NUMBER)){ClearAll();return false;}
-    for(const FInventoryItem& I:Saved){if(I.IsEmpty())continue;const EInventoryResult R=AddItemData(I);if(R!=EInventoryResult::Success){ClearAll();return false;}}
-    BroadcastChanged();return true;
+    int32 Free = 0;
+    for (int32 i = 0; i < ActiveSlotCount; ++i)
+    {
+        if (!Slots[i].bLocked && !Slots[i].IsOccupied()) ++Free;
+    }
+
+    if (Needed > Free || (!bIgnoreWeight && Weight > MaxWeight + KINDA_SMALL_NUMBER))
+    {
+        Slots = OriginalSlots;
+        NormalizeSlotIndexes();
+        bSuppressInventoryEvents = bWasSuppressingEvents;
+        BroadcastChanged();
+        return false;
+    }
+
+    for (const FInventoryItem& Item : Saved)
+    {
+        if (Item.IsEmpty()) continue;
+        if (AddItemData(Item) != EInventoryResult::Success)
+        {
+            Slots = OriginalSlots;
+            NormalizeSlotIndexes();
+            bSuppressInventoryEvents = bWasSuppressingEvents;
+            BroadcastChanged();
+            return false;
+        }
+    }
+
+    bSuppressInventoryEvents = bWasSuppressingEvents;
+    BroadcastChanged();
+    return true;
 }
-void UInventoryComponent::BroadcastChanged() { if(OnInventoryChanged.IsBound()) OnInventoryChanged.Broadcast(this); }
+void UInventoryComponent::BroadcastChanged() { if(!bSuppressInventoryEvents && OnInventoryChanged.IsBound()) OnInventoryChanged.Broadcast(this); }
