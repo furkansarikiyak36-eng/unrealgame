@@ -567,11 +567,16 @@ def build_contextual_demo_map(made, m):
         spawn_raw_carvable(carvable_class, made['RawLog_250'], (1500, 850, 16), 'Stock_Raw_250', 'WoodStock')
     spawn_mesh(made['Plank'], (900, 1200, 3), label='Example_Plank_Not_Placed', folder='WoodStock')
     # One usable cart and sled sit beside the stock, not randomly scattered across the map.
-    try:
-        unreal.HaulCart.spawn(world, unreal.Vector(650, 1450, 0), 0.0, unreal.EHaulKind.CART)
-        unreal.HaulCart.spawn(world, unreal.Vector(1120, 1450, 0), 0.0, unreal.EHaulKind.SLED)
-    except Exception as exc:
-        log('Cart factory unavailable in editor Python; skip cart spawn:', exc)
+    cart_class = unreal.load_class(None, '/Script/MyProject2.HaulCart')
+    if cart_class:
+        cart = spawn(cart_class, (650, 1450, 0), label='Working_Cart', folder='Hauling')
+        sled = spawn(cart_class, (1120, 1450, 0), label='Working_Sled', folder='Hauling')
+        if cart:
+            cart.set_kind(unreal.EHaulKind.CART)
+        if sled:
+            sled.set_kind(unreal.EHaulKind.SLED)
+    else:
+        log('HaulCart class missing; skip cart/sled placement')
 
     # QUARRY: a small group of damageable rocks; break them to obtain inventory stones for the fire pit.
     spawn_mesh(cube, (2250, 1150, -5), scale=(10, 9, 0.1), label='QuarryPad', folder='Pads', material=m['trail'])
