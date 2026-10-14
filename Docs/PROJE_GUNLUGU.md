@@ -313,3 +313,12 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - `UWorldCoreSaveGame` manifest, sparse excavation snapshot ve son 100.000 komut/olay anahtarını saklıyor. Yükleme manifest/defterleri doğruluyor ve ancak snapshot importer kabul ederse canlı kazı durumunu değiştiriyor. Commit ve rollback aynı operasyon ID'sini kullansa da farklı olay anahtarına sahip.
 - Faz 2 statik Python kontrat testi CI betiğine bağlandı. Bu kod kazı delta'sı ve ortak save envelope temelini sağlar; terrain geometri, envanter ve diğer domain kayıtlarının tamamlandığını iddia etmez.
 - Unreal Engine 5.8 build/Automation bu oturumda çalıştırılmadı; çalışma ağacına kaydedildiğinde yalnızca hafif statik CI kontrolü yapılır. Motor doğrulaması ve kapsamlı sistem denetimi Faz 14'te.
+
+### 2026-10-14 — Faz 3: runtime voxel mesh/collision adapter
+
+- `AExcavationTerrainChunkActor` eklendi: `UDynamicMeshComponent` ile 3B density örneklerini marching-tetrahedra izoyüzeyine çevirir, mesh üçgenlerini sınırlı tutar ve complex-as-simple collision'ı günceller.
+- `UExcavationTerrainChunkSubsystem` eklendi: 3B görsel chunk aktörlerini kaydeder, kazı/rollback event'lerinde yalnızca etkilenmiş chunk'ları yeniler, snapshot reset/load olayında geometriyi tekrar kurar. Bu kayıt yalnızca renderer cache'idir; density ve simülasyon state sahipliği mevcut subsistemlerde kalır.
+- Otomatik streaming oyuncu çevresinde 3D chunk'ları her tick sınırlı bütçeyle üretir; coordinate actor BeginPlay'den önce atanır. Varsayılan düz yüzey sağlayıcısı, yüklü Landscape proxy'lerini okuyabilen alternatif fallback sağlayıcısı ve aktif proje provider'ına öncelik eklendi.
+- `MyProject2.Build.cs` içine Landscape modül bağımlılığı eklendi; `Scripts/tests/test_excavation_terrain_adapter_contract.py` statik kontrat testi Python CI'a bağlandı.
+- **Açık kalan:** Landscape'in orijinal render/collision yüzeyinden voxel mesh'e yetki devri, malzeme stratification ve navigation güncellemesi henüz tamamlanmış kabul edilmez. Bu kodda geometri/collision üretimi var; UE 5.8 compile/Automation bu oturumda çalıştırılmadı. Faz 3 tracker bu nedenle In Progress durumunda bırakıldı.
+
