@@ -19,7 +19,7 @@ const TArray<EForestItem>& ForestItems::GetAllItems()
 		EForestItem::TrunkLog, EForestItem::BigLog, EForestItem::Log,
 		EForestItem::HalfLog, EForestItem::ShortLog, EForestItem::HollowLog, EForestItem::Plank,
 		EForestItem::Beam, EForestItem::Firewood, EForestItem::Stone, EForestItem::StoneBlock,
-		EForestItem::WindowBuck, EForestItem::DoorBuck };
+		EForestItem::WindowBuck, EForestItem::DoorBuck, EForestItem::Stick };
 	return Items;
 }
 
@@ -40,7 +40,39 @@ FString ForestItems::GetDisplayName(EForestItem Item)
 	case EForestItem::StoneBlock: return TEXT("Taş Blok");
 	case EForestItem::WindowBuck: return TEXT("Pencere Kasası");
 	case EForestItem::DoorBuck:   return TEXT("Kapı Kasası");
+	case EForestItem::Stick:      return TEXT("Çubuk");
 	default:                      return TEXT("");
+	}
+}
+
+FName ForestItems::GetInventoryID(EForestItem Item)
+{
+	if (Item == EForestItem::None)
+	{
+		return NAME_None;
+	}
+	const UEnum* ItemEnum = StaticEnum<EForestItem>();
+	return ItemEnum
+		? FName(*ItemEnum->GetNameStringByValue(static_cast<int64>(Item)))
+		: NAME_None;
+}
+
+float ForestItems::GetItemWeight(EForestItem Item)
+{
+	switch (Item)
+	{
+	case EForestItem::Stick:      return 0.2f;
+	case EForestItem::Firewood:   return 0.8f;
+	case EForestItem::Stone:      return 2.0f;
+	case EForestItem::StoneBlock: return 45.0f;
+	case EForestItem::HalfLog:   return 18.0f;
+	case EForestItem::ShortLog:  return 8.0f;
+	case EForestItem::HollowLog: return 20.0f;
+	case EForestItem::Plank:     return 5.0f;
+	case EForestItem::Beam:      return 12.0f;
+	case EForestItem::WindowBuck:return 15.0f;
+	case EForestItem::DoorBuck:  return 25.0f;
+	default:                     return 1.0f;
 	}
 }
 
@@ -67,6 +99,7 @@ UStaticMesh* ForestItems::GetMesh(EForestItem Item, int32 Variant)
 	case EForestItem::Plank:      return LoadGreybox(TEXT("SM_GB_Plank"));
 	case EForestItem::Beam:       return LoadGreybox(TEXT("SM_GB_Beam"));
 	case EForestItem::Firewood:   return LoadGreybox(TEXT("SM_GB_Firewood"));
+	case EForestItem::Stick:      return LoadGreybox(TEXT("SM_GB_Stick"));
 	case EForestItem::Stone:      return LoadGreybox(TEXT("SM_GB_Stone"));
 	case EForestItem::StoneBlock: return LoadGreybox(TEXT("SM_GB_StoneBlock"));
 	// A 100 x 100 cm frame, stood on its bottom edge and scaled to the opening.
