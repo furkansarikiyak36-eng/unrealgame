@@ -8,6 +8,7 @@
 
 class UCapsuleComponent;
 class UStaticMeshComponent;
+class UStructureDamageResolver;
 
 /**
  * A raider. It walks to the player, or to the nearest installed wood when it has no one in reach, hits what is in its way
@@ -43,6 +44,7 @@ public:
 	void TakeHit(float Amount);
 	bool IsAlive() const { return Health > 0.f; }
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 
 private:
@@ -53,6 +55,14 @@ private:
 	TObjectPtr<UStaticMeshComponent> Body;
 
 	TWeakObjectPtr<AActor> TargetOverride;
+	UPROPERTY(Transient)
+	TObjectPtr<UStructureDamageResolver> DamageResolver;
+
+	TArray<FVector> CachedNavPath;
+	int32 CachedNavWaypoint = 0;
+	TWeakObjectPtr<AActor> CachedNavTarget;
+	FVector CachedNavGoal = FVector::ZeroVector;
+	double NextPathRefreshTime = 0.0;
 };
 
 /** Starts and stops a raid with the plan this game ships with (a night with one wave of raiders). */
