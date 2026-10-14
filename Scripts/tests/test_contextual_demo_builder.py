@@ -53,7 +53,6 @@ class ContextualDemoBuilderTests(unittest.TestCase):
 
     def test_groove_snap_and_preview_are_context_gated(self) -> None:
         self.assertGreaterEqual(self.log_cpp.count("if (!bSplitPiece || SplitCount != 1"), 3)
-        self.assertIn("Line.Length", self.log_cpp) if False else None  # geometry extent is asserted in MechanicsDemo below
         self.assertIn("GetLength() + 2.f * ModuleLength", self.log_cpp)
 
     def test_player_only_reports_a_groove_after_success(self) -> None:
