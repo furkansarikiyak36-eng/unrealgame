@@ -47,7 +47,7 @@ class Phase6InventoryIntegrationTests(unittest.TestCase):
         self.assertIn("made['Stick'] = save_mesh('SM_GB_Stick'", GREYBOX)
 
     def test_physical_drop_and_pickup_preserve_stock_on_failure(self):
-        drop = section(CHARACTER_CPP, "APickupItem* AForestCharacter::DropInventoryItem", "int32 AForestCharacter::GetItemCount")
+        drop = section(CHARACTER_CPP, "AActor* AForestCharacter::DropInventoryItem", "int32 AForestCharacter::GetItemCount")
         self.assertLess(drop.index("CoreInventory->CanDropItem"), drop.index("CoreInventory->DropItem"))
         self.assertIn("Item == EForestItem::Stone", drop)
         self.assertIn("Item == EForestItem::Stick", drop)
