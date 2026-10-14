@@ -985,6 +985,62 @@ void AMechanicsDemo::RunShaping(AForestCharacter* Character)
 			&& FMath::Abs(FMath::FindDeltaAngleDegrees(QuarterA->GetFlatAngle(), Half->GetFlatAngle())) > 170.f,
 		FString::Printf(TEXT("Yarma tekrar: yarım (%.0f%%) sonra çeyrek (her biri %.1f%%), yarma sayısı %d; aynı yarmadan çıkan iki parçanın düz yüzleri ters (%.0f° ve %.0f°)"),
 			bQuarters ? 50.f : 0.f, Share * 100.f, Half->GetSplitCount(), Half->GetFlatAngle(), QuarterA ? QuarterA->GetFlatAngle() : 0.f));
+
+	// Context gate: a round log must not offer or accept a trough.
+	ACarvableLog* RoundStock = Fresh();
+	TArray<float> RoundGroovePoints;
+	TArray<TArray<FVector>> RoundGuide;
+	TArray<bool> RoundClosed;
+	RoundStock->GetSnapPoints(ECarveTool::Groove, 0.f, RoundGroovePoints);
+	RoundStock->GetCutGuide(ECarveTool::Groove, RoundStock->GetCenterX(), 0.f, 0.f, 0.f, 0.f, RoundGuide, RoundClosed);
+	const float RoundVolume = RoundStock->GetVolume();
+	const bool bRoundRejected = RoundGroovePoints.IsEmpty() && RoundGuide.IsEmpty()
+		&& !RoundStock->CutGroove(0.f) && FMath::IsNearlyEqual(RoundStock->GetVolume(), RoundVolume, 1.f);
+	Report(bRoundRejected, TEXT("Oluk önkoşulu: yuvarlak/boyuna yarılmamış kütükte kesim çizgisi veya oluk yok"));
+
+	// Context gate: after exactly one lengthwise split, the half-log gets a full-length channel.
+	ACarvableLog* HalfForGroove = Fresh();
+	ACarvableLog* OppositeHalf = HalfForGroove->Split(0.f);
+	if (OppositeHalf)
+	{
+		OppositeHalf->Anchor();
+	}
+	HalfForGroove->Anchor();
+	TArray<float> HalfGroovePoints;
+	TArray<TArray<FVector>> HalfGuide;
+	TArray<bool> HalfClosed;
+	HalfForGroove->GetSnapPoints(ECarveTool::Groove, 0.f, HalfGroovePoints);
+	HalfForGroove->GetCutGuide(ECarveTool::Groove, HalfForGroove->GetCenterX(), 0.f, 0.f, 0.f, 0.f, HalfGuide, HalfClosed);
+	const float HalfVolumeBefore = HalfForGroove->GetVolume();
+	const FVector FlatWorld = HalfForGroove->GetActorTransform().TransformPosition(FVector(HalfForGroove->GetCenterX(), 0.f, 0.f));
+	const FVector FlatNormal = HalfForGroove->GetActorTransform().TransformVectorNoScale(FVector(0.f, 1.f, 0.f));
+	Character->TestCarveHit(HalfForGroove, ECarveTool::Groove, FlatWorld, FlatNormal);
+	const bool bHalfCut = Character->TestCarveHit(HalfForGroove, ECarveTool::Groove, FlatWorld, FlatNormal);
+	const float HalfVolumeAfter = HalfForGroove->GetVolume();
+	TArray<float> DuplicateGroovePoints;
+	HalfForGroove->GetSnapPoints(ECarveTool::Groove, 0.f, DuplicateGroovePoints);
+	Report(OppositeHalf && HalfGroovePoints.Num() == 1 && HalfGuide.Num() == 2 && bHalfCut
+			&& HalfVolumeAfter < HalfVolumeBefore && DuplicateGroovePoints.IsEmpty(),
+		FString::Printf(TEXT("Oluk doğru bağlamda: yarım kütüğün tamamı boyunca kanal açıldı, hacim %.0f -> %.0f cm3; ikinci oluk kapatıldı"),
+			HalfVolumeBefore, HalfVolumeAfter));
+
+	// Context gate: a second lengthwise split creates a quarter-piece, which is not a trough stock.
+	ACarvableLog* QuarterStock = Fresh();
+	ACarvableLog* QuarterOpposite = QuarterStock->Split(0.f);
+	ACarvableLog* QuarterPiece = QuarterStock->Split(90.f);
+	if (QuarterOpposite) QuarterOpposite->Anchor();
+	if (QuarterPiece) QuarterPiece->Anchor();
+	TArray<float> QuarterGroovePoints;
+	TArray<TArray<FVector>> QuarterGuide;
+	TArray<bool> QuarterClosed;
+	if (QuarterPiece)
+	{
+		QuarterPiece->GetSnapPoints(ECarveTool::Groove, 0.f, QuarterGroovePoints);
+		QuarterPiece->GetCutGuide(ECarveTool::Groove, QuarterPiece->GetCenterX(), 0.f, 0.f, 0.f, 0.f, QuarterGuide, QuarterClosed);
+	}
+	const bool bQuarterRejected = QuarterPiece && QuarterPiece->GetSplitCount() == 2
+		&& QuarterGroovePoints.IsEmpty() && QuarterGuide.IsEmpty() && !QuarterPiece->CutGroove(0.f);
+	Report(bQuarterRejected, TEXT("Oluk önkoşulu: ikinci kez boyuna yarılıp çeyrek olan parçada oluk seçeneği sunulmuyor"));
 }
 
 ACarvableLog* AMechanicsDemo::Piece(FName Name) const
