@@ -66,6 +66,26 @@ class ExcavationTerrainAdapterContractTests(unittest.TestCase):
         self.assertIn("TActorIterator<ALandscapeProxy>", SUBSYSTEM_CPP)
         self.assertIn("RegisterFallbackBaseDensitySource(LandscapeFallbackDensitySource)", SUBSYSTEM_CPP)
 
+    def test_base_material_id_maps_to_dynamic_mesh_material_slots(self):
+        self.assertIn("SampleBaseMaterialIdAtWorld", (WORLD_CORE / "ExcavationBaseDensitySource.h").read_text(encoding="utf-8"))
+        self.assertIn("TrySampleBaseMaterialIdAtWorld", VOLUME_H)
+        self.assertIn("EnableMaterialID", ACTOR_CPP)
+        self.assertIn("GetMaterialID()->SetValue", ACTOR_CPP)
+        self.assertIn("StratifiedMaterialLayers", ACTOR_H)
+        self.assertIn("MaterialSlotByBaseId.Find(BaseMaterialId)", ACTOR_CPP)
+
+    def test_navigation_octree_is_refreshed_after_mesh_and_collision_changes(self):
+        self.assertIn('#include "NavigationSystem.h"', ACTOR_CPP)
+        self.assertIn("SetCanEverAffectNavigation(true)", ACTOR_CPP)
+        self.assertGreaterEqual(ACTOR_CPP.count("UNavigationSystemV1::UpdateComponentInNavOctree(*DynamicMeshComponent)"), 2)
+
+    def test_landscape_physical_material_can_resolve_a_stable_layer_id(self):
+        self.assertIn("FExcavationLandscapeMaterialMapping", LANDSCAPE_SOURCE)
+        self.assertIn("SetMaterialMappings", LANDSCAPE_SOURCE)
+        self.assertIn("GetPhysicalMaterialAtLocation", LANDSCAPE_SOURCE)
+        self.assertIn("LandscapeMaterialMappings", SUBSYSTEM_H)
+        self.assertIn("SetMaterialMappings(LandscapeMaterialMappings)", SUBSYSTEM_CPP)
+
     def test_mesh_adapter_does_not_own_a_second_density_store(self):
         self.assertNotIn("CellOverrides", ACTOR_H + ACTOR_CPP)
         self.assertNotIn("TMap<FIntVector, float>", ACTOR_H + ACTOR_CPP)
