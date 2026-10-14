@@ -3,6 +3,9 @@
 #include "ForestCharacter.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryItem.h"
+#include "StickPhaseS1_Core/StickActor.h"
+#include "StickCore/StickDefinition.h"
+#include "Core/StructuralMaterialTypes.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
 #include "LogConstructionActor.h"
@@ -1832,6 +1835,26 @@ void AForestCharacter::Interact()
 				}
 				return;
 			}
+
+			if (AStickActor* Stick = Cast<AStickActor>(StoneHit.GetActor()))
+			{
+				UStickDefinition* StickDefinition = Stick->GetDefinition();
+				if (!StickDefinition ||
+					Stick->GetStructuralState_Implementation() != EStructuralNodeState::Loose ||
+					StickDefinition->Shape != EStickShape::Raw)
+				{
+					ShowMessage(TEXT("Yalnızca serbest ve işlenmemiş çubuk stoğa alınabilir."));
+					return;
+				}
+				if (!CanAddItem(EForestItem::Stick, 1) || AddItem(EForestItem::Stick, 1) != 1)
+				{
+					ShowMessage(TEXT("Çanta dolu; çubuk dünyada bırakıldı."));
+					return;
+				}
+				Stick->Destroy();
+				ShowMessage(TEXT("+1 Çubuk"));
+				return;
+			}
 		}
 	}
 	// Any piece of wood onto the shoulder, as long as its weight fits (a log item lying about becomes a piece first).
@@ -1911,6 +1934,39 @@ void AForestCharacter::Interact()
 	ShowMessage(FString::Printf(TEXT("+%d %s"), PickupCount, *ForestItems::GetDisplayName(Pickup->GetItem())));
 	Pickup->Destroy();
 	FocusedPickup = nullptr;
+}
+
+APickupItem* AForestCharacter::DropInventoryItem(EForestItem Item, int32 Count)
+{
+	if (!CoreInventory || !GetWorld() || Count <= 0 || Item == EForestItem::None ||
+		ForestItems::IsCarriedItem(Item))
+	{
+		return nullptr;
+	}
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	if (ItemID.IsNone() || !CoreInventory->CanDropItem(ItemID, Count))
+	{
+		return nullptr;
+	}
+
+	const FVector Forward = GetActorForwardVector().GetSafeNormal();
+	const FVector SpawnLocation = GetActorLocation() + Forward * 105.0f + FVector(0.0f, 0.0f, 35.0f);
+	const FTransform DropTransform(FRotator(0.0f, GetActorRotation().Yaw, 0.0f), SpawnLocation);
+	APickupItem* Pickup = APickupItem::Spawn(
+		GetWorld(), Item, Count, DropTransform, Forward * 160.0f + FVector(0.0f, 0.0f, 90.0f));
+	if (!Pickup)
+	{
+		return nullptr;
+	}
+
+	// Spawn first, then debit. If the inventory rejects the debit, remove the
+	// transient actor so a retry cannot duplicate the stack.
+	if (CoreInventory->DropItem(ItemID, Count) != EInventoryResult::Success)
+	{
+		Pickup->Destroy();
+		return nullptr;
+	}
+	return Pickup;
 }
 
 int32 AForestCharacter::GetItemCount(EForestItem Item) const
@@ -2005,9 +2061,9 @@ void AForestCharacter::Craft(EForestItem Input, int32 InputCount, EForestItem Ou
 			InputCount, *ForestItems::GetDisplayName(Input)));
 		return;
 	}
-	if (!CoreInventory || !CanAddItem(Output, OutputCount) && ForestItems::IsCarriedItem(Input))
+	if (!CoreInventory)
 	{
-		ShowMessage(TEXT("Çanta dolu"));
+		ShowMessage(TEXT("Envanter sistemi hazır değil."));
 		return;
 	}
 
