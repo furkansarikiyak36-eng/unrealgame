@@ -64,6 +64,20 @@ Bu dalın `Docs/TEST_DURUMU.md` belgesi son kayıtlı koşumda **101 mekanik kon
 
 Ekli 14 Ekim durum raporundaki **119/119** sonuç, yerel `integrate/web-plan` dalına aittir. GitHub'da bu oturumda erişilebilen dallar `main` ve `plan/phase-00-baseline`; yerel 119-kontrollü sürüm buradaki dala senkronize değil. Bu nedenle bu harita, şimdilik bu dalda mevcut olan mekanik grupları için bir aday sahnedir; tüm 119 yerel kontrolün tek tek bu haritaya eşlendiğini veya yerel sahnenin birebir yeniden üretildiğini iddia etmez.
 
+## Tam 119 kontrolü olan sürüme geçiş için zorunlu eşleme
+
+Ekli yerel durum raporunda yer alan daha geniş oyun akışındaki 119 kontrolün tamamını bu eski dalın sahnesine yerleştirilmiş gibi göstermiyoruz. O sürümde olup bu dalda kaynak sınıfı/harita bağlantısı henüz bulunmayan şu bağlamlar, aynı gerçek mekanik sınıfları senkronize edildikten sonra bu haritaya eklenmelidir:
+
+- **Soğuk bölge ve günlük hayatta kalma:** korunaklı/korunaksız küçük çevre deneyi; ateş, çatı, ıslanma ve giysi farkını kıyaslama.
+- **Nehir geçişi:** iki kıyı ve aralarında gerçek nehir aktörü; geçiş öncesi/sonrası ıslanma ve hız farkı.
+- **Yar ve ip hattı:** erişilemeyen üst kot, doğru ankraj noktaları ve ip ile çıkış; ardından köprü ile alternatif rota.
+- **Kalıntı/hikâye:** tek yanmış kulübe alanında beş notun her biri ayrı ve okunabilir; rehber tabelaları notların yerine geçmez.
+- **Tarla ve hayvanlar:** boş ekim parselleri, yabani tohum kaynağı ve gerçek etkileşimli hayvanlar; hayvan besleme bu dalda bağlı değilse çalışan özellik gibi sergilenmez.
+- **Baskın ve savunma:** ayrı test şeridi; oyuncu saldırı başlatabilmeli, düşman yolu ve hedef seçimi görülebilmeli, duvar/çit/kazık davranışı güvenli şekilde sınanabilmeli.
+- **Taş yerleştirme:** geçerli yüzey/socket, dolu socket ve engel üstüne yerleştirme için birbirinden ayrılmış test noktaları.
+
+Bu sınıfların bir kısmı 14 Ekim yerel raporunda (`integrate/web-plan`) belirtilmiş ancak GitHub'da erişilebilir `plan/phase-00-baseline` dalında bulunmuyor. Onların yerine sahte statik dekor koymak veya bu kontroller geçti demek doğru olmaz. Yerel 119-kontrollü dal senkronize edildiğinde bu istasyonlar aynı map builder içinde gerçek sınıfları çağırarak kurulmalı; ardından her katalog/test ID'si **istasyon + önkoşul + işlem + beklenen sonuç + test kanıtı** ile eşleştirilmelidir.
+
 ## Kabul listesi
 
 - [ ] Unreal Editor içinde `Demo_Contextual_01` açılır; harita boş/bozuk asset hatası vermez.
