@@ -97,7 +97,7 @@ class Phase6InventoryIntegrationTests(unittest.TestCase):
         self.assertIn("SaveObject->bHasStorageInventories = true", SAVE_CPP)
         self.assertIn("StorageSnapshot.Items.Add(Slot.Item)", SAVE_CPP)
         self.assertIn("StorageActorsByKey", SAVE_CPP)
-        self.assertIn("Storage->GetInventory()->CanRestoreFromSavedItems(StorageSnapshot.Items)", SAVE_CPP)
+        self.assertIn("!(*FoundStorage)->GetInventory()->CanRestoreFromSavedItems(StorageSnapshot.Items)", SAVE_CPP)
         self.assertIn("Storage->GetInventory()->RestoreFromSavedItems(StorageSnapshot.Items)", SAVE_CPP)
         self.assertIn("CurrentSaveSchemaVersion = 3", SAVE_H)
 
