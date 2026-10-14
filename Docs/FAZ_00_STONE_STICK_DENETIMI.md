@@ -37,3 +37,13 @@
 ## Karar
 
 STONE ve STICK kataloglarının tüm satırları kaynak triage tablosuna işlenmiştir. Bu yalnızca Faz 0'ın kaynak haritası ayağını tamamlar; taze UE testleri, satır-özel test kimlikleri, görsel/editor kanıtları ve yüksek riskli işlem hatalarının düzeltilmesi beklediğinden Faz 0 genel kabulü **açık** kalır.
+
+
+## İşlenen kaynak kaybı ve no-op başarı engelleri
+
+Son kaynak düzenlemeleri:
+- `UStoneWorkingComponent::CrushBoulder`: bütün istenen taş parçaları oluşturulmadan kaynak kaya tüketilmiyor; herhangi bir spawn veya kaynak yok etme başarısızlığında üretilen parçalar geri temizleniyor. Yeni parçalar kaynak taşın `UStoneDefinition` verisiyle başlatılıyor.
+- `UStickBreakingComponent::CompleteBreak`: bütün kırık çubuklar oluşturulmadan kaynak çubuk yok edilmiyor; kısmi spawn hatasında üretilmiş çıktılar temizleniyor ve kırma denemesi durduruluyor.
+- `HollowGroove`, `EngraveJoint` ve `SmoothSurface` şimdilik `false` dönüyor. Bunlar geometriyi değiştirmeden başarı bildiriyordu; artık sahte başarı üretmiyorlar. Bu metotların gerçek geometrik işlemi hâlâ uygulanmayı bekliyor.
+
+**Doğrulama sınırı:** Bu güncellemeler kaynak seviyesinde işlendi ancak UE 5.8 derleme/oyun içi test koşusu henüz alınmadı. P0-024 ve P0-026, motor testi olmadan kapatılmaz.
