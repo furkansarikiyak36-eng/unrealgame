@@ -113,6 +113,11 @@ def verify_stone_placement(path: Path, minimum_tests: int = 5) -> tuple[int, int
         path, "Stone placement", "MyProject2.StonePlacement", minimum_tests
     )
 
+def verify_stone_trap(path: Path, minimum_tests: int = 2) -> tuple[int, int]:
+    return verify_automation_suite(
+        path, "Stone trap", "MyProject2.StoneTrap", minimum_tests
+    )
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -120,6 +125,7 @@ def main() -> int:
     parser.add_argument("--wood", required=True, type=Path)
     parser.add_argument("--stick-inventory", required=True, type=Path)
     parser.add_argument("--stone-placement", required=True, type=Path)
+    parser.add_argument("--stone-trap", required=True, type=Path)
     parser.add_argument("--minimum-mechanics-checks", type=int, default=101,
                         help="Fail if fewer than this many MechanicsDemo checks passed (default: 101).")
     parser.add_argument("--minimum-wood-tests", type=int, default=12,
@@ -128,9 +134,12 @@ def main() -> int:
                         help="Fail if fewer than this many unique stick crafting tests passed (default: 3).")
     parser.add_argument("--minimum-stone-placement-tests", type=int, default=5,
                         help="Fail if fewer than this many unique stone placement tests passed (default: 5).")
+    parser.add_argument("--minimum-stone-trap-tests", type=int, default=2,
+                        help="Fail if fewer than this many unique stone trap tests passed (default: 2).")
     args = parser.parse_args()
     if min(args.minimum_mechanics_checks, args.minimum_wood_tests,
-           args.minimum_stick_inventory_tests, args.minimum_stone_placement_tests) < 1:
+           args.minimum_stick_inventory_tests, args.minimum_stone_placement_tests,
+           args.minimum_stone_trap_tests) < 1:
         parser.error("minimum test counts must be at least 1")
     try:
         mech_passed, mech_failed = verify_mechanics(args.mechanics, args.minimum_mechanics_checks)
@@ -141,6 +150,9 @@ def main() -> int:
         stone_passed, stone_failed = verify_stone_placement(
             args.stone_placement, args.minimum_stone_placement_tests
         )
+        trap_passed, trap_failed = verify_stone_trap(
+            args.stone_trap, args.minimum_stone_trap_tests
+        )
     except ValueError as exc:
         print(f"TEST VERIFICATION FAILED: {exc}", file=sys.stderr)
         return 1
@@ -148,6 +160,7 @@ def main() -> int:
     print(f"Wood automation: {wood_passed} passed, {wood_failed} failed")
     print(f"Stick inventory automation: {stick_passed} passed, {stick_failed} failed")
     print(f"Stone placement automation: {stone_passed} passed, {stone_failed} failed")
+    print(f"Stone trap automation: {trap_passed} passed, {trap_failed} failed")
     print("TEST VERIFICATION PASSED")
     return 0
 
