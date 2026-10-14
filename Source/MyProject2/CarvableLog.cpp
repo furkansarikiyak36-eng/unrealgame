@@ -453,6 +453,7 @@ bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
 		case ECarveTool::NotchRound: bCutRebuilt = Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, true); break;
 		case ECarveTool::NotchFlat:  bCutRebuilt = Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, false); break;
 		case ECarveTool::Dovetail:   bCutRebuilt = Replacement->CutDovetail(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth); break;
+		case ECarveTool::Groove:     bCutRebuilt = Replacement->CutGroove(Cut.SideAngleDeg); break;
 		default:                     bCutRebuilt = false; break;
 		}
 
