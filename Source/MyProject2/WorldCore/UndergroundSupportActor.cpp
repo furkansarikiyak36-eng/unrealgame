@@ -1,6 +1,8 @@
 #include "UndergroundSupportActor.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Engine/World.h"
 #include "UndergroundHazardSubsystem.h"
 
@@ -9,6 +11,11 @@ AUndergroundSupportActor::AUndergroundSupportActor()
     PrimaryActorTick.bCanEverTick = false;
     SupportMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("UndergroundSupportMesh"));
     SetRootComponent(SupportMesh);
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> DefaultSupportCube(TEXT("/Engine/BasicShapes/Cube.Cube"));
+    if (DefaultSupportCube.Succeeded())
+    {
+        SupportMesh->SetStaticMesh(DefaultSupportCube.Object);
+    }
     SupportMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     SupportMesh->SetCollisionObjectType(ECC_WorldStatic);
     SupportMesh->SetCollisionResponseToAllChannels(ECR_Block);
@@ -58,6 +65,31 @@ void AUndergroundSupportActor::ApplySupportProfile()
             SelfWeight = 35.0f;
             CompressiveCapacityKN = 40.0f;
             break;
+    }
+
+    if (SupportMesh)
+    {
+        switch (SupportType)
+        {
+            case EUndergroundSupportType::TimberPost:
+                SupportMesh->SetRelativeScale3D(FVector(0.18f, 0.18f, 1.5f));
+                SupportMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 75.0f));
+                break;
+            case EUndergroundSupportType::TimberBrace:
+                SupportMesh->SetRelativeScale3D(FVector(1.5f, 0.18f, 0.18f));
+                SupportMesh->SetRelativeLocation(FVector::ZeroVector);
+                break;
+            case EUndergroundSupportType::StonePillar:
+                SupportMesh->SetRelativeScale3D(FVector(0.42f, 0.42f, 1.5f));
+                SupportMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 75.0f));
+                break;
+            case EUndergroundSupportType::ReinforcedBeam:
+                SupportMesh->SetRelativeScale3D(FVector(1.5f, 0.22f, 0.25f));
+                SupportMesh->SetRelativeLocation(FVector::ZeroVector);
+                break;
+            default:
+                break;
+        }
     }
 
     StructuralHealth = CurrentIntegrity;
