@@ -47,7 +47,7 @@ class WoodMaterialIntegrationTests(unittest.TestCase):
         self.assertIn("BurnTotal", LOG_CPP)
         self.assertIn("UBurnSubsystem", LOG_CPP)
         self.assertIn("TArray<TWeakObjectPtr<ACarvableLog>> Burning", BURN_H)
-        self.assertIn("Piece->StepBurn(Seconds)", BURN_CPP)
+        self.assertIn("Source->StepBurn(Seconds)", BURN_CPP)
         self.assertNotIn("EBurnState", WOOD_H)
         self.assertNotIn("EBurnState", WOOD_CPP)
 
