@@ -253,9 +253,10 @@ bool URegionLogisticsSubsystem::RegisterInfrastructureSegment(
 {
     if (StableLinkKey.IsNone() || StartNodeKey.IsNone() || EndNodeKey.IsNone()
         || StartNodeKey == EndNodeKey
+        || MakeStableNodeId(StartNodeKey) == MakeStableNodeId(EndNodeKey)
         || !IsValidNodeData(StartNodeKey, StartLocation)
         || !IsValidNodeData(EndNodeKey, EndLocation)
-        || FVector::Distance(StartLocation, EndLocation) < 1.0f
+        || FVector::Dist(StartLocation, EndLocation) < 1.0f
         || !IsFiniteInRange(MaxPayloadKg, 0.1f, 10000000.0f)
         || !IsFiniteInRange(Condition01, 0.0f, 1.0f)
         || !IsFiniteInRange(Risk01, 0.0f, 1.0f)
@@ -447,7 +448,7 @@ bool URegionLogisticsSubsystem::ComputeTraversalCost(
         return false;
     }
 
-    const float DistanceMeters = FVector::Distance(FromNode.WorldLocation, ToNode.WorldLocation) / 100.0f;
+    const float DistanceMeters = FVector::Dist(FromNode.WorldLocation, ToNode.WorldLocation) / 100.0f;
     if (!FMath::IsFinite(DistanceMeters) || DistanceMeters <= 0.0f)
     {
         return false;
