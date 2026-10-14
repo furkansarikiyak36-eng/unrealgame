@@ -284,8 +284,15 @@ Kullanıcının önceliği netleştirildi: 485 mekaniği satır satır denetleyi
 - Docs/PLAN_14_FAZ_UYGULAMA_OMURGASI.md implementation-first L0–L4 katmanlarına göre güncellendi. Faz 14 artık 485 mekanik ve tüm sistemler için toplu analiz/hata kapısı.
 - Docs/FAZ_TAKIP.csv içinde Faz 0 kaynak-triage baseline'ı tamamlandı olarak işaretlendi; U0/U1/U2 mekanik durumları kodlamayı bloke etmiyor. Faz 1 kazı veri temeli çalışması olarak başlatıldı.
 - 485 mekanik ana katalogda 333 U2, 88 U1 ve 64 U0 olarak aile eşleştirmeleriyle eşitlendi; 485 unique ID var. Bu dağılım oyun içi tamamlanma iddiası değildir.
-- Inventory-to-world bridge düzeltildi: null world/actor class/invalid item kontrolü eklenip fiziksel spawn sonrası DropItem çağrılıyor; drop reddedilirse spawned actor temizleniyor. Kaynak kontratını kontrol eden Python testi CI betiğine bağlandı; GitHub Actions sonucu henüz burada okunmadı.
+- Inventory-to-world bridge düzeltildi: null world/actor class/invalid item kontrolü eklenip fiziksel spawn sonrası DropItem çağrılıyor; drop reddedilirse spawned actor temizleniyor. Kaynak kontratını kontrol eden Python testi CI betiğine bağlandı; Python tooling CI run #417 başarılı.
 - Faz 1 için WorldCore/ExcavationTypes.h, ExcavationVolumeSubsystem.h/.cpp eklendi. Sparse cell override, küresel carve/fill edit, sınır/cap doğrulaması ve operation-id tabanlı rollback koruması bulunuyor. Veri backend'i henüz mesh/collision, nav veya save/load sistemine bağlanmış değildir; bunlar ilgili sonraki katmanlar.
 - Doğrulama: dosyalar branch'e kaydedildi; bu oturumda Unreal derleme veya motor otomasyonu çalıştırılmadı. Yeni C++ kodunun UE 5.8'de gerçek compile sonucu Claude Code tarafında alınmalı.
 
 **Sıradaki:** Faz 1 veri API'sini mevcut world/chunk/persistence kontratlarıyla uyumlu hale getirmek ve consumer'ların yalnızca UExcavationVolumeSubsystem API'sini kullanmasını sağlamak; ardından Faz 2'nin ortak kimlik/sahiplik/sürüm sözleşmelerini modül sınırlarına uygulamak.
+
+### 2026-10-14 — Kazı veri katmanına chunk indeksi ve seam API'si (Web)
+
+- ExcavationVolumeSubsystem'e 3B cell→chunk koordinat dönüşümü (negatif koordinatlar için floor division), chunk başına override hücresi listesi ve editin etkilediği komşu chunk'ları döndüren API eklendi.
+- Aktif sparse override varken cell boyutu veya chunk eksen boyutu değiştirilirse dünya-koordinat sorguları/editler reddediliyor; böylece önceden yazılmış cell kimlikleri sessizce farklı geometriye kaymıyor.
+- Aynı hücreyi tekrar düzenleyen sonraki işlem, yoğunluk aynı olsa bile hücrenin işlem sahipliğini alır. Bu sayede önceki rollback yeni işlemin sonucunu yanlışlıkla silemez; rollback sırası doğrulanır.
+- GitHub Actions Python tooling CI run #417 başarılıdır. Bu kontrol Python/shell/CSV araçlarını çalıştırır; yeni C++ kaynak için Unreal derlemesi değildir. UE testleri Claude Code host sürecinde çalıştırılacaktır.
