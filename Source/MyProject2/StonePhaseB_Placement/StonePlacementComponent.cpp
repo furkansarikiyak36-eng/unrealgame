@@ -123,10 +123,11 @@ bool UStonePlacementComponent::CancelPlacement()
         {
             return false;
         }
-        Stone->AttachToComponent(
-            AttachParent,
-            FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-            OriginalAttachSocket);
+        const FAttachmentTransformRules RestoreRules =
+            (!OriginalAttachSocket.IsNone() && AttachParent->DoesSocketExist(OriginalAttachSocket))
+                ? FAttachmentTransformRules::SnapToTargetNotIncludingScale
+                : FAttachmentTransformRules::KeepWorldTransform;
+        Stone->AttachToComponent(AttachParent, RestoreRules, OriginalAttachSocket);
     }
     else if (Stone->GetStructuralState_Implementation() != OriginalStructuralState)
     {
