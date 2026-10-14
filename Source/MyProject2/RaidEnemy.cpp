@@ -150,10 +150,9 @@ void ARaidEnemy::StepAI(float Dt)
 		{
 			Player->TakeEnemyHit(PlayerDps * Dt);
 		}
-		else if (DamageResolver && DamageResolver->ApplyDamageToBlock(Target, WoodDps * Dt * 100.0f)
-			&& Target->IsActorBeingDestroyed())
+		else if (DamageResolver)
 		{
-			DamageResolver->UpdateWorldAfterBlockDestroyed(World, Target);
+			DamageResolver->ApplyDamageToBlock(Target, WoodDps * Dt * 100.0f);
 		}
 		return;
 	}
@@ -206,11 +205,9 @@ void ARaidEnemy::StepAI(float Dt)
 		{
 			Blocker->AddDamage(WoodDps * Dt);
 		}
-		else if (DamageResolver && IsValid(BlockerActor)
-			&& DamageResolver->ApplyDamageToBlock(BlockerActor, WoodDps * Dt * 100.0f)
-			&& BlockerActor->IsActorBeingDestroyed())
+		else if (DamageResolver && IsValid(BlockerActor))
 		{
-			DamageResolver->UpdateWorldAfterBlockDestroyed(World, BlockerActor);
+			DamageResolver->ApplyDamageToBlock(BlockerActor, WoodDps * Dt * 100.0f);
 		}
 	}
 	// Keep to the ground.
