@@ -62,6 +62,25 @@ namespace
     }
 }
 
+bool UExcavationVolumeSubsystem::IsGridConfigurationCompatible() const
+{
+    if (!FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0f || CellsPerChunkAxis < 4)
+    {
+        return false;
+    }
+
+    if (CellOverrides.Num() > 0)
+    {
+        if ((LockedCellSizeCm > 0.0f && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
+            || (LockedCellsPerChunkAxis > 0 && CellsPerChunkAxis != LockedCellsPerChunkAxis))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void UExcavationVolumeSubsystem::Deinitialize()
 {
     CellOverrides.Reset();
@@ -73,14 +92,7 @@ void UExcavationVolumeSubsystem::Deinitialize()
 
 bool UExcavationVolumeSubsystem::TryWorldToCell(const FVector& WorldPositionCm, FIntVector& OutCell) const
 {
-    if (!IsFiniteVector(WorldPositionCm) || !FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0f)
-    {
-        return false;
-    }
-    if (CellsPerChunkAxis < 4
-        || (CellOverrides.Num() > 0
-            && ((LockedCellSizeCm > 0.0f && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
-                || (LockedCellsPerChunkAxis > 0 && CellsPerChunkAxis != LockedCellsPerChunkAxis))))
+    if (!IsFiniteVector(WorldPositionCm) || !IsGridConfigurationCompatible())
     {
         return false;
     }
@@ -99,11 +111,7 @@ bool UExcavationVolumeSubsystem::TryWorldToCell(const FVector& WorldPositionCm, 
 
 FVector UExcavationVolumeSubsystem::CellToWorldCenter(const FIntVector& Cell) const
 {
-    if (!FMath::IsFinite(CellSizeCm) || CellSizeCm <= 0.0f
-        || CellsPerChunkAxis < 4
-        || (CellOverrides.Num() > 0
-            && ((LockedCellSizeCm > 0.0f && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
-                || (LockedCellsPerChunkAxis > 0 && CellsPerChunkAxis != LockedCellsPerChunkAxis))))
+    if (!IsGridConfigurationCompatible())
     {
         return FVector::ZeroVector;
     }
@@ -132,6 +140,11 @@ bool UExcavationVolumeSubsystem::TryGetDensityOverrideAtCell(
     const FIntVector& Cell,
     float& OutDensity) const
 {
+    if (!IsGridConfigurationCompatible())
+    {
+        return false;
+    }
+
     const FExcavationCellOverride* Override = CellOverrides.Find(Cell);
     if (!Override || !IsValidDensity(Override->Density))
     {
@@ -142,18 +155,31 @@ bool UExcavationVolumeSubsystem::TryGetDensityOverrideAtCell(
     return true;
 }
 
+bool UExcavationVolumeSubsystem::ResolveDensityAtCell(
+    const FIntVector& Cell,
+    float BaseDensity,
+    float& OutDensity) const
+{
+    if (!IsGridConfigurationCompatible() || !IsValidDensity(BaseDensity))
+    {
+        return false;
+    }
+
+    const FExcavationCellOverride* Override = CellOverrides.Find(Cell);
+    OutDensity = Override ? Override->Density : BaseDensity;
+    return IsValidDensity(OutDensity);
+}
+
 bool UExcavationVolumeSubsystem::IsCellOverridden(const FIntVector& Cell) const
 {
-    return CellOverrides.Contains(Cell);
+    return IsGridConfigurationCompatible() && CellOverrides.Contains(Cell);
 }
 
 bool UExcavationVolumeSubsystem::TryGetChunkCoordinateForCell(
     const FIntVector& Cell,
     FIntVector& OutChunkCoordinate) const
 {
-    if (CellsPerChunkAxis < 4
-        || (CellOverrides.Num() > 0 && LockedCellsPerChunkAxis > 0
-            && CellsPerChunkAxis != LockedCellsPerChunkAxis))
+    if (!IsGridConfigurationCompatible())
     {
         return false;
     }
@@ -166,9 +192,7 @@ TArray<FIntVector> UExcavationVolumeSubsystem::GetOverrideCellsInChunk(
     const FIntVector& ChunkCoordinate) const
 {
     TArray<FIntVector> Result;
-    if (CellsPerChunkAxis < 4
-        || (CellOverrides.Num() > 0 && LockedCellsPerChunkAxis > 0
-            && CellsPerChunkAxis != LockedCellsPerChunkAxis))
+    if (!IsGridConfigurationCompatible())
     {
         return Result;
     }
@@ -193,9 +217,7 @@ TArray<FIntVector> UExcavationVolumeSubsystem::GetAffectedChunksForEdit(
     const FExcavationEditRecord& Record) const
 {
     TArray<FIntVector> Result;
-    if (!Record.bCommitted || Record.SchemaVersion != 1 || CellsPerChunkAxis < 4
-        || (CellOverrides.Num() > 0 && LockedCellsPerChunkAxis > 0
-            && CellsPerChunkAxis != LockedCellsPerChunkAxis))
+    if (!Record.bCommitted || Record.SchemaVersion != 1 || !IsGridConfigurationCompatible())
     {
         return Result;
     }
@@ -249,9 +271,7 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
     if (!IsFiniteVector(CenterCm)
         || !FMath::IsFinite(RadiusCm)
         || RadiusCm <= 0.0f
-        || !FMath::IsFinite(CellSizeCm)
-        || CellSizeCm <= 0.0f
-        || CellsPerChunkAxis < 4
+        || !IsGridConfigurationCompatible()
         || MaxCellsPerEdit <= 0
         || (EditType != EExcavationEditType::Carve && EditType != EExcavationEditType::Fill))
     {
@@ -327,6 +347,11 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
         LockedCellsPerChunkAxis = CellsPerChunkAxis;
     }
 
+    if (CandidateRecord.Changes.IsEmpty())
+    {
+        return false;
+    }
+
     for (const FExcavationCellChange& Change : CandidateRecord.Changes)
     {
         FExcavationCellOverride NewOverride;
@@ -344,7 +369,8 @@ bool UExcavationVolumeSubsystem::ApplySphereEdit(
 
 bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Record)
 {
-    if (!Record.bCommitted || !Record.OperationId.IsValid() || Record.SchemaVersion != 1)
+    if (!Record.bCommitted || !Record.OperationId.IsValid()
+        || Record.SchemaVersion != 1 || Record.Changes.IsEmpty() || !IsGridConfigurationCompatible())
     {
         return false;
     }
@@ -365,7 +391,8 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
         SeenCells.Add(Change.Cell);
 
         const FExcavationCellOverride* Current = CellOverrides.Find(Change.Cell);
-        if (!Current || Current->LastOperationId != Record.OperationId)
+        if (!Current || Current->LastOperationId != Record.OperationId
+            || !FMath::IsNearlyEqual(Current->Density, Change.NewDensity))
         {
             return false;
         }
