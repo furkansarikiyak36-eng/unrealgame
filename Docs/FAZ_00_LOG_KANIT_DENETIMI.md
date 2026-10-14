@@ -57,4 +57,4 @@ Kanıt bağlantıları:
 
 ## Karar
 
-LOG sistemi “baştan yapılacak” değildir; mevcut fiziksel kütük sistemi güçlü bir korunacak çekirdektir. Bununla birlikte LOG-014, LOG-015, LOG-061, LOG-068, LOG-071–LOG-076 gibi maddeler için bu statik denetimde uçtan uca kanıt yoktur. Faz 0 sırasında her kayıt “kod yolu var / kısmi / kanıtlanmadı” seviyesinde izlenir; test ve editör kanıtı olmadan U5/U6 olarak yükseltilmez.
+LOG sistemi “baştan yapılacak” değildir; mevcut fiziksel kütük sistemi güçlü bir korunacak çekirdektir. Satır eşleştirme tablosundaki 59 kayıt U2 (yerel davranış izi), 17 kayıt U0 (bu incelemede uygulanmış davranış zinciri bulunamadı veya ayrı özellik gerekli) seviyesinde kaldı. Hiçbir satır U4/U5/U6 olarak yükseltilmedi. Özellikle LOG-014, LOG-015, LOG-061, LOG-068, LOG-072–LOG-076 için ayrı entegrasyon/geliştirme işi gerekiyor.
