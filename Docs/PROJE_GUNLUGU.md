@@ -210,3 +210,10 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - TriggerVolume overlap tepkisi Pawn yanında PhysicsBody kanalına da açıldı; fiziksel taş/kütük gövdeleri de trigger event üretebilir.
 - StoneTrap otomasyon testinde iki collision kanalının overlap ayarı assertion ile kontrol ediliyor.
 - Son kaynak diff'i için Python tooling CI tetiklendi; UE 5.8 derlemesi ve C++ testleri bu ortamda çalıştırılmadı.
+
+
+### 2026-10-14 — Stone Trap alıcı kapsamı
+
+- StoneTrap C++ testleri 4'e yükseltildi: düşman/cooldown, null victim, taş health, CarvableLog normalized damage.
+- Log verifier ve sentetik Python testleri artık en az dört ayrı StoneTrap Automation Test path'i gerektiriyor.
+- UE 5.8 derleme ve gerçek Automation Test koşusu henüz yapılmadı; Python CI sadece log verifier/katalog/araç testlerini çalıştırır.
