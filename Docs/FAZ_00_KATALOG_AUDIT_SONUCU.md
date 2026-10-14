@@ -58,3 +58,12 @@ Dokuz katalog eşleştirme dosyası artık **485/485 satırı** kapsıyor: LOG 7
 P0-027 için kaynak düzeltmesi ve testler branch'e eklendi. `UCraftingComponent` artık `UStickInventoryComponent::ApplyCraftTransaction` kullanır. Üç motor otomasyon testi duplicate girdiler, kapasite başarısızlığı ve başarılı girdi/çıktı bilançosunu kapsar. `Scripts/run_tests.sh` bunları ayrı `StickInventoryTests.log` içinde çalıştırıp `Scripts/verify_test_logs.py` üzerinden en az 3 benzersiz test sonucu istemektedir.
 
 **Bu düzeltme UE 5.8 üzerinde henüz çalıştırılmadı.** Kod düzeyi ilerleme tamamlandı; engine build ve motor automation geçmeden P0-027 kapanmış sayılamaz.
+
+
+## Faz 1 kazı spike dosyaları (hazırlık, ölçüm bekliyor)
+
+- [Teknoloji spike şartnamesi](./FAZ_01_KAZI_TECHNOLOJI_SPIKE.md)
+- [Doldurulacak benchmark matrisi](./FAZ_01_KAZI_SPIKE_SABLONU.csv)
+- [Matrisi ve kanıt kapısını doğrulayan araç](../Scripts/validate_excavation_spike.py)
+
+Matriste iki aday ve iki çözünürlük için dört koşu bulunuyor. Mevcut satırların tüm kararları “Bekliyor”; bu doğru durumdur. Validator yalnızca şemanın ve gerekli ölçüm kanıtının varlığını denetler, gerçek fizik/mesh/performance ölçümü yapmaz.
