@@ -231,3 +231,10 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - Ana RAID başlığı 69 alt mekanik bildiriyor; aynı kaynakta yedi alt bölümün sayıları 6+7+9+12+10+10+9=63 ediyor.
 - Ayrıntılı isimli liste ve repo RAID eşleştirmesi 63 kayıt içeriyor. Altı ek gereksinimin isimleri/ID'leri kaynakta bulunmadığından uydurularak eklenmedi.
 - P0-001, onaylı kaynak kararıyla başlığın 63'e çekilmesi veya eksik altı gereksinimin asıl kaynaktan kurtarılması tamamlanana kadar açık bırakıldı.
+
+### 2026-10-14 — Kaynak katalog repo içine alındı ve kimlik eşleştirmesi sıkılaştırıldı
+
+- Kütüphanedeki orijinal 485 satırlık MEKANIK_KATALOG_TAKIP_CSV.csv, Docs/MEKANIK_KATALOG_TAKIP_CSV.csv konumuna değişmeden alınmıştır; bu bir kanonik gereksinim snapshot'ıdır. Tüm satırlar hâlâ U0 durumundadır; eklemek onların doğrulandığı anlamına gelmez.
+- Scripts/validate_catalog_mapping.py, ana katalogdaki 485 Mechanic_ID'nin dokuz türetilmiş CSV'ye doğru sistemde, eksiksiz ve bir kez eşlendiğini denetler.
+- Scripts/tests/test_validate_catalog_mapping.py kapsamında 8 hata/başarı senaryosu eklendi.
+- Scripts/run_python_tests.sh ana katalog snapshot'ını ve tüm eşleştirmeleri CI içinde doğrulayacak şekilde güncellendi; ana CSV için ayrıca keşif raporu çalıştırır, U0 kanıt boşluklarını geçerli kabul etmezmiş gibi göstermeden açıkça listeler.
