@@ -121,3 +121,21 @@ Bu çalışma, önceki kod geliştirme fazlarından ayrı bir kabul/kanıt turud
 - **0 U4/U5/U6:** bu tur satır özelinde otomatik test, editör görsel doğrulaması veya uzun oturum/kayıt/performance kabulü iddia etmiyor.
 
 Python tooling CI, bu CSV'yi beklenen 76 satırla keşif modunda denetleyecek şekilde güncellendi. Bu ilerleme LOG ailesinin kaynak haritalamasıdır; kalan 409 katalog maddesini ya da UE 5.8 oyun içi doğrulamasını kapatmıyor.
+
+
+### 2026-10-14 — 485 katalog satırının kaynak triage haritalaması
+
+Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
+- LOG 76
+- INVENTORY 32
+- RAID 63
+- WORLD 35
+- MATERIAL 38
+- FARMING 57
+- CORE 12
+- STONE 96
+- STICK 76
+
+İlk statik kaynak seviyeleri: U2=333, U1=88, U0=64; U3–U6=0. U2/U1 kaynakta bir algoritma/model izinin bulunmasıdır; bu, katalog satırının uçtan uca geçtiği anlamına gelmez. Her satırda isimli otomatik test sonucu ve editör/oyun içi kanıtı bekliyor; U0 maddelerinin uygulama ya da doğru kaynak sahibi bulunması gerekiyor.
+
+`Scripts/run_python_tests.sh` 9 CSV'yi beklenen satır sayılarıyla audit ediyor. Güncel Python CI run #88 başarılı: https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/38510701119. Bu sonuç UE 5.8 derleme veya oyun testi değildir. Faz 0 açık; tek final demo ilkesi değişmedi.
