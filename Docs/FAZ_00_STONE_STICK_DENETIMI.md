@@ -88,3 +88,12 @@ Son kaynak turunda taş sistemi oyuncunun ana input akışına bağlandı; artı
 `Scripts/run_tests.sh` artık `MyProject2.StonePlacement` suite'ini ayrı logda çalıştırır. `Scripts/verify_test_logs.py` minimum **5** benzersiz başarılı stone placement sonucu olmadan doğrulamayı geçirmez.
 
 **Açık kalan sınır:** Bu beş C++ testi UE 5.8 üzerinde henüz derlenmedi/çalıştırılmadı. Genel ahşap graph adaptörü, yapı çöküşünün bütün sistemlere yayılması, graph save/load ve editör görsel doğrulaması hâlâ kabul kapılarıdır. Bu kod düzeyi ilerleme “oyun içinde onaylandı” anlamına gelmez.
+
+
+## En son durum — yerleştirme ve yapısal socket kapısı
+
+Yapısal hedefe yerleştirme artık yalnızca Installed state'i vermiyor. Hedef actor, IStructuralNode ve UStructuralGraph taşıyan bir AStoneActor ise kaynak yüzü/socket'i hedef taştaki yakın, doğru yöne bakan ve boş socket ile eşleşmeden commit edilmez. Kaynak face/socket adı ve hedef socket adı iki yönlü graph link'ine kaydedilir. State geçişi başarısızsa yeni graph bağlantısı geri alınır.
+
+Socket world-position/normal hesabı AStoneActor mesh component transform'undan yapılır; bu, actor transform'una ek mesh-relative scale/transform'u da içerir. Yerleştirme bounds-ofseti de mesh component relative transform'unu dikkate alır. Kullanılmış socket/yüz adı ortak UStoneDefinition asset alanlarından değil actor graph'ından türetilir.
+
+Otomasyon dosyası artık beş Unreal Automation Test içeriyor; beşinci test reciprocal bağlantıyı ve dolu hedef socket'in tekrar kullanılmasının reddedilmesini doğrular. Bu testler UE 5.8 hostunda henüz çalıştırılmadı. Legacy ahşap/diğer yapısal sınıflar için adapter bu değişiklikte uygulanmadı; graph-bearing ancak AStoneActor olmayan hedeflere placement fail-closed davranır.
