@@ -184,3 +184,13 @@ Satır bazlı eşleştirme dokuz aileyle 485/485'e ulaştı:
 - Socket occupancy artık ortak `UStoneDefinition` asset içindeki transient alanlardan okunmuyor; per-actor graph connections temel alınır.
 - Beş UE Automation Test yazıldı ve `Scripts/run_tests.sh` / `verify_test_logs.py` bu suite için minimum 5 farklı başarılı sonuç ister.
 - GitHub Actions Python tooling/shell/katalog kontrolleri başarılı; bu C++ kodu **UE 5.8 üzerinde henüz derlenip test edilmedi**. P0-023/P0-030/P0-032/P0-033 “In Progress” durumunda kalır.
+
+
+### 2026-10-14 — Taş yerleştirme: graph socket occupancy ve mesh-local hizalama
+
+- Yapısal hedefe yerleştirme artık sadece Installed state'i vermiyor. Hedef AStoneActor / UStructuralGraph ise kaynak yüzü veya socket'i hedef taşın yakındaki doğru yöne bakan boş socket'iyle eşleştirilmeden commit edilmez.
+- UStructuralGraph::ConnectTo iki uçta da bağlantı kaydı oluşturuyor. State geçişi beklenmedik biçimde başarısız olursa bu işlem sırasında yaratılan link geri alınır.
+- Kaynak/hedef socket dünya pozisyon ve normal hesapları UStaticMeshComponent::GetComponentTransform() üzerinden yürütülüyor; böylece yontulmuş/parçalı taşların mesh-relative scale/transform bilgisi göz ardı edilmiyor. Mesh bounds'ın temas düzlemine oturması da component-relative transform'u hesaba katıyor.
+- Kullanılmış local socket/face adları actor graph'ından türetiliyor; hedefte kullanılan socket ikinci bağlantı için sunulmuyor.
+- StonePlacementTests.cpp beş C++ Automation Test içeriyor: begin/cancel, face/socket hizalama, carry/confirm rollback, collision clearance ve reciprocal graph/occupied-socket testleri. verify_test_logs.py en az beş başarılı benzersiz sonuç ister.
+- Son Python tooling CI kaynak dosyalarını derlemez. UE 5.8 Windows build, beş C++ otomasyon testi ve görsel editor testi henüz çalıştırılmadı; P0-023/P0-030/P0-032/P0-033 In Progress olarak kalır.
