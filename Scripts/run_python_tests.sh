@@ -90,40 +90,40 @@ bash -n "$ROOT/Scripts/run_python_tests.sh"
 echo "[20/33] Verifying contextual demo layout and mechanical precondition contracts..."
 "$PYTHON" "$ROOT/Scripts/tests/test_contextual_demo_builder.py"
 
-echo "[33/33] Auditing the 76-row LOG map..."
+echo "[21/33] Auditing the 76-row LOG map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_LOG_KATALOG_ESLESTIRME.csv" --expected-count 76
 
-echo "[33/33] Auditing the 32-row INVENTORY map..."
+echo "[22/33] Auditing the 32-row INVENTORY map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_ENVANTER_KATALOG_ESLESTIRME.csv" --expected-count 32
 
-echo "[33/33] Auditing the 63-row RAID map..."
+echo "[23/33] Auditing the 63-row RAID map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_RAID_KATALOG_ESLESTIRME.csv" --expected-count 63
 
-echo "[33/33] Auditing the 35-row WORLD map..."
+echo "[24/33] Auditing the 35-row WORLD map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_WORLD_KATALOG_ESLESTIRME.csv" --expected-count 35
 
-echo "[33/33] Auditing the 38-row MATERIAL map..."
+echo "[25/33] Auditing the 38-row MATERIAL map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_MATERIAL_KATALOG_ESLESTIRME.csv" --expected-count 38
 
-echo "[33/33] Auditing the 57-row FARMING map..."
+echo "[26/33] Auditing the 57-row FARMING map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_FARMING_KATALOG_ESLESTIRME.csv" --expected-count 57
 
-echo "[33/33] Auditing the 12-row CORE map..."
+echo "[27/33] Auditing the 12-row CORE map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_CORE_KATALOG_ESLESTIRME.csv" --expected-count 12
 
-echo "[33/33] Auditing the 96-row STONE map..."
+echo "[28/33] Auditing the 96-row STONE map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_STONE_KATALOG_ESLESTIRME.csv" --expected-count 96
 
-echo "[33/33] Auditing the 76-row STICK map..."
+echo "[29/33] Auditing the 76-row STICK map..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/FAZ_00_STICK_KATALOG_ESLESTIRME.csv" --expected-count 76
 
-echo "[33/33] Validating Phase 1 excavation benchmark matrix..."
+echo "[30/33] Validating Phase 1 excavation benchmark matrix..."
 "$PYTHON" "$ROOT/Scripts/validate_excavation_spike.py" "$ROOT/Docs/FAZ_01_KAZI_SPIKE_SABLONU.csv"
 
-echo "[33/33] Reconciling the canonical catalog against its nine detailed mappings..."
+echo "[31/33] Reconciling the canonical catalog against its nine detailed mappings..."
 "$PYTHON" "$ROOT/Scripts/validate_catalog_mapping.py" --master "$ROOT/Docs/MEKANIK_KATALOG_TAKIP_CSV.csv" --mapping-dir "$ROOT/Docs"
 
-echo "[33/33] Auditing the canonical 485-row master catalog evidence state..."
+echo "[32/33] Auditing the canonical 485-row master catalog evidence state..."
 "$PYTHON" "$ROOT/Scripts/audit_mechanic_catalog.py" "$ROOT/Docs/MEKANIK_KATALOG_TAKIP_CSV.csv" --expected-count 485
 
 echo "[33/33] Auditing the Phase 0 findings matrix..."
