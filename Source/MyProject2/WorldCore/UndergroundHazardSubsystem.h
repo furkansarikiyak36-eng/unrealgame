@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "WorldCore/UndergroundHazardTypes.h"
+#include "WorldCore/WorldTypes.h"
 #include "UndergroundHazardSubsystem.generated.h"
 
 class AUndergroundSupportActor;
@@ -118,6 +119,11 @@ protected:
     TMap<FGuid, TWeakObjectPtr<AUndergroundSupportActor>> RegisteredSupports;
     UPROPERTY(Transient)
     TMap<FIntVector, FUndergroundWaterPocket> WaterPockets;
+
+    UPROPERTY(Transient)
+    TMap<FIntPoint, FUndergroundSurfaceWaterCellSnapshot> ModifiedSurfaceCells;
+
+    TSet<FIntPoint> SurfaceCellsProcessedThisTick;
 
     TArray<FIntVector> OpenCaveCells;
     TSet<FIntVector> OpenCaveCellSet;
