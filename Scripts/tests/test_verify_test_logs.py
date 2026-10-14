@@ -60,5 +60,20 @@ class LogVerifierTests(unittest.TestCase):
             VERIFY.verify_wood(self.wood)
 
 
+    def test_fewer_than_required_wood_tests_are_rejected(self):
+        self.wood.write_text(
+            "Test Completed. Result={Success} Name={A} Path={MyProject2.Wood.A}\\n"
+            "Test Completed. Result={Success} Name={B} Path={MyProject2.Wood.B}\\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "expected at least 3"):
+            VERIFY.verify_wood(self.wood, minimum_tests=3)
+
+    def test_fewer_than_required_mechanics_checks_are_rejected(self):
+        self.mechanics.write_text("SONUÇ: 100 geçti, 0 kaldı\\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "expected at least 101"):
+            VERIFY.verify_mechanics(self.mechanics, minimum_passed=101)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
