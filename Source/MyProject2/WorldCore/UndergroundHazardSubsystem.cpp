@@ -693,7 +693,7 @@ void UUndergroundHazardSubsystem::SimulateUndergroundGravityFlow()
     for (const FIntVector& Cell : Cells)
     {
         FUndergroundWaterPocket* Pocket = WaterPockets.Find(Cell);
-        if (!Pocket || Pocket->VolumeM3 <= KINDA_SMALL_NUMBER)
+        if (!Pocket || Pocket->VolumeM3 <= KINDA_SMALL_NUMBER || !OpenCaveCellSet.Contains(Cell))
         {
             continue;
         }
