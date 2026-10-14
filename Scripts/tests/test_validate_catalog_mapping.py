@@ -16,7 +16,7 @@ SYSTEMS = tuple(MAPPING_FILES)
 def write_csv(path: Path, headers: list[str], rows: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=headers)
+        writer = csv.DictWriter(handle, fieldnames=headers, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -66,7 +66,7 @@ class CatalogMappingTests(unittest.TestCase):
         self.mapping_rows["STONE"] = []
         self.write_all()
         errors = self.audit()
-        self.assertTrue(any("STONE mapping expected 1 rows, got 0" in e for e in errors))
+        self.assertTrue(any("mapping STONE expected 1 rows, got 0" in e for e in errors))
         self.assertTrue(any("STONE mapping missing master IDs" in e for e in errors))
 
     def test_unregistered_mapping_id_fails(self):
