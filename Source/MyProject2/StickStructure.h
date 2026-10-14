@@ -9,22 +9,13 @@
 class UPointLightComponent;
 class UStaticMeshComponent;
 
-/** What sticks are made into (Sons of the Forest's stick builds). */
-UENUM()
-enum class EStickBuild : uint8
-{
-	/** A row of sharpened sticks driven into the ground, points out: hurts what walks into it. */
-	Spikes,
-	/** A woven stick fence: blocks the way until it is broken. */
-	Fence,
-	/** A stick torch on a stake: light and a little warmth. */
-	Torch,
-	Count UMETA(Hidden),
-};
-
 /**
- * A small build made of sticks from the pack: spikes, a fence or a torch. It has a strength like wood (0 sound, 1 broken);
- * raiders hitting it wear it down.
+ * One sharpened stick driven into the ground (Sons of the Forest's physical stick building: nothing is placed as a
+ * finished prefab, every stick is put in by hand). What sticks make follows from how they stand:
+ * - a stake hurts whoever walks into its point;
+ * - stakes closer than a body's width together block the way, a palisade, and raiders have to break through;
+ * - a stake set alight with the lighter is a torch: light and some warmth until it burns down.
+ * It has a strength like wood (0 sound, 1 broken).
  */
 UCLASS()
 class MYPROJECT2_API AStickStructure : public AActor
@@ -34,35 +25,47 @@ class MYPROJECT2_API AStickStructure : public AActor
 public:
 	AStickStructure();
 
-	static int32 SticksFor(EStickBuild Build);
-	static FString NameOf(EStickBuild Build);
-	/** A build standing on the ground at Ground, its length across Yaw. */
-	static AStickStructure* Build(UWorld* World, EStickBuild Build, const FVector& Ground, float Yaw);
-
-	EStickBuild GetKind() const { return Kind; }
-	float GetDamage() const { return Damage; }
-	/** Wears it down; it falls apart (is destroyed) at 1. */
-	void AddDamage(float Amount);
-
-	/** Spikes hurt enemies this close (cm) this much per second; a torch warms this far. */
-	static constexpr float SpikeReachCm = 70.f;
+	static constexpr float HeightCm = 140.f;
+	static constexpr float RadiusCm = 3.5f;
+	/** Enemies this close (cm, to the stake) are hurt this much per second. */
+	static constexpr float SpikeReachCm = 45.f;
 	static constexpr float SpikeDps = 20.f;
+	/** A torch burns this long, warms this far, this much. */
+	static constexpr float TorchSeconds = 360.f;
 	static constexpr float TorchReachCm = 300.f;
 	static constexpr float TorchWarmthC = 12.f;
-	bool IsLitTorch() const { return Kind == EStickBuild::Torch; }
+	/** Seconds of the lighter's flame it takes to set a stake alight. */
+	static constexpr float IgniteSeconds = 2.f;
+
+	/** A stake driven into the ground at Ground, standing up. */
+	static AStickStructure* Plant(UWorld* World, const FVector& Ground, float Yaw);
+
+	float GetDamage() const { return Damage; }
+	/** Wears it down; it breaks (is destroyed) at 1. */
+	void AddDamage(float Amount);
+
+	/** The lighter's flame: after IgniteSeconds the stake burns as a torch. True once it burns. */
+	bool ApplyHeat(float Seconds);
+	bool IsLitTorch() const { return bLit; }
+	float GetBurnSecondsLeft() const { return BurnLeft; }
+
+	virtual void Tick(float DeltaSeconds) override;
 
 private:
-	void Configure(EStickBuild NewKind);
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UStaticMeshComponent> Shaft;
 
 	UPROPERTY(VisibleAnywhere)
-	TObjectPtr<USceneComponent> Pivot;
+	TObjectPtr<UStaticMeshComponent> Point;
 
 	UPROPERTY(VisibleAnywhere)
-	TArray<TObjectPtr<UStaticMeshComponent>> Parts;
+	TObjectPtr<UStaticMeshComponent> Flame;
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UPointLightComponent> Light;
 
-	EStickBuild Kind = EStickBuild::Spikes;
 	float Damage = 0.f;
+	float Heat = 0.f;
+	bool bLit = false;
+	float BurnLeft = 0.f;
 };

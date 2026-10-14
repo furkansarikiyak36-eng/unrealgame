@@ -40,13 +40,13 @@ Görsel taraf (çizgiler, alev, ışık, HUD, yeni aktörlerin görünüşü) te
 | Q / tekerlek | Seçim değiştir: oyma derinliği, eğim açısı, yapım listesi |
 | F (basılı) | Çakmak: bakılan odunu ya da ateş yerini ısıtır |
 | C | Taş koy (7 taş halka = ateş yeri) |
-| I | Yapım: diken, çit, meşale, tarla, deri giysi, ip, ip hattı |
+| I | Yapım: kazık çubuk (tek tek çakılır), tarla, deri giysi, ip, ip hattı |
 | 8 | Ye (pişmiş et, yumurta, tahıl, süt) |
 | X | İt (serbest kütük, araba, kızak) |
 | O | Duvardaki kütükten 2 modüllük açıklık kes |
 | V | Parçayı geçici (iskele) işaretle |
-| T, B, 3, Tab | Mala, inşa modu (taş blok vb.), taş blok yap, çanta |
-| P (admin) + … | G malzeme, H oda, J kes, N aç, M hasar, K oyma kütüğü, L demo, Y yapıya hasar, Z baskın başlat, U araba/kızak/sehpa koy |
+| F1, Tab | Tuş listesi, çanta  (inşa modu yok: her şey elle, parça parça) |
+| P (admin) + … | G malzeme, J kes, N aç, M hasar, K oyma kütüğü, L kütük demosu, Y yapıya hasar, Z baskın, U araba/kızak/sehpa, 9 zaman +3 saat |
 
 ## 4. Oynanır sistemler
 

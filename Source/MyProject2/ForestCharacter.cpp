@@ -295,9 +295,7 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	MappingContext->MapKey(SprintAction, EKeys::LeftShift);
 	MappingContext->MapKey(PrimaryInput, EKeys::LeftMouseButton);
 	MappingContext->MapKey(InteractAction, EKeys::E);
-	MappingContext->MapKey(CraftBlockAction, EKeys::Three);
 	MappingContext->MapKey(InventoryAction, EKeys::Tab);
-	MappingContext->MapKey(BuildAction, EKeys::B);
 	MappingContext->MapKey(RotateAction, EKeys::R);
 	MappingContext->MapKey(CycleAction, EKeys::MouseWheelAxis);
 	MappingContext->MapKey(CycleAction, EKeys::Q); // laptop friendly: next build option
@@ -320,12 +318,8 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	Input->BindAction(SprintAction, ETriggerEvent::Completed, this, &AForestCharacter::StopSprint);
 	Input->BindAction(PrimaryInput, ETriggerEvent::Started, this, &AForestCharacter::PrimaryAction);
 	Input->BindAction(InteractAction, ETriggerEvent::Started, this, &AForestCharacter::Interact);
-	Input->BindAction(CraftBlockAction, ETriggerEvent::Started, this, &AForestCharacter::CraftStoneBlock);
 	Input->BindAction(InventoryAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleInventory);
 	UInputAction* ToggleTrowelAction = MakeAction(TEXT("IA_ToggleTrowel"), EInputActionValueType::Boolean);
-	MappingContext->MapKey(ToggleTrowelAction, EKeys::T);
-	Input->BindAction(ToggleTrowelAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleTrowel);
-	Input->BindAction(BuildAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleBuildMode);
 	Input->BindAction(RotateAction, ETriggerEvent::Started, this, &AForestCharacter::RotateBuild);
 	Input->BindAction(CycleAction, ETriggerEvent::Started, this, &AForestCharacter::CycleBuildItem);
 	Input->BindAction(CancelAction, ETriggerEvent::Started, this, &AForestCharacter::CancelBuild);
@@ -334,7 +328,6 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UInputAction* DebugGiveAction = MakeAction(TEXT("IA_DebugGive"), EInputActionValueType::Boolean);
 	UInputAction* DebugRoomAction = MakeAction(TEXT("IA_DebugRoom"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(DebugGiveAction, EKeys::G);
-	MappingContext->MapKey(DebugRoomAction, EKeys::H);
 	UInputAction* DebugHarvestAction = MakeAction(TEXT("IA_DebugHarvest"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(DebugHarvestAction, EKeys::J);
 	Input->BindAction(DebugHarvestAction, ETriggerEvent::Started, this, &AForestCharacter::DebugHarvestNearest);
@@ -444,17 +437,16 @@ void AForestCharacter::DrawPreviewLines()
 	PreviewLines->Flush();
 	const FLinearColor PlanColor = bGhostValid ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
 
-	// Stick building: the footprint of the chosen build where it would stand.
-	if (bStickMode && !IsHandsBusy() && StickBuildIndex < 4)
+	// Making: where a stake or a field would go.
+	if (bStickMode && !IsHandsBusy() && (StickBuildIndex == CraftStake || StickBuildIndex == CraftField))
 	{
 		FHitResult Spot;
 		if (StickBuildSpot(Spot))
 		{
-			const EStickBuild Kind = static_cast<EStickBuild>(FMath::Min<uint8>(StickBuildIndex, 2));
-			const bool bAfford = GetItemCount(EForestItem::Stick) >= (StickBuildIndex == 3 ? 2 : AStickStructure::SticksFor(Kind));
+			const bool bStake = StickBuildIndex == CraftStake;
+			const bool bAfford = GetItemCount(EForestItem::Stick) >= (bStake ? 1 : 2);
 			const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
-			const FVector Half = StickBuildIndex == 3 ? FVector(100.f, 100.f, 5.f)
-				: (Kind == EStickBuild::Torch ? FVector(10.f, 10.f, 80.f) : (Kind == EStickBuild::Fence ? FVector(8.f, 100.f, 60.f) : FVector(30.f, 75.f, 35.f)));
+			const FVector Half = bStake ? FVector(AStickStructure::RadiusCm, AStickStructure::RadiusCm, AStickStructure::HeightCm * 0.5f) : FVector(100.f, 100.f, 5.f);
 			ForestOutline::DrawBox(PreviewLines, FTransform(Forward.Rotation(), Spot.ImpactPoint + FVector(0.f, 0.f, Half.Z)), FBox(-Half, Half),
 				bAfford ? ForestOutline::ValidColor() : ForestOutline::InvalidColor());
 		}
@@ -1180,6 +1172,13 @@ void AForestCharacter::HeatTarget(AActor* Target, float Seconds)
 			ShowMessage(FString::Printf(TEXT("Tutuşuyor %%%.0f"), Piece->GetHeatShare() * 100.f));
 		}
 	}
+	else if (AStickStructure* Stake = Cast<AStickStructure>(Target))
+	{
+		if (Stake->ApplyHeat(Seconds))
+		{
+			ShowMessage(TEXT("Kazık meşale oldu"));
+		}
+	}
 	else if (ACampfire* Fire = Cast<ACampfire>(Target))
 	{
 		Fire->ApplyHeat(Seconds);
@@ -1336,11 +1335,12 @@ FString AForestCharacter::CraftEntryName(uint8 Entry)
 {
 	switch (Entry)
 	{
-	case 6: return TEXT("İp hattı");
-	case 3: return TEXT("Tarla");
-	case 4: return TEXT("Deri giysi");
-	case 5: return TEXT("İp");
-	default: return AStickStructure::NameOf(static_cast<EStickBuild>(Entry));
+	case CraftStake:    return TEXT("Kazık çubuk");
+	case CraftField:    return TEXT("Tarla");
+	case CraftGarment:  return TEXT("Deri giysi");
+	case CraftRope:     return TEXT("İp");
+	case CraftRopeLine: return TEXT("İp hattı");
+	default:            return TEXT("");
 	}
 }
 
@@ -1349,7 +1349,9 @@ bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
 	StickBuildIndex = Entry % CraftEntryCount;
 	switch (StickBuildIndex)
 	{
-	case 3:
+	case CraftStake:
+		return PlantStakeAt(Hit) != nullptr;
+	case CraftField:
 		if (GetItemCount(EForestItem::Stick) < 2)
 		{
 			ShowMessage(TEXT("Tarla sınırı için 2 çubuk gerek"));
@@ -1362,7 +1364,7 @@ bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
 		RemoveItem(EForestItem::Stick, 2);
 		ShowMessage(TEXT("Tarla açıldı  —  [E] ile tohum ek"));
 		return true;
-	case 4:
+	case CraftGarment:
 		if (FarmKit::MakeHideGarment(this))
 		{
 			ShowMessage(FString::Printf(TEXT("Deri giysi yapıldı: soğuğa yalıtım %%%.0f"), Survival->Insulation * 100.f));
@@ -1370,7 +1372,7 @@ bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
 		}
 		ShowMessage(FString::Printf(TEXT("Deri giysi için %d deri gerek (giysiler zaten tamsa daha fazlası işe yaramaz)"), FarmKit::HidesPerGarment));
 		return false;
-	case 5:
+	case CraftRope:
 		if (GetItemCount(EForestItem::Wool) >= 2)
 		{
 			RemoveItem(EForestItem::Wool, 2);
@@ -1387,7 +1389,7 @@ bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
 		AddItem(EForestItem::Rope, 1);
 		ShowMessage(FString::Printf(TEXT("İp büküldü (%d ip)"), GetItemCount(EForestItem::Rope)));
 		return true;
-	case 6:
+	case CraftRopeLine:
 	{
 		if (!bRopeAnchorSet)
 		{
@@ -1413,8 +1415,26 @@ bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
 		return true;
 	}
 	default:
-		return BuildStickAt(Hit);
+		return false;
 	}
+}
+
+AStickStructure* AForestCharacter::PlantStakeAt(const FHitResult& Hit)
+{
+	if (GetItemCount(EForestItem::Stick) < 1)
+	{
+		ShowMessage(TEXT("Kazık için çubuk gerek: devrilen ağaçların dalları"));
+		return nullptr;
+	}
+	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	AStickStructure* Stake = AStickStructure::Plant(GetWorld(), Hit.ImpactPoint, Forward.Rotation().Yaw);
+	if (!Stake)
+	{
+		return nullptr;
+	}
+	RemoveItem(EForestItem::Stick, 1);
+	ShowMessage(TEXT("Kazık çakıldı  —  aralıkları dar dikilen kazıklar yolu kapatır; [F] ile yakılan kazık meşale olur"));
+	return Stake;
 }
 
 bool AForestCharacter::TestReadNote(ARemnantNote* Note)
@@ -1497,16 +1517,11 @@ FString AForestCharacter::GetStickModeLabel() const
 	FString Cost;
 	switch (StickBuildIndex)
 	{
-	case 3: Cost = FString::Printf(TEXT("2 çubuk, çantada %d"), GetItemCount(EForestItem::Stick)); break;
-	case 4: Cost = FString::Printf(TEXT("%d deri, çantada %d"), FarmKit::HidesPerGarment, GetItemCount(EForestItem::Hide)); break;
-	case 5: Cost = FString::Printf(TEXT("2 yün ya da 1 deri; yün %d, deri %d"), GetItemCount(EForestItem::Wool), GetItemCount(EForestItem::Hide)); break;
-	case 6: Cost = FString::Printf(TEXT("1 ip, çantada %d; %s"), GetItemCount(EForestItem::Rope), bRopeAnchorSet ? TEXT("ikinci ucu seç") : TEXT("birinci ucu seç")); break;
-	default:
-	{
-		const EStickBuild Kind = static_cast<EStickBuild>(StickBuildIndex);
-		Cost = FString::Printf(TEXT("%d çubuk, çantada %d"), AStickStructure::SticksFor(Kind), GetItemCount(EForestItem::Stick));
-		break;
-	}
+	case CraftStake:    Cost = FString::Printf(TEXT("1 çubuk, çantada %d"), GetItemCount(EForestItem::Stick)); break;
+	case CraftField:    Cost = FString::Printf(TEXT("2 çubuk, çantada %d"), GetItemCount(EForestItem::Stick)); break;
+	case CraftGarment:  Cost = FString::Printf(TEXT("%d deri, çantada %d"), FarmKit::HidesPerGarment, GetItemCount(EForestItem::Hide)); break;
+	case CraftRope:     Cost = FString::Printf(TEXT("2 yün ya da 1 deri; yün %d, deri %d"), GetItemCount(EForestItem::Wool), GetItemCount(EForestItem::Hide)); break;
+	default:            Cost = FString::Printf(TEXT("1 ip, çantada %d; %s"), GetItemCount(EForestItem::Rope), bRopeAnchorSet ? TEXT("ikinci ucu seç") : TEXT("birinci ucu seç")); break;
 	}
 	return FString::Printf(TEXT("Yapım: %s (%s)  —  [Q] değiştir, [Sol tık] yap, [I] kapat"), *CraftEntryName(StickBuildIndex), *Cost);
 }
@@ -1514,46 +1529,6 @@ FString AForestCharacter::GetStickModeLabel() const
 bool AForestCharacter::StickBuildSpot(FHitResult& OutHit) const
 {
 	return TraceFromView(500.f, OutHit, true) && OutHit.ImpactNormal.Z > 0.7f && OutHit.GetActor() && !OutHit.GetActor()->IsA<ACarvableLog>();
-}
-
-bool AForestCharacter::BuildStickAt(const FHitResult& Hit)
-{
-	const EStickBuild Kind = static_cast<EStickBuild>(StickBuildIndex);
-	const int32 Cost = AStickStructure::SticksFor(Kind);
-	if (GetItemCount(EForestItem::Stick) < Cost)
-	{
-		ShowMessage(FString::Printf(TEXT("%s için %d çubuk gerek (%d var)"), *AStickStructure::NameOf(Kind), Cost, GetItemCount(EForestItem::Stick)));
-		return false;
-	}
-	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
-	if (!AStickStructure::Build(GetWorld(), Kind, Hit.ImpactPoint, Forward.Rotation().Yaw))
-	{
-		return false;
-	}
-	RemoveItem(EForestItem::Stick, Cost);
-	ShowMessage(FString::Printf(TEXT("%s kuruldu (-%d çubuk)"), *AStickStructure::NameOf(Kind), Cost));
-	return true;
-}
-
-AStickStructure* AForestCharacter::TestBuildStick(uint8 Build, const FHitResult& Hit, bool bGiveSticks)
-{
-	StickBuildIndex = Build;
-	if (bGiveSticks)
-	{
-		AddItem(EForestItem::Stick, AStickStructure::SticksFor(static_cast<EStickBuild>(Build)));
-	}
-	const int32 Before = GetItemCount(EForestItem::Stick);
-	if (!BuildStickAt(Hit))
-	{
-		return nullptr;
-	}
-	AStickStructure* Newest = nullptr;
-	for (TActorIterator<AStickStructure> It(GetWorld()); It; ++It)
-	{
-		Newest = *It;
-	}
-	(void)Before;
-	return Newest;
 }
 
 void AForestCharacter::TestDropStone()
@@ -1939,20 +1914,20 @@ void AForestCharacter::PrimaryAction()
 	if (bStickMode && !IsHandsBusy())
 	{
 		FHitResult Spot;
-		if (StickBuildIndex == 6)
+		if (StickBuildIndex == CraftRopeLine)
 		{
 			if (TraceFromView(600.f, Spot, true))
 			{
 				TestCraft(StickBuildIndex, Spot);
 			}
 		}
-		else if (StickBuildIndex >= 4 || StickBuildSpot(Spot))
+		else if (StickBuildIndex == CraftGarment || StickBuildIndex == CraftRope || StickBuildSpot(Spot))
 		{
 			TestCraft(StickBuildIndex, Spot);
 		}
 		else
 		{
-			ShowMessage(TEXT("Çubuk yapısı düz zemine kurulur  —  yere bak"));
+			ShowMessage(TEXT("Kazık ve tarla düz zemine  —  yere bak"));
 		}
 		return;
 	}

@@ -26,7 +26,6 @@ class AFireStone;
 class AStickStructure;
 class ARopeLine;
 class ARemnantNote;
-enum class EStickBuild : uint8;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UCableComponent;
@@ -241,8 +240,8 @@ public:
 	ACarvableLog* TestUnload(AHaulCart* Cart);
 	/** For the mechanics test: [E] on a loose stone or stick (a small stone and a stick go into the pack, a building stone into the hands). */
 	bool TestPickUpResource(AActor* Resource);
-	/** For the mechanics test: the stick build chosen and built on Hit (sticks given first when bGiveSticks). */
-	AStickStructure* TestBuildStick(uint8 Build, const FHitResult& Hit, bool bGiveSticks);
+	/** [I] Kazık çubuk: one stick from the pack driven into the ground at Hit. Null without a stick. */
+	AStickStructure* PlantStakeAt(const FHitResult& Hit);
 	bool IsCarryingStone() const;
 	/** For the mechanics test: puts a carried stone down, empties the pack of sticks, gives sticks. */
 	void TestDropStone();
@@ -252,7 +251,8 @@ public:
 	int32 TestGiveItem(EForestItem Item, int32 Count) { return AddItem(Item, Count); }
 	bool TestRemoveItem(EForestItem Item, int32 Count) { return RemoveItem(Item, Count); }
 	/** What [I] can make: the three stick builds, a field, hide clothing and rope. */
-	static constexpr uint8 CraftEntryCount = 7;
+	/** What [I] makes: a stake driven in by hand, a field, hide clothing, rope, a rope line. */
+	enum ECraftEntry : uint8 { CraftStake, CraftField, CraftGarment, CraftRope, CraftRopeLine, CraftEntryCount };
 	static FString CraftEntryName(uint8 Entry);
 	/** For the mechanics test: [I] entry Entry made (on Hit when it is placed on the ground). */
 	bool TestCraft(uint8 Entry, const FHitResult& Hit);
@@ -438,8 +438,6 @@ private:
 	bool IsWaterAtHand() const;
 	uint8 StickBuildIndex = 0;
 	void ToggleStickMode();
-	/** Builds the chosen stick build on the aimed ground, paying its sticks from the pack. */
-	bool BuildStickAt(const FHitResult& Hit);
 	bool StickBuildSpot(FHitResult& OutHit) const;
 	void LighterPressed();
 	void LighterReleased();

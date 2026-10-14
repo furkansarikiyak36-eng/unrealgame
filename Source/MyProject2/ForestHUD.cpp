@@ -631,12 +631,13 @@ void AForestHUD::DrawHUD()
 			TEXT("                  X: it   ·   O: duvarda açıklık   ·   V: iskele işareti"),
 			TEXT("ATEŞ          C: taş koy (7 taş = ateş yeri)   ·   F basılı: çakmak"),
 			TEXT("                  Odunu omza al, ateş yerine bak, Sol tık: yakıt"),
-			TEXT("YAPIM         I: diken, çit, meşale, tarla, deri giysi, ip, ip hattı"),
+			TEXT("YAPIM         I: kazık çubuk (tek tek çak), tarla, deri giysi, ip, ip hattı"),
+			TEXT("                  Dar aralıklı kazıklar yolu kapatır; [F] ile yakılan kazık meşale olur"),
 			TEXT("YAŞAM         8: ye   ·   E: su iç (nehir), not oku, ipe bin, tarla, hayvan"),
 			TEXT("                  Ateş, çatı ve deri giysi ısıtır; ıslanmak üşütür"),
-			TEXT("DİĞER         Tab: çanta   ·   B: taş inşa modu   ·   3: taş blok   ·   T: mala"),
+			TEXT("DİĞER         Tab: çanta"),
 			TEXT("ADMİN (P)    G malzeme   ·   9 zaman +3 saat   ·   Z baskın   ·   U araba"),
-			TEXT("                  K oyma kütüğü   ·   L kütük demosu   ·   Y hasar"),
+			TEXT("                  K oyma kütüğü   ·   L kütük demosu   ·   Y yapıya hasar"),
 		};
 		float MaxW = 0.f;
 		for (const FString& Line : Help)

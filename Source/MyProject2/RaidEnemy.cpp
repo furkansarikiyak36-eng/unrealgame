@@ -104,7 +104,7 @@ void ARaidEnemy::StepAI(float Dt)
 	// Stick spikes hurt the same way.
 	for (TActorIterator<AStickStructure> It(World); It; ++It)
 	{
-		if (It->GetKind() == EStickBuild::Spikes && FVector::Dist2D(Here, It->GetActorLocation()) - BodyRadius < AStickStructure::SpikeReachCm)
+		if (FVector::Dist2D(Here, It->GetActorLocation()) - BodyRadius - AStickStructure::RadiusCm < AStickStructure::SpikeReachCm)
 		{
 			TakeHit(AStickStructure::SpikeDps * Dt);
 			if (Health <= 0.f)

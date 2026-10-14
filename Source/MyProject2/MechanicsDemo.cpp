@@ -2088,48 +2088,56 @@ void AMechanicsDemo::AddStoneStickScript(AForestCharacter* Character)
 		return 0.2f;
 	});
 
-	// Stick builds: spikes, a fence, a torch, paid in sticks from the pack.
+	// Stakes, one stick each, driven in by hand: no stick, no stake; a row of them close together is a palisade.
 	Script.Add([this, Character, Area]()
 	{
 		UWorld* World = GetWorld();
 		Face(Character, World, Area + FVector(-400.f, 600.f, 0.f), 0.f);
-		auto Spot = [&](const FVector& Offset)
-		{
-			FHitResult Hit = GroundAt(World, Area + Offset);
-			return Hit;
-		};
-		// Spend the sticks there are, so that four are too few.
 		Character->TestUseUpSticks();
-		Character->TestGiveSticks(3);
-		const bool bTooFew = Character->TestBuildStick(static_cast<uint8>(EStickBuild::Spikes), Spot(FVector(0.f, 600.f, 0.f)), false) == nullptr;
-		AStickStructure* Spikes = Character->TestBuildStick(static_cast<uint8>(EStickBuild::Spikes), Spot(FVector(0.f, 600.f, 0.f)), true);
-		const int32 Left = Character->GetItemCount(EForestItem::Stick);
-		AStickStructure* Fence = Character->TestBuildStick(static_cast<uint8>(EStickBuild::Fence), Spot(FVector(0.f, 1200.f, 0.f)), true);
-		AStickStructure* Torch = Character->TestBuildStick(static_cast<uint8>(EStickBuild::Torch), Spot(FVector(-300.f, 900.f, 0.f)), true);
+		const bool bNone = Character->PlantStakeAt(GroundAt(World, Area + FVector(0.f, 600.f, 0.f))) == nullptr;
+		Character->TestGiveSticks(8);
+		// A single stake, a palisade of six across the raider's way (40 cm apart: too narrow to pass), and a seventh to light.
+		bool bPlanted = Character->PlantStakeAt(GroundAt(World, Area + FVector(0.f, 600.f, 0.f))) != nullptr;
+		for (int32 Index = 0; Index < 6; ++Index)
+		{
+			bPlanted &= Character->PlantStakeAt(GroundAt(World, Area + FVector(0.f, 1000.f + 40.f * Index, 0.f))) != nullptr;
+		}
+		AStickStructure* Torch = Character->PlantStakeAt(GroundAt(World, Area + FVector(-300.f, 900.f, 0.f)));
+		Character->TestLight(Torch, 1.f);
+		const bool bNotYet = Torch && !Torch->IsLitTorch();
+		Character->TestLight(Torch, 1.5f);
 		const UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(World);
-		const float TorchWarmth = Torch && Loop ? Loop->GetTemperatureAt(Torch->GetActorLocation() + FVector(100.f, 0.f, 50.f)).Fire : 0.f;
-		Report(bTooFew && Spikes && Left == 3 && Fence && Torch && TorchWarmth > 5.f,
-			FString::Printf(TEXT("Çubuk yapıları: 3 çubukla diken kurulmadı, 4 ile kuruldu (çubuk harcandı); çit ve meşale kuruldu, meşale 1 m'de +%.0f°C"), TorchWarmth));
+		const float Warmth = Torch && Loop ? Loop->GetTemperatureAt(Torch->GetActorLocation() + FVector(100.f, 0.f, 50.f)).Fire : 0.f;
+		Report(bNone && bPlanted && Torch && bNotYet && Torch->IsLitTorch() && Character->GetItemCount(EForestItem::Stick) == 0 && Warmth > 5.f,
+			FString::Printf(TEXT("Kazık çubuk: çubuksuz çakılmadı; 8 çubukla 8 kazık tek tek çakıldı; çakmakla yakılan kazık meşale oldu, 1 m'de +%.0f°C"), Warmth));
 		return 0.2f;
 	});
 
-	// Raiders: spikes hurt them; a fence in their way is worn down.
+	// Raiders: a stake hurts them; the palisade stops them, and they wear it down.
 	Script.Add([this, Area, Character]()
 	{
 		UWorld* World = GetWorld();
-		AStickStructure* Spikes = nullptr;
-		AStickStructure* Fence = nullptr;
+		AStickStructure* Single = nullptr;
+		TArray<AStickStructure*> Palisade;
 		for (TActorIterator<AStickStructure> It(World); It; ++It)
 		{
-			if (It->GetKind() == EStickBuild::Spikes) { Spikes = *It; }
-			if (It->GetKind() == EStickBuild::Fence) { Fence = *It; }
+			const FVector Local = It->GetActorLocation() - Area;
+			if (FMath::Abs(Local.Y - 600.f) < 20.f)
+			{
+				Single = *It;
+			}
+			else if (Local.Y > 980.f && Local.Y < 1230.f && FMath::Abs(Local.X) < 20.f)
+			{
+				Palisade.Add(*It);
+			}
 		}
-		if (!Spikes || !Fence)
+		if (!Single || Palisade.Num() != 6)
 		{
-			Report(false, TEXT("Çubuk yapıları bulunamadı"));
+			Report(false, TEXT("Kazıklar bulunamadı"));
 			return 0.1f;
 		}
-		ARaidEnemy* Pricked = World->SpawnActor<ARaidEnemy>(ARaidEnemy::StaticClass(), FTransform(Spikes->GetActorLocation() + FVector(40.f, 0.f, 92.f)));
+		ARaidEnemy* Pricked = World->SpawnActor<ARaidEnemy>(ARaidEnemy::StaticClass(), FTransform(Single->GetActorLocation() * FVector(1.f, 1.f, 0.f)
+			+ FVector(0.f, 0.f, GroundAt(World, Single->GetActorLocation()).ImpactPoint.Z + 92.f) + FVector(40.f, 0.f, 0.f)));
 		Pricked->SetTarget(Character);
 		const float Start = Pricked->Health;
 		Pricked->StepAI(1.f);
@@ -2139,20 +2147,29 @@ void AMechanicsDemo::AddStoneStickScript(AForestCharacter* Character)
 			Pricked->Destroy();
 		}
 
-		// A post behind the fence; the raider comes from the front and runs into the fence.
-		const FVector FenceAt = Fence->GetActorLocation();
-		ACarvableLog* Post = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, FenceAt + FVector(300.f, 0.f, 70.f)));
-		Post->PlaceAt(Post->GetStandTransform(GroundAt(World, FenceAt + FVector(300.f, 0.f, 0.f)).ImpactPoint, 0.f), true);
-		ARaidEnemy* Breaker = World->SpawnActor<ARaidEnemy>(ARaidEnemy::StaticClass(), FTransform(FenceAt + FVector(-300.f, 0.f, 92.f)));
+		// A post beyond the palisade; the raider comes from the other side, square on to the row of stakes.
+		const FVector Middle = Area + FVector(0.f, 1100.f, 0.f);
+		const FVector Ground = GroundAt(World, Middle).ImpactPoint;
+		ACarvableLog* Post = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, Ground + FVector(300.f, 0.f, 70.f)));
+		Post->PlaceAt(Post->GetStandTransform(Ground + FVector(300.f, 0.f, 0.f), 0.f), true);
+		ARaidEnemy* Breaker = World->SpawnActor<ARaidEnemy>(ARaidEnemy::StaticClass(), FTransform(Ground + FVector(-300.f, 0.f, 92.f)));
 		Breaker->SetTarget(Post);
-		for (int32 Step = 0; Step < 120 && IsValid(Breaker); ++Step)
+		float Furthest = -1000.f;
+		for (int32 Step = 0; Step < 40 && IsValid(Breaker); ++Step)
 		{
 			Breaker->StepAI(0.25f);
+			Furthest = FMath::Max(Furthest, Breaker->GetActorLocation().X - Ground.X);
 		}
-		const bool bWorn = !IsValid(Fence) || Fence->GetDamage() > 0.2f;
-		Report(Hurt > 15.f && bWorn,
-			FString::Printf(TEXT("Savunma: çubuk diken düşmana 1 sn'de %.0f can aldırdı; düşman yolundaki çiti yıprattı (%s)"),
-				Hurt, IsValid(Fence) ? *FString::Printf(TEXT("%%%.0f"), Fence->GetDamage() * 100.f) : TEXT("kırıldı")));
+		float Worn = 0.f;
+		int32 Broken = 0;
+		for (AStickStructure* Stake : Palisade)
+		{
+			Broken += IsValid(Stake) ? 0 : 1;
+			Worn = FMath::Max(Worn, IsValid(Stake) ? Stake->GetDamage() : 1.f);
+		}
+		Report(Hurt > 15.f && Furthest < 0.f && Worn > 0.f,
+			FString::Printf(TEXT("Savunma: kazığın yanında düşman 1 sn'de %.0f can kaybetti; dar aralıklı kazıklar onu durdurdu (geçemedi), kazıkları yıprattı (en çok %%%.0f, %d kırık)"),
+				Hurt, Worn * 100.f, Broken));
 		if (IsValid(Breaker))
 		{
 			Breaker->Destroy();
@@ -2177,7 +2194,7 @@ void AMechanicsDemo::AddFarmScript(AForestCharacter* Character)
 
 		FHitResult Ground = GroundAt(World, Area);
 		Character->TestGiveSticks(2);
-		const bool bField = Character->TestCraft(3, Ground);
+		const bool bField = Character->TestCraft(AForestCharacter::CraftField, Ground);
 		ACropFieldActor* Field = nullptr;
 		for (TActorIterator<ACropFieldActor> It(World); It; ++It)
 		{
@@ -2260,12 +2277,12 @@ void AMechanicsDemo::AddFarmScript(AForestCharacter* Character)
 		Character->TestRemoveItem(EForestItem::Hide, Character->GetItemCount(EForestItem::Hide));
 		Character->TestGiveItem(EForestItem::Hide, FarmKit::HidesPerGarment * 2 + 1);
 		FHitResult None;
-		const bool bFirst = Character->TestCraft(4, None);
+		const bool bFirst = Character->TestCraft(AForestCharacter::CraftGarment, None);
 		const float One = Body->Insulation;
-		const bool bSecond = Character->TestCraft(4, None);
-		const bool bNoThird = !Character->TestCraft(4, None);
+		const bool bSecond = Character->TestCraft(AForestCharacter::CraftGarment, None);
+		const bool bNoThird = !Character->TestCraft(AForestCharacter::CraftGarment, None);
 		const int32 RopesBefore = Character->GetItemCount(EForestItem::Rope);
-		const bool bRope = Character->TestCraft(5, None) && Character->GetItemCount(EForestItem::Rope) == RopesBefore + 1;
+		const bool bRope = Character->TestCraft(AForestCharacter::CraftRope, None) && Character->GetItemCount(EForestItem::Rope) == RopesBefore + 1;
 		Report(bFirst && FMath::IsNearlyEqual(One, FarmKit::InsulationPerGarment) && bSecond && FMath::IsNearlyEqual(Body->Insulation, FarmKit::MaxInsulation) && bNoThird && bRope,
 			FString::Printf(TEXT("Deri giysi: her parça %%%.0f yalıtım, en çok %%%.0f; ip yündan ya da deriden büküldü"), FarmKit::InsulationPerGarment * 100.f, FarmKit::MaxInsulation * 100.f));
 		Body->ResetAll();
@@ -2314,10 +2331,10 @@ void AMechanicsDemo::AddWorldScript(AForestCharacter* Character)
 		Foot.ImpactPoint = Ground;
 		FHitResult Summit;
 		Summit.ImpactPoint = FVector(Ground.X + 300.f, Ground.Y, Top);
-		const bool bNoRope = !Character->TestCraft(6, Foot);
+		const bool bNoRope = !Character->TestCraft(AForestCharacter::CraftRopeLine, Foot);
 		Character->TestGiveItem(EForestItem::Rope, 1);
 		const int32 Before = ARopeLine::CountAll(World);
-		const bool bStrung = Character->TestCraft(6, Foot) && Character->TestCraft(6, Summit) && ARopeLine::CountAll(World) == Before + 1
+		const bool bStrung = Character->TestCraft(AForestCharacter::CraftRopeLine, Foot) && Character->TestCraft(AForestCharacter::CraftRopeLine, Summit) && ARopeLine::CountAll(World) == Before + 1
 			&& Character->GetItemCount(EForestItem::Rope) == 0;
 		ARopeLine* Rope = nullptr;
 		for (TActorIterator<ARopeLine> It(World); It; ++It)

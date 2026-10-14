@@ -519,3 +519,9 @@ Kullanıcı istedi: "demo kurabilir misin". Test: mekanik 119/119 (değişmedi).
 - Sorun ekran görüntüsüyle doğrulandı: aynı anda iki görev listesi (eski kütük demosu kendiliğinden açılıyordu), taşan tuş listesi, tuş listesinin üstüne binen uzun gün satırı.
 - Düzeltme: sol üstte tek satır ("[F1] tuşlar  [Tab] çanta  [I] yapım"); **[F1]** gruplanmış tuş penceresini ortada açar/kapatır; üst ortada iki kısa satır (gün/saat/bölge/sıcaklık; baskın gecesi, notlar, altyapı); sağda hayatta kalma paneli yalnızca sıradaki görevi, ipucunu (sarılarak) ve sonraki 3 görevi gösterir. Senaryo kuruluyken eski kütük demosu kendiliğinden açılmaz, admin [L] ile açılır.
 - **`-HudShot=saniye`** bayrağı: oyun o saniyede arayüzle birlikte ekran görüntüsü alıp (`Saved/HudShot.png`) kapanır. Arayüz değişikliklerini görerek doğrulamak için. Son görüntü `Docs/hud_2026-10-14.png`.
+
+### 2026-10-14 — İnşa modu kaldırıldı; çubuklar elle çakılıyor (CC)
+Kullanıcı: "inşa modu neden var, physical assembly temelde bu oyun". Test: mekanik 119/119.
+- Kaldırılan tuşlar: **B** inşa modu (çantadan hayalet önizlemeyle hazır parça koyma) ve içindeki kütük duvar planı, **[3]** taş blok tarifi, **[T]** mala (yalnızca eski duvar/plan sistemiyle çalışıyordu), admin **[H]** hazır oda. Kodları şimdilik erişilemez durumda duruyor (`ToggleBuildMode`, `UpdateBuildPreview`, `ALogWallBlueprint`, `ALogConstructionActor`, `StructureManager`), ayrı bir temizlikte silinecek.
+- Çubuk yapıları prefab değil: `AStickStructure` artık tek bir sivri çubuk. [I] → Kazık çubuk her tıklamada bir çubuk harcayıp bir kazık çakar. Düşmana yakınında 20 can/sn; 64 cm'den dar aralıklı kazıklar düşmanı fiziksel olarak durdurur (testte 40 cm aralıklı 6 kazık), düşman onları yıpratır; [F] çakmakla 2 sn ısıtılan kazık 6 dk yanan meşale olur.
+- [I] listesi: kazık çubuk, tarla, deri giysi, ip, ip hattı. Hayatta kalma demosunda savunma görevi "3 kazık çak" oldu. HUD tuş penceresi güncellendi.

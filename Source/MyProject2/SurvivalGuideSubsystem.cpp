@@ -37,7 +37,7 @@ namespace
 		{ TEXT("İp bük ve ip hattı ger"), TEXT("[I] İp (2 yün ya da 1 deri); sonra [I] İp hattı: yarın dibine ve tepesine tıkla") },
 		{ TEXT("İple yara tırman"), TEXT("İpin ucunda [E]: tepeye çıkarsın; tepede iyi taş ve bir not var") },
 		{ TEXT("Nehre köprü kur"), TEXT("Kıyıların ikisine de direk dik, üstlerine nehri aşan bir kiriş koy") },
-		{ TEXT("Savunma kur: diken ya da çit"), TEXT("[I] ile Çubuk diken ya da Çubuk çit; ya da sivri uçlu kazıklardan duvar") },
+		{ TEXT("Savunma kur: 3 kazık çak"), TEXT("[I] Kazık çubuk: her tıklama bir çubuk çakar; aralıkları dar çakılan kazıklar yolu kapatır") },
 		{ TEXT("Önceki yerleşimcilerin 3 notunu oku"), TEXT("Kazıklara asılı kâğıtlar: başlangıçta, nehir kıyısında, yarın dibinde, yanık kulübede") },
 		{ TEXT("İlk baskın gecesini atlat (3. gece)"), TEXT("22:00'de gelirler; ateşi besle, kazık ve çit kur, şafağı bekle (admin [Z] hemen başlatır)") },
 	};
@@ -148,11 +148,12 @@ void USurvivalGuideSubsystem::Poll()
 		bBridge |= Feature.Kind == EWoodFeatureKind::Bridge;
 		bDefenceWall |= Feature.Kind == EWoodFeatureKind::StakeWall || Feature.Kind == EWoodFeatureKind::DefenseWall;
 	}
-	bool bStickDefence = false;
+	int32 Stakes = 0;
 	for (TActorIterator<AStickStructure> It(World); It; ++It)
 	{
-		bStickDefence |= It->GetKind() != EStickBuild::Torch;
+		Stakes += It->IsLitTorch() ? 0 : 1;
 	}
+	const bool bStickDefence = Stakes >= 3;
 	const UScenarioSubsystem* Scenario = UScenarioSubsystem::Get(World);
 
 	Mark(0, Has(EForestItem::Stick, 4) && Has(EForestItem::Stone, 7));
