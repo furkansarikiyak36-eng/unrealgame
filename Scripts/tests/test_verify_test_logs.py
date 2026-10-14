@@ -137,23 +137,23 @@ class LogVerifierTests(unittest.TestCase):
             VERIFY.verify_stone_placement(self.stone_placement)
 
     def test_valid_stone_trap_log_passes(self):
-        names = ("DamageDispatchAndCooldown", "NullVictimSafety")
+        names = ("DamageDispatchAndCooldown", "NullVictimSafety", "PhysicalStone", "CarvableLog")
         self.stone_trap.write_text(
             "".join(
                 f"Test Completed. Result={{Success}} Name={{{name}}} "
-                f"Path={{MyProject2.StoneTrap.{name}}}\\n"
+                f"Path={{MyProject2.StoneTrap.Damage.{name}}}\\n"
                 for name in names
             ),
             encoding="utf-8",
         )
-        self.assertEqual(VERIFY.verify_stone_trap(self.stone_trap), (2, 0))
+        self.assertEqual(VERIFY.verify_stone_trap(self.stone_trap), (4, 0))
 
     def test_stone_trap_failure_is_rejected(self):
         self.stone_trap.write_text(
             "Test Completed. Result={Success} Name={Damage} "
-            "Path={MyProject2.StoneTrap.DamageDispatchAndCooldown}\\n"
+            "Path={MyProject2.StoneTrap.Damage.DispatchAndCooldown}\\n"
             "Test Completed. Result={Fail} Name={Cooldown} "
-            "Path={MyProject2.StoneTrap.NullVictimSafety}\\n",
+            "Path={MyProject2.StoneTrap.Damage.NullVictimSafety}\\n",
             encoding="utf-8",
         )
         with self.assertRaisesRegex(ValueError, "1 failed"):
@@ -167,7 +167,7 @@ class LogVerifierTests(unittest.TestCase):
     def test_stone_trap_minimum_test_count_is_enforced(self):
         self.stone_trap.write_text(
             "Test Completed. Result={Success} Name={Damage} "
-            "Path={MyProject2.StoneTrap.DamageDispatchAndCooldown}\\n",
+            "Path={MyProject2.StoneTrap.Damage.DispatchAndCooldown}\\n",
             encoding="utf-8",
         )
         with self.assertRaisesRegex(ValueError, "expected at least 2"):
