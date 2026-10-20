@@ -100,15 +100,18 @@ void UWorldStateSubsystem::Tick(float DeltaTime)
             FRegionClimateSnapshot Climate;
             if (URegionSeasonSubsystem* RegionSeason = GetWorld()->GetSubsystem<URegionSeasonSubsystem>())
                 Climate = RegionSeason->GetClimateAtLocation(ChunkSettings.ChunkToWorldCenter(Chunk->Coordinate));
-            const float RegionPrecipitationScale = Climate.bHasKnownRegion ? FMath::Max(0.f, Climate.PrecipitationMultiplier) : 1.f;
-            const float RegionTemperatureOffset = Climate.bHasKnownRegion ? Climate.TemperatureOffsetC : 0.f;
+            const float RegionPrecipitationScale = Climate.bHasKnownRegion
+                ? FMath::Max(0.f, Climate.PrecipitationMultiplier) * FMath::Clamp(Climate.MeanAnnualRainfallMm / 600.f, 0.f, 5.f) : 1.f;
+            const float RegionTemperatureOffset = Climate.bHasKnownRegion
+                ? Climate.TemperatureOffsetC + (Climate.BaselineTemperatureC - 15.f) : 0.f;
+            const bool bLocalSnow = bIsSnowing || (Climate.bHasKnownRegion && TempMinC + RegionTemperatureOffset <= Climate.SnowThresholdOffsetC);
             if (AdvancedWaterSoilSimulation)
             {
                 AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
                 if (HistoricalPrecipitationMm > 0.0f)
                     AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, HistoricalPrecipitationMm * RegionPrecipitationScale, false, TempMinC + RegionTemperatureOffset);
                 if (bNeedsCurrentPrecipitation && RainfallMm > 0.0f)
-                    AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, RainfallMm * RegionPrecipitationScale, bIsSnowing, TempMinC + RegionTemperatureOffset);
+                    AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, RainfallMm * RegionPrecipitationScale, bLocalSnow, TempMinC + RegionTemperatureOffset);
             }
             else if (WaterSimulation)
             {
@@ -228,15 +231,18 @@ void UWorldStateSubsystem::RequestChunkSimulation(UChunkState* Chunk,float Days)
     FRegionClimateSnapshot Climate;
     if (URegionSeasonSubsystem* RegionSeason = GetWorld()->GetSubsystem<URegionSeasonSubsystem>())
         Climate = RegionSeason->GetClimateAtLocation(ChunkSettings.ChunkToWorldCenter(Chunk->Coordinate));
-    const float RegionPrecipitationScale = Climate.bHasKnownRegion ? FMath::Max(0.f, Climate.PrecipitationMultiplier) : 1.f;
-    const float RegionTemperatureOffset = Climate.bHasKnownRegion ? Climate.TemperatureOffsetC : 0.f;
+    const float RegionPrecipitationScale = Climate.bHasKnownRegion
+        ? FMath::Max(0.f, Climate.PrecipitationMultiplier) * FMath::Clamp(Climate.MeanAnnualRainfallMm / 600.f, 0.f, 5.f) : 1.f;
+    const float RegionTemperatureOffset = Climate.bHasKnownRegion
+        ? Climate.TemperatureOffsetC + (Climate.BaselineTemperatureC - 15.f) : 0.f;
+    const bool bLocalSnow = bIsSnowing || (Climate.bHasKnownRegion && TempMinC + RegionTemperatureOffset <= Climate.SnowThresholdOffsetC);
     if (AdvancedWaterSoilSimulation)
     {
         AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
         if (HistoricalPrecipitationMm > 0.0f)
             AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, HistoricalPrecipitationMm * RegionPrecipitationScale, false, TempMinC + RegionTemperatureOffset);
         if (bNeedsCurrentPrecipitation && RainfallMm > 0.0f)
-            AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, RainfallMm * RegionPrecipitationScale, bIsSnowing, TempMinC + RegionTemperatureOffset);
+            AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, RainfallMm * RegionPrecipitationScale, bLocalSnow, TempMinC + RegionTemperatureOffset);
     }
     else if (WaterSimulation)
     {
@@ -257,7 +263,7 @@ void UWorldStateSubsystem::SimulateChunk(UChunkState* Chunk,float Days,float Tar
         if (URegionSeasonSubsystem* RegionSeason = GetWorld()->GetSubsystem<URegionSeasonSubsystem>())
         {
             const FRegionClimateSnapshot Climate = RegionSeason->GetClimateAtLocation(ChunkSettings.ChunkToWorldCenter(Chunk->Coordinate));
-            if (Climate.bHasKnownRegion) LocalTemperatureC += Climate.TemperatureOffsetC;
+            if (Climate.bHasKnownRegion) LocalTemperatureC += Climate.TemperatureOffsetC + (Climate.BaselineTemperatureC - 15.f);
         }
         AdvancedWaterSoilSimulation->SimulateChunk(Chunk, Days, LocalTemperatureC, 0.55f);
     }
