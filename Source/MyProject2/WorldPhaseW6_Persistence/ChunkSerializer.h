@@ -18,6 +18,9 @@ struct FSerializedCell
     UPROPERTY() float SoilOrganicMatterFraction=0.03f;
     UPROPERTY() float BedrockDepthMeters=3.0f;
     UPROPERTY() float RootingDepthMeters=0.6f;
+    UPROPERTY() float SoilDepthMeters=1.5f;
+    UPROPERTY() float ExcavatedDepthMeters=0.0f;
+    UPROPERTY() EWorldGroundTreatment GroundTreatment=EWorldGroundTreatment::Natural;
     UPROPERTY() float WaterVolume=0.0f;
     UPROPERTY() float WaterLevel=0.0f;
     UPROPERTY() float WaterFlowRate=0.0f;
