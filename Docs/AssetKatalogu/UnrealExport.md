@@ -1,6 +1,6 @@
 # UnrealExport — Ham kütükler (kendi)
 
-Blender'dan aktarılan ham kütükler: 75 / 150 / 300 / 600 cm boylar ve işlenmiş halleri (yarım, kalas, oluk, yontulmuş, çentikli). Ağaç kesilince çıkan ve montajda kullanılan parçalar bunlar. M_RawLog materyali kabuk, kesik, yontulmuş ve soyulmuş yüzeyleri ile yıllık halkalı uç kesiti çizer.
+Blender'dan aktarılan ham kütükler: 75 / 150 / 300 / 600 cm boylar ve işlenmiş halleri (yarım, kalas, oluk, yontulmuş, çentikli). Ağaç kesilince çıkan ve montajda kullanılan parçalar bunlar. M_RawLog materyali kabuk, kesik, yontulmuş ve soyulmuş yüzeyleri ile yıllık halkalı uç kesiti çizer. Not: düz SM_RawLog_75 bu envanterden sonra eklendi (150 cm kütüğün yarı boyu).
 
 [← Asset kataloğu](README.md)
 
