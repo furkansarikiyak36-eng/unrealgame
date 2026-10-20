@@ -7,7 +7,7 @@ enum class EWorldLayerType : uint8 { Terrain, Water, Soil, Biomass, Chemistry, O
 UENUM(BlueprintType)
 enum class EChunkActivationMode : uint8 { Passive, Scheduled, Continuous };
 UENUM(BlueprintType)
-enum class EWorldEventType : uint8 { None, CanalWallBroken, WaterLevelChanged, SoilMoistureChanged, FireStarted, FireSpread, FireExtinguished, DecayTick, ToxinSpread, TerrainDeformed, BuildingDamaged, NeighborActivated };
+enum class EWorldEventType : uint8 { None, CanalWallBroken, WaterLevelChanged, SoilMoistureChanged, FireStarted, FireSpread, FireExtinguished, DecayTick, ToxinSpread, TerrainDeformed, BuildingDamaged, Erosion, NeighborActivated };
 UENUM(BlueprintType)
 enum class EBuildingDamageType : uint8 { None, Impact, Fire, Decay, Erosion, Toxin };
 
@@ -46,6 +46,25 @@ struct FTerrainCell
     UPROPERTY(BlueprintReadWrite) float Deformation = 0.0f;
     UPROPERTY(BlueprintReadWrite) float Permeability = 0.5f;
     UPROPERTY(BlueprintReadWrite) FName MaterialID = NAME_None;
+};
+USTRUCT(BlueprintType)
+struct FSoilHydrologyState
+{
+    GENERATED_BODY()
+    // Water storage is water-equivalent depth in millimetres per cell area.
+    UPROPERTY(BlueprintReadWrite) float TopLayerWaterMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float RootLayerWaterMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float DeepLayerWaterMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float SnowpackWaterEquivalentMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float GroundwaterWaterEquivalentMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float SoilTemperatureC = 12.0f;
+    UPROPERTY(BlueprintReadWrite) float SurfaceRunoffMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float CumulativeInfiltrationMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float CumulativeEvapotranspirationMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float CumulativeErosionIndex = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float SuspendedSedimentKg = 0.0f;
+    UPROPERTY(BlueprintReadWrite) float LastWaterBalanceErrorMm = 0.0f;
+    UPROPERTY(BlueprintReadWrite) bool bInitialized = false;
 };
 USTRUCT(BlueprintType)
 struct FChemistryCell
