@@ -1,6 +1,6 @@
 # Test durumu
 
-Otomatik üretildi (20 October 2026 11:46) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
+Otomatik üretildi (20 October 2026 11:52) — `python Scripts/update_docs.py`. Kayıtlar `Saved/TestRuns/`; `Scripts/run_tests.sh` oluşturur.
 
 ## Mekanik test (grafiksiz, `-MechanicsDemoQuit`)
 
