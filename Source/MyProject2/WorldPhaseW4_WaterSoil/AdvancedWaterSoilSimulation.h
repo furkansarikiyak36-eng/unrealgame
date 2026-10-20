@@ -50,8 +50,8 @@ public:
 
     UFUNCTION(BlueprintCallable, Category="Hydrology") void ApplyPrecipitation(UChunkState* Chunk, float PrecipitationMm, bool bSnow, float AirTemperatureC);
     UFUNCTION(BlueprintCallable, Category="Hydrology") FHydrologyStepReport SimulateChunk(UChunkState* Chunk, float DeltaDays, float AirTemperatureC, float AirHumidity01 = 0.55f);
-    UFUNCTION(BlueprintCallable, Category="Hydrology") void InitializeCellHydrology(FChunkCell& Cell) const;
-    UFUNCTION(BlueprintPure, Category="Hydrology") float GetCellTotalWaterMm(const FChunkCell& Cell) const;
+    void InitializeCellHydrology(FChunkCell& Cell) const;
+    float GetCellTotalWaterMm(const FChunkCell& Cell) const;
 private:
     float GetCellSurfaceWaterMm(const FChunkCell& Cell) const;
     float GetInfiltrationFactor(const FChunkCell& Cell) const;
