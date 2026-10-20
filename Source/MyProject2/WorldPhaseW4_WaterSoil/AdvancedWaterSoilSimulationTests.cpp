@@ -84,6 +84,9 @@ bool FAdvancedHydrologyPersistenceTest::RunTest(const FString& Parameters)
     Cell.Terrain.OrganicMatterFraction = 0.08f;
     Cell.Terrain.BedrockDepthMeters = 0.9f;
     Cell.Terrain.RootingDepthMeters = 0.35f;
+    Cell.Terrain.SoilDepthMeters = 0.42f;
+    Cell.Terrain.ExcavatedDepthMeters = 1.08f;
+    Cell.Terrain.GroundTreatment = EWorldGroundTreatment::Pit;
 
     const FSerializedChunk Saved = UChunkSerializer::SerializeChunk(Source);
     UChunkState* Restored = UChunkSerializer::DeserializeChunk(GetTransientPackage(), Saved);
@@ -97,6 +100,9 @@ bool FAdvancedHydrologyPersistenceTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Soil texture persists"), R.Terrain.SoilTexture == EWorldSoilTexture::Clay);
     TestTrue(TEXT("Compaction persists"), FMath::IsNearlyEqual(R.Terrain.Compaction, 0.42f));
     TestTrue(TEXT("Bedrock depth persists"), FMath::IsNearlyEqual(R.Terrain.BedrockDepthMeters, 0.9f));
+    TestTrue(TEXT("Remaining soil depth persists"), FMath::IsNearlyEqual(R.Terrain.SoilDepthMeters, 0.42f));
+    TestTrue(TEXT("Excavation depth persists"), FMath::IsNearlyEqual(R.Terrain.ExcavatedDepthMeters, 1.08f));
+    TestTrue(TEXT("Ground treatment persists"), R.Terrain.GroundTreatment == EWorldGroundTreatment::Pit);
     return true;
 }
 
