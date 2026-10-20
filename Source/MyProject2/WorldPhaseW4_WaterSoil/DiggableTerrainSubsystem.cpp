@@ -7,6 +7,7 @@
 void UDiggableTerrainSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
+    Collection.InitializeDependency<UWorldStateSubsystem>();
     WorldState = GetWorld() ? GetWorld()->GetSubsystem<UWorldStateSubsystem>() : nullptr;
 }
 
@@ -169,7 +170,7 @@ FDigOperationResult UDiggableTerrainSubsystem::FillAtWorld(const FVector& WorldL
         const float ActualLoose = FillDepth * CellArea * FMath::Max(1.0f, LooseSoilExpansionRatio);
         LooseRemaining -= ActualLoose;
         Result.SoilConsumedM3 += ActualLoose;
-        Result.ExcavatedVolumeM3 += FillDepth * CellArea;
+        Result.FilledVolumeM3 += FillDepth * CellArea;
         ++Result.CellsChanged;
         ChangedChunks.Add(ChunkCoord);
     }
@@ -178,7 +179,7 @@ FDigOperationResult UDiggableTerrainSubsystem::FillAtWorld(const FVector& WorldL
     if (!Result.bSucceeded) Result.FailureReason = FText::FromString(TEXT("No excavated soil cells were available to fill."));
     Result.AffectedChunks = ChangedChunks.Array();
     Result.AffectedChunks.Sort([](const FIntPoint& A, const FIntPoint& B) { return A.X == B.X ? A.Y < B.Y : A.X < B.X; });
-    BroadcastChange(ChangedChunks, Result.CellsChanged, 0.0f, Result.ExcavatedVolumeM3);
+    BroadcastChange(ChangedChunks, Result.CellsChanged, 0.0f, Result.FilledVolumeM3);
     return Result;
 }
 
