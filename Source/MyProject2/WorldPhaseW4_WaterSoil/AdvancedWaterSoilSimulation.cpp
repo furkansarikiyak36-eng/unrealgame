@@ -80,6 +80,29 @@ FHydrologyStepReport UAdvancedWaterSoilSimulation::SimulateChunk(UChunkState* Ch
 {
     FHydrologyStepReport Report;
     if (!Chunk || Chunk->Cells.IsEmpty() || DeltaDays <= 0.f) return Report;
+    if (DeltaDays > 1.f)
+    {
+        FHydrologyStepReport Total;
+        float Remaining = DeltaDays;
+        bool bFirst = true;
+        while (Remaining > KINDA_SMALL_NUMBER)
+        {
+            const float StepDays = FMath::Min(1.f, Remaining);
+            const FHydrologyStepReport Step = SimulateChunk(Chunk, StepDays, AirTemperatureC, AirHumidity01);
+            if (bFirst) { Total.TotalWaterBeforeMm = Step.TotalWaterBeforeMm; bFirst = false; }
+            Total.TotalWaterAfterMm = Step.TotalWaterAfterMm;
+            Total.InfiltrationMm += Step.InfiltrationMm;
+            Total.EvapotranspirationMm += Step.EvapotranspirationMm;
+            Total.SnowmeltMm += Step.SnowmeltMm;
+            Total.VerticalDrainageMm += Step.VerticalDrainageMm;
+            Total.SurfaceFlowMm += Step.SurfaceFlowMm;
+            Total.MeanRootZoneSaturation = Step.MeanRootZoneSaturation;
+            Total.MeanSurfaceWaterMm = Step.MeanSurfaceWaterMm;
+            Total.WaterBalanceErrorMm += Step.WaterBalanceErrorMm;
+            Remaining -= StepDays;
+        }
+        return Total;
+    }
     const float Days = FMath::Clamp(DeltaDays, 0.f, 1.f);
     const int32 Axis = FMath::RoundToInt(FMath::Sqrt(static_cast<float>(Chunk->Cells.Num())));
     if (Axis <= 0 || Axis * Axis != Chunk->Cells.Num()) return Report;
@@ -239,5 +262,38 @@ FHydrologyStepReport UAdvancedWaterSoilSimulation::SimulateChunk(UChunkState* Ch
     const float PerCellError = Report.WaterBalanceErrorMm / CellCount;
     for (FChunkCell& Cell : Chunk->Cells) Cell.Hydrology.LastWaterBalanceErrorMm = PerCellError;
     Chunk->MarkDirty();
+    if (UWorld* World = GetWorld())
+    {
+        if (UWorldEventSubsystem* Events = World->GetSubsystem<UWorldEventSubsystem>())
+        {
+            if (Report.SurfaceFlowMm > 0.01f || Report.SnowmeltMm > 0.01f)
+            {
+                FWorldEvent Event; Event.Type = EWorldEventType::WaterLevelChanged;
+                Event.ChunkCoord = Chunk->Coordinate; Event.Magnitude = Report.SurfaceFlowMm + Report.SnowmeltMm;
+                Event.SourceTag = TEXT("AdvancedHydrology");
+                Event.NumericPayload.Add(TEXT("SurfaceFlowMm"), Report.SurfaceFlowMm);
+                Event.NumericPayload.Add(TEXT("SnowmeltMm"), Report.SnowmeltMm);
+                Events->BroadcastEvent(Event);
+            }
+            if (Report.InfiltrationMm > 0.01f || Report.EvapotranspirationMm > 0.01f)
+            {
+                FWorldEvent Event; Event.Type = EWorldEventType::SoilMoistureChanged;
+                Event.ChunkCoord = Chunk->Coordinate; Event.Magnitude = Report.InfiltrationMm + Report.EvapotranspirationMm;
+                Event.SourceTag = TEXT("AdvancedHydrology");
+                Event.NumericPayload.Add(TEXT("InfiltrationMm"), Report.InfiltrationMm);
+                Event.NumericPayload.Add(TEXT("EvapotranspirationMm"), Report.EvapotranspirationMm);
+                Event.NumericPayload.Add(TEXT("RootZoneSaturation"), Report.MeanRootZoneSaturation);
+                Events->BroadcastEvent(Event);
+            }
+            if (Report.SurfaceFlowMm > 0.01f)
+            {
+                FWorldEvent Event; Event.Type = EWorldEventType::Erosion;
+                Event.ChunkCoord = Chunk->Coordinate; Event.Magnitude = Report.SurfaceFlowMm;
+                Event.SourceTag = TEXT("AdvancedHydrology");
+                Event.NumericPayload.Add(TEXT("SurfaceFlowMm"), Report.SurfaceFlowMm);
+                Events->BroadcastEvent(Event);
+            }
+        }
+    }
     return Report;
 }
