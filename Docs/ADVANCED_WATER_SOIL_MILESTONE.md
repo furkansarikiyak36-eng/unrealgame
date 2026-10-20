@@ -11,14 +11,15 @@ The advanced solver is the authoritative water/soil step used by `UWorldStateSub
 3. **Rain/snow input:** precipitation can be added to surface-water volume or snowpack. The world subsystem applies historical catch-up precipitation as liquid because the old weather history stores amounts but not historical rain/snow classification; current precipitation uses the current snow flag.
 4. **Snowmelt:** degree-day melt with a daily cap transfers snow water equivalent into surface water.
 5. **Infiltration:** soil texture/permeability, top-layer saturation and frozen-soil temperature jointly limit infiltration.
-6. **Vertical redistribution:** water drains from topsoil to root zone, root zone to deep soil, then deep drainage to a groundwater store. Layer capacities and rates are configurable.
-7. **Evaporation and transpiration:** atmospheric demand is temperature- and humidity-dependent; surface water evaporates first, then topsoil, and vegetation cover scales root-zone transpiration.
-8. **Surface routing:** neighbour exchange is calculated from terrain elevation plus surface-water depth, with a two-phase delta buffer and a maximum transfer fraction to avoid order-dependent updates and negative volumes.
-9. **Nutrient leaching:** water percolation reduces the existing nitrogen, phosphorus and potassium pools at configurable relative rates.
-10. **Erosion pressure:** surface flow, local slope and vegetation cover produce a persistent erosion index and suspended-sediment proxy. It does not yet physically lower terrain or transport sediment between cells.
-11. **Diagnostics and events:** each simulation step returns total water before/after, infiltration, ET, melt, vertical drainage, surface flow, mean root-zone saturation and water-balance error. World events are broadcast for material hydrology changes.
-12. **Persistence:** the layered water state, snowpack, soil temperature, cumulative fluxes, erosion index and balance error are serialized with each chunk cell.
-13. **Bounded catch-up:** elapsed simulation intervals longer than one day are processed as one-day substeps rather than clamped and discarded.
+6. **Texture-specific hydraulics:** sand, loamy sand, loam, silt loam, clay loam, clay, organic peat and rock use different capacity/conductivity multipliers. Compaction suppresses infiltration and percolation; organic matter increases water retention; rooting depth scales root-zone storage; shallow bedrock constrains deep storage and drainage. These are game-scale parameters, not measured soil curves.
+7. **Vertical redistribution:** water drains from topsoil to root zone, root zone to deep soil, then deep drainage to a groundwater store. Layer capacities and rates are configurable.
+8. **Evaporation and transpiration:** atmospheric demand is temperature- and humidity-dependent; surface water evaporates first, then topsoil, and vegetation cover scales root-zone transpiration.
+9. **Surface routing:** neighbour exchange is calculated from terrain elevation plus surface-water depth, with a two-phase delta buffer and a maximum transfer fraction to avoid order-dependent updates and negative volumes.
+10. **Nutrient leaching:** water percolation reduces the existing nitrogen, phosphorus and potassium pools at configurable relative rates.
+11. **Erosion pressure:** surface flow, local slope and vegetation cover produce a persistent erosion index and suspended-sediment proxy. It does not yet physically lower terrain or transport sediment between cells.
+12. **Diagnostics and events:** each simulation step returns total water before/after, infiltration, ET, melt, vertical drainage, surface flow, mean root-zone saturation and water-balance error. World events are broadcast for material hydrology changes.
+13. **Persistence:** the layered water state, snowpack, soil temperature, cumulative fluxes, erosion index and balance error are serialized with each chunk cell.
+14. **Bounded catch-up:** elapsed simulation intervals longer than one day are processed as one-day substeps rather than clamped and discarded.
 
 ## State units
 
