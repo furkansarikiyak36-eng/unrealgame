@@ -6,6 +6,8 @@
 #include "DiggableTerrainSubsystem.generated.h"
 
 class UWorldStateSubsystem;
+class UChunkState;
+struct FChunkCell;
 
 UENUM(BlueprintType)
 enum class EDigBrushShape : uint8
@@ -23,6 +25,7 @@ struct FDigOperationResult
     UPROPERTY(BlueprintReadOnly) bool bSucceeded = false;
     UPROPERTY(BlueprintReadOnly) int32 CellsChanged = 0;
     UPROPERTY(BlueprintReadOnly) float ExcavatedVolumeM3 = 0.0f;
+    UPROPERTY(BlueprintReadOnly) float FilledVolumeM3 = 0.0f;
     UPROPERTY(BlueprintReadOnly) float SoilConsumedM3 = 0.0f;
     UPROPERTY(BlueprintReadOnly) TArray<FIntPoint> AffectedChunks;
     UPROPERTY(BlueprintReadOnly) FText FailureReason;
