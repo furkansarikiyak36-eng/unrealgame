@@ -93,14 +93,21 @@ void UWorldStateSubsystem::Tick(float DeltaTime)
         const float WeatherDays = FMath::Max(0.0f, CurrentDayIndex - Chunk->Metadata.LastWeatherUpdateDay);
         if (WeatherDays > 0.0f)
         {
-            const float MissedRainfallMm = ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
-            if (AdvancedWaterSoilSimulation && MissedRainfallMm > 0.0f)
+            const float HistoricalPrecipitationMm = ComputeHistoricalRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
+            const bool bNeedsCurrentPrecipitation = CurrentDayIndex > Chunk->Metadata.LastWeatherUpdateDay;
+            if (AdvancedWaterSoilSimulation)
             {
                 AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
-                AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, MissedRainfallMm, bIsSnowing, TempMinC);
+                if (HistoricalPrecipitationMm > 0.0f)
+                    AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, HistoricalPrecipitationMm, false, TempMinC);
+                if (bNeedsCurrentPrecipitation && RainfallMm > 0.0f)
+                    AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, RainfallMm, bIsSnowing, TempMinC);
             }
-            else if (WaterSimulation && MissedRainfallMm > 0.0f)
-                WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
+            else if (WaterSimulation)
+            {
+                const float MissedRainfallMm = ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
+                if (MissedRainfallMm > 0.0f) WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
+            }
             Chunk->Metadata.LastWeatherUpdateDay = CurrentDayIndex;
             Chunk->MarkDirty();
         }
@@ -193,18 +200,37 @@ float UWorldStateSubsystem::ComputeRainfallSince(float LastWeatherDay, int32 Cur
     return TotalRainfall;
 }
 
+float UWorldStateSubsystem::ComputeHistoricalRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const
+{
+    const int32 FirstMissedDay = FMath::Max(2, FMath::FloorToInt(LastWeatherDay) + 1);
+    const int32 LastHistoricalDay = CurrentDayIndex - 1;
+    if (LastHistoricalDay < FirstMissedDay) return 0.0f;
+    float Total = 0.0f;
+    for (int32 Day = FirstMissedDay; Day <= LastHistoricalDay; ++Day)
+        Total += ComputeRainfallForDay(Day);
+    return Total;
+}
+
 void UWorldStateSubsystem::RequestChunkSimulation(UChunkState* Chunk,float Days)
 {
     if (!Chunk || Days <= 0.0f) return;
     const float CurrentTotalDay=WorldTime.ToTotalDays();
     const int32 CurrentDayIndex=FMath::FloorToInt(CurrentTotalDay);
-    const float MissedRainfallMm=ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay,CurrentDayIndex);
-    if (MissedRainfallMm > 0.0f && AdvancedWaterSoilSimulation)
+    const float HistoricalPrecipitationMm = ComputeHistoricalRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
+    const bool bNeedsCurrentPrecipitation = CurrentDayIndex > Chunk->Metadata.LastWeatherUpdateDay;
+    if (AdvancedWaterSoilSimulation)
     {
         AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
-        AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, MissedRainfallMm, bIsSnowing, TempMinC);
+        if (HistoricalPrecipitationMm > 0.0f)
+            AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, HistoricalPrecipitationMm, false, TempMinC);
+        if (bNeedsCurrentPrecipitation && RainfallMm > 0.0f)
+            AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, RainfallMm, bIsSnowing, TempMinC);
     }
-    else if (MissedRainfallMm > 0.0f && WaterSimulation) WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
+    else if (WaterSimulation)
+    {
+        const float MissedRainfallMm = ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
+        if (MissedRainfallMm > 0.0f) WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
+    }
     Chunk->Metadata.LastWeatherUpdateDay=FMath::Max(Chunk->Metadata.LastWeatherUpdateDay,(float)CurrentDayIndex);
     SimulateChunk(Chunk,Days,CurrentTotalDay);
     Chunk->Metadata.LastSimulationTime=FPlatformTime::Seconds();
