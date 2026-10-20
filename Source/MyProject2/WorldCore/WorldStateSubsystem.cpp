@@ -4,6 +4,7 @@
 #include "WorldPhaseW1_Chunk/WorldChunkSubsystem.h"
 #include "WorldPhaseW4_WaterSoil/WaterSimulation.h"
 #include "WorldPhaseW4_WaterSoil/SoilSimulation.h"
+#include "WorldPhaseW4_WaterSoil/AdvancedWaterSoilSimulation.h"
 #include "WorldPhaseW5_FireDecayChem/FireSimulation.h"
 #include "WorldPhaseW5_FireDecayChem/DecaySimulation.h"
 #include "WorldPhaseW5_FireDecayChem/ChemistrySimulation.h"
@@ -14,7 +15,7 @@
 void UWorldStateSubsystem::Initialize(FSubsystemCollectionBase& C)
 {
     Super::Initialize(C); StateStore=NewObject<UChunkStateStore>(this); BudgetAllocator=NewObject<USimulationBudgetAllocator>(this);
-    WaterSimulation=NewObject<UWaterSimulation>(this); SoilSimulation=NewObject<USoilSimulation>(this); FireSimulation=NewObject<UFireSimulation>(this);
+    WaterSimulation=NewObject<UWaterSimulation>(this); SoilSimulation=NewObject<USoilSimulation>(this); AdvancedWaterSoilSimulation=NewObject<UAdvancedWaterSoilSimulation>(this); FireSimulation=NewObject<UFireSimulation>(this);
     DecaySimulation=NewObject<UDecaySimulation>(this); ChemistrySimulation=NewObject<UChemistrySimulation>(this); EventTracker=NewObject<UEventChainTracker>(this);
     WorldTime=FWorldTime();
 }
@@ -93,7 +94,12 @@ void UWorldStateSubsystem::Tick(float DeltaTime)
         if (WeatherDays > 0.0f)
         {
             const float MissedRainfallMm = ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
-            if (WaterSimulation && MissedRainfallMm > 0.0f)
+            if (AdvancedWaterSoilSimulation && MissedRainfallMm > 0.0f)
+            {
+                AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
+                AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, MissedRainfallMm, bIsSnowing, TempMinC);
+            }
+            else if (WaterSimulation && MissedRainfallMm > 0.0f)
                 WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
             Chunk->Metadata.LastWeatherUpdateDay = CurrentDayIndex;
             Chunk->MarkDirty();
@@ -193,7 +199,12 @@ void UWorldStateSubsystem::RequestChunkSimulation(UChunkState* Chunk,float Days)
     const float CurrentTotalDay=WorldTime.ToTotalDays();
     const int32 CurrentDayIndex=FMath::FloorToInt(CurrentTotalDay);
     const float MissedRainfallMm=ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay,CurrentDayIndex);
-    if (MissedRainfallMm>0.0f && WaterSimulation) WaterSimulation->ApplyRainfall(Chunk,MissedRainfallMm);
+    if (MissedRainfallMm > 0.0f && AdvancedWaterSoilSimulation)
+    {
+        AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
+        AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, MissedRainfallMm, bIsSnowing, TempMinC);
+    }
+    else if (MissedRainfallMm > 0.0f && WaterSimulation) WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
     Chunk->Metadata.LastWeatherUpdateDay=FMath::Max(Chunk->Metadata.LastWeatherUpdateDay,(float)CurrentDayIndex);
     SimulateChunk(Chunk,Days,CurrentTotalDay);
     Chunk->Metadata.LastSimulationTime=FPlatformTime::Seconds();
