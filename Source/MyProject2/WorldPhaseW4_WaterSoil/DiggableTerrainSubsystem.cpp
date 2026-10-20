@@ -113,7 +113,6 @@ FDigOperationResult UDiggableTerrainSubsystem::DigAtWorld(const FVector& WorldLo
         Cell->Terrain.SoilDepthMeters -= CutDepth;
         Cell->Terrain.ExcavatedDepthMeters += CutDepth;
         Cell->Terrain.Compaction = FMath::Clamp(Cell->Terrain.Compaction - 0.12f, 0.0f, 1.0f);
-        Cell->Terrain.RootingDepthMeters = FMath::Min(Cell->Terrain.RootingDepthMeters, FMath::Max(MinimumSoilDepthMeters, Cell->Terrain.SoilDepthMeters));
         Cell->Terrain.GroundTreatment = EWorldGroundTreatment::Disturbed;
         Cell->bIsDirty = true;
         Chunk->MarkDirty();
