@@ -9,6 +9,8 @@ enum class EChunkActivationMode : uint8 { Passive, Scheduled, Continuous };
 UENUM(BlueprintType)
 enum class EWorldEventType : uint8 { None, CanalWallBroken, WaterLevelChanged, SoilMoistureChanged, FireStarted, FireSpread, FireExtinguished, DecayTick, ToxinSpread, TerrainDeformed, BuildingDamaged, NeighborActivated, Erosion };
 UENUM(BlueprintType)
+enum class EWorldSoilTexture : uint8 { Sand, LoamySand, Loam, SiltLoam, ClayLoam, Clay, OrganicPeat, Rock };
+UENUM(BlueprintType)
 enum class EBuildingDamageType : uint8 { None, Impact, Fire, Decay, Erosion, Toxin };
 
 USTRUCT(BlueprintType)
@@ -46,6 +48,11 @@ struct FTerrainCell
     UPROPERTY(BlueprintReadWrite) float Deformation = 0.0f;
     UPROPERTY(BlueprintReadWrite) float Permeability = 0.5f;
     UPROPERTY(BlueprintReadWrite) FName MaterialID = NAME_None;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil") EWorldSoilTexture SoilTexture = EWorldSoilTexture::Loam;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil", meta=(ClampMin="0", ClampMax="1")) float Compaction = 0.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil", meta=(ClampMin="0", ClampMax="0.3")) float OrganicMatterFraction = 0.03f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil", meta=(ClampMin="0.1")) float BedrockDepthMeters = 3.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil", meta=(ClampMin="0.05", ClampMax="3")) float RootingDepthMeters = 0.6f;
 };
 USTRUCT(BlueprintType)
 struct FSoilHydrologyState
