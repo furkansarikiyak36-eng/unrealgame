@@ -100,4 +100,37 @@ bool FAdvancedHydrologyPersistenceTest::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FAdvancedHydrologyTextureResponseTest,
+    "MyProject2.Hydrology.SoilTextureResponse",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAdvancedHydrologyTextureResponseTest::RunTest(const FString& Parameters)
+{
+    UChunkState* SandChunk = NewObject<UChunkState>();
+    UChunkState* ClayChunk = NewObject<UChunkState>();
+    SandChunk->Initialize(2);
+    ClayChunk->Initialize(2);
+    for (FChunkCell& Cell : SandChunk->Cells)
+    {
+        Cell.SoilMoisture = 0.3f;
+        Cell.Terrain.Permeability = 0.5f;
+        Cell.Terrain.SoilTexture = EWorldSoilTexture::Sand;
+        Cell.Water.Volume = 0.1f;
+    }
+    for (FChunkCell& Cell : ClayChunk->Cells)
+    {
+        Cell.SoilMoisture = 0.3f;
+        Cell.Terrain.Permeability = 0.5f;
+        Cell.Terrain.SoilTexture = EWorldSoilTexture::Clay;
+        Cell.Water.Volume = 0.1f;
+    }
+    UAdvancedWaterSoilSimulation* Model = NewObject<UAdvancedWaterSoilSimulation>();
+    Model->CellSizeMeters = 4.f;
+    const FHydrologyStepReport Sand = Model->SimulateChunk(SandChunk, 1.f, 18.f, 0.5f);
+    const FHydrologyStepReport Clay = Model->SimulateChunk(ClayChunk, 1.f, 18.f, 0.5f);
+    TestTrue(TEXT("Sandy soil infiltrates more rapidly than clay under identical conditions"), Sand.InfiltrationMm > Clay.InfiltrationMm);
+    return true;
+}
+
 #endif
