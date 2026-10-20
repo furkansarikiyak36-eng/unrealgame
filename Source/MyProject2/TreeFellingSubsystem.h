@@ -13,8 +13,9 @@ class AHarvestableActor;
  *
  * On begin play every SkeletalMeshActor (Megaplant) and StaticMeshActor (e.g. KiteDemo) tagged "Fellable" becomes an
  * AHarvestableActor tree in place (same mesh, a trunk capsule takes the hits); the source actor is hidden. An axe hit
- * is only heard; when the tree gives way a crack is heard, a stump stays, the tree topples and, when it lands, raw
- * UnrealExport logs (600 / 300 cm by tree height) lie along the fall line. Logs split 600 -> 300 -> 150 -> 75.
+ * is only heard; when the tree gives way a crack is heard, the tree leans, topples and, when it lands, raw
+ * UnrealExport logs (600 / 300 cm by tree height) lie along the fall line. Logs split 600 -> 300 -> 150 -> 75; once
+ * picked up they are worked by RawLogShapes (cut across, split, hew, channel).
  *
  * Rocks tagged "Breakable" become stones of the stone chain (AHarvestableActor::InitFromStaticRock).
  *

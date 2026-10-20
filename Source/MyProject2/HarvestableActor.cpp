@@ -601,8 +601,12 @@ bool AHarvestableActor::ApplyHit(float Damage, const FHitResult& Hit, const FVec
 		}
 		return false;
 	}
-	SpawnDebris(Hit.ImpactPoint, Hit.ImpactNormal, 2);
-	AddHitMark(Hit);
+	// Raw logs show no axe marks or chips: only the sound, and the log splits when it gives.
+	if (RawLogLength <= 0)
+	{
+		SpawnDebris(Hit.ImpactPoint, Hit.ImpactNormal, 2);
+		AddHitMark(Hit);
+	}
 
 	if (Health <= 0.f)
 	{
@@ -685,54 +689,18 @@ void AHarvestableActor::StartFall(const FVector& Direction)
 	Mesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	TrunkCollider->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 
+	// The tree turns round its foot. (A stump mesh was tried and dropped: it never matched the trunk.)
+	FallPivot = BaseLocation;
 	if (bSimpleTree)
 	{
-		// The trunk gives way: a crack, a stump stays and the tree tips over from the top of the stump.
+		// The trunk gives way with a crack, leans for a moment and goes over.
 		PlayFellingSound(GetWorld(), TEXT("SW_TreeCrack"), BaseLocation + FVector(0.f, 0.f, 200.f));
 		TrunkCollider->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		// The tree breaks off at the stump's top and turns round that point, so it does not jump up.
-		const float StumpTop = SpawnStump();
-		FallPivot = BaseLocation + FVector(0.f, 0.f, StumpTop * 0.8f);
-	}
-	else
-	{
-		FallPivot = BaseLocation;
 	}
 
 	bFalling = true;
 	FallTime = 0.f;
 	SetActorTickEnabled(true);
-}
-
-float AHarvestableActor::SpawnStump()
-{
-	// Megascans Old Tree Stump (about 134 x 88 cm, 57 cm tall).
-	static const TCHAR* StumpPath = TEXT("/Game/Fab/Megascans/3D/Old_Tree_Stump_wd0qcaobw/Low/wd0qcaobw_tier_3/StaticMeshes/wd0qcaobw_tier_3.wd0qcaobw_tier_3");
-	UStaticMesh* StumpMesh = LoadObject<UStaticMesh>(nullptr, StumpPath);
-	UWorld* World = GetWorld();
-	if (!StumpMesh || !World)
-	{
-		return 0.f;
-	}
-	const FBox Box = StumpMesh->GetBoundingBox();
-	const float Width = FMath::Max(1.f, (Box.GetSize().X + Box.GetSize().Y) * 0.5f);
-	// About twice the trunk width (the trunk flares at its foot) and never shorter than the meadow grass.
-	const float Scale = FMath::Clamp(TrunkRadius * 2.f * 2.2f / Width, 0.9f, 1.3f);
-	const FRotator Rotation(0.f, FMath::FRand() * 360.f, 0.f);
-	// Bottom of the mesh a few cm into the ground at the tree's base.
-	const FVector Location = BaseLocation - FVector(0.f, 0.f, Box.Min.Z * Scale + 4.f);
-
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AStaticMeshActor* Stump = World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(Rotation, Location, FVector(Scale)), Params);
-	if (!Stump)
-	{
-		return 0.f;
-	}
-	Stump->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
-	Stump->GetStaticMeshComponent()->SetStaticMesh(StumpMesh);
-	Stump->Tags.Add(TEXT("TreeStump"));
-	return Box.GetSize().Z * Scale - 4.f;
 }
 
 void AHarvestableActor::DropRockResources(UWorld* World, const FVector& Center, int32 Count)

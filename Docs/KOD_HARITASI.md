@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (20 October 2026 11:56) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (20 October 2026 16:07) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -166,7 +166,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsLighterHeld() const` — F held: the lighter heats what is in sight (a piece of wood or a fire pit).
 - `void TakeEnemyHit(float Amount)` — An enemy hit on the player.
 - `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
-- `static bool IsProfileTool(ECarveTool Tool)` — For PIE test scripts (Python): E and the left click as the player presses them, and what is carried.
+- `static bool IsProfileTool(ECarveTool Tool)` — An axe hit on Log at a point of its surface given in its local space (point and outward normal), as PerformHit does.
 - `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
 - `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
 - `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).
@@ -344,6 +344,24 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static bool StartRaid(UWorld* World, FName EventID, int32 Total, int32 AtOnce)` — One wave of Total raiders, at most AtOnce of them at a time, under the event ID (a raid night).
 - `static void StopRaid(UWorld* World)` — Cancels the active raid and removes only actors owned by its Raid Director.
 - Ayrıca (açıklamasız): `CountEnemies`
+
+## RawLogShapes.h
+
+**RawLogShapes** (namespace) — Working the raw UnrealExport logs with the axe, as finished shapes rather than free carving. Every log is a length (600 / 300 / 150 / 75 cm, the 75 cm module) and a …
+
+- `FShape FromMesh(const UStaticMesh* Mesh)` — The shape of a raw-log mesh from its name (SM_RawLog_300_Half...); invalid for anything else.
+- `FShape FromLog(const ACarvableLog* Log)` — The shape of a building piece made from a raw-log mesh.
+- `EAction ClassifyHit(const ACarvableLog* Log, const FHitResult& Hit, bool bChannelMode)` — What a hit at Hit does: an end face splits, the middle cuts across, the sides are hewn; bChannelMode: channel.
+- `bool CanApply(const FShape& Shape, EAction Action, FString& OutWhy)` — Whether Action can be done to Shape; when not, OutWhy says why (shown to the player).
+- `int32 HitsFor(EAction Action)` — Axe hits it takes.
+- `bool Apply(ACarvableLog* Log, EAction Action, FString& OutMessage)` — Replaces Log by the pieces Action makes, where it lies; OutMessage describes the result. False if it cannot.
+- `FString Describe(const FShape& Shape)` — "300 cm yarım kütük".
+- `FString ActionName(EAction Action)` — "Enine kesiliyor".
+- Ayrıca (açıklamasız): `LoadMesh`, `ProfileName`
+
+**FShape** (struct)
+
+- Ayrıca (açıklamasız): `IsValid`
 
 ## RawMaterialNode.h
 
@@ -563,4 +581,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-198 / 486 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+201 / 497 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

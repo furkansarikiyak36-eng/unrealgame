@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestHUD.h"
+#include "RawLogShapes.h"
 #include "UnrealClient.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -134,11 +135,16 @@ void AForestHUD::DrawHUD()
 			Detail += TEXT("  |  yanık");
 		}
 		const TCHAR* Wheel = bProfile ? TEXT("[Tekerlek] derinlik")
-			: Tool == ECarveTool::CrossCut ? TEXT("65 cm'lik modül çizgileri")
+			: Tool == ECarveTool::CrossCut ? TEXT("75 cm'lik modül çizgileri")
 			: AForestCharacter::IsEndTool(Tool) ? TEXT("kütüğün iki ucundan biri")
 			: Tool == ECarveTool::Split ? TEXT("[Tekerlek] dikey/yatay") : TEXT("[Tekerlek] köşe/oluk");
-		const FString Label = FString::Printf(TEXT("Oyma: %s  %s   vuruş %d/2   |   [R] araç   %s"),
-			AForestCharacter::GetCarveToolName(Tool), *Detail, Player->GetCarveHits(), Wheel);
+		// Raw UnrealExport logs are worked by where the axe lands (RawLogShapes), not with the carving tools.
+		const RawLogShapes::FShape Shape = RawLogShapes::FromLog(Player->GetFocusedCarvable());
+		const FString Label = Shape.IsValid()
+			? FString::Printf(TEXT("%s   |   ortaya vur: enine kes   uca vur: boyuna yar   yana vur: düzle   [R] oluk / normal"),
+				*RawLogShapes::Describe(Shape))
+			: FString::Printf(TEXT("Oyma: %s  %s   vuruş %d/2   |   [R] araç   %s"),
+				AForestCharacter::GetCarveToolName(Tool), *Detail, Player->GetCarveHits(), Wheel);
 		// A piece of a structure says what the structure is.
 		const FString Made = StructureLink::DescribeFeaturesOf(GetWorld(), Player->GetFocusedCarvable());
 		if (!Made.IsEmpty())

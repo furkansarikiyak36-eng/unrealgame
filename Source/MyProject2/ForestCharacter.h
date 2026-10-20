@@ -125,6 +125,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Forest|Test") int32 TestCarriedCount() const { return GetCarriedCount(); }
 	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestCarriedItem() const;
 	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestLastMessage() const;
+	/** An axe hit on Log at a point of its surface given in its local space (point and outward normal), as PerformHit does. */
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") void TestShapeHit(ACarvableLog* Log, FVector LocalPoint, FVector LocalNormal, bool bChannel);
 	static bool IsProfileTool(ECarveTool Tool)
 	{
 		return Tool == ECarveTool::NotchRound || Tool == ECarveTool::NotchFlat || Tool == ECarveTool::Dovetail;
@@ -220,6 +222,13 @@ private:
 	void UpdateCarveAim(const FHitResult& Hit, ACarvableLog* Log);
 	void UpdateCarvePreview();
 	void ApplyCarveHit(ACarvableLog* Log);
+	/** Raw UnrealExport logs: the axe hit is a cross cut, a split, hewing or a channel by where it lands (RawLogShapes). */
+	void ApplyShapeHit(ACarvableLog* Log, const FHitResult& Hit);
+	/** R on a raw log: hits open a channel (gutter, then trough) instead of cutting / splitting / hewing. */
+	bool bChannelMode = false;
+	TWeakObjectPtr<ACarvableLog> ShapeTarget;
+	uint8 ShapeAction = 0;
+	int32 ShapeHits = 0;
 	/** K (admin): three carvable raw logs (A 500, B 375, C 250 cm) in front of the player. */
 	void DebugSpawnCarvableLogs();
 	/** Admin + L: starts (or restarts) the guided wood chain demo, see AMechanicsDemo. */

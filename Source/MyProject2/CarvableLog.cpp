@@ -675,6 +675,10 @@ ACarvableLog* ACarvableLog::SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh
 
 	const FBox Box = UGeometryScriptLibrary_MeshQueryFunctions::GetMeshBoundingBox(Log->MeshComponent->GetDynamicMesh());
 	Log->Radius = Box.GetSize().Z * 0.5f;
+	// Remember what it was made from (RawLogShapes reads the shape from the mesh name); unlike a placed log it still
+	// falls and settles, and the copy above is not loaded again.
+	Log->SourceMesh = Mesh;
+	Log->bStartAsleep = false;
 	Log->SetMaterials(Mesh->GetMaterial(0));
 	Log->FinishEdit();
 	Log->FinishSpawning(Transform);
@@ -1475,8 +1479,25 @@ ACarvableLog* ACarvableLog::PlaceAcross(AActor* Lower, const FCrossPlacement& Pl
 	}
 
 	Upper->PlaceAt(Placement.Upper, /*bAnchorIt*/ true);
-	// Underside (180), square across (90), cup as round as the lower log and half of it deep: it seats onto it.
-	Upper->Notch(Placement.NotchX, 180.f, 90.f, Placement.LowerRadius, Placement.LowerRadius);
+	// Flat notches top and bottom, like SM_RawLog_75_FlatNotch_TopBottom: the upper log's underside and the lower log's
+	// top each lose a quarter of the lower log's thickness, so together they seat it half a log deep as before.
+	auto SideAngleFor = [](const ACarvableLog* Log, const FVector& WorldDir)
+	{
+		const FVector Local = Log->GetActorTransform().InverseTransformVectorNoScale(WorldDir);
+		return FMath::RadiansToDegrees(FMath::Atan2(Local.Y, Local.Z));
+	};
+	const float NotchDepth = Placement.LowerRadius * 0.5f;
+	Upper->CutProfile(Placement.NotchX, SideAngleFor(Upper, -FVector::UpVector), Placement.LowerRadius * 2.f + 2.f, NotchDepth, false);
+	if (LowerLog)
+	{
+		const FVector Crossing = Upper->GetActorTransform().TransformPosition(FVector(Placement.NotchX, 0.f, 0.f));
+		const float LowerX = LowerLog->GetActorTransform().InverseTransformPosition(Crossing).X;
+		const float Width = Placement.UpperRadius * 2.f + 2.f;
+		if (LowerLog->IsSpanFree(LowerX - Width * 0.5f, LowerX + Width * 0.5f))
+		{
+			LowerLog->CutProfile(LowerX, SideAngleFor(LowerLog, FVector::UpVector), Width, NotchDepth, false);
+		}
+	}
 
 	// A wall corner rests on more than one log: every other log the upper one crosses gets a cup too, cut to the
 	// depth that seats it at the height it already has, and becomes part of the corner.
@@ -1510,7 +1531,7 @@ ACarvableLog* ACarvableLog::PlaceAcross(AActor* Lower, const FCrossPlacement& Pl
 		const float Depth = Placement.UpperRadius + OtherRadius * CupFit - Gap;
 		if (Upper->IsSpanFree(LocalX - OtherRadius, LocalX + OtherRadius))
 		{
-			Upper->Notch(LocalX, 180.f, 90.f, OtherRadius, Depth);
+			Upper->CutProfile(LocalX, 180.f, OtherRadius * 2.f + 2.f, Depth, false);
 		}
 		Other->Anchor();
 	}

@@ -35,7 +35,8 @@ def state(pawn):
     for l in logs:
         o, e = l.get_actor_bounds(False)
         pieces.append([round(max(e.x, e.y, e.z) * 2), round(o.x), round(o.y), round(o.z)])
-    s = {'pawn': pawn.get_class().get_name(), 'raw_logs_on_ground': raws, 'carvable_pieces': sorted(pieces)}
+    shapes = sorted(l.get_editor_property('source_mesh').get_name().replace('SM_RawLog_', '') for l in logs if l.get_editor_property('source_mesh'))
+    s = {'pawn': pawn.get_class().get_name(), 'raw_logs_on_ground': raws, 'carvable_pieces': sorted(pieces), 'shapes': shapes}
     if hasattr(pawn, 'test_carried_item'):
         s.update({'carried': pawn.test_carried_item(), 'count': pawn.test_carried_count(), 'load': round(pawn.test_carry_load(), 2),
                   'message': pawn.test_last_message()})
@@ -55,6 +56,65 @@ if world:
     elif mode == 'goto':
         x, y = float(sys.argv[2]), float(sys.argv[3])
         pawn.set_actor_location(unreal.Vector(x, y, pawn.get_actor_location().z + 50.0), False, True)
+    elif mode == 'aim':
+        # aim <center|end|side> [mesh name filter]: stand by the nearest raw-log building piece and look at that part of it
+        part = sys.argv[2] if len(sys.argv) > 2 else 'center'
+        filt = sys.argv[3] if len(sys.argv) > 3 else 'SM_RawLog_'
+        logs = [l for l in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.CarvableLog)
+                if l.get_editor_property('source_mesh') and filt in l.get_editor_property('source_mesh').get_name()
+                and l.get_attach_parent_actor() is None]
+        if logs:
+            t = min(logs, key=lambda l: (l.get_actor_location() - pawn.get_actor_location()).length())
+            m = t.get_editor_property('source_mesh'); bb = m.get_bounding_box()
+            length = bb.max.x - bb.min.x
+            o, e = t.get_actor_bounds(False)
+            ax = t.get_actor_forward_vector(); ax = unreal.Vector(ax.x, ax.y, 0.0); ax = ax * (1.0 / max(ax.length(), 1e-3))
+            side = unreal.Vector(-ax.y, ax.x, 0.0)
+            top = o.z + e.z * 0.6
+            if part == 'end':
+                target = o + ax * (length * 0.5 - 2.0); target.z = o.z
+                stand = o + ax * (length * 0.5 + 380.0)
+            elif part == 'side':
+                target = o + ax * (length * 0.3) + side * 8.0; target.z = top
+                stand = o + ax * (length * 0.3) + side * 140.0
+            else:
+                target = unreal.Vector(o.x, o.y, top)
+                stand = o + side * 140.0
+            stand.z = pawn.get_actor_location().z
+            pawn.set_actor_location(stand, False, True)
+            eye = unreal.Vector(stand.x, stand.y, stand.z + 64.0)
+            d = target - eye
+            yaw = math.degrees(math.atan2(d.y, d.x)); pitch = math.degrees(math.atan2(d.z, math.hypot(d.x, d.y)))
+            unreal.GameplayStatics.get_player_controller(world, 0).set_control_rotation(unreal.Rotator(roll=0.0, pitch=pitch, yaw=yaw))
+            out['target'] = [m.get_name(), part, round(length)]
+        else:
+            out['error'] = 'no raw-log piece ({})'.format(filt)
+    elif mode == 'shape':
+        # shape <center|end|side|channel> <mesh name filter> [hits=2]: exact axe hits on that part of the nearest matching piece
+        part, filt = sys.argv[2], sys.argv[3]
+        hits = int(sys.argv[4]) if len(sys.argv) > 4 else 2
+        logs = [l for l in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.CarvableLog)
+                if l.get_editor_property('source_mesh') and l.get_editor_property('source_mesh').get_name() == filt]
+        if logs:
+            t = min(logs, key=lambda l: (l.get_actor_location() - pawn.get_actor_location()).length())
+            bb = t.get_editor_property('source_mesh').get_bounding_box()
+            c = unreal.Vector((bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2)
+            L = bb.max.x - bb.min.x
+            if part == 'end':
+                pt, n = unreal.Vector(bb.max.x, c.y, c.z), unreal.Vector(1.0, 0.0, 0.0)
+            elif part == 'side':
+                pt, n = unreal.Vector(c.x + 0.3 * L, bb.max.y, c.z), unreal.Vector(0.0, 1.0, 0.0)
+            else:
+                pt, n = unreal.Vector(c.x, c.y, bb.max.z), unreal.Vector(0.0, 0.0, 1.0)
+            msgs = []
+            for _ in range(hits):
+                if not unreal.SystemLibrary.is_valid(t):
+                    break
+                pawn.test_shape_hit(t, pt, n, part == 'channel')
+                msgs.append(pawn.test_last_message())
+            out['target'] = [filt, part]; out['messages'] = msgs
+        else:
+            out['error'] = 'no piece ' + filt
     elif mode == 'take':
         logs = [l for l in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.CarvableLog)]
         if logs:

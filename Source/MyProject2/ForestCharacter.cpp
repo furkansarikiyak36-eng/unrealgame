@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestCharacter.h"
+#include "RawLogShapes.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryItem.h"
 #include "StickPhaseS1_Core/StickActor.h"
@@ -470,19 +471,16 @@ void AForestCharacter::DrawPreviewLines()
 	// Where the carried piece goes: its outline there, and for a crossing the saddle notch it will get.
 	if (const ACarvableLog* Piece = GetTopCarried(); Piece && CarryPlace != ECarryPlace::None)
 	{
+		// Only a base line where the piece will lie (along its underside) with short end marks; a crossing notches by itself.
 		const FTransform& Where = CarryPlace == ECarryPlace::Across ? CrossPlacement.Upper : PlaceTransform;
-		ForestOutline::DrawPieceBox(PreviewLines, Piece->IsSplit() ? EForestItem::HalfLog : EForestItem::Log, Piece->GetLocalBox(), Where,
-			bPlaceSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor());
-		if (CarryPlace == ECarryPlace::Across)
-		{
-			TArray<TArray<FVector>> Rim;
-			TArray<bool> Closed;
-			ACarvableLog::GetCrossNotchGuide(CrossPlacement, Piece, Rim, Closed);
-			for (int32 Index = 0; Index < Rim.Num(); ++Index)
-			{
-				ForestOutline::DrawDashed(PreviewLines, CrossPlacement.Upper, Rim[Index], Closed[Index], ForestOutline::CutColor());
-			}
-		}
+		const FBox Box = Piece->GetLocalBox();
+		const FLinearColor Color = bPlaceSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
+		const FVector A = Where.TransformPosition(FVector(Box.Min.X, 0.f, Box.Min.Z + 1.f));
+		const FVector B = Where.TransformPosition(FVector(Box.Max.X, 0.f, Box.Min.Z + 1.f));
+		const FVector Across = Where.TransformVectorNoScale(FVector(0.f, Box.GetExtent().Y, 0.f));
+		PreviewLines->DrawLine(A, B, Color, SDPG_World, 2.f, 0.f);
+		PreviewLines->DrawLine(A - Across, A + Across, Color, SDPG_World, 2.f, 0.f);
+		PreviewLines->DrawLine(B - Across, B + Across, Color, SDPG_World, 2.f, 0.f);
 	}
 }
 
@@ -1893,7 +1891,16 @@ void AForestCharacter::UpdateFocus()
 	if (ACarvableLog* Carvable = Cast<ACarvableLog>(Hit.GetActor()))
 	{
 		FocusedCarvable = Carvable;
-		UpdateCarveAim(Hit, Carvable);
+		if (RawLogShapes::FromLog(Carvable).IsValid())
+		{
+			// Raw logs are worked as finished shapes by where they are hit: no cut guide, no aim.
+			CarvePreview->SetVisibility(false);
+			bCarveSpotValid = false;
+		}
+		else
+		{
+			UpdateCarveAim(Hit, Carvable);
+		}
 		if (CurrentTool != EForestTool::Axe && SwingTime < 0.f)
 		{
 			EquipTool(EForestTool::Axe);
@@ -2042,7 +2049,14 @@ void AForestCharacter::PerformHit()
 	}
 	if (ACarvableLog* Carvable = Cast<ACarvableLog>(Hit.GetActor()))
 	{
-		ApplyCarveHit(Carvable);
+		if (RawLogShapes::FromLog(Carvable).IsValid())
+		{
+			ApplyShapeHit(Carvable, Hit);
+		}
+		else
+		{
+			ApplyCarveHit(Carvable);
+		}
 		return;
 	}
 	if (AAnimalActor* Animal = Cast<AAnimalActor>(Hit.GetActor()))
@@ -2113,6 +2127,17 @@ void AForestCharacter::PerformHit()
 	if (AHarvestableActor* Harvestable = Cast<AHarvestableActor>(Hit.GetActor()))
 	{
 		const FVector Direction = (Hit.ImpactPoint - Camera->GetComponentLocation()).GetSafeNormal();
+		// A raw log of up to 300 cm lying where it fell is worked like any building piece: it becomes one in place and the
+		// hit cuts, splits, hews or channels it by where it lands. 600 cm logs only cut across, into two 300s.
+		if (Harvestable->IsTrunk() && Harvestable->GetRawLogLength() > 0 && Harvestable->GetRawLogLength() <= AHarvestableActor::LongestShoulderLogCm)
+		{
+			FocusedHarvestable = nullptr;
+			if (ACarvableLog* Piece = Harvestable->ConvertToCarvable())
+			{
+				ApplyShapeHit(Piece, Hit);
+			}
+			return;
+		}
 		if (Harvestable->ApplyHit(HitDamage, Hit, Direction))
 		{
 			ShowMessage(Harvestable->IsTrunk() ? TEXT("Kütük ikiye bölündü!") : Harvestable->IsTree() ? TEXT("Ağaç devriliyor!") : TEXT("Kaya parçalandı!"));
@@ -3037,6 +3062,12 @@ void AForestCharacter::RotateBuild()
 		ShowMessage(bPlaceSlope ? FString::Printf(TEXT("Koyma: eğik %.0f°  (tekerlek: açı)"), SlopeAngle)
 			: bPlaceStanding ? FString(TEXT("Koyma: dik (direk)")) : FString(TEXT("Koyma: yatır")));
 	}
+	else if (FocusedCarvable.IsValid() && RawLogShapes::FromLog(FocusedCarvable.Get()).IsValid())
+	{
+		bChannelMode = !bChannelMode;
+		ShapeHits = 0;
+		ShowMessage(bChannelMode ? TEXT("Oluk açma: kütüğün üstüne vur  —  [R] normal") : TEXT("Normal: ortadan vur = enine kes, uca vur = boyuna yar, yana vur = düzle  —  [R] oluk"));
+	}
 	else if (FocusedCarvable.IsValid())
 	{
 		CarveTool = static_cast<ECarveTool>((static_cast<uint8>(CarveTool) + 1) % static_cast<uint8>(ECarveTool::Count));
@@ -3401,6 +3432,49 @@ void AForestCharacter::ShowMessage(const FString& Text)
 	MessageTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 }
 
+void AForestCharacter::ApplyShapeHit(ACarvableLog* Log, const FHitResult& Hit)
+{
+	if (Log->IsAnchored() || Log->IsCarried())
+	{
+		ShowMessage(TEXT("Yapıdaki parça işlenmez  —  önce [E] ile al, yere koy"));
+		return;
+	}
+	const RawLogShapes::FShape Shape = RawLogShapes::FromLog(Log);
+	const RawLogShapes::EAction Action = RawLogShapes::ClassifyHit(Log, Hit, bChannelMode);
+	FString Why;
+	if (!RawLogShapes::CanApply(Shape, Action, Why))
+	{
+		ShapeHits = 0;
+		ShowMessage(Why);
+		return;
+	}
+	if (ShapeTarget.Get() != Log || ShapeAction != static_cast<uint8>(Action))
+	{
+		ShapeTarget = Log;
+		ShapeAction = static_cast<uint8>(Action);
+		ShapeHits = 0;
+	}
+	AHarvestableActor::PlayFellingSound(GetWorld(), TEXT("SW_AxeChop"), Hit.ImpactPoint);
+	const int32 Needed = RawLogShapes::HitsFor(Action);
+	if (++ShapeHits < Needed)
+	{
+		ShowMessage(FString::Printf(TEXT("%s  %d/%d  (%s)"), *RawLogShapes::ActionName(Action), ShapeHits, Needed, *RawLogShapes::Describe(Shape)));
+		return;
+	}
+	ShapeHits = 0;
+	ShapeTarget = nullptr;
+	FString Made;
+	if (RawLogShapes::Apply(Log, Action, Made))
+	{
+		FocusedCarvable = nullptr;
+		ShowMessage(Made);
+	}
+	else
+	{
+		ShowMessage(Made);
+	}
+}
+
 void AForestCharacter::TestPressInteract()
 {
 	UpdateFocus();
@@ -3411,6 +3485,18 @@ void AForestCharacter::TestPressPrimary()
 {
 	UpdateFocus();
 	PrimaryAction();
+}
+
+void AForestCharacter::TestShapeHit(ACarvableLog* Log, FVector LocalPoint, FVector LocalNormal, bool bChannel)
+{
+	if (!Log)
+	{
+		return;
+	}
+	const FTransform Frame = Log->GetActorTransform();
+	FHitResult Hit(Log, nullptr, Frame.TransformPosition(LocalPoint), Frame.TransformVectorNoScale(LocalNormal).GetSafeNormal());
+	bChannelMode = bChannel;
+	ApplyShapeHit(Log, Hit);
 }
 
 FString AForestCharacter::TestCarriedItem() const

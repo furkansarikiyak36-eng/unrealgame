@@ -139,8 +139,6 @@ private:
 	void AddHitMark(const FHitResult& Hit);
 	/** Trunk capsule for trees whose own mesh has no collision; sets TrunkRadius. */
 	void SetupTrunkCollider();
-	/** Cut stump at the tree's base, sized to the trunk; returns its top height above the base (0 if none). */
-	float SpawnStump();
 	/** Breakable rocks: the pieces of the next tier fly apart from the rock's centre. */
 	void BreakStone();
 
@@ -188,15 +186,15 @@ private:
 	float Height = 1000.f;
 
 	/**
-	 * Skeletal and level-placed static trees: an axe hit only plays a sound; when it gives way a crack is heard, a stump
-	 * stays, the tree falls and, when it lands, raw logs lie along the fall line (RawLogsForHeight).
+	 * Skeletal and level-placed static trees: an axe hit only plays a sound; when it gives way a crack is heard, the
+	 * tree leans for a moment and falls and, when it lands, raw logs lie along the fall line (RawLogsForHeight).
 	 */
 	bool bSimpleTree = false;
-	/** Trunk radius in world cm (stump size). */
+	/** Trunk radius in world cm. */
 	float TrunkRadius = 30.f;
-	/** Simple trees: seconds the tree creaks and leans on its stump before it goes over. */
+	/** Simple trees: seconds the tree creaks and leans before it goes over. */
 	float BreakDuration = 0.7f;
-	/** Point the tree rotates around while falling: the top of the stump. */
+	/** Point the tree rotates around while falling: its foot. */
 	FVector FallPivot = FVector::ZeroVector;
 
 	/** Breakable rocks and their pieces: 3 large, 2 medium, 1 small, -1 carved; 0 = not part of the stone chain. */
