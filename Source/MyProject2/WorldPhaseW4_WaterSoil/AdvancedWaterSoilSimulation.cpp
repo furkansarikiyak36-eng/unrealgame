@@ -189,7 +189,7 @@ FHydrologyStepReport UAdvancedWaterSoilSimulation::SimulateChunk(UChunkState* Ch
     {
         FSoilHydrologyState& H = Cell.Hydrology;
         const float SurfaceMm = GetCellSurfaceWaterMm(Cell);
-        const float KInfiltration = BaseInfiltrationMmPerDay * GetTextureConductivityMultiplier(Cell.Terrain.SoilTexture) * GetInfiltrationFactor(Cell);
+        const float KInfiltration = BaseInfiltrationMmPerDay * GetInfiltrationFactor(Cell);
         const float Infiltration = FMath::Min(SurfaceMm, KInfiltration * Days);
         const float InfiltrationM3 = Infiltration * 0.001f * Area;
         Cell.Water.Volume = FMath::Max(0.f, Cell.Water.Volume - InfiltrationM3);
