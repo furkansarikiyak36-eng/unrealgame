@@ -51,5 +51,6 @@ protected:
     void UpdateWorldTimeTick(float DeltaTime);
     float ComputeRainfallForDay(int32 DayNumber) const;
     float ComputeRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const;
+    float ComputeHistoricalRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const;
     void SimulateChunk(UChunkState* Chunk, float DeltaDays, float TargetDay=-1.0f);
 };
