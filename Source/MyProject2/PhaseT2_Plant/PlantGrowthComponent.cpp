@@ -114,8 +114,11 @@ void UPlantGrowthComponent::UpdateDailyAdvanced(
     PlantState.NutrientStress = NutrientFactor * PHFactor;
     PlantState.WeedPressure = WeedFactor;
 
+    const float StageDemandProgress = FMath::Clamp(
+        static_cast<float>(static_cast<uint8>(PlantState.Stage)) /
+        static_cast<float>(static_cast<uint8>(EGrowthStage::Maturity)), 0.f, 1.f);
     const float PotentialWaterDemand = FMath::Lerp(Definition->BaseWaterDemandMmPerDay,
-        Definition->PeakWaterDemandMmPerDay, FMath::Clamp(float(PlantState.Stage) / float(EGrowthStage::Maturity), 0.f, 1.f))
+        Definition->PeakWaterDemandMmPerDay, StageDemandProgress)
         * FMath::Max(0.f, Definition->WaterDemandStageFactor) * Days;
     const float AvailableWater = FMath::Max(0.f, Soil.Water - Soil.WaterWilting);
     const float WaterUptake = FMath::Min(AvailableWater, PotentialWaterDemand * FMath::Clamp(0.25f + WaterFactor * 0.75f, 0.f, 1.f));
@@ -123,7 +126,9 @@ void UPlantGrowthComponent::UpdateDailyAdvanced(
     PlantState.WaterUptakeTodayMm = WaterUptake;
 
     const float ExistingBiomassRatio = FMath::Clamp(PlantState.Biomass / FMath::Max(1.f, Definition->MaxBiomass), 0.f, 1.f);
-    const float UptakeScale = FMath::Clamp(GDD / ThermalRange + 0.02f, 0.02f, 0.25f) * Days * Definition->NutrientUptakeFractionPerCropCycle;
+    const float CropCycleGDD = FMath::Max(1.f, Definition->GetTotalGDDToMaturity());
+    const float UptakeScale = FMath::Clamp(GDD / CropCycleGDD, 0.f, 0.1f)
+        * Days * FMath::Clamp(Definition->NutrientUptakeFractionPerCropCycle, 0.f, 1.f);
     const float NRequest = Definition->NitrogenDemand * UptakeScale * (0.35f + ExistingBiomassRatio);
     const float PRequest = Definition->PhosphorusDemand * UptakeScale * (0.35f + ExistingBiomassRatio);
     const float KRequest = Definition->PotassiumDemand * UptakeScale * (0.35f + ExistingBiomassRatio);
@@ -165,12 +170,11 @@ void UPlantGrowthComponent::UpdateDailyAdvanced(
     PlantState.Stage = Definition->GetStageForGDD(PlantState.AccumulatedGDD);
     PlantState.StageProgress = Definition->GetStageProgress(PlantState.AccumulatedGDD);
     PlantState.bIsHarvestable = PlantState.Stage == EGrowthStage::Maturity && !PlantState.bHasFailed;
-    PlantState.YieldPotential = EstimateHarvestYield();
-
     const float QualityPenalty = (1.f - SafeSuitability) * 0.035f + PlantState.DiseaseSeverity * 0.04f
         + PlantState.FrostDamage * 0.08f + PlantState.HeatDamage * 0.06f;
     PlantState.QualityIndex = FMath::Clamp(PlantState.QualityIndex - QualityPenalty * Days,
         Definition->MinimumQualityAfterStress, 1.f);
+    PlantState.YieldPotential = EstimateHarvestYield();
 
     const bool bSevereStress = SafeSuitability < 0.22f || TempMin <= Definition->FrostLethalThresholdC
         || TempMax >= Definition->HeatLethalThresholdC;
