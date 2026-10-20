@@ -92,9 +92,8 @@ float UAdvancedWaterSoilSimulation::GetTopFieldCapacity(const FChunkCell& Cell) 
 
 float UAdvancedWaterSoilSimulation::GetRootFieldCapacity(const FChunkCell& Cell) const
 {
-    const float OrganicBoost = 1.f + FMath::Clamp(Cell.Terrain.OrganicMatterFraction, 0.f, 0.3f) * 1.5f;
-    const float RootDepthScale = FMath::Clamp(Cell.Terrain.RootingDepthMeters / 0.6f, 0.1f, 5.f);
-    return FMath::Max(1.f, RootLayerFieldCapacityMm * GetTextureCapacityMultiplier(Cell.Terrain.SoilTexture) * OrganicBoost * RootDepthScale);
+    const float AvailableRootDepth = FMath::Min(Cell.Terrain.RootingDepthMeters, FMath::Max(0.05f, Cell.Terrain.SoilDepthMeters));
+    return RootLayerFieldCapacityMm * GetTextureCapacityMultiplier(Cell.Terrain.SoilTexture) * FMath::Clamp(AvailableRootDepth / 0.6f, 0.1f, 5.0f);
 }
 
 float UAdvancedWaterSoilSimulation::GetDeepFieldCapacity(const FChunkCell& Cell) const
