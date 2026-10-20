@@ -42,7 +42,7 @@ The advanced solver is the authoritative water/soil step used by `UWorldStateSub
 ## Required Claude Code validation
 
 - Compile under UE 5.8/UHT and fix integration errors without removing the physical rules.
-- Run `MyProject2.Hydrology.MassBalance`, `MyProject2.Hydrology.SnowpackAndMelt` and `MyProject2.Hydrology.PersistenceRoundTrip` automation tests.
+- Run `MyProject2.Hydrology.MassBalance`, `MyProject2.Hydrology.SnowpackAndMelt` and `MyProject2.Hydrology.PersistenceRoundTrip` and `MyProject2.Hydrology.SoilTextureResponse` automation tests.
 - Add tests for dry-soil infiltration, saturated-soil infiltration slowdown, frozen-soil inhibition, nutrient non-negativity, lateral-flow conservation, 1.0-day versus multi-day catch-up, serialization round-trip and legacy cell migration.
 - Check water balance over 1, 7 and 30 simulation days. Water balance should equal initial water plus explicit precipitation inputs minus modeled evapotranspiration and any future explicitly modeled external exports.
 - Profile large chunk counts and ensure the event system does not become the dominant cost.
