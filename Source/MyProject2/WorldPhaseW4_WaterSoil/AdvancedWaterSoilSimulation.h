@@ -56,4 +56,9 @@ private:
     float GetCellSurfaceWaterMm(const FChunkCell& Cell) const;
     float GetInfiltrationFactor(const FChunkCell& Cell) const;
     float GetSlopeFactor(const UChunkState* Chunk, int32 Index, int32 Axis) const;
+    float GetTextureCapacityMultiplier(EWorldSoilTexture Texture) const;
+    float GetTextureConductivityMultiplier(EWorldSoilTexture Texture) const;
+    float GetTopFieldCapacity(const FChunkCell& Cell) const;
+    float GetRootFieldCapacity(const FChunkCell& Cell) const;
+    float GetDeepFieldCapacity(const FChunkCell& Cell) const;
 };
