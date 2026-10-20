@@ -26,7 +26,7 @@ void AStickActor::InitializeFromDefinition(UStickDefinition* Def)
     if (StateMachine) { StateMachine->OnStateChanged.AddDynamic(this, &AStickActor::HandleStateChanged); }
     SetStructuralState_Implementation(EStructuralNodeState::Loose);
 }
-EMaterialType AStickActor::GetMaterialType_Implementation() const { return EMaterialType::Wood; }
+EStructuralMaterialType AStickActor::GetMaterialType_Implementation() const { return EStructuralMaterialType::Wood; }
 EStructuralNodeState AStickActor::GetStructuralState_Implementation() const { return StateMachine ? StateMachine->GetState() : EStructuralNodeState::Loose; }
 bool AStickActor::SetStructuralState_Implementation(EStructuralNodeState S) { return StateMachine && StateMachine->TransitionTo(S); }
 float AStickActor::GetStructuralMass_Implementation() const { return Definition ? Definition->Mass : 0.4f; }

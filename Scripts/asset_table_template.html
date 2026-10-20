@@ -1,0 +1,251 @@
+<title>MyProject2 Asset Envanteri</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a technical ledger. Summary strip, sticky filter bar, one wide scrolling table; pack view as a second tab. */
+:root {
+  --bg: #f4f5f2; --panel: #ffffff; --fg: #1d2420; --muted: #5d6862; --line: #d9ddd6; --accent: #2f6f5e; --accent-soft: #e2efe9;
+  --ok: #2e7d4f; --ok-bg: #e3f2e8; --warn: #9a6a00; --warn-bg: #fbf0d4; --bad: #b3362b; --bad-bg: #f8e1de; --new: #2f5fa8; --new-bg: #e2eaf7;
+  --display: "Archivo", "Segoe UI", system-ui, sans-serif; --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141816; --panel: #1b201d; --fg: #e3e8e4; --muted: #9aa59f; --line: #2c3430; --accent: #6fc0a6; --accent-soft: #1f3a32;
+  --ok: #74c995; --ok-bg: #1d3326; --warn: #e6b94f; --warn-bg: #3a2f14; --bad: #f08a7e; --bad-bg: #3d1f1b; --new: #8fb3ee; --new-bg: #1e2b40;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141816; --panel: #1b201d; --fg: #e3e8e4; --muted: #9aa59f; --line: #2c3430; --accent: #6fc0a6; --accent-soft: #1f3a32;
+  --ok: #74c995; --ok-bg: #1d3326; --warn: #e6b94f; --warn-bg: #3a2f14; --bad: #f08a7e; --bad-bg: #3d1f1b; --new: #8fb3ee; --new-bg: #1e2b40;
+  color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; display: grid; gap: 16px; max-width: 1700px; margin: 0 auto; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 1.6rem; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { color: var(--muted); margin: 4px 0 0; max-width: 75ch; line-height: 1.5; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; display: grid; gap: 2px; }
+.tile b { font-family: var(--mono); font-size: 1.25rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); }
+.tabs { display: flex; gap: 4px; }
+.tabs button, .chip { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+input[type="search"], select { font: inherit; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+input[type="search"] { flex: 1 1 220px; }
+select { max-width: 240px; }
+button:focus-visible, input:focus-visible, select:focus-visible, th:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.count { color: var(--muted); font-size: 0.85rem; margin-left: auto; font-variant-numeric: tabular-nums; }
+.tablebox { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; vertical-align: top; }
+th { position: sticky; top: 0; background: var(--panel); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); cursor: pointer; user-select: none; }
+th[aria-sort="ascending"]::after { content: " ▲"; } th[aria-sort="descending"]::after { content: " ▼"; }
+td.num { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+th.num { text-align: right; }
+td.name { font-weight: 500; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+td.note { white-space: normal; min-width: 220px; color: var(--muted); }
+td.pack { color: var(--muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+tr:hover td { background: var(--accent-soft); }
+.pill { display: inline-block; border-radius: 999px; padding: 1px 9px; font-size: 0.75rem; font-weight: 600; }
+.v-Hafif { background: var(--ok-bg); color: var(--ok); } .v-Orta { background: var(--warn-bg); color: var(--warn); } .v-Ağır { background: var(--bad-bg); color: var(--bad); }
+.tag { display: inline-block; font-size: 0.7rem; border-radius: 4px; padding: 0 5px; margin-left: 4px; background: var(--new-bg); color: var(--new); font-weight: 600; }
+.use { font-family: var(--mono); font-size: 0.75rem; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.pager button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.pager button:disabled { opacity: 0.4; cursor: default; }
+.legend { color: var(--muted); font-size: 0.8rem; line-height: 1.6; max-width: 110ch; }
+.legend b { color: var(--fg); font-weight: 600; }
+a.packlink { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+tbody tr.clickable { cursor: pointer; }
+.detail { background: var(--panel); border: 1px solid var(--accent); border-radius: 6px; padding: 14px 16px; display: grid; gap: 12px; }
+.detail header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.detail h2 { font-family: var(--display); font-size: 1.15rem; margin: 0; overflow-wrap: anywhere; }
+.detail .sub { color: var(--muted); font-size: 0.85rem; }
+.detail .close { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.kv div { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.kv b { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kv span { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.kv div.key { border-color: var(--accent); background: var(--accent-soft); }
+.detail h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0; }
+.detail table { font-size: 0.8rem; }
+.detail .mats { font-size: 0.85rem; line-height: 1.6; overflow-wrap: anywhere; }
+@media (max-width: 600px) { h1 { font-size: 1.3rem; } select { max-width: 100%; flex: 1 1 140px; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>MyProject2 Asset Envanteri</h1>
+    <p class="lede">Content Drawer'daki (/Game) her asset; 19 Ekim 2026 taraması. Kararlar: mesh'te Nanite'sız LOD0 üçgeni ve doku seti, dokuda tam çözünürlük belleği ve format, diğerlerinde disk boyutu.</p>
+  </header>
+  <section class="tiles" id="tiles" aria-label="Özet"></section>
+  <div class="bar" role="toolbar" aria-label="Filtreler">
+    <div class="tabs">
+      <button id="tab-assets" aria-pressed="true">Asset'ler</button>
+      <button id="tab-packs" aria-pressed="false">Paketler</button>
+    </div>
+    <input type="search" id="q" placeholder="Ada, pakete veya nota göre ara" aria-label="Ara">
+    <select id="f-type" aria-label="Tür"></select>
+    <select id="f-pack" aria-label="Paket"></select>
+    <select id="f-use" aria-label="Kullanım">
+      <option value="">Kullanım: hepsi</option><option value="any">Bir haritada kullanılan</option><option value="M">Main'de</option><option value="P">PerfTest'te</option><option value="none">Hiçbir haritada yok</option>
+    </select>
+    <button class="chip" id="v-Ağır" aria-pressed="false">Ağır</button>
+    <button class="chip" id="v-Orta" aria-pressed="false">Orta</button>
+    <button class="chip" id="v-Hafif" aria-pressed="false">Hafif</button>
+    <span class="count" id="count"></span>
+  </div>
+  <section class="detail" id="detail" hidden aria-live="polite"></section>
+  <div class="tablebox"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  <div class="pager" id="pager"></div>
+  <p class="legend">
+    <b>Kopya başı GPU</b>: yakındaki her kopyanın çizdirdiği üçgen (gölge açıksa iki kez); Nanite ekran boyutuna göre çizer.
+    <b>Kopya başı RAM</b>: instanced (HISM, PCG, foliage) yerleşimde ~0,2 KB (editörde ~1 KB); Megaplant skeletal ağaç ~7 MB (500 ağaç +3,5 GB ölçüldü).
+    <b>Doku MB</b>: tam çözünürlük + mip tahmini; oyunda dokular akıtılır, gerçek VRAM daha az ve akış havuzuyla sınırlıdır; aynı dokuyu kullanan mesh'ler bir kez öder.
+    <b>Kullanan</b>: M = Main, P = PerfTest. Kullanılmayan asset oyunda maliyet yaratmaz, yalnız disk ve editör açılışı yer.
+  </p>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const rows = DATA.rows, packs = DATA.packs;
+const $ = id => document.getElementById(id);
+const fmt = (n, d = 0) => n == null || n === '' ? '' : Number(n).toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const PAGE = 150;
+const state = { view: 'assets', q: '', type: '', pack: '', use: '', verdicts: new Set(), sort: 'd', dir: -1, page: 0 };
+try { const s = JSON.parse(localStorage.getItem('assetTable') || '{}'); if (s.view) state.view = s.view; } catch (e) {}
+
+const ASSET_COLS = [
+  ['n', 'Ad', 'name'], ['t', 'Tür'], ['c', 'Kategori'], ['p', 'Paket', 'pack'], ['v', 'Karar'], ['d', 'Disk MB', 'num', 2],
+  ['tri', 'LOD0 üçgen', 'num'], ['nan', 'Nanite'], ['lod', 'LOD', 'num'], ['tex', 'Doku MB', 'num', 1], ['fv', 'İlk kopya VRAM MB', 'num', 1],
+  ['bd', 'Paket disk MB', 'num', 1], ['tmax', 'En büyük doku', 'num'],
+  ['gpu', 'Kopya başı GPU'], ['ram', 'Kopya başı RAM'], ['q', 'Kalite'], ['u', 'Kullanan'], ['note', 'Not', 'note']];
+const PACK_COLS = [['p', 'Paket', 'pack'], ['n', 'Asset', 'num'], ['d', 'Disk MB', 'num', 0], ['mesh', 'Mesh', 'num'],
+  ['tex', 'Doku MB (tam çöz.)', 'num', 0], ['heavy', 'Ağır asset', 'num'], ['used', 'Haritada kullanılan', 'num']];
+
+function tiles() {
+  const disk = rows.reduce((a, r) => a + r.d, 0), unused = rows.filter(r => !r.u).reduce((a, r) => a + r.d, 0);
+  const heavy = rows.filter(r => r.v === 'Ağır').length, meshes = rows.filter(r => r.t === 'Statik mesh' || r.t === 'Skeletal mesh').length;
+  const tex = rows.filter(r => r.t === 'Doku' || r.t === 'Küp doku').length, fresh = rows.filter(r => r.new).length;
+  $('tiles').innerHTML = [
+    [fmt(rows.length), 'Asset'], [fmt(disk / 1024, 1) + ' GB', 'Disk'], [fmt(meshes), 'Mesh'], [fmt(tex), 'Doku'],
+    [fmt(heavy), 'Ağır asset'], [fmt(unused / 1024, 1) + ' GB', 'Hiçbir haritada yok'], [fmt(fresh), 'Yeni kitlerden']]
+    .map(([b, s]) => `<div class="tile"><b>${b}</b><span>${s}</span></div>`).join('');
+}
+function options() {
+  const types = [...new Set(rows.map(r => r.t))].sort((a, b) => a.localeCompare(b, 'tr'));
+  $('f-type').innerHTML = '<option value="">Tür: hepsi</option>' + types.map(t => `<option>${esc(t)}</option>`).join('');
+  $('f-pack').innerHTML = '<option value="">Paket: hepsi</option>' + packs.map(p => `<option value="${esc(p.p)}">${esc(p.p)} (${p.n})</option>`).join('');
+}
+function filtered() {
+  const q = state.q.toLowerCase();
+  return rows.filter(r => (!state.type || r.t === state.type) && (!state.pack || r.p === state.pack) &&
+    (!state.verdicts.size || state.verdicts.has(r.v)) &&
+    (!state.use || (state.use === 'any' ? !!r.u : state.use === 'none' ? !r.u : (r.u || '').includes(state.use))) &&
+    (!q || (r.n + ' ' + r.p + ' ' + (r.note || '') + ' ' + (r.c || '')).toLowerCase().includes(q)));
+}
+function sortRows(list, key, dir) {
+  return list.slice().sort((a, b) => {
+    let x = a[key], y = b[key];
+    if (key === 'v') { const o = { 'Ağır': 3, 'Orta': 2, 'Hafif': 1 }; x = o[x]; y = o[y]; }
+    if (key === 'lod') { x = Number(x) || 0; y = Number(y) || 0; }
+    if (typeof x === 'boolean') { x = +x; y = +y; }
+    if (x == null || x === '') return 1; if (y == null || y === '') return -1;
+    return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'tr')) * dir;
+  });
+}
+function head(cols) {
+  $('thead').innerHTML = '<tr>' + cols.map(([k, label, cls]) =>
+    `<th tabindex="0" data-k="${k}" class="${cls === 'num' ? 'num' : ''}" aria-sort="${state.sort === k ? (state.dir > 0 ? 'ascending' : 'descending') : 'none'}">${label}</th>`).join('') + '</tr>';
+  $('thead').querySelectorAll('th').forEach(th => {
+    const go = () => { const k = th.dataset.k; if (state.sort === k) state.dir *= -1; else { state.sort = k; state.dir = ['n', 't', 'c', 'p', 'u', 'note', 'q', 'gpu', 'ram'].includes(k) ? 1 : -1; } state.page = 0; render(); };
+    th.addEventListener('click', go); th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+}
+function cell(r, [k, , cls, dec]) {
+  let v = r[k];
+  if (k === 'v') return `<td><span class="pill v-${v}">${v}</span></td>`;
+  if (k === 'nan') return `<td>${r.t === 'Statik mesh' || r.t === 'Skeletal mesh' ? (v ? 'evet' : 'hayır') : ''}</td>`;
+  if (k === 'n') return `<td class="name" title="${esc(v)}">${esc(v)}${r.new ? '<span class="tag">yeni</span>' : ''}</td>`;
+  if (k === 'u') return `<td class="use">${esc(v) || '—'}</td>`;
+  if (k === 'tmax' && v) return `<td class="num">${fmt(v)} px</td>`;
+  if (k === 'tri' && !v) return '<td class="num"></td>';
+  if (cls === 'num') return `<td class="num">${fmt(v, dec || 0)}</td>`;
+  return `<td class="${cls || ''}" title="${cls ? esc(v) : ''}">${esc(v)}</td>`;
+}
+function render() {
+  try { localStorage.setItem('assetTable', JSON.stringify({ view: state.view })); } catch (e) {}
+  $('tab-assets').setAttribute('aria-pressed', state.view === 'assets'); $('tab-packs').setAttribute('aria-pressed', state.view === 'packs');
+  ['f-type', 'f-use', 'v-Ağır', 'v-Orta', 'v-Hafif'].forEach(id => $(id).hidden = state.view === 'packs');
+  if (state.view === 'packs') {
+    if (!PACK_COLS.some(c => c[0] === state.sort)) { state.sort = 'd'; state.dir = -1; }
+    const q = state.q.toLowerCase();
+    let list = packs.filter(p => (!q || p.p.toLowerCase().includes(q)) && (!state.pack || p.p === state.pack));
+    list = sortRows(list, state.sort, state.dir);
+    head(PACK_COLS);
+    $('tbody').innerHTML = list.map(p => '<tr>' + PACK_COLS.map(c => c[0] === 'p'
+      ? `<td class="pack"><a class="packlink" data-p="${esc(p.p)}">${esc(p.p)}</a>${p.new ? '<span class="tag">yeni</span>' : ''}</td>` : cell(p, c)).join('') + '</tr>').join('');
+    $('tbody').querySelectorAll('a.packlink').forEach(a => a.addEventListener('click', () => { state.view = 'assets'; state.pack = a.dataset.p; $('f-pack').value = state.pack; state.sort = 'd'; state.dir = -1; state.page = 0; render(); }));
+    $('count').textContent = `${fmt(list.length)} paket`;
+    $('pager').innerHTML = '';
+    return;
+  }
+  if (!ASSET_COLS.some(c => c[0] === state.sort)) { state.sort = 'd'; state.dir = -1; }
+  const list = sortRows(filtered(), state.sort, state.dir);
+  const pages = Math.max(1, Math.ceil(list.length / PAGE)); state.page = Math.min(state.page, pages - 1);
+  head(ASSET_COLS);
+  $('tbody').innerHTML = list.slice(state.page * PAGE, (state.page + 1) * PAGE).map(r =>
+    `<tr${r.det ? ` class="clickable" tabindex="0" data-i="${r._i}" title="Tam dökümü göster"` : ''}>` + ASSET_COLS.map(c => cell(r, c)).join('') + '</tr>').join('');
+  $('tbody').querySelectorAll('tr.clickable').forEach(tr => {
+    const open = () => showDetail(rows[+tr.dataset.i]);
+    tr.addEventListener('click', open); tr.addEventListener('keydown', e => { if (e.key === 'Enter') open(); });
+  });
+  const disk = list.reduce((a, r) => a + r.d, 0);
+  $('count').textContent = `${fmt(list.length)} asset · ${fmt(disk, 0)} MB disk`;
+  $('pager').innerHTML = pages > 1 ? `<button id="prev" ${state.page ? '' : 'disabled'}>Önceki</button><span>Sayfa ${state.page + 1} / ${pages}</span><button id="next" ${state.page < pages - 1 ? '' : 'disabled'}>Sonraki</button>` : '';
+  if (pages > 1) { $('prev').onclick = () => { state.page--; render(); }; $('next').onclick = () => { state.page++; render(); }; }
+}
+function showDetail(r) {
+  const d = r.det, el = $('detail');
+  const sk = r.t === 'Skeletal mesh';
+  const geo = r.nan ? (sk ? `${fmt(r.ntri / 1e6, 1)} M Nanite üçgen · ${fmt(r.bones)} kemik` : 'Nanite') : `${fmt(r.tri)} üçgen · ${r.lod || '?'} LOD`;
+  const perGpu = r.nan ? 'Nanite (ekrana göre)' : `${fmt(r.tri)} üçgen, gölgeyle ${fmt(r.tri * 2)}`;
+  const perRam = sk ? '~7 MB + kemik güncellemesi' : '~0,2 KB (instanced)';
+  const ram = n => sk ? `${fmt(7 * n, 0)} MB` : `${fmt(0.2 * n / 1024, 2)} MB`;
+  el.innerHTML = `
+    <header><div><h2>${esc(r.n)}</h2><div class="sub">${esc(r.t)} · ${esc(r.c || '')} · ${esc(r.p)} · kullanan: ${r.u ? esc(r.u.replace('M', 'Main ').replace('P', 'PerfTest')) : 'hiçbir harita'}</div></div>
+      <button class="close" id="detail-close">Kapat</button></header>
+    <div class="kv">
+      <div class="key"><span>İlk kopya VRAM</span><b>${fmt(r.fv, 1)} MB</b></div>
+      <div><span>Geometri</span><b>${geo}</b></div>
+      <div><span>Geometri belleği</span><b>${fmt(r.geo, 2)} MB</b></div>
+      <div><span>Doku (kendi / pakette paylaşılan)</span><b>${fmt(r.tex, 1)} MB (${fmt(r.own, 1)} / ${fmt(r.sh, 1)})</b></div>
+      <div><span>Materyal · doku</span><b>${r.mats} · ${d.t.length}</b></div>
+      <div><span>Disk (asset + bağımlılıklar)</span><b>${fmt(r.bd, 1)} MB${r.eo ? ` + ${fmt(r.eo, 1)} editör` : ''}</b></div>
+      <div class="key"><span>Kopya başı GPU (yakında)</span><b>${perGpu}</b></div>
+      <div class="key"><span>Kopya başı RAM</span><b>${perRam}</b></div>
+      <div><span>100 / 1.000 kopya RAM</span><b>${ram(100)} / ${ram(1000)}</b></div>
+    </div>
+    <h3>Dokular</h3>
+    <div class="tablebox"><table><thead><tr><th>Doku</th><th>Kaynak</th><th>Etkin</th><th>Format</th><th class="num">MB</th><th class="num">Kullanan mesh</th></tr></thead><tbody>
+      ${d.t.map(t => `<tr><td>${esc(t[0])}</td><td>${esc(t[1])}</td><td>${esc(t[2])}</td><td>${esc(t[3])}</td><td class="num">${fmt(t[4], 1)}</td><td class="num">${fmt(t[5])}</td></tr>`).join('') || '<tr><td colspan="6">Doku yok</td></tr>'}
+    </tbody></table></div>
+    <h3>Materyaller</h3><div class="mats">${d.m.map(esc).join(' · ') || '—'}${Object.keys(d.o || {}).length ? '<br>Ayrıca: ' + Object.entries(d.o).map(([k, v]) => `${v} ${esc(k)}`).join(', ') : ''}</div>`;
+  el.hidden = false;
+  $('detail-close').onclick = () => { el.hidden = true; };
+  el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+}
+rows.forEach((r, i) => { r._i = i; });
+tiles(); options();
+$('q').addEventListener('input', e => { state.q = e.target.value; state.page = 0; render(); });
+$('f-type').addEventListener('change', e => { state.type = e.target.value; state.page = 0; render(); });
+$('f-pack').addEventListener('change', e => { state.pack = e.target.value; state.page = 0; render(); });
+$('f-use').addEventListener('change', e => { state.use = e.target.value; state.page = 0; render(); });
+['Ağır', 'Orta', 'Hafif'].forEach(v => $('v-' + v).addEventListener('click', e => {
+  state.verdicts.has(v) ? state.verdicts.delete(v) : state.verdicts.add(v); e.currentTarget.setAttribute('aria-pressed', state.verdicts.has(v)); state.page = 0; render(); }));
+$('tab-assets').onclick = () => { state.view = 'assets'; state.page = 0; render(); };
+$('tab-packs').onclick = () => { state.view = 'packs'; render(); };
+render();
+</script>

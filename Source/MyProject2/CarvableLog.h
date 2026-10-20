@@ -245,7 +245,8 @@ public:
 	/** Split lengthwise at some point (a half, a quarter): not a round log any more. */
 	bool IsSplit() const { return bSplitPiece; }
 	/** A whole round log, full length: what a wall plan or a recipe takes as "a log". */
-	bool IsFullLog() const { return !bSplitPiece && GetLength() >= 6.f * ModuleLength - 5.f; }
+	/** A whole carryable log: four modules (the 300 cm raw log), not split. */
+	bool IsFullLog() const { return !bSplitPiece && GetLength() >= 4.f * ModuleLength - 5.f; }
 	/** The piece's extent in its own frame. */
 	FBox GetLocalBox() const { return FBox(FVector(MinX, -Radius, -Radius), FVector(MaxX, Radius, Radius)); }
 
@@ -273,7 +274,7 @@ public:
 	 * Pieces keep the same lines (they share the log's local frame), so pieces cut on the grid always fit together.
 	 * A 390 cm log is exactly six modules.
 	 */
-	static constexpr float ModuleLength = 65.f;
+	static constexpr float ModuleLength = 75.f;
 
 	/** Local X of the grid lines that lie inside the log (not its ends). */
 	void GetModuleLines(TArray<float>& OutX) const;

@@ -8,6 +8,8 @@
 #include "HarvestableActor.generated.h"
 
 class UStaticMeshComponent;
+class USkeletalMeshComponent;
+class UCapsuleComponent;
 
 /**
  * A tree, rock or big log lying on the ground that the player can hit.
@@ -26,6 +28,61 @@ public:
 
 	/** Copies mesh and materials from a level placed actor and sizes health and drops from it. */
 	void InitFrom(const UStaticMeshComponent* Source, EHarvestType InType);
+
+	/**
+	 * A skeletal tree (Megaplant): the skeletal mesh is shown as is, a capsule round the trunk takes the hits,
+	 * and the whole actor tips over from its base like a static tree.
+	 */
+	void InitFromSkeletal(const USkeletalMeshComponent* Source);
+
+	/**
+	 * A level-placed static tree (e.g. KiteDemo) tagged "Fellable": the mesh is shown without collision, a capsule round
+	 * the trunk takes the hits. Same simple felling as the skeletal trees (see bSimpleTree).
+	 */
+	void InitFromStaticTree(const UStaticMeshComponent* Source);
+
+	/**
+	 * A raw UnrealExport log (SM_RawLog_<length>, along X, pivot at the centre) lying on the ground. Trees leave these;
+	 * hitting one splits it into two of half the length: 600 -> 300 -> 150 -> 75. 75 cm is the end of the chain.
+	 * Lengths are whole 75 cm modules (ACarvableLog::ModuleLength): 600 = 8M, 300 = 4M, 150 = 2M, 75 = 1M.
+	 */
+	void InitRawLog(int32 LengthCm, const FVector& Center, const FVector& Direction);
+	/** SM_RawLog_<length>; for a length without its own mesh, the 150 cm one (InitRawLog then scales it). */
+	static UStaticMesh* LoadRawLog(int32 LengthCm);
+	static constexpr int32 ShortestRawLogCm = 75;
+	/** The longest raw log that goes on the shoulder; longer ones are dragged by rope. */
+	static constexpr int32 LongestShoulderLogCm = 300;
+	int32 GetRawLogLength() const { return RawLogLength; }
+
+	/**
+	 * Picking up a raw log: it becomes the building piece every assembly uses (ACarvableLog, same mesh and place,
+	 * cut, notched, laid, stood and carried by its volume). This actor is destroyed. Null if it is not a raw log.
+	 */
+	class ACarvableLog* ConvertToCarvable();
+
+	/**
+	 * A level-placed rock tagged "Breakable" (Megascans). Its size gives its stone tier: 3 large (100 cm or more),
+	 * 2 medium (40 cm or more), 1 small. The pickaxe breaks large into three medium stones and medium into four small
+	 * ones, which scatter; small stones stay whole. See CarveHit for carving.
+	 */
+	void InitFromStaticRock(const UStaticMeshComponent* Source);
+
+	/** A loose stone of Tier (1 small, 2 medium) thrown from where it is with Impulse; its physics stops after 4 s. */
+	void InitLooseStone(int32 Tier, UStaticMesh* StoneMesh, float Scale, const FVector& Impulse);
+
+	/**
+	 * One chisel strike. After CarveHitsNeeded strikes a medium stone becomes a flat wall stone, a small one a
+	 * cobblestone (brown from stones of 20 cm or more, grey from smaller ones). Returns true when it changed.
+	 */
+	bool CarveHit();
+	bool IsCarvable() const { return HarvestType == EHarvestType::Rock && (StoneTier == 1 || StoneTier == 2); }
+	static constexpr int32 CarveHitsNeeded = 3;
+
+	/** Raw logs a felled tree leaves, longest first: 18 m or taller -> 600 + 300, 10 m or taller -> 600, else 300. */
+	static TArray<int32> RawLogsForHeight(float TreeHeightCm);
+
+	/** Plays /Game/Audio/Felling/<Name> at Location with distance falloff (silent if the asset is missing). */
+	static void PlayFellingSound(UWorld* World, const TCHAR* Name, const FVector& Location, float Volume = 1.f);
 
 	/** Lays a big log of the given stage (1 or 2) on the ground, centred at Center along Direction. */
 	void InitLog(int32 InStage, const FVector& Center, const FVector& Direction);
@@ -80,6 +137,12 @@ private:
 	void SplitLog();
 	void SpawnDebris(const FVector& Location, const FVector& Normal, int32 Num);
 	void AddHitMark(const FHitResult& Hit);
+	/** Trunk capsule for trees whose own mesh has no collision; sets TrunkRadius. */
+	void SetupTrunkCollider();
+	/** Cut stump at the tree's base, sized to the trunk; returns its top height above the base (0 if none). */
+	float SpawnStump();
+	/** Breakable rocks: the pieces of the next tier fly apart from the rock's centre. */
+	void BreakStone();
 
 	/** Places a log so its centre sits on the ground below Center. */
 	static FTransform GroundedLogTransform(UWorld* World, const UStaticMesh* LogMesh, const FVector& Scale, const FVector& Center, const FVector& Direction, const AActor* Ignore);
@@ -87,12 +150,24 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
+	/** Skeletal trees only: the tree itself, no collision. */
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<USkeletalMeshComponent> TreeSkin;
+
+	/** Skeletal trees only: trunk collision for the axe and the player. */
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UCapsuleComponent> TrunkCollider;
+
 	UPROPERTY(EditAnywhere, Category = "Harvest")
 	EHarvestType HarvestType = EHarvestType::Tree;
 
 	/** For big logs: 1 = trunk straight from the tree, 2 = its halves. */
 	UPROPERTY(VisibleInstanceOnly, Category = "Harvest")
 	int32 LogStage = 0;
+
+	/** Raw UnrealExport logs only: length in cm (600, 300, 150); 0 for the greybox logs. */
+	UPROPERTY(VisibleInstanceOnly, Category = "Harvest")
+	int32 RawLogLength = 0;
 
 	UPROPERTY(EditAnywhere, Category = "Harvest")
 	float MaxHealth = 100.f;
@@ -111,6 +186,22 @@ private:
 
 	float Health = 100.f;
 	float Height = 1000.f;
+
+	/**
+	 * Skeletal and level-placed static trees: an axe hit only plays a sound; when it gives way a crack is heard, a stump
+	 * stays, the tree falls and, when it lands, raw logs lie along the fall line (RawLogsForHeight).
+	 */
+	bool bSimpleTree = false;
+	/** Trunk radius in world cm (stump size). */
+	float TrunkRadius = 30.f;
+	/** Simple trees: seconds the tree creaks and leans on its stump before it goes over. */
+	float BreakDuration = 0.7f;
+	/** Point the tree rotates around while falling: the top of the stump. */
+	FVector FallPivot = FVector::ZeroVector;
+
+	/** Breakable rocks and their pieces: 3 large, 2 medium, 1 small, -1 carved; 0 = not part of the stone chain. */
+	int32 StoneTier = 0;
+	int32 CarveHits = 0;
 	/** Whole logs still inside this trunk (or half trunk). */
 	int32 LogCount = 4;
 

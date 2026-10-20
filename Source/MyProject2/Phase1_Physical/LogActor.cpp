@@ -77,9 +77,9 @@ void ALogActor::HandleStateChanged(AActor*, ELogState NewState)
 }
 
 
-EMaterialType ALogActor::GetMaterialType_Implementation() const
+EStructuralMaterialType ALogActor::GetMaterialType_Implementation() const
 {
-    return EMaterialType::Wood;
+    return EStructuralMaterialType::Wood;
 }
 
 EStructuralNodeState ALogActor::GetStructuralState_Implementation() const

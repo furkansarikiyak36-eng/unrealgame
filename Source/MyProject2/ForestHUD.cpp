@@ -22,6 +22,7 @@
 #include "Campfire.h"
 #include "StructureLink.h"
 #include "EngineUtils.h"
+#include "RawMaterialNode.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
@@ -247,6 +248,23 @@ void AForestHUD::DrawHUD()
 		const float BarY = CenterY + 22.f + TextH;
 		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), CenterX - BarW * 0.5f, BarY, BarW, 8.f);
 		DrawRect(DynamicColor, CenterX - BarW * 0.5f, BarY, BarW * CapRatio, 8.f);
+	}
+	else if (const ARawMaterialNode* RawNode = Player->GetFocusedRawNode())
+	{
+		// Red when used up, yellow at half, green when full: the same gradient as the other capacity bars.
+		const float Ratio = RawNode->GetSupplyRatio();
+		const FLinearColor DynamicColor = GetValueGradientColor(Ratio);
+		const FString Label = RawNode->GetPrompt();
+		float TextW, TextH;
+		GetTextSize(Label, TextW, TextH, Font);
+		DrawText(Label, DynamicColor, CenterX - TextW * 0.5f, CenterY + 18.f, Font);
+		if (RawNode->MaxSupply > 0)
+		{
+			const float BarW = 160.f;
+			const float BarY = CenterY + 22.f + TextH;
+			DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), CenterX - BarW * 0.5f, BarY, BarW, 6.f);
+			DrawRect(DynamicColor, CenterX - BarW * 0.5f, BarY, BarW * Ratio, 6.f);
+		}
 	}
 	else if (const APickupItem* Pickup = Player->GetFocusedPickup())
 	{
@@ -633,7 +651,7 @@ void AForestHUD::DrawHUD()
 			TEXT("                  Odunu omza al, ateş yerine bak, Sol tık: yakıt"),
 			TEXT("YAPIM         I: kazık çubuk (tek tek çak), tarla, deri giysi, ip, ip hattı"),
 			TEXT("                  Dar aralıklı kazıklar yolu kapatır; [F] ile yakılan kazık meşale olur"),
-			TEXT("YAŞAM         8: ye   ·   E: su iç (nehir), not oku, ipe bin, tarla, hayvan"),
+			TEXT("YAŞAM         8: ye   ·   E: su iç (nehir), not oku, ipe bin, tarla, hayvan, ham madde topla"),
 			TEXT("                  Ateş, çatı ve deri giysi ısıtır; ıslanmak üşütür"),
 			TEXT("DİĞER         Tab: çanta"),
 			TEXT("ADMİN (P)    G malzeme   ·   9 zaman +3 saat   ·   Z baskın   ·   U araba"),

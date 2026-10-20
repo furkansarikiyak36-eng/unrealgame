@@ -21,7 +21,9 @@ const TArray<EForestItem>& ForestItems::GetAllItems()
 		EForestItem::Beam, EForestItem::Firewood, EForestItem::Stone, EForestItem::StoneBlock,
 		EForestItem::WindowBuck, EForestItem::DoorBuck, EForestItem::Stick,
 		EForestItem::Seed, EForestItem::Grain, EForestItem::Meat, EForestItem::Hide, EForestItem::Wool, EForestItem::Egg,
-		EForestItem::Milk, EForestItem::Rope };
+		EForestItem::Milk, EForestItem::Rope,
+		EForestItem::PlantFiber, EForestItem::Vine, EForestItem::Bark, EForestItem::Resin, EForestItem::Clay,
+		EForestItem::Flint, EForestItem::Bone };
 	return Items;
 }
 
@@ -51,6 +53,13 @@ FString ForestItems::GetDisplayName(EForestItem Item)
 	case EForestItem::Egg:        return TEXT("Yumurta");
 	case EForestItem::Milk:       return TEXT("Süt");
 	case EForestItem::Rope:       return TEXT("İp");
+	case EForestItem::PlantFiber: return TEXT("Bitki Lifi");
+	case EForestItem::Vine:       return TEXT("Asma");
+	case EForestItem::Bark:       return TEXT("Ağaç Kabuğu");
+	case EForestItem::Resin:      return TEXT("Reçine");
+	case EForestItem::Clay:       return TEXT("Kil");
+	case EForestItem::Flint:      return TEXT("Çakmak Taşı");
+	case EForestItem::Bone:       return TEXT("Kemik");
 	default:                      return TEXT("");
 	}
 }
@@ -80,6 +89,13 @@ float ForestItems::GetItemWeight(EForestItem Item)
 	case EForestItem::Egg:        return 0.1f;
 	case EForestItem::Milk:       return 1.0f;
 	case EForestItem::Rope:       return 0.6f;
+	case EForestItem::PlantFiber: return 0.05f;
+	case EForestItem::Vine:       return 0.2f;
+	case EForestItem::Bark:       return 0.4f;
+	case EForestItem::Resin:      return 0.1f;
+	case EForestItem::Clay:       return 2.0f;
+	case EForestItem::Flint:      return 0.5f;
+	case EForestItem::Bone:       return 0.3f;
 	case EForestItem::Firewood:   return 0.8f;
 	case EForestItem::Stone:      return 2.0f;
 	case EForestItem::StoneBlock: return 45.0f;
@@ -110,7 +126,7 @@ UStaticMesh* ForestItems::GetMesh(EForestItem Item, int32 Variant)
 	{
 	case EForestItem::TrunkLog:   return GetLogStageMesh(1);
 	case EForestItem::BigLog:     return GetLogStageMesh(2);
-	case EForestItem::Log:        return LoadGreybox(TEXT("SM_GB_Log"));
+	case EForestItem::Log:        return LoadObject<UStaticMesh>(nullptr, TEXT("/Game/UnrealExport/SM_RawLog_300.SM_RawLog_300"));
 	case EForestItem::HalfLog:    return LoadGreybox(TEXT("SM_GB_LogHalf"));
 	case EForestItem::ShortLog:   return LoadGreybox(TEXT("SM_GB_LogShort"));
 	case EForestItem::HollowLog:  return LoadGreybox(TEXT("SM_GB_LogHollow"));

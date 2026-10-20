@@ -19,7 +19,7 @@ public:
     AStoneActor();
     UFUNCTION(BlueprintCallable) void InitializeFromDefinition(UStoneDefinition* Def);
     UFUNCTION(BlueprintPure) UStoneDefinition* GetDefinition() const { return Definition; }
-    virtual EMaterialType GetMaterialType_Implementation() const override;
+    virtual EStructuralMaterialType GetMaterialType_Implementation() const override;
     virtual EStructuralNodeState GetStructuralState_Implementation() const override;
     virtual bool SetStructuralState_Implementation(EStructuralNodeState NewState) override;
     virtual float GetStructuralMass_Implementation() const override;

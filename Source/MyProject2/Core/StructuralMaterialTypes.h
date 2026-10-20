@@ -3,7 +3,7 @@
 #include "StructuralMaterialTypes.generated.h"
 
 UENUM(BlueprintType)
-enum class EMaterialType : uint8
+enum class EStructuralMaterialType : uint8
 {
     Wood UMETA(DisplayName = "Ahşap"),
     Stone UMETA(DisplayName = "Taş"),
@@ -46,8 +46,8 @@ struct FStructuralConnection
     GENERATED_BODY()
 
     UPROPERTY(Transient) TWeakObjectPtr<AActor> ConnectedNode;
-    UPROPERTY(BlueprintReadWrite) EMaterialType MyMaterial = EMaterialType::Wood;
-    UPROPERTY(BlueprintReadWrite) EMaterialType TheirMaterial = EMaterialType::Wood;
+    UPROPERTY(BlueprintReadWrite) EStructuralMaterialType MyMaterial = EStructuralMaterialType::Wood;
+    UPROPERTY(BlueprintReadWrite) EStructuralMaterialType TheirMaterial = EStructuralMaterialType::Wood;
     UPROPERTY(BlueprintReadWrite) EConnectionType ConnectionType = EConnectionType::None;
     UPROPERTY(BlueprintReadWrite) FName MySocket;
     UPROPERTY(BlueprintReadWrite) FName TheirSocket;

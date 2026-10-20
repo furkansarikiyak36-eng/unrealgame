@@ -26,6 +26,7 @@ class AFireStone;
 class AStickStructure;
 class ARopeLine;
 class ARemnantNote;
+class ARawMaterialNode;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UCableComponent;
@@ -74,6 +75,7 @@ public:
 	int32 GetCarriedCount() const { return CarriedItem == EForestItem::Log ? CarriedLogs.Num() : (CarriedItem != EForestItem::None ? 1 : 0); }
 	AHarvestableActor* GetFocusedHarvestable() const { return FocusedHarvestable.Get(); }
 	APickupItem* GetFocusedPickup() const { return FocusedPickup.Get(); }
+	ARawMaterialNode* GetFocusedRawNode() const { return FocusedRawNode.Get(); }
 	bool IsInBuildMode() const { return bBuildMode; }
 	EForestItem GetSelectedBuildItem() const { return SelectedBuildItem; }
 	bool IsPlacementValid() const { return bPlacementValid; }
@@ -115,6 +117,14 @@ public:
 	void TakeEnemyHit(float Amount);
 	/** Shoulder load, 1 = full (one whole log). */
 	float GetCarryLoad() const;
+
+	/** For PIE test scripts (Python): E and the left click as the player presses them, and what is carried. */
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") void TestPressInteract();
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") void TestPressPrimary();
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") float TestCarryLoad() const { return GetCarryLoad(); }
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") int32 TestCarriedCount() const { return GetCarriedCount(); }
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestCarriedItem() const;
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestLastMessage() const;
 	static bool IsProfileTool(ECarveTool Tool)
 	{
 		return Tool == ECarveTool::NotchRound || Tool == ECarveTool::NotchFlat || Tool == ECarveTool::Dovetail;
@@ -261,6 +271,8 @@ public:
 	/** For the mechanics test: E on a note, drinking where the player stands, riding a rope from its near end. */
 	bool TestReadNote(ARemnantNote* Note);
 	bool TestDrink();
+	/** [E] on a raw material source: one gathering into the pack. Returns how many items went in. */
+	int32 TestGather(ARawMaterialNode* Node);
 	bool TestRideRope(ARopeLine* Line);
 	/** The rope line being strung: its first end is set. */
 	bool HasRopeAnchor() const { return bRopeAnchorSet; }
@@ -374,6 +386,7 @@ private:
 	bool bAdminMode = false;
 	TWeakObjectPtr<AHarvestableActor> FocusedHarvestable;
 	TWeakObjectPtr<APickupItem> FocusedPickup;
+	TWeakObjectPtr<ARawMaterialNode> FocusedRawNode;
 	TWeakObjectPtr<ALogWallBlueprint> FocusedBlueprint;
 	TWeakObjectPtr<ALogConstructionActor> FocusedLogActor;
 	TWeakObjectPtr<AStoneMasonryActor> FocusedStoneActor;

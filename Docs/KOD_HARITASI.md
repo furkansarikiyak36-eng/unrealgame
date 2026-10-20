@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (14 October 2026 15:02) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (20 October 2026 11:46) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -83,7 +83,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `float GetVolume() const` — Wood in this piece (cm3); what it weighs on the shoulder.
 - `static float GetShoulderCapacity()` — How much wood fits on the shoulder: one whole log (390 x 70 cm), or two halves, or six one-module pieces.
 - `bool IsSplit() const` — Split lengthwise at some point (a half, a quarter): not a round log any more.
-- `bool IsFullLog() const` — A whole round log, full length: what a wall plan or a recipe takes as "a log".
+- `bool IsFullLog() const` — A whole carryable log: four modules (the 300 cm raw log), not split.
 - `FBox GetLocalBox() const` — The piece's extent in its own frame.
 - `void BeginCarry(USceneComponent* AttachTo, const FTransform& Relative)` — On the player's shoulder: no physics, no collision, attached to AttachTo at Relative.
 - `void PlaceAt(const FTransform& Transform, bool bAnchorIt)` — Off the shoulder to Transform: anchored (a post) or left to settle where it lands.
@@ -166,6 +166,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsLighterHeld() const` — F held: the lighter heats what is in sight (a piece of wood or a fire pit).
 - `void TakeEnemyHit(float Amount)` — An enemy hit on the player.
 - `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
+- `static bool IsProfileTool(ECarveTool Tool)` — For PIE test scripts (Python): E and the left click as the player presses them, and what is carried.
 - `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
 - `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
 - `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).
@@ -177,16 +178,18 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void TestToggleTemporary(ACarvableLog* Piece)` — For the mechanics test: [V] on a piece.
 - `ACarvableLog* TestUnload(AHaulCart* Cart)` — For the mechanics test: [E] on a cart (takes the last piece off it onto the shoulder).
 - `bool TestPickUpResource(AActor* Resource)` — For the mechanics test: [E] on a loose stone or stick (a small stone and a stick go into the pack, a building stone into the hands).
-- `AStickStructure* TestBuildStick(uint8 Build, const FHitResult& Hit, bool bGiveSticks)` — For the mechanics test: the stick build chosen and built on Hit (sticks given first when bGiveSticks).
+- `AStickStructure* PlantStakeAt(const FHitResult& Hit)` — [I] Kazık çubuk: one stick from the pack driven into the ground at Hit. Null without a stick.
 - `void TestDropStone()` — For the mechanics test: puts a carried stone down, empties the pack of sticks, gives sticks.
 - `int32 TestGiveItem(EForestItem Item, int32 Count)` — For the mechanics test and the farm code: items into and out of the pack.
 - `bool TestCraft(uint8 Entry, const FHitResult& Hit)` — For the mechanics test: [I] entry Entry made (on Hit when it is placed on the ground).
 - `void EatFood()` — [8]: eats the most filling food in the pack.
 - `bool TestReadNote(ARemnantNote* Note)` — For the mechanics test: E on a note, drinking where the player stands, riding a rope from its near end.
+- `int32 TestGather(ARawMaterialNode* Node)` — [E] on a raw material source: one gathering into the pack. Returns how many items went in.
 - `bool HasRopeAnchor() const` — The rope line being strung: its first end is set.
+- `bool IsHelpOpen() const` — [F1]: the full list of controls.
 - `void TestLight(AActor* Target, float Seconds)` — For the mechanics test: the lighter held on Target for Seconds.
 - `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
-- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `GetStickModeLabel`
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `GetSlopeAngle`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
 
 ## ForestOutline.h
 
@@ -226,6 +229,16 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **AHarvestableActor** (class) — A tree, rock or big log lying on the ground that the player can hit. Trees topple away from the player and leave a stage 1 log; cutting a big log splits it in two (stage …
 
 - `void InitFrom(const UStaticMeshComponent* Source, EHarvestType InType)` — Copies mesh and materials from a level placed actor and sizes health and drops from it.
+- `void InitFromSkeletal(const USkeletalMeshComponent* Source)` — A skeletal tree (Megaplant): the skeletal mesh is shown as is, a capsule round the trunk takes the hits, and the whole actor tips over from its base like a static tree.
+- `void InitFromStaticTree(const UStaticMeshComponent* Source)` — A level-placed static tree (e.g. KiteDemo) tagged "Fellable": the mesh is shown without collision, a capsule round the trunk takes the hits. Same simple felling as the …
+- `void InitRawLog(int32 LengthCm, const FVector& Center, const FVector& Direction)` — A raw UnrealExport log (SM_RawLog_<length>, along X, pivot at the centre) lying on the ground. Trees leave these; hitting one splits it into two of half the length: 600 …
+- `static UStaticMesh* LoadRawLog(int32 LengthCm)` — SM_RawLog_<length>; for a length without its own mesh, the 150 cm one (InitRawLog then scales it).
+- `class ACarvableLog* ConvertToCarvable()` — Picking up a raw log: it becomes the building piece every assembly uses (ACarvableLog, same mesh and place, cut, notched, laid, stood and carried by its volume). This …
+- `void InitFromStaticRock(const UStaticMeshComponent* Source)` — A level-placed rock tagged "Breakable" (Megascans). Its size gives its stone tier: 3 large (100 cm or more), 2 medium (40 cm or more), 1 small. The pickaxe breaks large …
+- `void InitLooseStone(int32 Tier, UStaticMesh* StoneMesh, float Scale, const FVector& Impulse)` — A loose stone of Tier (1 small, 2 medium) thrown from where it is with Impulse; its physics stops after 4 s.
+- `bool CarveHit()` — One chisel strike. After CarveHitsNeeded strikes a medium stone becomes a flat wall stone, a small one a cobblestone (brown from stones of 20 cm or more, grey from …
+- `static TArray<int32> RawLogsForHeight(float TreeHeightCm)` — Raw logs a felled tree leaves, longest first: 18 m or taller -> 600 + 300, 10 m or taller -> 600, else 300.
+- `static void PlayFellingSound(UWorld* World, const TCHAR* Name, const FVector& Location, float Volume = 1.f)` — Plays /Game/Audio/Felling/<Name> at Location with distance falloff (silent if the asset is missing).
 - `void InitLog(int32 InStage, const FVector& Center, const FVector& Direction)` — Lays a big log of the given stage (1 or 2) on the ground, centred at Center along Direction.
 - `static int32 LogsFromHeight(float TreeHeightCm)` — Whole logs (six modules, 390 cm) a tree of this height gives: 85% of the height is usable trunk, at most four. A trunk or a half trunk carries the number it still holds …
 - `static void DropRockResources(UWorld* World, const FVector& Center, int32 Count)` — A broken rock: one building stone and Count - 1 small stones, lying around Center.
@@ -238,7 +251,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void EndDrag()` — Lays the log back on the ground where it is.
 - `void BeginShoulder(USceneComponent* AttachTo, const FTransform& Relative, bool bCastShadow = false)` — Shouldering a big log: attached to the player's view, no collision.
 - `void PlaceOnGround(const FVector& Center, const FVector& Direction)` — Off the shoulder, laid on the ground centred at Center along Direction.
-- Ayrıca (açıklamasız): `AHarvestableActor`, `GetLogCount`, `GetTreeHeight`, `SetLogCount`, `IsAlive`, `IsTree`, `IsTrunk`, `GetHealthPercent`, `GetDisplayName`, `IsDragged`
+- Ayrıca (açıklamasız): `AHarvestableActor`, `GetRawLogLength`, `IsCarvable`, `GetLogCount`, `GetTreeHeight`, `SetLogCount`, `IsAlive`, `IsTree`, `IsTrunk`, `GetHealthPercent`, `GetDisplayName`, `IsDragged`
 
 ## HaulCart.h
 
@@ -332,13 +345,25 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static void StopRaid(UWorld* World)` — Cancels the active raid and removes only actors owned by its Raid Director.
 - Ayrıca (açıklamasız): `CountEnemies`
 
+## RawMaterialNode.h
+
+**ARawMaterialNode** (class) — A source of raw materials gathered by hand with [E]: fibre from a bush, clay from a bank, flint from an outcrop. Raw materials are not building pieces; they bind and …
+
+- `static TArray<FRawMaterialDrop> DefaultDrops(ERawSourceKind Kind)` — The drops a source of this kind gives unless set by hand.
+- `int32 Harvest(AForestCharacter* Player, FString& OutGot)` — One gathering into the player's pack. Returns how many items went in; 0 when empty or the pack is full.
+- `void Regrow()` — Back to a full supply (the respawn timer, or the mechanics test).
+- `float GetSupplyRatio() const` — 1 when full, 0 when used up; always 1 for an endless source.
+- `FString GetPrompt() const` — "[E] Topla: Bitki Lifi" text for the HUD.
+- Ayrıca (açıklamasız): `ARawMaterialNode`, `Spawn`, `KindName`, `IsDepleted`, `GetRegrowSecondsLeft`
+
 ## StickStructure.h
 
-**AStickStructure** (class) — A small build made of sticks from the pack: spikes, a fence or a torch. It has a strength like wood (0 sound, 1 broken); raiders hitting it wear it down.
+**AStickStructure** (class) — One sharpened stick driven into the ground (Sons of the Forest's physical stick building: nothing is placed as a finished prefab, every stick is put in by hand). What …
 
-- `static AStickStructure* Build(UWorld* World, EStickBuild Build, const FVector& Ground, float Yaw)` — A build standing on the ground at Ground, its length across Yaw.
-- `void AddDamage(float Amount)` — Wears it down; it falls apart (is destroyed) at 1.
-- Ayrıca (açıklamasız): `AStickStructure`, `SticksFor`, `NameOf`, `GetKind`, `GetDamage`, `IsLitTorch`
+- `static AStickStructure* Plant(UWorld* World, const FVector& Ground, float Yaw)` — A stake driven into the ground at Ground, standing up.
+- `void AddDamage(float Amount)` — Wears it down; it breaks (is destroyed) at 1.
+- `bool ApplyHeat(float Seconds)` — The lighter's flame: after IgniteSeconds the stake burns as a torch. True once it burns.
+- Ayrıca (açıklamasız): `AStickStructure`, `GetDamage`, `IsLitTorch`, `GetBurnSecondsLeft`
 
 ## StoneMasonryActor.h
 
@@ -394,6 +419,16 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **USurvivalGuideSubsystem** (class) — The survival demo: a checklist through every pillar of the game (fire, cold, food, farming, animals, clothes, ropes, bridges, notes, defences, the first raid night), …
 
 - Ayrıca (açıklamasız): `Get`, `IsActive`, `GetLines`, `GetDoneCount`, `GetGoalCount`
+
+## TreeFellingSubsystem.h
+
+**UTreeFellingSubsystem** (class) — Makes level trees fellable in a game world. On begin play every SkeletalMeshActor (Megaplant) and StaticMeshActor (e.g. KiteDemo) tagged "Fellable" becomes an …
+
+- `int32 ConvertFellableTrees()` — Converts the tagged skeletal trees of the world; returns how many. Safe to call twice.
+- `bool ChopFrom(AActor* Chopper)` — One axe swing from Chopper towards its facing; true when something was hit. Also used by tests.
+- `bool CarveFrom(AActor* Chopper)` — One chisel strike from Chopper on the stone in front of it; true when a carvable stone was hit. Right mouse.
+- `int32 GetConvertedCount() const` — Trees converted in this world (alive or felled).
+- Ayrıca (açıklamasız): `TEXT`
 
 ## Wood/WoodCarrierComponent.h
 
@@ -528,4 +563,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-190 / 455 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+198 / 486 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

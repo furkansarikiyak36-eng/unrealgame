@@ -1,0 +1,173 @@
+<title>Doğa Asset Maliyeti</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: field-guide ledger — kit summary strip on top, one sortable family table per kind below */
+:root {
+  --bg: #f3f4ef; --surface: #ffffff; --fg: #1f2620; --muted: #5d685f; --line: #d7dbd2;
+  --accent: #3f6b3a; --accent-soft: #e2ebdc; --warn: #a3651c; --warn-soft: #f4e6d2; --bad: #a33a2c; --bad-soft: #f5dcd6;
+  --nanite: #2f5f86; --nanite-soft: #dce8f2;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151a16; --surface: #1d241f; --fg: #e5ebe2; --muted: #9aa69c; --line: #2f3a31;
+  --accent: #8cc283; --accent-soft: #24331f; --warn: #e0a85c; --warn-soft: #3a2c18; --bad: #ef8a7a; --bad-soft: #3d201b;
+  --nanite: #8ab8de; --nanite-soft: #1d2d3b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151a16; --surface: #1d241f; --fg: #e5ebe2; --muted: #9aa69c; --line: #2f3a31;
+  --accent: #8cc283; --accent-soft: #24331f; --warn: #e0a85c; --warn-soft: #3a2c18; --bad: #ef8a7a; --bad-soft: #3d201b;
+  --nanite: #8ab8de; --nanite-soft: #1d2d3b; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 22px; }
+h1 { font: 800 clamp(26px, 4vw, 38px)/1.1 var(--display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font: 700 18px/1.2 var(--display); margin: 0; }
+.lede { color: var(--muted); max-width: 70ch; margin: 6px 0 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); }
+.tab { font: 700 15px var(--display); background: none; border: 0; color: var(--muted); padding: 10px 14px; cursor: pointer;
+  border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--fg); border-color: var(--accent); }
+.tab:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tab .n { font: 400 12px var(--mono); color: var(--muted); margin-left: 4px; }
+.kits { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.kit { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; }
+.kit .name { font: 700 15px var(--display); display: flex; justify-content: space-between; gap: 8px; }
+.kit .name span { font: 400 12px var(--mono); color: var(--muted); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.controls input, .controls select { font: 14px var(--body); padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--surface); color: var(--fg); }
+.controls input { flex: 1 1 220px; min-width: 0; }
+.count { color: var(--muted); font-size: 13px; }
+.tablebox { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; min-width: 980px; font-size: 13.5px; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { font: 600 11.5px var(--body); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); cursor: pointer;
+  white-space: nowrap; position: sticky; top: 0; background: var(--surface); user-select: none; }
+th[aria-sort="ascending"]::after { content: " ▲"; } th[aria-sort="descending"]::after { content: " ▼"; }
+td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+th.num { text-align: right; }
+tr:hover td { background: var(--accent-soft); }
+.fam { font-weight: 600; }
+.sub { color: var(--muted); font-size: 12px; display: block; max-width: 34ch; overflow-wrap: anywhere; }
+.chip { display: inline-block; font: 600 11px var(--body); padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
+.r-stat { background: var(--line); color: var(--fg); }
+.r-break { background: var(--warn-soft); color: var(--warn); }
+.r-pick { background: var(--accent-soft); color: var(--accent); }
+.nan { background: var(--nanite-soft); color: var(--nanite); }
+.bar { display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: center; min-width: 150px; }
+.bar i { display: block; height: 7px; border-radius: 3px; background: var(--accent); }
+.bar i.w { background: var(--warn); } .bar i.b { background: var(--bad); }
+.gpu-b { color: var(--bad); font-weight: 600; } .gpu-w { color: var(--warn); font-weight: 600; }
+.notes { font-size: 13px; color: var(--muted); display: grid; gap: 4px; max-width: 95ch; }
+.notes b { color: var(--fg); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Doğa asset maliyeti</h1>
+    <p class="lede">Ağaç, çim, bitki ve kaya varlıkları; her kit ve her Megascans ailesi (tüm varyantları birlikte) için ekran kartı belleği, çizim maliyeti ve boyut. RTX 3060 Laptop (6 GB), High kalite varsayımıyla; 20 Ekim 2026 envanteri.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+
+  <section aria-labelledby="kits-h" style="display:grid;gap:10px">
+    <h2 id="kits-h">Kitlere göre özet</h2>
+    <div class="kits" id="kits"></div>
+  </section>
+
+  <section aria-labelledby="fam-h" style="display:grid;gap:10px">
+    <h2 id="fam-h">Aileler</h2>
+    <div class="controls">
+      <input id="q" type="search" placeholder="Ara: ad, kit, mesh…" aria-label="Ara">
+      <select id="kit" aria-label="Kit"></select>
+      <select id="role" aria-label="Rol">
+        <option value="">Tüm roller</option><option>Statik</option><option>Dinamik-kırılır</option><option>Dinamik-toplanır</option>
+      </select>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="tablebox"><table>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"></tbody>
+    </table></div>
+  </section>
+
+  <section class="notes">
+    <div><b>VRAM (aile)</b>: ailenin kullandığı tüm dokular bir kez sayılarak (doku sınırları uygulanmış, mip'ler dahil) + tüm varyantların geometrisi. Bu, aileyi sahneye koyunca bir kez ödenen bedeldir; kopya sayısıyla artmaz.</div>
+    <div><b>Tek varyant</b>: en ucuz tek varyantı kullanırsan ödenen VRAM.</div>
+    <div><b>GPU / 100 yakın kopya</b>: Nanite olmayan mesh'lerde LOD0 üçgeni × 2 (gölge) × 100 × 0,25 ms / milyon üçgen (PerfTest'te ölçülen kalibrasyon). Uzaktaki kopyalar LOD'a düştüğü için gerçek maliyet daha düşüktür. Nanite mesh'ler ekrandaki piksele göre çizilir; üçgen sayısından tahmin verilmez.</div>
+    <div><b>RAM</b>: instanced (foliage/PCG) kopya başı ~0,2 KB; 1.000 kopya ~0,2 MB. RAM'i asıl dokular ve mesh verisi doldurur.</div>
+    <div><b>Rol</b>: Statik = sahne dekoru; Dinamik-kırılır = kesilen ağaç; Dinamik-toplanır = taşınan/toplanan taş, odun, hasat bitkisi.</div>
+  </section>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const TABS = ['Ağaç', 'Çim', 'Bitki', 'Kaya'];
+const COLS = [
+  {k: 'fam', t: 'Aile'}, {k: 'kit', t: 'Kit'}, {k: 'role', t: 'Rol'}, {k: 'n', t: 'Varyant', num: 1},
+  {k: 'hmax', t: 'Boy (m)', num: 1}, {k: 'tmax', t: 'Üçgen', num: 1}, {k: 'vram', t: 'VRAM aile (MB)', num: 1},
+  {k: 'vone', t: 'Tek varyant (MB)', num: 1}, {k: 'texmax', t: 'Doku', num: 1}, {k: 'gpu', t: 'GPU / 100 kopya (ms)', num: 1}
+];
+const st = {tab: 'Ağaç', sort: 'vram', dir: 1};
+try { const s = localStorage.getItem('dam_tab'); if (TABS.includes(s)) st.tab = s; } catch (e) {}
+if (TABS.includes(decodeURIComponent(location.hash.slice(1)))) st.tab = decodeURIComponent(location.hash.slice(1));
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 1) => v == null ? '—' : Number(v).toLocaleString('tr-TR', {minimumFractionDigits: d, maximumFractionDigits: d});
+const roleChip = r => `<span class="chip ${r === 'Statik' ? 'r-stat' : r === 'Dinamik-kırılır' ? 'r-break' : 'r-pick'}">${r}</span>`;
+function tris(r) { const a = r.tmin === r.tmax ? fmt(r.tmin, 0) : fmt(r.tmin, 0) + '–' + fmt(r.tmax, 0); return a; }
+
+function renderTabs() {
+  $('tabs').innerHTML = TABS.map(t => `<button class="tab" role="tab" aria-selected="${t === st.tab}" data-t="${t}">${t}<span class="n">${DATA.rows.filter(r => r.tab === t).length}</span></button>`).join('');
+  $('tabs').querySelectorAll('.tab').forEach(b => b.onclick = () => {
+    st.tab = b.dataset.t; try { localStorage.setItem('dam_tab', st.tab); } catch (e) {}
+    $('kit').value = ''; render();
+  });
+}
+function renderKits() {
+  const s = DATA.summary.filter(x => x.tab === st.tab).sort((a, b) => a.vram_med - b.vram_med);
+  $('kits').innerHTML = s.map(x => `<div class="kit"><div class="name">${x.kit}<span>${x.fams} aile · ${x.meshes} mesh</span></div>
+    <dl class="kv"><dt>VRAM medyan</dt><dd>${fmt(x.vram_med)} MB</dd><dt>VRAM en yüksek</dt><dd>${fmt(x.vram_max)} MB</dd>
+    <dt>Üçgen medyan</dt><dd>${fmt(x.tris_med, 0)}</dd><dt>GPU / 100 kopya</dt><dd>${x.gpu_med == null ? 'Nanite' : fmt(x.gpu_med, 2) + ' ms'}</dd>
+    <dt>Nanite mesh</dt><dd>${x.nanite} / ${x.meshes}</dd></dl></div>`).join('');
+  const kits = [...new Set(DATA.rows.filter(r => r.tab === st.tab).map(r => r.kit))].sort();
+  const cur = $('kit').value;
+  $('kit').innerHTML = '<option value="">Tüm kitler</option>' + kits.map(k => `<option${k === cur ? ' selected' : ''}>${k}</option>`).join('');
+}
+function renderTable() {
+  $('head').innerHTML = COLS.map(c => `<th class="${c.num ? 'num' : ''}" data-k="${c.k}" ${st.sort === c.k ? `aria-sort="${st.dir > 0 ? 'ascending' : 'descending'}"` : ''} tabindex="0">${c.t}</th>`).join('');
+  $('head').querySelectorAll('th').forEach(th => {
+    const go = () => { const k = th.dataset.k; st.dir = st.sort === k ? -st.dir : (COLS.find(c => c.k === k).num ? -1 : 1); st.sort = k; renderTable(); };
+    th.onclick = go; th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+  });
+  const q = $('q').value.trim().toLowerCase(), kit = $('kit').value, role = $('role').value;
+  let rows = DATA.rows.filter(r => r.tab === st.tab && (!kit || r.kit === kit) && (!role || r.role === role) &&
+    (!q || (r.fam + ' ' + r.kit + ' ' + r.meshes.join(' ')).toLowerCase().includes(q)));
+  const k = st.sort;
+  rows.sort((a, b) => { const x = a[k], y = b[k];
+    if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+    return (typeof x === 'string' ? x.localeCompare(y, 'tr') : x - y) * st.dir; });
+  const maxV = Math.max(1, ...DATA.rows.filter(r => r.tab === st.tab).map(r => r.vram));
+  $('body').innerHTML = rows.map(r => {
+    const vc = r.vram >= 60 ? 'b' : r.vram >= 25 ? 'w' : '';
+    const gc = r.gpu == null ? '' : r.gpu >= 1 ? 'gpu-b' : r.gpu >= 0.3 ? 'gpu-w' : '';
+    return `<tr><td><span class="fam">${r.fam}</span><span class="sub">${r.n > 1 ? r.meshes.slice(0, 4).join(', ') + (r.n > 4 ? '…' : '') : r.kind}</span></td>
+      <td>${r.kit}</td><td>${roleChip(r.role)}</td><td class="num">${r.n}</td>
+      <td class="num">${r.hmin === r.hmax ? fmt(r.hmax, 1) : fmt(r.hmin, 1) + '–' + fmt(r.hmax, 1)}</td>
+      <td class="num">${tris(r)}${r.nanite ? ` <span class="chip nan">Nanite${r.nanite < r.n ? ' ' + r.nanite : ''}</span>` : ''}</td>
+      <td class="num"><div class="bar"><span>${fmt(r.vram)}</span><i class="${vc}" style="width:${Math.max(2, r.vram / maxV * 100)}%"></i></div></td>
+      <td class="num">${fmt(r.vone)}</td><td class="num">${r.texmax ? r.texmax + ' px' : '—'}</td>
+      <td class="num ${gc}">${r.gpu == null ? (r.nanite ? 'ekrana göre' : '—') : fmt(r.gpu, 2) + (r.gpumax > r.gpu ? `<span class="sub">en çok ${fmt(r.gpumax, 2)}</span>` : '')}</td></tr>`;
+  }).join('');
+  $('count').textContent = rows.length + ' aile';
+}
+function render() { renderTabs(); renderKits(); renderTable(); }
+['q', 'kit', 'role'].forEach(id => $(id).addEventListener('input', renderTable));
+render();
+</script>

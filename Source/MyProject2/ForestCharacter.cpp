@@ -24,6 +24,7 @@
 #include "LooseResources.h"
 #include "StickStructure.h"
 #include "FarmKit.h"
+#include "RawMaterialNode.h"
 #include "WorldFeatures.h"
 #include "ScenarioSubsystem.h"
 #include "WorldCore/RegionLogisticsSubsystem.h"
@@ -1373,7 +1374,16 @@ bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
 		ShowMessage(FString::Printf(TEXT("Deri giysi için %d deri gerek (giysiler zaten tamsa daha fazlası işe yaramaz)"), FarmKit::HidesPerGarment));
 		return false;
 	case CraftRope:
-		if (GetItemCount(EForestItem::Wool) >= 2)
+		// Plant fibre and vines first: wool and hide are worth more as clothing.
+		if (GetItemCount(EForestItem::PlantFiber) >= 3)
+		{
+			RemoveItem(EForestItem::PlantFiber, 3);
+		}
+		else if (GetItemCount(EForestItem::Vine) >= 2)
+		{
+			RemoveItem(EForestItem::Vine, 2);
+		}
+		else if (GetItemCount(EForestItem::Wool) >= 2)
 		{
 			RemoveItem(EForestItem::Wool, 2);
 		}
@@ -1383,7 +1393,7 @@ bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
 		}
 		else
 		{
-			ShowMessage(TEXT("İp için 2 yün ya da 1 deri gerek"));
+			ShowMessage(TEXT("İp için 3 lif, 2 asma, 2 yün ya da 1 deri gerek"));
 			return false;
 		}
 		AddItem(EForestItem::Rope, 1);
@@ -1395,7 +1405,7 @@ bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
 		{
 			if (GetItemCount(EForestItem::Rope) < 1)
 			{
-				ShowMessage(TEXT("İp hattı için 1 ip gerek: [I] listesinden yün ya da deriden ip bük"));
+				ShowMessage(TEXT("İp hattı için 1 ip gerek: [I] listesinden lif, asma, yün ya da deriden ip bük"));
 				return false;
 			}
 			bRopeAnchorSet = true;
@@ -1454,6 +1464,23 @@ bool AForestCharacter::IsWaterAtHand() const
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, 90.f);
 	const FVector Ahead = Feet + FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal() * 150.f;
 	return ARiverStrip::IsInWater(GetWorld(), Feet) || ARiverStrip::IsInWater(GetWorld(), Ahead);
+}
+
+int32 AForestCharacter::TestGather(ARawMaterialNode* Node)
+{
+	if (!Node)
+	{
+		return 0;
+	}
+	if (Node->IsDepleted())
+	{
+		ShowMessage(Node->GetPrompt());
+		return 0;
+	}
+	FString Got;
+	const int32 Added = Node->Harvest(this, Got);
+	ShowMessage(Added > 0 ? Got : FString(TEXT("Çanta dolu; bir şey alınamadı")));
+	return Added;
 }
 
 bool AForestCharacter::TestDrink()
@@ -1520,7 +1547,8 @@ FString AForestCharacter::GetStickModeLabel() const
 	case CraftStake:    Cost = FString::Printf(TEXT("1 çubuk, çantada %d"), GetItemCount(EForestItem::Stick)); break;
 	case CraftField:    Cost = FString::Printf(TEXT("2 çubuk, çantada %d"), GetItemCount(EForestItem::Stick)); break;
 	case CraftGarment:  Cost = FString::Printf(TEXT("%d deri, çantada %d"), FarmKit::HidesPerGarment, GetItemCount(EForestItem::Hide)); break;
-	case CraftRope:     Cost = FString::Printf(TEXT("2 yün ya da 1 deri; yün %d, deri %d"), GetItemCount(EForestItem::Wool), GetItemCount(EForestItem::Hide)); break;
+	case CraftRope:     Cost = FString::Printf(TEXT("3 lif / 2 asma / 2 yün / 1 deri; lif %d, asma %d, yün %d, deri %d"),
+		GetItemCount(EForestItem::PlantFiber), GetItemCount(EForestItem::Vine), GetItemCount(EForestItem::Wool), GetItemCount(EForestItem::Hide)); break;
 	default:            Cost = FString::Printf(TEXT("1 ip, çantada %d; %s"), GetItemCount(EForestItem::Rope), bRopeAnchorSet ? TEXT("ikinci ucu seç") : TEXT("birinci ucu seç")); break;
 	}
 	return FString::Printf(TEXT("Yapım: %s (%s)  —  [Q] değiştir, [Sol tık] yap, [I] kapat"), *CraftEntryName(StickBuildIndex), *Cost);
@@ -1850,6 +1878,7 @@ void AForestCharacter::UpdateFocus()
 {
 	FocusedHarvestable = nullptr;
 	FocusedPickup = nullptr;
+	FocusedRawNode = nullptr;
 	FocusedBlueprint = nullptr;
 	FocusedLogActor = nullptr;
 	FocusedStoneActor = nullptr;
@@ -1894,6 +1923,10 @@ void AForestCharacter::UpdateFocus()
 				EquipTool(Wanted);
 			}
 		}
+	}
+	else if (ARawMaterialNode* RawNode = Cast<ARawMaterialNode>(Hit.GetActor()))
+	{
+		FocusedRawNode = RawNode;
 	}
 	else if (APickupItem* Pickup = Cast<APickupItem>(Hit.GetActor()))
 	{
@@ -2167,12 +2200,17 @@ void AForestCharacter::Interact()
 			return;
 		}
 	}
-	// A field: sow it, or bring in a ripe crop. An animal: take what it has made.
+	// A field: sow it, or bring in a ripe crop. An animal: take what it has made. A raw material source: gather.
 	if (CarriedItem == EForestItem::None)
 	{
 		FHitResult FarmHit;
 		if (TraceFromView(400.f, FarmHit, true))
 		{
+			if (ARawMaterialNode* RawNode = Cast<ARawMaterialNode>(FarmHit.GetActor()))
+			{
+				TestGather(RawNode);
+				return;
+			}
 			if (ACropFieldActor* Field = Cast<ACropFieldActor>(FarmHit.GetActor()))
 			{
 				if (FarmKit::IsRipe(Field))
@@ -2301,6 +2339,17 @@ void AForestCharacter::Interact()
 	// Big logs on the ground: half a trunk goes on the shoulder, a whole trunk is dragged by rope.
 	if (AHarvestableActor* BigLog = FocusedHarvestable.Get())
 	{
+		// Raw logs from a felled tree: up to 300 cm they become building pieces on the shoulder (one 300, two 150 or
+		// four 75 cm logs fill it); 600 cm is too heavy and is dragged by rope.
+		if (BigLog->IsTrunk() && BigLog->GetRawLogLength() > 0 && BigLog->GetRawLogLength() <= AHarvestableActor::LongestShoulderLogCm)
+		{
+			FocusedHarvestable = nullptr;
+			if (ACarvableLog* Piece = BigLog->ConvertToCarvable())
+			{
+				StartCarry(Piece);
+			}
+			return;
+		}
 		if (BigLog->IsTrunk())
 		{
 			if (BigLog->GetLogItem() == EForestItem::BigLog)
@@ -3350,6 +3399,28 @@ void AForestCharacter::ShowMessage(const FString& Text)
 {
 	Message = Text;
 	MessageTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+}
+
+void AForestCharacter::TestPressInteract()
+{
+	UpdateFocus();
+	Interact();
+}
+
+void AForestCharacter::TestPressPrimary()
+{
+	UpdateFocus();
+	PrimaryAction();
+}
+
+FString AForestCharacter::TestCarriedItem() const
+{
+	return CarriedItem == EForestItem::None ? FString(TEXT("None")) : ForestItems::GetDisplayName(CarriedItem);
+}
+
+FString AForestCharacter::TestLastMessage() const
+{
+	return Message;
 }
 
 float AForestCharacter::GetMessageAge() const

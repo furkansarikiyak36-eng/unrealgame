@@ -41,7 +41,15 @@ enum class EForestItem : uint8
 	Wool UMETA(DisplayName = "Yün"),
 	Egg UMETA(DisplayName = "Yumurta"),
 	Milk UMETA(DisplayName = "Süt"),
-	Rope UMETA(DisplayName = "İp")
+	Rope UMETA(DisplayName = "İp"),
+	/** Raw materials gathered by hand at ARawMaterialNode sources: they bind and seal pieces, they are not pieces. */
+	PlantFiber UMETA(DisplayName = "Bitki Lifi"),
+	Vine UMETA(DisplayName = "Asma"),
+	Bark UMETA(DisplayName = "Ağaç Kabuğu"),
+	Resin UMETA(DisplayName = "Reçine"),
+	Clay UMETA(DisplayName = "Kil"),
+	Flint UMETA(DisplayName = "Çakmak Taşı"),
+	Bone UMETA(DisplayName = "Kemik")
 };
 
 UENUM(BlueprintType)

@@ -13,6 +13,8 @@ Conventions (the C++ relies on them):
 Re-running replaces everything it made.
 
 Set GREYBOX_BUILD=demo to rebuild only the Demo_WoodChain map (meshes and Greybox_Mechanics are left alone).
+Set GREYBOX_BUILD=raw (or run Scripts/build_raw_demo.py) to rebuild only the Demo_RawMaterials map.
+Set GREYBOX_BUILD=main (or run Scripts/build_main_map.py) to rebuild only the Main sandbox map.
 """
 import math
 import random
@@ -24,6 +26,8 @@ MESHES = GB + '/Meshes'
 MATS = GB + '/Materials'
 MAP_PATH = '/Game/Maps/Greybox_Mechanics'
 DEMO_MAP_PATH = '/Game/Maps/Demo_WoodChain'
+RAW_DEMO_MAP_PATH = '/Game/Maps/Demo_RawMaterials'
+MAIN_MAP_PATH = '/Game/Maps/Main'
 
 asset_lib = unreal.EditorAssetLibrary
 asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
@@ -170,6 +174,34 @@ def save_mesh(name, mesh, materials, collision_mesh=None, hulls=1, collide=True)
     return asset
 
 
+def build_log_hollow(materials):
+    """Build the greybox hollow log as an open channel with a rounded inner bed."""
+    bark, cut = materials
+    log_length, log_diameter = 390.0, 70.0
+    mesh = new_mesh()
+    append_log(mesh, log_length, log_diameter)
+
+    # Leave a visible wood base while making the channel substantially deeper.
+    channel_length = log_length - 40.0
+    channel_radius = log_diameter * 0.31
+    channel_center_z = -log_diameter * 0.09
+
+    # The cylinder removes the rounded lower half; the box opens the top and
+    # leaves straight sides, producing a U-shaped trough rather than a flat cut.
+    round_tool = new_mesh()
+    prim.append_cylinder(round_tool, opts(1), xf((0, 0, channel_center_z), ALONG_X),
+                         channel_radius, channel_length, 32, 0, True,
+                         unreal.GeometryScriptPrimitiveOriginMode.CENTER)
+    subtract(mesh, round_tool)
+
+    opening_tool = new_mesh()
+    prim.append_box(opening_tool, opts(1), xf((0, 0, channel_center_z)),
+                    channel_length, channel_radius * 2.0, log_diameter * 2.0,
+                    0, 0, 0, unreal.GeometryScriptPrimitiveOriginMode.BASE)
+    subtract(mesh, opening_tool)
+    return save_mesh('SM_GB_LogHollow', mesh, [bark, cut], hulls=8)
+
+
 # ---------------------------------------------------------------------------
 # Meshes
 # ---------------------------------------------------------------------------
@@ -204,14 +236,7 @@ def build_meshes(m):
     recentre(mesh)
     made['LogHalf'] = save_mesh('SM_GB_LogHalf', mesh, [bark, cut])
 
-    # A trough: a long box carved out of the top.
-    mesh = new_mesh()
-    append_log(mesh, LOG_LEN, LOG_D)
-    tool = new_mesh()
-    prim.append_box(tool, opts(1), xf((0, 0, -LOG_D * 0.1)), LOG_LEN - 50.0, LOG_D * 0.7, LOG_D, 0, 0, 0,
-                    unreal.GeometryScriptPrimitiveOriginMode.BASE)
-    subtract(mesh, tool)
-    made['LogHollow'] = save_mesh('SM_GB_LogHollow', mesh, [bark, cut])
+    made['LogHollow'] = build_log_hollow([bark, cut])
 
     mesh = new_mesh()
     prim.append_box(mesh, opts(0), xf(), LOG_LEN, 35.0, 10.0, 0, 0, 0, unreal.GeometryScriptPrimitiveOriginMode.CENTER)
@@ -337,7 +362,12 @@ def spawn_mesh(static_mesh, loc, rot=(0, 0, 0), scale=(1, 1, 1), label=None, fol
     return actor
 
 
+# The default text render font has no glyphs for these Turkish letters; they show as gaps.
+SIGN_FOLD = str.maketrans({'İ': 'I', 'ı': 'i', 'Ş': 'S', 'ş': 's', 'Ğ': 'G', 'ğ': 'g'})
+
+
 def sign(text, loc, face_towards=(0, 0), size=70.0, colour=(255, 240, 200)):
+    text = text.translate(SIGN_FOLD)
     yaw = math.degrees(math.atan2(face_towards[1] - loc[1], face_towards[0] - loc[0]))
     actor = spawn(unreal.TextRenderActor, loc, (0, yaw, 0), 'Sign_' + text.split()[0], 'Signs')
     comp = actor.get_editor_property('text_render')
@@ -469,6 +499,105 @@ def build_demo_map(made):
     log('map saved', DEMO_MAP_PATH, ok)
 
 
+# Raw material sources around the start, each with its name and what it gives. Heights put the engine shape's
+# centred pivot on the ground (see ARawMaterialNode's looks).
+RAW_DEMO_SOURCES = [
+    ('FIBER_BUSH', 'LİF ÇALISI', 'bitki lifi, bazen asma', (700, -900), 40),
+    ('VINES', 'ASMA', 'asma (eklem bağı)', (900, -450), 80),
+    ('DEAD_TREE', 'KURU AĞAÇ', 'ağaç kabuğu, bazen reçine', (1000, 0), 130),
+    ('CLAY_BANK', 'KİL YATAĞI', 'kil (kütük arası sıva)', (900, 450), 12.5),
+    ('FLINT_OUTCROP', 'ÇAKMAK TAŞI', 'çakmak taşı', (700, 900), 35),
+    ('BONE_PILE', 'KEMİK YIĞINI', 'kemik', (300, 1100), 12.5),
+]
+
+
+def rerun(actor):
+    """Re-applies an actor's construction after its properties were set (look and default drops by kind)."""
+    if hasattr(actor, 'rerun_construction_scripts'):
+        actor.rerun_construction_scripts()
+
+
+def set_raw_props(node, kind, **props):
+    """Sets the source kind and other properties; empty drops then take the kind's defaults on construction.
+    A class added by Live Coding has no Python bindings until the editor restarts: the properties are then left to
+    the editor's property tools (the actor label carries the kind) and False is returned."""
+    enum = getattr(unreal, 'RawSourceKind', None)
+    if enum is None:
+        log('RawSourceKind not in Python yet:', node.get_actor_label(), 'needs Kind', kind, props)
+        return False
+    node.set_editor_property('kind', getattr(enum, kind))
+    node.set_editor_property('drops', [])
+    for name, value in props.items():
+        node.set_editor_property(name, value)
+    rerun(node)
+    return True
+
+
+def build_raw_demo_map():
+    """Raw material stage: six sources in an arc in front of the start, [E] gathers, [I] twists fibre into rope."""
+    node_class = unreal.load_class(None, '/Script/MyProject2.RawMaterialNode')
+    if node_class is None:
+        raise RuntimeError('RawMaterialNode class missing: build the C++ module (or Live Coding) first.')
+    world = new_template_map()
+    cube = unreal.load_asset('/Engine/BasicShapes/Cube')
+    grid = unreal.load_asset('/Engine/EngineMaterials/WorldGridMaterial')
+    spawn_mesh(cube, (0, 0, -50), scale=(40, 40, 1), label='Ground', folder='Ground', material=grid)
+    spawn(unreal.PlayerStart, (0, 0, 100), label='PlayerStart')
+
+    for kind, name, gives, (x, y), z in RAW_DEMO_SOURCES:
+        node = spawn(node_class, (x, y, z), (0, 0, 0), 'Raw_' + kind, 'RawMaterials')
+        # Quick regrowth so emptying and refilling a source can be watched in the demo.
+        set_raw_props(node, kind, respawn_seconds=20.0)
+        sign(name, (x, y, z * 2 + 120), (0, 0), size=45)
+        sign(gives, (x, y, z * 2 + 85), (0, 0), size=26, colour=(200, 230, 255))
+
+    # One source that never runs out, to fill the pack for rope.
+    endless = spawn(node_class, (-300, -900, 40), (0, 0, 0), 'Raw_FIBER_BUSH_Endless', 'RawMaterials')
+    set_raw_props(endless, 'FIBER_BUSH', max_supply=0)
+    sign('SONSUZ LİF', (-300, -900, 200), (0, 0), size=40)
+
+    # High above the arc, clear of the sources' own signs.
+    sign('HAM MADDE DEMOSU', (1700, 0, 760), (0, 0), size=90)
+    sign('[E] topla  -  [Tab] çanta  -  [I] ip: 3 lif ya da 2 asma', (1700, 0, 670), (0, 0), size=36)
+    sign('kaynak tükenince küçülür, 20 sn sonra yenilenir', (1700, 0, 615), (0, 0), size=30, colour=(200, 230, 255))
+
+    ok = unreal.EditorLoadingAndSavingUtils.save_map(world, RAW_DEMO_MAP_PATH)
+    log('map saved', RAW_DEMO_MAP_PATH, ok)
+
+
+# Sandbox platforms: top height (cm) and centre; 4 x 4 m, solid down to the ground.
+MAIN_PLATFORMS = [(25, (1000, -1000)), (50, (1000, 0)), (100, (1000, 1000)), (200, (-1000, 1000))]
+
+
+def build_main_map():
+    """Empty sandbox to place things on: a large grid floor, platforms at a few heights, a ramp and a wide deck."""
+    world = new_template_map()
+    cube = unreal.load_asset('/Engine/BasicShapes/Cube')
+    grid = unreal.load_asset('/Engine/EngineMaterials/WorldGridMaterial')
+    plain = unreal.load_asset('/Engine/BasicShapes/BasicShapeMaterial')
+    # 80 x 80 m, top at z = 0; the world grid material draws 1 m lines for placing.
+    spawn_mesh(cube, (0, 0, -50), scale=(80, 80, 1), label='Ground', folder='Ground', material=grid)
+    spawn(unreal.PlayerStart, (0, 0, 100), label='PlayerStart')
+
+    for height, (x, y) in MAIN_PLATFORMS:
+        spawn_mesh(cube, (x, y, height / 2.0), scale=(4, 4, height / 100.0),
+                   label='Platform_%dcm' % height, folder='Platforms', material=grid)
+        sign('%d cm' % height if height < 100 else '%d m' % (height // 100), (x, y, height + 60), (0, 0), size=50)
+
+    # A ramp up to the 1 m platform from the start side: 6 m across, about 9.5 degrees.
+    run, rise = 600.0, 100.0
+    slope = math.degrees(math.atan2(rise, run))
+    spawn_mesh(cube, (1000 - 200 - run / 2.0, 1000, rise / 2.0 - 5), (slope, 0, 0),
+               scale=(math.hypot(run, rise) / 100.0, 2, 0.1), label='Ramp_1m', folder='Platforms', material=grid)
+
+    # A wide, low deck to build on: 10 x 10 m, 10 cm high.
+    spawn_mesh(cube, (-1300, -1300, 5), scale=(10, 10, 0.1), label='Deck_10m', folder='Platforms', material=plain)
+    sign('10 x 10 m döşeme', (-1300, -1300, 80), (0, 0), size=50)
+
+    ok = unreal.EditorLoadingAndSavingUtils.save_map(world, MAIN_MAP_PATH)
+    log('map saved', MAIN_MAP_PATH, ok)
+
+
 def load_made():
     names = {'TreePine': 'SM_GB_Tree_Pine', 'TreeBroad': 'SM_GB_Tree_Broad'}
     return {key: unreal.load_asset(MESHES + '/' + name) for key, name in names.items()}
@@ -476,8 +605,22 @@ def load_made():
 
 def main():
     import os
-    if os.environ.get('GREYBOX_BUILD') == 'demo':
+    build_mode = os.environ.get('GREYBOX_BUILD')
+    if build_mode == 'demo':
         build_demo_map(load_made())
+        return
+    if build_mode == 'main':
+        build_main_map()
+        return
+    if build_mode == 'raw':
+        build_raw_demo_map()
+        return
+    if build_mode == 'hollow':
+        bark = unreal.load_asset(MATS + '/MI_GB_Bark')
+        cut = unreal.load_asset('/Game/Building/Materials/M_CutWood')
+        if bark is None or cut is None:
+            raise RuntimeError('Required bark or cut-wood material is missing.')
+        build_log_hollow([bark, cut])
         return
 
     for path in (GB, MESHES, MATS, '/Game/Maps'):
@@ -502,13 +645,14 @@ def main():
     build_demo_map(made)
 
 
-try:
-    main()
-except Exception:
-    import traceback
-    log(traceback.format_exc())
-    raise
-finally:
-    import os
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_greybox.log'), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(LOG))
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception:
+        import traceback
+        log(traceback.format_exc())
+        raise
+    finally:
+        import os
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build_greybox.log'), 'w', encoding='utf-8') as f:
+            f.write('\n'.join(LOG))

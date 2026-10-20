@@ -4,6 +4,7 @@
 #include "CarvableLog.h"
 #include "FarmKit.h"
 #include "LooseResources.h"
+#include "RawMaterialNode.h"
 #include "WorldFeatures.h"
 #include "HarvestableActor.h"
 #include "Components/StaticMeshComponent.h"
@@ -85,6 +86,11 @@ void UScenarioSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	{
 		return;
 	}
+	// Small demo stages lay themselves out: the scenario's river and cliff would not fit on them.
+	if (InWorld.GetMapName().Contains(TEXT("Demo_RawMaterials")))
+	{
+		return;
+	}
 	LayOut();
 }
 
@@ -159,5 +165,21 @@ void UScenarioSubsystem::LayOut()
 	{
 		LooseResources::SpawnStone(World, GroundAt(World, FVector(-2000.f - 150.f * Index, -900.f + 200.f * Index, 0.f)) + FVector(0.f, 0.f, 30.f), Index == 0);
 	}
-	UE_LOG(LogTemp, Display, TEXT("[Senaryo] Dünya kuruldu: nehir, yar, yanık kulübe, %d not, yabani tahıl, hayvanlar, taşlar"), Notes.Num());
+	// Raw materials that bind and seal the pieces: fibre, vines, bark and bones in the forest, clay on the near river bank,
+	// flint among the western rocks.
+	struct FRawSpot { float X, Y; ERawSourceKind Kind; };
+	const FRawSpot RawSpots[] = {
+		{ 600.f, 600.f, ERawSourceKind::FiberBush }, { -500.f, 1200.f, ERawSourceKind::FiberBush }, { 900.f, -300.f, ERawSourceKind::FiberBush },
+		{ -400.f, -1000.f, ERawSourceKind::FiberBush }, { 1600.f, 900.f, ERawSourceKind::FiberBush },
+		{ 0.f, 2200.f, ERawSourceKind::Vines }, { 1500.f, -1300.f, ERawSourceKind::Vines }, { -1300.f, 1000.f, ERawSourceKind::Vines },
+		{ -700.f, 200.f, ERawSourceKind::DeadTree }, { 800.f, 1800.f, ERawSourceKind::DeadTree },
+		{ -500.f, -2300.f, ERawSourceKind::BonePile },
+		{ 2250.f, -800.f, ERawSourceKind::ClayBank }, { 2250.f, 1000.f, ERawSourceKind::ClayBank }, { 2250.f, 2000.f, ERawSourceKind::ClayBank },
+		{ -2100.f, -700.f, ERawSourceKind::FlintOutcrop }, { -2300.f, 900.f, ERawSourceKind::FlintOutcrop }, { -1900.f, -1900.f, ERawSourceKind::FlintOutcrop } };
+	for (const FRawSpot& Spot : RawSpots)
+	{
+		ARawMaterialNode::Spawn(World, GroundAt(World, FVector(Spot.X, Spot.Y, 0.f)), Spot.Kind);
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("[Senaryo] Dünya kuruldu: nehir, yar, yanık kulübe, %d not, yabani tahıl, hayvanlar, taşlar, %d ham madde kaynağı"), Notes.Num(), int32(UE_ARRAY_COUNT(RawSpots)));
 }

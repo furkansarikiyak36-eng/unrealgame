@@ -13,6 +13,7 @@
 #include "SurvivalComponent.h"
 #include "LooseResources.h"
 #include "FarmKit.h"
+#include "RawMaterialNode.h"
 #include "WorldFeatures.h"
 #include "ScenarioSubsystem.h"
 #include "WorldCore/RegionLogisticsSubsystem.h"
@@ -2294,6 +2295,45 @@ void AMechanicsDemo::AddFarmScript(AForestCharacter* Character)
 void AMechanicsDemo::AddWorldScript(AForestCharacter* Character)
 {
 	const FVector Area(1000.f, -1600.f, 0.f);
+
+	// Raw materials: a source gathered with [E] runs out, regrows, and its fibre is twisted into rope.
+	Script.Add([this, Character, Area]()
+	{
+		UWorld* World = GetWorld();
+		ARawMaterialNode* Bush = ARawMaterialNode::Spawn(World, GroundAt(World, Area + FVector(-700.f, 0.f, 0.f)).ImpactPoint, ERawSourceKind::FiberBush);
+		if (!Bush)
+		{
+			Report(false, TEXT("Ham madde: lif çalısı oluşturulamadı"));
+			return 0.2f;
+		}
+		FRawMaterialDrop Fiber;
+		Fiber.Item = EForestItem::PlantFiber;
+		Fiber.Min = Fiber.Max = 2;
+		Bush->Drops = { Fiber };
+		Bush->MaxSupply = 2;
+		Bush->RespawnSeconds = 60.f;
+		Bush->Regrow();
+		for (const EForestItem Item : { EForestItem::PlantFiber, EForestItem::Vine, EForestItem::Wool, EForestItem::Hide })
+		{
+			Character->TestRemoveItem(Item, Character->GetItemCount(Item));
+		}
+		const int32 First = Character->TestGather(Bush);
+		const float Half = Bush->GetSupplyRatio();
+		const int32 Second = Character->TestGather(Bush);
+		const bool bEmpty = Bush->IsDepleted() && Bush->GetRegrowSecondsLeft() > 0.f && Character->TestGather(Bush) == 0;
+		const int32 Gathered = Character->GetItemCount(EForestItem::PlantFiber);
+		Bush->Regrow();
+		const bool bRegrown = !Bush->IsDepleted() && FMath::IsNearlyEqual(Bush->GetSupplyRatio(), 1.f);
+		const int32 RopesBefore = Character->GetItemCount(EForestItem::Rope);
+		FHitResult None;
+		const bool bRope = Character->TestCraft(AForestCharacter::CraftRope, None)
+			&& Character->GetItemCount(EForestItem::Rope) == RopesBefore + 1 && Character->GetItemCount(EForestItem::PlantFiber) == Gathered - 3;
+		Report(First == 2 && Second == 2 && FMath::IsNearlyEqual(Half, 0.5f) && Gathered == 4 && bEmpty && bRegrown && bRope,
+			FString::Printf(TEXT("Ham madde: lif çalısından 2 kez toplandı (%d lif), tükendi, toplanamadı, yenilendi; 3 liften ip büküldü"), Gathered));
+		Character->TestRemoveItem(EForestItem::PlantFiber, Character->GetItemCount(EForestItem::PlantFiber));
+		Bush->Destroy();
+		return 0.2f;
+	});
 
 	// The river: wading is wet and cold; its water can be drunk; standing on a bridge above it keeps one dry.
 	Script.Add([this, Character, Area]()

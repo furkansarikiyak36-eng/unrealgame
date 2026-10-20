@@ -20,12 +20,12 @@ bool UStructuralGraph::ConnectTo(AActor* Other, FName MySocket, FName TheirSocke
     if (!Owner->GetClass()->ImplementsInterface(UStructuralNode::StaticClass()) ||
         !Other->GetClass()->ImplementsInterface(UStructuralNode::StaticClass())) return false;
 
-    const EMaterialType MyMat = IStructuralNode::Execute_GetMaterialType(Owner);
-    const EMaterialType TheirMat = IStructuralNode::Execute_GetMaterialType(Other);
+    const EStructuralMaterialType MyMat = IStructuralNode::Execute_GetMaterialType(Owner);
+    const EStructuralMaterialType TheirMat = IStructuralNode::Execute_GetMaterialType(Other);
     const bool bCompatible = (MyMat == TheirMat) ||
-        (MyMat == EMaterialType::Wood && TheirMat == EMaterialType::Stone) ||
-        (MyMat == EMaterialType::Stone && TheirMat == EMaterialType::Wood) ||
-        MyMat == EMaterialType::Mortar || TheirMat == EMaterialType::Mortar;
+        (MyMat == EStructuralMaterialType::Wood && TheirMat == EStructuralMaterialType::Stone) ||
+        (MyMat == EStructuralMaterialType::Stone && TheirMat == EStructuralMaterialType::Wood) ||
+        MyMat == EStructuralMaterialType::Mortar || TheirMat == EStructuralMaterialType::Mortar;
     if (!bCompatible) return false;
 
     FStructuralConnection NewConn;

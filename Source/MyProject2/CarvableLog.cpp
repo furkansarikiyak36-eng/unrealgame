@@ -47,8 +47,9 @@ FOnLogRepaired ACarvableLog::OnLogRepaired;
 
 float ACarvableLog::GetShoulderCapacity()
 {
-	// One whole greybox log, 70 cm thick and six modules long, with a little slack for rounding.
-	return 1.03f * PI * 35.f * 35.f * 6.f * ModuleLength;
+	// One 300 cm raw log (UnrealExport, 36 cm thick, four modules), with a little slack for rounding: one 300, two 150
+	// or four 75 cm logs fill a shoulder.
+	return 1.03f * PI * 18.f * 18.f * 4.f * ModuleLength;
 }
 
 ACarvableLog* ACarvableLog::SpawnLog(UWorld* World, const FTransform& Transform)
