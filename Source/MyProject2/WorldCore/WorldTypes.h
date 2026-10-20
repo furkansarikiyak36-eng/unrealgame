@@ -11,6 +11,8 @@ enum class EWorldEventType : uint8 { None, CanalWallBroken, WaterLevelChanged, S
 UENUM(BlueprintType)
 enum class EWorldSoilTexture : uint8 { Sand, LoamySand, Loam, SiltLoam, ClayLoam, Clay, OrganicPeat, Rock };
 UENUM(BlueprintType)
+enum class EWorldGroundTreatment : uint8 { Natural, Disturbed, Tilled, RaisedBed, Trench, Pit, WaterCatchment, TrapPrepared };
+UENUM(BlueprintType)
 enum class EBuildingDamageType : uint8 { None, Impact, Fire, Decay, Erosion, Toxin };
 
 USTRUCT(BlueprintType)
@@ -53,6 +55,11 @@ struct FTerrainCell
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil", meta=(ClampMin="0", ClampMax="0.3")) float OrganicMatterFraction = 0.03f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil", meta=(ClampMin="0.1")) float BedrockDepthMeters = 3.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil", meta=(ClampMin="0.05", ClampMax="3")) float RootingDepthMeters = 0.6f;
+    // Remaining soil profile thickness. Digging reduces this while increasing ExcavatedDepthMeters.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil|Digging", meta=(ClampMin="0")) float SoilDepthMeters = 1.5f;
+    // Net cut below the cell's original surface; bounds refilling and bedrock access.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil|Digging", meta=(ClampMin="0")) float ExcavatedDepthMeters = 0.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Soil|Digging") EWorldGroundTreatment GroundTreatment = EWorldGroundTreatment::Natural;
 };
 USTRUCT(BlueprintType)
 struct FSoilHydrologyState
