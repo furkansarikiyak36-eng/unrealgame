@@ -8,9 +8,9 @@ void UAdvancedWaterSoilSimulation::InitializeCellHydrology(FChunkCell& Cell) con
     FSoilHydrologyState& H = Cell.Hydrology;
     if (H.bInitialized) return;
     const float LegacyMoisture = FMath::Clamp(Cell.SoilMoisture, 0.f, 1.f);
-    H.TopLayerWaterMm = LegacyMoisture * TopLayerFieldCapacityMm;
-    H.RootLayerWaterMm = LegacyMoisture * RootLayerFieldCapacityMm;
-    H.DeepLayerWaterMm = LegacyMoisture * DeepLayerFieldCapacityMm;
+    H.TopLayerWaterMm = LegacyMoisture * GetTopFieldCapacity(Cell);
+    H.RootLayerWaterMm = LegacyMoisture * GetRootFieldCapacity(Cell);
+    H.DeepLayerWaterMm = LegacyMoisture * GetDeepFieldCapacity(Cell);
     H.SoilTemperatureC = 12.f;
     H.bInitialized = true;
 }
@@ -52,12 +52,65 @@ void UAdvancedWaterSoilSimulation::ApplyPrecipitation(UChunkState* Chunk, float 
     Chunk->MarkDirty();
 }
 
+float UAdvancedWaterSoilSimulation::GetTextureCapacityMultiplier(EWorldSoilTexture Texture) const
+{
+    switch (Texture)
+    {
+        case EWorldSoilTexture::Sand: return 0.58f;
+        case EWorldSoilTexture::LoamySand: return 0.74f;
+        case EWorldSoilTexture::Loam: return 1.0f;
+        case EWorldSoilTexture::SiltLoam: return 1.12f;
+        case EWorldSoilTexture::ClayLoam: return 1.28f;
+        case EWorldSoilTexture::Clay: return 1.42f;
+        case EWorldSoilTexture::OrganicPeat: return 1.6f;
+        case EWorldSoilTexture::Rock: return 0.18f;
+        default: return 1.0f;
+    }
+}
+
+float UAdvancedWaterSoilSimulation::GetTextureConductivityMultiplier(EWorldSoilTexture Texture) const
+{
+    switch (Texture)
+    {
+        case EWorldSoilTexture::Sand: return 1.8f;
+        case EWorldSoilTexture::LoamySand: return 1.4f;
+        case EWorldSoilTexture::Loam: return 1.0f;
+        case EWorldSoilTexture::SiltLoam: return 0.72f;
+        case EWorldSoilTexture::ClayLoam: return 0.5f;
+        case EWorldSoilTexture::Clay: return 0.24f;
+        case EWorldSoilTexture::OrganicPeat: return 1.25f;
+        case EWorldSoilTexture::Rock: return 0.015f;
+        default: return 1.0f;
+    }
+}
+
+float UAdvancedWaterSoilSimulation::GetTopFieldCapacity(const FChunkCell& Cell) const
+{
+    const float OrganicBoost = 1.f + FMath::Clamp(Cell.Terrain.OrganicMatterFraction, 0.f, 0.3f) * 1.5f;
+    return FMath::Max(1.f, TopLayerFieldCapacityMm * GetTextureCapacityMultiplier(Cell.Terrain.SoilTexture) * OrganicBoost);
+}
+
+float UAdvancedWaterSoilSimulation::GetRootFieldCapacity(const FChunkCell& Cell) const
+{
+    const float OrganicBoost = 1.f + FMath::Clamp(Cell.Terrain.OrganicMatterFraction, 0.f, 0.3f) * 1.5f;
+    const float RootDepthScale = FMath::Clamp(Cell.Terrain.RootingDepthMeters / 0.6f, 0.1f, 5.f);
+    return FMath::Max(1.f, RootLayerFieldCapacityMm * GetTextureCapacityMultiplier(Cell.Terrain.SoilTexture) * OrganicBoost * RootDepthScale);
+}
+
+float UAdvancedWaterSoilSimulation::GetDeepFieldCapacity(const FChunkCell& Cell) const
+{
+    const float BedrockScale = FMath::Clamp(Cell.Terrain.BedrockDepthMeters / 3.f, 0.1f, 1.f);
+    return FMath::Max(1.f, DeepLayerFieldCapacityMm * GetTextureCapacityMultiplier(Cell.Terrain.SoilTexture) * BedrockScale);
+}
+
 float UAdvancedWaterSoilSimulation::GetInfiltrationFactor(const FChunkCell& Cell) const
 {
-    const float Permeability = FMath::Clamp(Cell.Terrain.Permeability, 0.f, 1.f);
+    const float TextureConductivity = GetTextureConductivityMultiplier(Cell.Terrain.SoilTexture);
+    const float CompactionFactor = FMath::Clamp(1.f - FMath::Clamp(Cell.Terrain.Compaction, 0.f, 1.f) * 0.9f, 0.05f, 1.f);
+    const float Permeability = FMath::Clamp(Cell.Terrain.Permeability, 0.f, 1.f) * TextureConductivity * CompactionFactor;
     const float FrozenFactor = Cell.Hydrology.SoilTemperatureC <= -1.f ? 0.08f
         : Cell.Hydrology.SoilTemperatureC < 2.f ? FMath::Lerp(0.08f, 1.f, (Cell.Hydrology.SoilTemperatureC + 1.f) / 3.f) : 1.f;
-    const float TopSaturation = FMath::Clamp(Cell.Hydrology.TopLayerWaterMm / FMath::Max(1.f, TopLayerFieldCapacityMm), 0.f, 1.5f);
+    const float TopSaturation = FMath::Clamp(Cell.Hydrology.TopLayerWaterMm / GetTopFieldCapacity(Cell), 0.f, 1.5f);
     const float SaturationFactor = FMath::Square(FMath::Clamp(1.f - TopSaturation, 0.05f, 1.f));
     return Permeability * FrozenFactor * SaturationFactor;
 }
@@ -136,7 +189,7 @@ FHydrologyStepReport UAdvancedWaterSoilSimulation::SimulateChunk(UChunkState* Ch
     {
         FSoilHydrologyState& H = Cell.Hydrology;
         const float SurfaceMm = GetCellSurfaceWaterMm(Cell);
-        const float KInfiltration = BaseInfiltrationMmPerDay * GetInfiltrationFactor(Cell);
+        const float KInfiltration = BaseInfiltrationMmPerDay * GetTextureConductivityMultiplier(Cell.Terrain.SoilTexture) * GetInfiltrationFactor(Cell);
         const float Infiltration = FMath::Min(SurfaceMm, KInfiltration * Days);
         const float InfiltrationM3 = Infiltration * 0.001f * Area;
         Cell.Water.Volume = FMath::Max(0.f, Cell.Water.Volume - InfiltrationM3);
@@ -151,11 +204,11 @@ FHydrologyStepReport UAdvancedWaterSoilSimulation::SimulateChunk(UChunkState* Ch
         const float SurfaceEvaporation = FMath::Min(GetCellSurfaceWaterMm(Cell), AtmosphericDemand * 0.65f);
         Cell.Water.Volume = FMath::Max(0.f, Cell.Water.Volume - SurfaceEvaporation * 0.001f * Area);
         const float SoilEvapDemand = FMath::Max(0.f, AtmosphericDemand - SurfaceEvaporation);
-        const float TopAvailable = FMath::Max(0.f, H.TopLayerWaterMm - TopLayerWiltingMm);
+        const float TopAvailable = FMath::Max(0.f, H.TopLayerWaterMm - TopLayerWiltingMm * GetTextureCapacityMultiplier(Cell.Terrain.SoilTexture));
         const float TopEvaporation = FMath::Min(TopAvailable, SoilEvapDemand);
         H.TopLayerWaterMm -= TopEvaporation;
 
-        const float RootAvailable = FMath::Max(0.f, H.RootLayerWaterMm - RootLayerWiltingMm);
+        const float RootAvailable = FMath::Max(0.f, H.RootLayerWaterMm - RootLayerWiltingMm * GetTextureCapacityMultiplier(Cell.Terrain.SoilTexture) * FMath::Clamp(Cell.Terrain.RootingDepthMeters / 0.6f, 0.1f, 5.f));
         const float PotentialTranspiration = (0.15f + VegetationCover * 2.2f) * TemperatureFactor * Days;
         const float Transpiration = FMath::Min(RootAvailable, PotentialTranspiration);
         H.RootLayerWaterMm -= Transpiration;
@@ -163,27 +216,29 @@ FHydrologyStepReport UAdvancedWaterSoilSimulation::SimulateChunk(UChunkState* Ch
         H.CumulativeEvapotranspirationMm += ET;
         Report.EvapotranspirationMm += ET;
 
-        const float TopExcess = FMath::Max(0.f, H.TopLayerWaterMm - TopLayerFieldCapacityMm);
+        const float TopExcess = FMath::Max(0.f, H.TopLayerWaterMm - GetTopFieldCapacity(Cell));
         const float TopToRoot = FMath::Min(TopExcess, VerticalPercolationMmPerDay * Days
-            * FMath::Clamp(Cell.Terrain.Permeability, 0.f, 1.f));
+            * FMath::Clamp(Cell.Terrain.Permeability, 0.f, 1.f) * GetTextureConductivityMultiplier(Cell.Terrain.SoilTexture)
+            * FMath::Clamp(1.f - Cell.Terrain.Compaction * 0.75f, 0.1f, 1.f));
         H.TopLayerWaterMm -= TopToRoot;
         H.RootLayerWaterMm += TopToRoot;
 
-        const float RootExcess = FMath::Max(0.f, H.RootLayerWaterMm - RootLayerFieldCapacityMm);
+        const float RootExcess = FMath::Max(0.f, H.RootLayerWaterMm - GetRootFieldCapacity(Cell));
         const float RootToDeep = FMath::Min(RootExcess, VerticalPercolationMmPerDay * 0.65f * Days
-            * FMath::Clamp(Cell.Terrain.Permeability, 0.f, 1.f));
+            * FMath::Clamp(Cell.Terrain.Permeability, 0.f, 1.f) * GetTextureConductivityMultiplier(Cell.Terrain.SoilTexture)
+            * FMath::Clamp(1.f - Cell.Terrain.Compaction * 0.75f, 0.1f, 1.f));
         H.RootLayerWaterMm -= RootToDeep;
         H.DeepLayerWaterMm += RootToDeep;
 
-        const float DeepExcess = FMath::Max(0.f, H.DeepLayerWaterMm - DeepLayerFieldCapacityMm);
-        const float DeepDrainage = FMath::Min(DeepExcess, VerticalPercolationMmPerDay * 0.25f * Days);
+        const float DeepExcess = FMath::Max(0.f, H.DeepLayerWaterMm - GetDeepFieldCapacity(Cell));
+        const float DeepDrainage = FMath::Min(DeepExcess, VerticalPercolationMmPerDay * 0.25f * Days * FMath::Clamp(Cell.Terrain.BedrockDepthMeters / 3.f, 0.05f, 1.f));
         H.DeepLayerWaterMm -= DeepDrainage;
         H.GroundwaterWaterEquivalentMm += DeepDrainage;
         Report.VerticalDrainageMm += DeepDrainage;
 
         // Nutrients move with percolating water. These are game-scale relative pools, not laboratory units.
         const float PercolationFraction = FMath::Clamp((TopToRoot + RootToDeep + DeepDrainage)
-            / FMath::Max(1.f, TopLayerFieldCapacityMm + RootLayerFieldCapacityMm), 0.f, 0.5f);
+            / FMath::Max(1.f, GetTopFieldCapacity(Cell) + GetRootFieldCapacity(Cell)), 0.f, 0.5f);
         Cell.SoilNitrogen = FMath::Max(0.f, Cell.SoilNitrogen * (1.f - PercolationFraction * NitrogenLeachingFraction));
         Cell.SoilPhosphorus = FMath::Max(0.f, Cell.SoilPhosphorus * (1.f - PercolationFraction * PhosphorusLeachingFraction));
         Cell.SoilPotassium = FMath::Max(0.f, Cell.SoilPotassium * (1.f - PercolationFraction * PotassiumLeachingFraction));
@@ -192,7 +247,7 @@ FHydrologyStepReport UAdvancedWaterSoilSimulation::SimulateChunk(UChunkState* Ch
         H.RootLayerWaterMm = FMath::Max(0.f, H.RootLayerWaterMm);
         H.DeepLayerWaterMm = FMath::Max(0.f, H.DeepLayerWaterMm);
         H.GroundwaterWaterEquivalentMm = FMath::Max(0.f, H.GroundwaterWaterEquivalentMm);
-        Cell.SoilMoisture = FMath::Clamp(H.RootLayerWaterMm / FMath::Max(1.f, RootLayerFieldCapacityMm), 0.f, 1.f);
+        Cell.SoilMoisture = FMath::Clamp(H.RootLayerWaterMm / GetRootFieldCapacity(Cell), 0.f, 1.f);
         Cell.Water.Level = Cell.Water.Volume / Area;
         Cell.bHasWater = Cell.Water.Volume > 0.001f;
     }
