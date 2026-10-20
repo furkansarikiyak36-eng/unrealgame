@@ -5,6 +5,7 @@
 #include "AdvancedWaterSoilSimulation.generated.h"
 
 class UChunkState;
+struct FChunkCell;
 
 USTRUCT(BlueprintType)
 struct FHydrologyStepReport
