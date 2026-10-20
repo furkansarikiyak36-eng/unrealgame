@@ -13,6 +13,7 @@ struct FChunkCell
     UPROPERTY(BlueprintReadWrite) FChemistryCell Chemistry;
     UPROPERTY(BlueprintReadWrite) FBiomassCell Biomass;
     UPROPERTY(BlueprintReadWrite) float SoilMoisture = 0.3f;
+    UPROPERTY(BlueprintReadWrite) FSoilHydrologyState Hydrology;
     UPROPERTY(BlueprintReadWrite) float SoilNitrogen = 50.0f;
     UPROPERTY(BlueprintReadWrite) float SoilPhosphorus = 30.0f;
     UPROPERTY(BlueprintReadWrite) float SoilPotassium = 40.0f;
