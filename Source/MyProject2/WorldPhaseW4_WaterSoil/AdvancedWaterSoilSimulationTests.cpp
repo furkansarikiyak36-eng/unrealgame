@@ -2,6 +2,7 @@
 #include "Misc/AutomationTest.h"
 #include "WorldPhaseW4_WaterSoil/AdvancedWaterSoilSimulation.h"
 #include "WorldCore/ChunkState.h"
+#include "WorldPhaseW6_Persistence/ChunkSerializer.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FAdvancedHydrologyMassBalanceTest,
@@ -61,4 +62,42 @@ bool FAdvancedHydrologySnowpackTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("Snowpack storage never becomes negative"), Cell.Hydrology.SnowpackWaterEquivalentMm >= 0.f);
     return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FAdvancedHydrologyPersistenceTest,
+    "MyProject2.Hydrology.PersistenceRoundTrip",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAdvancedHydrologyPersistenceTest::RunTest(const FString& Parameters)
+{
+    UChunkState* Source = NewObject<UChunkState>();
+    Source->Initialize(2);
+    FChunkCell& Cell = Source->Cells[0];
+    Cell.Hydrology.bInitialized = true;
+    Cell.Hydrology.TopLayerWaterMm = 21.5f;
+    Cell.Hydrology.RootLayerWaterMm = 67.f;
+    Cell.Hydrology.DeepLayerWaterMm = 118.f;
+    Cell.Hydrology.SnowpackWaterEquivalentMm = 14.f;
+    Cell.Hydrology.SoilTemperatureC = -2.5f;
+    Cell.Hydrology.CumulativeErosionIndex = 3.4f;
+    Cell.Terrain.SoilTexture = EWorldSoilTexture::Clay;
+    Cell.Terrain.Compaction = 0.42f;
+    Cell.Terrain.OrganicMatterFraction = 0.08f;
+    Cell.Terrain.BedrockDepthMeters = 0.9f;
+    Cell.Terrain.RootingDepthMeters = 0.35f;
+
+    const FSerializedChunk Saved = UChunkSerializer::SerializeChunk(Source);
+    UChunkState* Restored = UChunkSerializer::DeserializeChunk(GetTransientPackage(), Saved);
+    TestNotNull(TEXT("Chunk deserializes"), Restored);
+    if (!Restored) return false;
+
+    const FChunkCell& R = Restored->Cells[0];
+    TestTrue(TEXT("Root-zone storage persists"), FMath::IsNearlyEqual(R.Hydrology.RootLayerWaterMm, 67.f));
+    TestTrue(TEXT("Snowpack persists"), FMath::IsNearlyEqual(R.Hydrology.SnowpackWaterEquivalentMm, 14.f));
+    TestTrue(TEXT("Soil temperature persists"), FMath::IsNearlyEqual(R.Hydrology.SoilTemperatureC, -2.5f));
+    TestTrue(TEXT("Soil texture persists"), R.Terrain.SoilTexture == EWorldSoilTexture::Clay);
+    TestTrue(TEXT("Compaction persists"), FMath::IsNearlyEqual(R.Terrain.Compaction, 0.42f));
+    TestTrue(TEXT("Bedrock depth persists"), FMath::IsNearlyEqual(R.Terrain.BedrockDepthMeters, 0.9f));
+    return true;
+}
+
 #endif
