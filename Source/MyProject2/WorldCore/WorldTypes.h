@@ -7,7 +7,7 @@ enum class EWorldLayerType : uint8 { Terrain, Water, Soil, Biomass, Chemistry, O
 UENUM(BlueprintType)
 enum class EChunkActivationMode : uint8 { Passive, Scheduled, Continuous };
 UENUM(BlueprintType)
-enum class EWorldEventType : uint8 { None, CanalWallBroken, WaterLevelChanged, SoilMoistureChanged, FireStarted, FireSpread, FireExtinguished, DecayTick, ToxinSpread, TerrainDeformed, BuildingDamaged, Erosion, NeighborActivated };
+enum class EWorldEventType : uint8 { None, CanalWallBroken, WaterLevelChanged, SoilMoistureChanged, FireStarted, FireSpread, FireExtinguished, DecayTick, ToxinSpread, TerrainDeformed, BuildingDamaged, NeighborActivated, Erosion };
 UENUM(BlueprintType)
 enum class EBuildingDamageType : uint8 { None, Impact, Fire, Decay, Erosion, Toxin };
 
