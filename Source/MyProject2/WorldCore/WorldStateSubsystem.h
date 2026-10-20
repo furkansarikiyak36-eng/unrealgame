@@ -5,7 +5,7 @@
 #include "ChunkCoordinate.h"
 #include "ChunkStateStore.h"
 #include "WorldStateSubsystem.generated.h"
-class USimulationBudgetAllocator; class UWorldChunkSubsystem; class UWorldEventSubsystem; class UWaterSimulation; class USoilSimulation; class UFireSimulation; class UDecaySimulation; class UChemistrySimulation; class UEventChainTracker;
+class USimulationBudgetAllocator; class UWorldChunkSubsystem; class UWorldEventSubsystem; class UWaterSimulation; class USoilSimulation; class UAdvancedWaterSoilSimulation; class UFireSimulation; class UDecaySimulation; class UChemistrySimulation; class UEventChainTracker;
 UCLASS()
 class MYPROJECT2_API UWorldStateSubsystem : public UTickableWorldSubsystem
 {
@@ -40,6 +40,7 @@ public:
 protected:
     UPROPERTY() TObjectPtr<USimulationBudgetAllocator> BudgetAllocator;
     UPROPERTY() TObjectPtr<UWaterSimulation> WaterSimulation;
+    UPROPERTY() TObjectPtr<UAdvancedWaterSoilSimulation> AdvancedWaterSoilSimulation;
     UPROPERTY() TObjectPtr<USoilSimulation> SoilSimulation;
     UPROPERTY() TObjectPtr<UFireSimulation> FireSimulation;
     UPROPERTY() TObjectPtr<UDecaySimulation> DecaySimulation;
