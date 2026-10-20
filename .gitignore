@@ -27,3 +27,6 @@ DerivedDataCache/
 # Marketplace promo images.
 /OldWest_VOL5.png
 /PN_OpenWorldFoliage.png
+
+# Editor tool output
+/Scripts/editor_tools/build_last.log
