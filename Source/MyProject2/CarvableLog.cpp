@@ -631,10 +631,10 @@ void ACarvableLog::LoadSource()
 	const FBox Box = UGeometryScriptLibrary_MeshQueryFunctions::GetMeshBoundingBox(MeshComponent->GetDynamicMesh());
 	Radius = FMath::Max(Box.GetSize().Y, Box.GetSize().Z) * 0.5f;
 	SetMaterials(SourceMesh->GetMaterial(0));
-	if (SourceMesh->GetStaticMaterials().Num() > 1)
+	// Pieces whose surface is already cut wood keep it on the carved faces too; every further slot keeps its material.
+	for (int32 Slot = 1; Slot < SourceMesh->GetStaticMaterials().Num(); ++Slot)
 	{
-		// Pieces whose surface is already cut wood keep it on the carved faces too.
-		MeshComponent->SetMaterial(1, SourceMesh->GetMaterial(1));
+		MeshComponent->SetMaterial(Slot, SourceMesh->GetMaterial(Slot));
 	}
 	FinishEdit();
 }
@@ -680,6 +680,11 @@ ACarvableLog* ACarvableLog::SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh
 	Log->SourceMesh = Mesh;
 	Log->bStartAsleep = false;
 	Log->SetMaterials(Mesh->GetMaterial(0));
+	// Every slot of the source keeps its own material (raw logs: bark, cut wood with the end grain, hewn wood).
+	for (int32 Slot = 1; Slot < Mesh->GetStaticMaterials().Num(); ++Slot)
+	{
+		Log->MeshComponent->SetMaterial(Slot, Mesh->GetMaterial(Slot));
+	}
 	Log->FinishEdit();
 	Log->FinishSpawning(Transform);
 	return Log;
@@ -1323,7 +1328,24 @@ bool ACarvableLog::ComputeCrossPlacement(const AActor* Lower, const FVector& Aim
 	{
 		return false;
 	}
-	const float Along = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis), -Room, Room);
+	float Along = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis), -Room, Room);
+	// The crossing snaps to the lower log's 75 cm module lines (its joint points).
+	if (const ACarvableLog* LowerLog = Cast<ACarvableLog>(Lower))
+	{
+		TArray<float> LowerLines;
+		LowerLog->GetModuleLines(LowerLines);
+		const float CentreX = LowerLog->GetActorTransform().InverseTransformPosition(Centre).X;
+		float Best = TNumericLimits<float>::Max();
+		for (const float Line : LowerLines)
+		{
+			const float Candidate = Line - CentreX;
+			if (FMath::Abs(Candidate) <= Room && FMath::Abs(Candidate - Along) < Best)
+			{
+				Best = FMath::Abs(Candidate - Along);
+				Along = Candidate;
+			}
+		}
+	}
 	const FVector Cross = Centre + Axis * Along;
 
 	// Square across, running away from the player.
@@ -1347,7 +1369,34 @@ bool ACarvableLog::ComputeCrossPlacement(const AActor* Lower, const FVector& Aim
 	Out.LowerRadius = LowerRadius;
 	Out.UpperRadius = UpperRadius;
 	const float AxisGap = UpperRadius + LowerRadius * CupFit - LowerRadius;
-	const FVector Location = Cross + FVector(0.f, 0.f, AxisGap) - Direction * Out.NotchX;
+	FVector Location = Cross + FVector(0.f, 0.f, AxisGap) - Direction * Out.NotchX;
+
+	// Level: the upper log rests on the highest lying log under its span, so it never tilts across logs at different
+	// heights. Lower logs under it stay as they are (a support piece can go into the gap).
+	const FVector SpanA = Location + Direction * Box.Min.X;
+	const FVector SpanB = Location + Direction * Box.Max.X;
+	for (TActorIterator<ACarvableLog> It(Upper->GetWorld()); It; ++It)
+	{
+		const ACarvableLog* Other = *It;
+		FVector OtherCentre, OtherAxis;
+		float OtherRadius, OtherHalf;
+		if (Other == Upper || Other == Lower || Other->IsCarried() || !GetLogAxis(Other, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
+			|| FMath::Abs(OtherAxis.Z) > 0.3f)
+		{
+			continue;
+		}
+		const FVector Flat(1.f, 1.f, 0.f);
+		double S = 0.0, T = 0.0;
+		const FVector P0 = SpanA * Flat, P1 = SpanB * Flat;
+		const FVector Q0 = (OtherCentre - OtherAxis * OtherHalf) * Flat, Q1 = (OtherCentre + OtherAxis * OtherHalf) * Flat;
+		WoodStructure::Geo::ClosestSegSeg(P0, P1, Q0, Q1, S, T);
+		if (FVector::Dist(FMath::Lerp(P0, P1, static_cast<float>(S)), FMath::Lerp(Q0, Q1, static_cast<float>(T))) > OtherRadius + UpperRadius * 0.5f)
+		{
+			continue;
+		}
+		const float OtherAxisZ = FMath::Lerp(OtherCentre - OtherAxis * OtherHalf, OtherCentre + OtherAxis * OtherHalf, static_cast<float>(T)).Z;
+		Location.Z = FMath::Max(Location.Z, OtherAxisZ + UpperRadius + OtherRadius * CupFit - OtherRadius);
+	}
 	Out.Upper = FTransform(FRotator(0.f, Direction.Rotation().Yaw, 0.f), Location);
 	return true;
 }

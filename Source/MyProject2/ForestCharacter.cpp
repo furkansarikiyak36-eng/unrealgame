@@ -1016,8 +1016,41 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		}
 		return;
 	}
-	const float Yaw = bPlaceStanding ? Forward.Rotation().Yaw : Forward.Rotation().Yaw + 90.f;
-	PlaceTransform = bPlaceStanding ? Piece->GetStandTransform(Hit.ImpactPoint, Yaw) : Piece->GetLayTransform(Hit.ImpactPoint, Yaw);
+	float Yaw = bPlaceStanding ? Forward.Rotation().Yaw : Forward.Rotation().Yaw + 90.f;
+	FVector Ground = Hit.ImpactPoint;
+	// Snap to the nearest lying log within 4 m: parallel or square to it (never at an odd angle), and on its 75 cm
+	// module grid, so pieces laid next to each other line up into one structure.
+	const ACarvableLog* Near = nullptr;
+	float NearDistance = 400.f;
+	for (TActorIterator<ACarvableLog> It(GetWorld()); It; ++It)
+	{
+		FVector C, A;
+		float R, H;
+		if (*It == Piece || It->IsCarried() || !ACarvableLog::GetLogAxis(*It, C, A, R, H) || FMath::Abs(A.Z) > 0.3f)
+		{
+			continue;
+		}
+		const FVector Closest = FMath::ClosestPointOnSegment(Ground, C - A * H, C + A * H);
+		const float Distance = FVector::Dist2D(Closest, Ground);
+		if (Distance < NearDistance)
+		{
+			NearDistance = Distance;
+			Near = *It;
+		}
+	}
+	if (Near)
+	{
+		const FTransform NearFrame = Near->GetActorTransform();
+		const float NearYaw = NearFrame.GetRotation().Rotator().Yaw;
+		Yaw = NearYaw + 90.f * FMath::RoundToFloat(FMath::FindDeltaAngleDegrees(NearYaw, Yaw) / 90.f);
+		FVector Local = NearFrame.InverseTransformPosition(Ground);
+		const float MinX = Near->GetLocalBox().Min.X;
+		const float Module = ACarvableLog::ModuleLength;
+		Local.X = MinX + FMath::RoundToFloat((Local.X - MinX) / Module) * Module;
+		Local.Y = FMath::RoundToFloat(Local.Y / Module) * Module;
+		Ground = FVector(NearFrame.TransformPosition(Local).X, NearFrame.TransformPosition(Local).Y, Ground.Z);
+	}
+	PlaceTransform = bPlaceStanding ? Piece->GetStandTransform(Ground, Yaw) : Piece->GetLayTransform(Ground, Yaw);
 	CarryPlace = bPlaceStanding ? ECarryPlace::Stand : ECarryPlace::Lay;
 }
 
