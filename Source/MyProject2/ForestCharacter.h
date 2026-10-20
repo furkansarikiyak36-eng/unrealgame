@@ -29,6 +29,7 @@ class ARemnantNote;
 class ARawMaterialNode;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
+class UChunkManager;
 class UCableComponent;
 class ULineBatchComponent;
 class UStoneCarryComponent;
@@ -316,6 +317,10 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USurvivalComponent> Survival;
+
+	/** Keeps the world chunks round the player loaded so water, soil and seasons are simulated where the player is. */
+	UPROPERTY(VisibleAnywhere, Category = "World")
+	TObjectPtr<UChunkManager> WorldChunks;
 
 	UPROPERTY(VisibleAnywhere, Category = "Inventory")
 	TObjectPtr<UInventoryComponent> CoreInventory;

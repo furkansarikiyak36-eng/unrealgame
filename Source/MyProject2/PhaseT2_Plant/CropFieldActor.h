@@ -5,7 +5,7 @@
 #include "CropFieldActor.generated.h"
 class UStaticMeshComponent; class UPlantGrowthComponent; class UPlantStageComponent; class UPlantVisualComponent; class USoilCellComponent; class UPlantDefinition; class UHarvestComponent; class UInventoryComponent; class UFeedStorageComponent;
 UCLASS() class MYPROJECT2_API ACropFieldActor:public AActor{GENERATED_BODY()
-public: ACropFieldActor(); virtual void BeginPlay()override;
+public: ACropFieldActor(); virtual void BeginPlay()override; virtual void EndPlay(const EEndPlayReason::Type EndPlayReason)override;
  UFUNCTION(BlueprintCallable,Category="Field") void PlantCrop(UPlantDefinition* Def,int32 SeedCount);
  UFUNCTION(BlueprintCallable,Category="Field|Inventory") bool PlantCropFromInventory(UPlantDefinition* Def,UInventoryComponent* Inventory,FName SeedItemID,int32 SeedCount);
  UFUNCTION(BlueprintCallable,Category="Field|Harvest") float HarvestToFeedStorage(UFeedStorageComponent* Destination,FName FeedID);

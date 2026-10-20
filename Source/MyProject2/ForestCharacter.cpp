@@ -35,6 +35,7 @@
 #include "MechanicsDemo.h"
 #include "StructureManager.h"
 #include "SurvivalComponent.h"
+#include "WorldPhaseW1_Chunk/ChunkManager.h"
 #include "CableComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -101,6 +102,8 @@ AForestCharacter::AForestCharacter()
 	GetCharacterMovement()->AirControl = 0.3f;
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
+	WorldChunks = CreateDefaultSubobject<UChunkManager>(TEXT("WorldChunks"));
+	WorldChunks->ActivationRadius = 256.f; // metres: 4 chunks (64 m) each way
 	CoreInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("CoreInventory"));
 	CoreInventory->MaxSlots = InventorySlots;
 	CoreInventory->bIgnoreWeight = true; // Preserve the playable character's existing 24-slot rule.

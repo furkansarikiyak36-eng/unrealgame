@@ -13,6 +13,7 @@ struct FChunkCell
     UPROPERTY(SaveGame, BlueprintReadWrite) FChemistryCell Chemistry;
     UPROPERTY(SaveGame, BlueprintReadWrite) FBiomassCell Biomass;
     UPROPERTY(SaveGame, BlueprintReadWrite) float SoilMoisture = 0.3f;
+    UPROPERTY(SaveGame, BlueprintReadWrite) FSoilHydrologyState Hydrology;
     UPROPERTY(SaveGame, BlueprintReadWrite) float SoilNitrogen = 50.0f;
     UPROPERTY(SaveGame, BlueprintReadWrite) float SoilPhosphorus = 30.0f;
     UPROPERTY(SaveGame, BlueprintReadWrite) float SoilPotassium = 40.0f;

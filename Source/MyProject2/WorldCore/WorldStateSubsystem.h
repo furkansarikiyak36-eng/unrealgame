@@ -5,7 +5,7 @@
 #include "ChunkCoordinate.h"
 #include "ChunkStateStore.h"
 #include "WorldStateSubsystem.generated.h"
-class USimulationBudgetAllocator; class UWorldChunkSubsystem; class UWorldEventSubsystem; class UWaterSimulation; class USoilSimulation; class UFireSimulation; class UDecaySimulation; class UChemistrySimulation; class UEventChainTracker;
+class USimulationBudgetAllocator; class UWorldChunkSubsystem; class UWorldEventSubsystem; class UWaterSimulation; class USoilSimulation; class UAdvancedWaterSoilSimulation; class UFireSimulation; class UDecaySimulation; class UChemistrySimulation; class UEventChainTracker;
 UCLASS()
 class MYPROJECT2_API UWorldStateSubsystem : public UTickableWorldSubsystem
 {
@@ -48,6 +48,7 @@ public:
 protected:
     UPROPERTY() TObjectPtr<USimulationBudgetAllocator> BudgetAllocator;
     UPROPERTY() TObjectPtr<UWaterSimulation> WaterSimulation;
+    UPROPERTY() TObjectPtr<UAdvancedWaterSoilSimulation> AdvancedWaterSoilSimulation;
     UPROPERTY() TObjectPtr<USoilSimulation> SoilSimulation;
     UPROPERTY() TObjectPtr<UFireSimulation> FireSimulation;
     UPROPERTY() TObjectPtr<UDecaySimulation> DecaySimulation;
@@ -59,6 +60,7 @@ protected:
     void ApplyCrossDomainCoupling(UChunkState* Chunk, float DeltaDays);
     float ComputeRainfallForDay(int32 DayNumber) const;
     float ComputeRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const;
+    float ComputeHistoricalRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const;
     void SimulateChunk(UChunkState* Chunk, float DeltaDays, float TargetDay=-1.0f);
     static constexpr int32 MaxSnapshotChunks = 16384;
     static constexpr int64 MaxSnapshotCells = 1048576;

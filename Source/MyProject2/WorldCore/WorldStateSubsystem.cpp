@@ -4,6 +4,9 @@
 #include "WorldPhaseW1_Chunk/WorldChunkSubsystem.h"
 #include "WorldPhaseW4_WaterSoil/WaterSimulation.h"
 #include "WorldPhaseW4_WaterSoil/SoilSimulation.h"
+#include "WorldPhaseW4_WaterSoil/AdvancedWaterSoilSimulation.h"
+#include "RegionSeason/RegionSeasonSubsystem.h"
+#include "RegionSeason/RegionSeasonTypes.h"
 #include "WorldPhaseW5_FireDecayChem/FireSimulation.h"
 #include "WorldPhaseW5_FireDecayChem/DecaySimulation.h"
 #include "WorldPhaseW5_FireDecayChem/ChemistrySimulation.h"
@@ -14,7 +17,7 @@
 void UWorldStateSubsystem::Initialize(FSubsystemCollectionBase& C)
 {
     Super::Initialize(C); StateStore=NewObject<UChunkStateStore>(this); BudgetAllocator=NewObject<USimulationBudgetAllocator>(this);
-    WaterSimulation=NewObject<UWaterSimulation>(this); SoilSimulation=NewObject<USoilSimulation>(this); FireSimulation=NewObject<UFireSimulation>(this);
+    WaterSimulation=NewObject<UWaterSimulation>(this); SoilSimulation=NewObject<USoilSimulation>(this); AdvancedWaterSoilSimulation=NewObject<UAdvancedWaterSoilSimulation>(this); FireSimulation=NewObject<UFireSimulation>(this);
     DecaySimulation=NewObject<UDecaySimulation>(this); ChemistrySimulation=NewObject<UChemistrySimulation>(this); EventTracker=NewObject<UEventChainTracker>(this);
     WorldTime=FWorldTime();
 }
@@ -93,9 +96,29 @@ void UWorldStateSubsystem::Tick(float DeltaTime)
         const float WeatherDays = FMath::Max(0.0f, CurrentDayIndex - Chunk->Metadata.LastWeatherUpdateDay);
         if (WeatherDays > 0.0f)
         {
-            const float MissedRainfallMm = ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
-            if (WaterSimulation && MissedRainfallMm > 0.0f)
-                WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
+            const float HistoricalPrecipitationMm = ComputeHistoricalRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
+            const bool bNeedsCurrentPrecipitation = CurrentDayIndex > Chunk->Metadata.LastWeatherUpdateDay;
+            FRegionClimateSnapshot Climate;
+            if (URegionSeasonSubsystem* RegionSeason = GetWorld()->GetSubsystem<URegionSeasonSubsystem>())
+                Climate = RegionSeason->GetClimateAtLocation(ChunkSettings.ChunkToWorldCenter(Chunk->Coordinate));
+            const float RegionPrecipitationScale = Climate.bHasKnownRegion
+                ? FMath::Max(0.f, Climate.PrecipitationMultiplier) * FMath::Clamp(Climate.MeanAnnualRainfallMm / 600.f, 0.f, 5.f) : 1.f;
+            const float RegionTemperatureOffset = Climate.bHasKnownRegion
+                ? Climate.TemperatureOffsetC + (Climate.BaselineTemperatureC - 15.f) : 0.f;
+            const bool bLocalSnow = bIsSnowing || (Climate.bHasKnownRegion && TempMinC + RegionTemperatureOffset <= Climate.SnowThresholdOffsetC);
+            if (AdvancedWaterSoilSimulation)
+            {
+                AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
+                if (HistoricalPrecipitationMm > 0.0f)
+                    AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, HistoricalPrecipitationMm * RegionPrecipitationScale, false, TempMinC + RegionTemperatureOffset);
+                if (bNeedsCurrentPrecipitation && RainfallMm > 0.0f)
+                    AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, RainfallMm * RegionPrecipitationScale, bLocalSnow, TempMinC + RegionTemperatureOffset);
+            }
+            else if (WaterSimulation)
+            {
+                const float MissedRainfallMm = ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
+                if (MissedRainfallMm > 0.0f) WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
+            }
             Chunk->Metadata.LastWeatherUpdateDay = CurrentDayIndex;
             Chunk->MarkDirty();
         }
@@ -322,7 +345,7 @@ float UWorldStateSubsystem::ComputeRainfallForDay(int32 DayNumber) const
     const float Roll = DailyRng.NextFloat();
     if (Roll >= 0.75f && Roll < 0.90f) return DailyRng.Range(3.0f, 15.0f);
     if (Roll >= 0.90f && Roll < 0.98f) return DailyRng.Range(15.0f, 40.0f);
-    if (Roll >= 0.98f) return DailyRng.Range(2.0f, 10.0f); // Snow is currently represented as precipitation water; no snowpack layer yet.
+    if (Roll >= 0.98f) return DailyRng.Range(2.0f, 10.0f); // The advanced hydrology solver routes precipitation into liquid water or snowpack.
     return 0.0f;
 }
 
@@ -344,13 +367,45 @@ float UWorldStateSubsystem::ComputeRainfallSince(float LastWeatherDay, int32 Cur
     return TotalRainfall;
 }
 
+float UWorldStateSubsystem::ComputeHistoricalRainfallSince(float LastWeatherDay, int32 CurrentDayIndex) const
+{
+    const int32 FirstMissedDay = FMath::Max(2, FMath::FloorToInt(LastWeatherDay) + 1);
+    const int32 LastHistoricalDay = CurrentDayIndex - 1;
+    if (LastHistoricalDay < FirstMissedDay) return 0.0f;
+    float Total = 0.0f;
+    for (int32 Day = FirstMissedDay; Day <= LastHistoricalDay; ++Day)
+        Total += ComputeRainfallForDay(Day);
+    return Total;
+}
+
 void UWorldStateSubsystem::RequestChunkSimulation(UChunkState* Chunk,float Days)
 {
     if (!Chunk || !FMath::IsFinite(Days) || Days <= 0.0f) return;
     const float CurrentTotalDay=WorldTime.ToTotalDays();
     const int32 CurrentDayIndex=FMath::FloorToInt(CurrentTotalDay);
-    const float MissedRainfallMm=ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay,CurrentDayIndex);
-    if (MissedRainfallMm>0.0f && WaterSimulation) WaterSimulation->ApplyRainfall(Chunk,MissedRainfallMm);
+    const float HistoricalPrecipitationMm = ComputeHistoricalRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
+    const bool bNeedsCurrentPrecipitation = CurrentDayIndex > Chunk->Metadata.LastWeatherUpdateDay;
+    FRegionClimateSnapshot Climate;
+    if (URegionSeasonSubsystem* RegionSeason = GetWorld()->GetSubsystem<URegionSeasonSubsystem>())
+        Climate = RegionSeason->GetClimateAtLocation(ChunkSettings.ChunkToWorldCenter(Chunk->Coordinate));
+    const float RegionPrecipitationScale = Climate.bHasKnownRegion
+        ? FMath::Max(0.f, Climate.PrecipitationMultiplier) * FMath::Clamp(Climate.MeanAnnualRainfallMm / 600.f, 0.f, 5.f) : 1.f;
+    const float RegionTemperatureOffset = Climate.bHasKnownRegion
+        ? Climate.TemperatureOffsetC + (Climate.BaselineTemperatureC - 15.f) : 0.f;
+    const bool bLocalSnow = bIsSnowing || (Climate.bHasKnownRegion && TempMinC + RegionTemperatureOffset <= Climate.SnowThresholdOffsetC);
+    if (AdvancedWaterSoilSimulation)
+    {
+        AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
+        if (HistoricalPrecipitationMm > 0.0f)
+            AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, HistoricalPrecipitationMm * RegionPrecipitationScale, false, TempMinC + RegionTemperatureOffset);
+        if (bNeedsCurrentPrecipitation && RainfallMm > 0.0f)
+            AdvancedWaterSoilSimulation->ApplyPrecipitation(Chunk, RainfallMm * RegionPrecipitationScale, bLocalSnow, TempMinC + RegionTemperatureOffset);
+    }
+    else if (WaterSimulation)
+    {
+        const float MissedRainfallMm = ComputeRainfallSince(Chunk->Metadata.LastWeatherUpdateDay, CurrentDayIndex);
+        if (MissedRainfallMm > 0.0f) WaterSimulation->ApplyRainfall(Chunk, MissedRainfallMm);
+    }
     Chunk->Metadata.LastWeatherUpdateDay=FMath::Max(Chunk->Metadata.LastWeatherUpdateDay,(float)CurrentDayIndex);
     Chunk->Metadata.LastObservedWorldDay=FMath::Max(Chunk->Metadata.LastObservedWorldDay,CurrentTotalDay);
     const float PendingCap=FMath::Clamp(MaxAccumulatedSimulationDays,1.0f,365.0f);
@@ -369,8 +424,23 @@ void UWorldStateSubsystem::SimulateChunk(UChunkState* Chunk,float Days,float Tar
     const float StepDays = FMath::Min(FMath::Clamp(Days, 0.0f, 1.0f),
         FMath::Clamp(MaxSimulationDaysPerStep, 0.01f, 1.0f));
     if(!Chunk || !FMath::IsFinite(StepDays) || StepDays<=0.0f) return;
-    if(WaterSimulation) WaterSimulation->SimulateChunk(Chunk,StepDays);
-    if(SoilSimulation) SoilSimulation->SimulateChunk(Chunk,StepDays,TemperatureC);
+    if (AdvancedWaterSoilSimulation)
+    {
+        // Layered hydrology (snow, infiltration, drainage, groundwater) with the region's climate offset.
+        AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
+        float LocalTemperatureC = TemperatureC;
+        if (URegionSeasonSubsystem* RegionSeason = GetWorld() ? GetWorld()->GetSubsystem<URegionSeasonSubsystem>() : nullptr)
+        {
+            const FRegionClimateSnapshot Climate = RegionSeason->GetClimateAtLocation(ChunkSettings.ChunkToWorldCenter(Chunk->Coordinate));
+            if (Climate.bHasKnownRegion) LocalTemperatureC += Climate.TemperatureOffsetC + (Climate.BaselineTemperatureC - 15.f);
+        }
+        AdvancedWaterSoilSimulation->SimulateChunk(Chunk, StepDays, LocalTemperatureC, 0.55f);
+    }
+    else
+    {
+        if(WaterSimulation) WaterSimulation->SimulateChunk(Chunk,StepDays);
+        if(SoilSimulation) SoilSimulation->SimulateChunk(Chunk,StepDays,TemperatureC);
+    }
     if(ChemistrySimulation) ChemistrySimulation->SimulateChunk(Chunk,StepDays);
     ApplyCrossDomainCoupling(Chunk,StepDays);
     // Vegetation cells now consume their synchronized moisture/health state; the same chunk
