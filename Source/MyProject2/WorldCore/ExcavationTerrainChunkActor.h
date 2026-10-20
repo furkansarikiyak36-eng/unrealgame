@@ -64,6 +64,16 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation|Terrain", meta = (AllowPrivateAccess = "true"))
     TObjectPtr<UDynamicMeshComponent> DynamicMeshComponent;
 
+    /** Cost of the last rebuild in ms: density sampling, meshing, and upload (render mesh, collision, navigation). */
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Excavation|Terrain|Stats")
+    float LastSampleMs = 0.0f;
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Excavation|Terrain|Stats")
+    float LastMeshMs = 0.0f;
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Excavation|Terrain|Stats")
+    float LastUploadMs = 0.0f;
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Excavation|Terrain|Stats")
+    int32 LastTriangleCount = 0;
+
 protected:
     bool TryGetChunkBaseCell(const UExcavationVolumeSubsystem* Excavation, FIntVector& OutBaseCell) const;
     bool RefreshChunkWorldTransform();

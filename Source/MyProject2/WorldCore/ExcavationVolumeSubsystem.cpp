@@ -194,6 +194,27 @@ bool UExcavationVolumeSubsystem::TryGetDensityOverrideAtCell(
     return true;
 }
 
+namespace
+{
+    // C++ sources are called directly; ProcessEvent (Execute_) per sample made a chunk rebuild ~30 ms.
+    // Blueprint classes (or Blueprint subclasses overriding the event) still go through Execute_.
+    float SampleSourceDensity(UObject* Source, const FVector& WorldPositionCm)
+    {
+        if (Source->GetClass()->HasAnyClassFlags(CLASS_Native))
+            if (const IExcavationBaseDensitySource* Native = Cast<IExcavationBaseDensitySource>(Source))
+                return Native->SampleBaseDensityAtWorld_Implementation(WorldPositionCm);
+        return IExcavationBaseDensitySource::Execute_SampleBaseDensityAtWorld(Source, WorldPositionCm);
+    }
+
+    int32 SampleSourceMaterialId(UObject* Source, const FVector& WorldPositionCm)
+    {
+        if (Source->GetClass()->HasAnyClassFlags(CLASS_Native))
+            if (const IExcavationBaseDensitySource* Native = Cast<IExcavationBaseDensitySource>(Source))
+                return Native->SampleBaseMaterialIdAtWorld_Implementation(WorldPositionCm);
+        return IExcavationBaseDensitySource::Execute_SampleBaseMaterialIdAtWorld(Source, WorldPositionCm);
+    }
+}
+
 bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
     const FVector& WorldPositionCm,
     float& OutDensity) const
@@ -222,9 +243,7 @@ bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
         }
 
         const float SampledDensity =
-            IExcavationBaseDensitySource::Execute_SampleBaseDensityAtWorld(
-                DensitySource,
-                WorldPositionCm);
+            SampleSourceDensity(DensitySource, WorldPositionCm);
         if (!IsValidDensity(SampledDensity))
         {
             return false;
@@ -240,6 +259,94 @@ bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
     }
 
     OutDensity = DefaultBaseDensity;
+    return true;
+}
+
+bool UExcavationVolumeSubsystem::SampleDensityBlock(
+    const FIntVector& BaseCell,
+    int32 Side,
+    TArray<float>& OutDensities) const
+{
+    if (Side <= 0 || Side > 130 || !IsGridConfigurationCompatible())
+    {
+        return false;
+    }
+
+    const int32 Count = Side * Side * Side;
+    OutDensities.SetNumUninitialized(Count);
+
+    UObject* DensitySource = IsValid(BaseDensitySourceObject)
+        ? BaseDensitySourceObject.Get()
+        : FallbackBaseDensitySourceObject.Get();
+    if (DensitySource != nullptr
+        && !DensitySource->GetClass()->ImplementsInterface(UExcavationBaseDensitySource::StaticClass()))
+    {
+        return false;
+    }
+
+    const double CellSize = CellSizeCm;
+    const double HalfCell = CellSize * 0.5;
+    for (int32 Z = 0; Z < Side; ++Z)
+    {
+        for (int32 Y = 0; Y < Side; ++Y)
+        {
+            for (int32 X = 0; X < Side; ++X)
+            {
+                float Density = DefaultBaseDensity;
+                if (DensitySource)
+                {
+                    const FVector Center(
+                        (static_cast<double>(BaseCell.X + X) * CellSize) + HalfCell,
+                        (static_cast<double>(BaseCell.Y + Y) * CellSize) + HalfCell,
+                        (static_cast<double>(BaseCell.Z + Z) * CellSize) + HalfCell);
+                    Density = SampleSourceDensity(DensitySource, Center);
+                }
+                if (!IsValidDensity(Density))
+                {
+                    return false;
+                }
+                OutDensities[(Z * Side + Y) * Side + X] = Density;
+            }
+        }
+    }
+
+    if (CellOverrides.Num() == 0)
+    {
+        return true;
+    }
+
+    // Overrides of every chunk the block touches, written over the base values.
+    const FIntVector MaxCell = BaseCell + FIntVector(Side - 1);
+    const FIntVector MinChunk = ChunkForCellAtSize(BaseCell, CellsPerChunkAxis);
+    const FIntVector MaxChunk = ChunkForCellAtSize(MaxCell, CellsPerChunkAxis);
+    for (int32 CZ = MinChunk.Z; CZ <= MaxChunk.Z; ++CZ)
+    {
+        for (int32 CY = MinChunk.Y; CY <= MaxChunk.Y; ++CY)
+        {
+            for (int32 CX = MinChunk.X; CX <= MaxChunk.X; ++CX)
+            {
+                const TSet<FIntVector>* Cells = CellsByChunk.Find(FIntVector(CX, CY, CZ));
+                if (!Cells)
+                {
+                    continue;
+                }
+                for (const FIntVector& Cell : *Cells)
+                {
+                    const FIntVector L = Cell - BaseCell;
+                    if (L.X < 0 || L.Y < 0 || L.Z < 0 || L.X >= Side || L.Y >= Side || L.Z >= Side)
+                    {
+                        continue;
+                    }
+                    const FExcavationCellOverride* Override = CellOverrides.Find(Cell);
+                    if (!Override || !IsValidDensity(Override->Density))
+                    {
+                        continue; // same as TrySampleDensityAtWorld: an unusable override leaves the base value
+                    }
+                    OutDensities[(L.Z * Side + L.Y) * Side + L.X] = Override->Density;
+                }
+            }
+        }
+    }
     return true;
 }
 
@@ -268,8 +375,7 @@ bool UExcavationVolumeSubsystem::TrySampleBaseMaterialIdAtWorld(
     }
 
     const int32 MaterialId =
-        IExcavationBaseDensitySource::Execute_SampleBaseMaterialIdAtWorld(
-            MaterialSource, WorldPositionCm);
+        SampleSourceMaterialId(MaterialSource, WorldPositionCm);
     if (MaterialId < 0 || MaterialId > 31)
     {
         return false;
@@ -690,6 +796,16 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
         CountX * CountY * CountZ,
         MaxCellsPerEdit)));
 
+    UObject* BaseSource = IsValid(BaseDensitySourceObject)
+        ? BaseDensitySourceObject.Get()
+        : FallbackBaseDensitySourceObject.Get();
+    if (BaseSource && !BaseSource->GetClass()->ImplementsInterface(UExcavationBaseDensitySource::StaticClass()))
+    {
+        BaseSource = nullptr;
+    }
+    int32 BlockedCells = 0;
+    int32 MovedCells = 0;
+
     // Build the entire change set first. Invalid/oversized edits never mutate state.
     for (int32 X = MinCell.X; ; ++X)
     {
@@ -727,6 +843,36 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
                 if (bInsideShape)
                 {
                     const FExcavationCellOverride* Existing = CellOverrides.Find(Cell);
+                    float Current = DefaultBaseDensity;
+                    if (Existing)
+                    {
+                        Current = Existing->Density;
+                    }
+                    else if (BaseSource)
+                    {
+                        Current = SampleSourceDensity(BaseSource, CellCenter);
+                    }
+                    if (FMath::IsNearlyEqual(Current, TargetDensity))
+                    {
+                        // Already what the edit wants (air above the ground, soil already dug): no override.
+                        if (Z == MaxCell.Z) break;
+                        continue;
+                    }
+                    if (EditType == EExcavationEditType::Carve && !Existing && UndiggableMaterialIds.Num() > 0)
+                    {
+                        int32 BaseMaterialId = 0;
+                        if (TrySampleBaseMaterialIdAtWorld(CellCenter, BaseMaterialId)
+                            && UndiggableMaterialIds.Contains(BaseMaterialId))
+                        {
+                            ++BlockedCells;
+                            if (Z == MaxCell.Z) break;
+                            continue;
+                        }
+                    }
+                    if ((Current >= 0.5f) != (TargetDensity >= 0.5f))
+                    {
+                        ++MovedCells;
+                    }
                     FExcavationCellChange Change;
                     Change.Cell = Cell;
                     Change.bHadPreviousOverride = Existing != nullptr;
@@ -743,8 +889,11 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
         if (X == MaxCell.X) break;
     }
 
+    CandidateRecord.BlockedCellCount = BlockedCells;
+    CandidateRecord.MovedCellCount = MovedCells;
     if (CandidateRecord.Changes.IsEmpty())
     {
+        OutRecord.BlockedCellCount = BlockedCells;
         return false;
     }
 

@@ -66,7 +66,8 @@ enum class EForestTool : uint8
 {
 	Axe,
 	Pickaxe,
-	Trowel UMETA(DisplayName = "Mala (Chinking Trowel)")
+	Trowel UMETA(DisplayName = "Mala (Chinking Trowel)"),
+	Shovel UMETA(DisplayName = "Kürek")
 };
 
 namespace ForestItems

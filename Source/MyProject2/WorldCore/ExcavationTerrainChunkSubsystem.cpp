@@ -9,6 +9,8 @@
 #include "LandscapeProxy.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "UObject/UObjectIterator.h"
 
 void UExcavationTerrainChunkSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -86,8 +88,45 @@ bool UExcavationTerrainChunkSubsystem::IsTickable() const
     return !IsTemplate();
 }
 
+void UExcavationTerrainChunkSubsystem::QueueRebuild(AExcavationTerrainChunkActor* Actor)
+{
+    if (IsValid(Actor))
+    {
+        PendingRebuilds.AddUnique(Actor);
+    }
+}
+
+void UExcavationTerrainChunkSubsystem::ProcessPendingRebuilds(double BudgetMs)
+{
+    const double Start = FPlatformTime::Seconds();
+    int32 Done = 0;
+    while (PendingRebuilds.Num() > 0)
+    {
+        if (Done > 0 && (FPlatformTime::Seconds() - Start) * 1000.0 >= BudgetMs)
+        {
+            break;
+        }
+        const TWeakObjectPtr<AExcavationTerrainChunkActor> Next = PendingRebuilds[0];
+        PendingRebuilds.RemoveAt(0, EAllowShrinking::No);
+        if (AExcavationTerrainChunkActor* Actor = Next.Get())
+        {
+            Actor->RebuildTerrainChunk();
+            ++Done;
+        }
+    }
+}
+
+int32 UExcavationTerrainChunkSubsystem::FlushPendingRebuilds()
+{
+    const int32 Count = PendingRebuilds.Num();
+    ProcessPendingRebuilds(TNumericLimits<float>::Max());
+    return Count;
+}
+
 void UExcavationTerrainChunkSubsystem::Tick(float DeltaTime)
 {
+    ProcessPendingRebuilds(FMath::Clamp(RebuildBudgetMs, 0.5f, 50.0f));
+
     LandscapeDiscoveryAccumulatorSeconds += FMath::Max(0.0f, DeltaTime);
     if (!bDidInitialLandscapeDiscovery
         || LandscapeDiscoveryAccumulatorSeconds >= FMath::Max(0.1f, LandscapeDiscoveryIntervalSeconds))
@@ -337,8 +376,15 @@ void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
     RemoveInvalidRegisteredActors();
 
     TArray<FIntVector> OrderedDesiredChunks = DesiredChunks.Array();
-    OrderedDesiredChunks.Sort([](const FIntVector& A, const FIntVector& B)
+    // Nearest first, so the ground under the player is there before anything else.
+    OrderedDesiredChunks.Sort([&PlayerChunk](const FIntVector& A, const FIntVector& B)
     {
+        const FIntVector DA = A - PlayerChunk;
+        const FIntVector DB = B - PlayerChunk;
+        const int64 HA = static_cast<int64>(DA.X) * DA.X + static_cast<int64>(DA.Y) * DA.Y;
+        const int64 HB = static_cast<int64>(DB.X) * DB.X + static_cast<int64>(DB.Y) * DB.Y;
+        if (HA != HB) return HA < HB;
+        if (FMath::Abs(DA.Z) != FMath::Abs(DB.Z)) return FMath::Abs(DA.Z) < FMath::Abs(DB.Z);
         if (A.X != B.X) return A.X < B.X;
         if (A.Y != B.Y) return A.Y < B.Y;
         return A.Z < B.Z;
@@ -348,7 +394,9 @@ void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
     const int32 SpawnBudget = FMath::Clamp(MaxChunksSpawnedPerTick, 1, 16);
     for (const FIntVector& Coordinate : OrderedDesiredChunks)
     {
-        if (SpawnedThisTick >= SpawnBudget)
+        // The player's own column is never held back by the budget: without it the player falls through.
+        const bool bUnderPlayer = Coordinate.X == PlayerChunk.X && Coordinate.Y == PlayerChunk.Y;
+        if (SpawnedThisTick >= SpawnBudget && !bUnderPlayer)
         {
             break;
         }
@@ -395,6 +443,11 @@ void UExcavationTerrainChunkSubsystem::HandleVolumeChanged(
         return;
     }
 
+    if (!bIsRollback && Record.EditType == EExcavationEditType::Carve)
+    {
+        RemoveGroundCoverAround(Record);
+    }
+
     const TArray<FIntVector> AffectedChunks = Excavation->GetAffectedChunksForEdit(Record);
     TSet<FIntVector> UniqueAffectedChunks;
     for (const FIntVector& Coordinate : AffectedChunks)
@@ -419,8 +472,53 @@ void UExcavationTerrainChunkSubsystem::HandleVolumeChanged(
         {
             if (AExcavationTerrainChunkActor* Actor = Entry.Get())
             {
-                Actor->RebuildTerrainChunk();
+                QueueRebuild(Actor);
             }
+        }
+    }
+}
+
+void UExcavationTerrainChunkSubsystem::RemoveGroundCoverAround(const FExcavationEditRecord& Record)
+{
+    // Grass, flowers and small plants are instances without collision; where the ground is dug away they would
+    // hang in the air over the hole. Trees and rocks (with collision, or taller than 1.5 m) are left alone.
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+    float Reach = Record.RadiusCm;
+    FVector Center = Record.CenterCm;
+    if (Record.ShapeType == EExcavationShapeType::Box)
+    {
+        Reach = static_cast<float>(Record.HalfExtentCm.GetMax());
+    }
+    else if (Record.ShapeType == EExcavationShapeType::Capsule)
+    {
+        Center = (Record.CenterCm + Record.EndCm) * 0.5;
+        Reach += static_cast<float>(FVector::Dist(Record.CenterCm, Record.EndCm)) * 0.5f;
+    }
+    Reach += 30.0f;
+    for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
+    {
+        UInstancedStaticMeshComponent* Instances = *It;
+        if (!IsValid(Instances) || Instances->GetWorld() != World || Instances->GetInstanceCount() == 0
+            || Instances->GetCollisionEnabled() != ECollisionEnabled::NoCollision || !Instances->GetStaticMesh())
+        {
+            continue;
+        }
+        if (Instances->GetStaticMesh()->GetBounds().BoxExtent.Z > 75.0)
+        {
+            continue;
+        }
+        if (!Instances->Bounds.GetBox().ExpandBy(Reach).IsInside(Center))
+        {
+            continue;
+        }
+        TArray<int32> Hits = Instances->GetInstancesOverlappingSphere(Center, Reach, true);
+        if (Hits.Num() > 0)
+        {
+            Instances->RemoveInstances(Hits);
         }
     }
 }
@@ -439,7 +537,7 @@ void UExcavationTerrainChunkSubsystem::HandleVolumeReset()
         {
             if (AExcavationTerrainChunkActor* Actor = Entry.Get())
             {
-                Actor->RebuildTerrainChunk();
+                QueueRebuild(Actor);
             }
         }
 

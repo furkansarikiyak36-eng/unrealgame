@@ -36,6 +36,8 @@
 #include "StructureManager.h"
 #include "SurvivalComponent.h"
 #include "WorldPhaseW1_Chunk/ChunkManager.h"
+#include "WorldCore/ExcavationVolumeSubsystem.h"
+#include "WorldCore/ExcavationTerrainChunkActor.h"
 #include "CableComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -328,6 +330,9 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	Input->BindAction(RotateAction, ETriggerEvent::Started, this, &AForestCharacter::RotateBuild);
 	Input->BindAction(CycleAction, ETriggerEvent::Started, this, &AForestCharacter::CycleBuildItem);
 	Input->BindAction(CancelAction, ETriggerEvent::Started, this, &AForestCharacter::CancelBuild);
+	UInputAction* ShovelAction = MakeAction(TEXT("IA_ToggleShovel"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(ShovelAction, EKeys::B);
+	Input->BindAction(ShovelAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleShovel);
 
 #if !UE_BUILD_SHIPPING
 	UInputAction* DebugGiveAction = MakeAction(TEXT("IA_DebugGive"), EInputActionValueType::Boolean);
@@ -609,6 +614,74 @@ void AForestCharacter::ToggleTrowel()
 		EquipTool(EForestTool::Trowel);
 		ShowMessage(TEXT("Mala (Chinking & Harç Aracı) kuşanıldı  —  Kütük duvarlara veya taş temele sol tıkla"));
 	}
+}
+
+void AForestCharacter::ToggleShovel()
+{
+	if (CurrentTool == EForestTool::Shovel)
+	{
+		EquipTool(EForestTool::Axe);
+		ShowMessage(TEXT("Balta kuşanıldı"));
+	}
+	else
+	{
+		EquipTool(EForestTool::Shovel);
+		ShowMessage(FString::Printf(TEXT("Kürek kuşanıldı  —  [Sol tık] kaz   [Sağ tık] toprak dök   (çuval %.2f / %.1f m³)"), LooseSoilM3, MaxLooseSoilM3));
+	}
+}
+
+FString AForestCharacter::ShovelStroke(const FVector& Point, const FVector& Normal, bool bFill)
+{
+	UExcavationVolumeSubsystem* Excavation = GetWorld() ? GetWorld()->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+	if (!Excavation)
+	{
+		return TEXT("Burası kazılamaz");
+	}
+	const FVector Out = Normal.IsNearlyZero() ? FVector::UpVector : Normal.GetSafeNormal();
+	const double Cell = Excavation->CellSizeCm / 100.0;
+	const float CellM3 = static_cast<float>(Cell * Cell * Cell);
+	constexpr float Swell = 1.25f; // dug soil is looser than the ground it came from
+	FExcavationEditRecord Record;
+	if (!bFill)
+	{
+		if (LooseSoilM3 >= MaxLooseSoilM3 - 0.01f)
+		{
+			return TEXT("Toprak çuvalı dolu  —  [Sağ tık] ile bir yere dök");
+		}
+		if (!Excavation->ApplySphereEdit(Point - Out * 20.f, ShovelRadiusCm, EExcavationEditType::Carve, Record))
+		{
+			return Record.BlockedCellCount > 0 ? TEXT("Kaya  —  kürek taşı kazamaz") : TEXT("Burada kazılacak toprak yok");
+		}
+		const float Gained = Record.MovedCellCount * CellM3 * Swell;
+		LooseSoilM3 = FMath::Min(MaxLooseSoilM3, LooseSoilM3 + Gained);
+		return FString::Printf(TEXT("Toprak kazıldı +%.2f m³  (çuval %.2f / %.1f m³)%s"), Gained, LooseSoilM3, MaxLooseSoilM3,
+			Record.BlockedCellCount > 0 ? TEXT("  —  altı kaya") : TEXT(""));
+	}
+	if (LooseSoilM3 < CellM3 * Swell * 0.5f)
+	{
+		return TEXT("Çuvalda toprak yok  —  önce kaz");
+	}
+	const FVector Center = Point + Out * 20.f;
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (FVector::Dist2D(Center, GetActorLocation()) < ShovelRadiusCm + Capsule->GetScaledCapsuleRadius()
+		&& Center.Z > GetActorLocation().Z - Capsule->GetScaledCapsuleHalfHeight() - ShovelRadiusCm)
+	{
+		return TEXT("Çok yakın  —  ayağının dibine dökemezsin");
+	}
+	if (!Excavation->ApplySphereEdit(Center, ShovelRadiusCm, EExcavationEditType::Fill, Record))
+	{
+		return TEXT("Burası zaten dolu");
+	}
+	const float Used = FMath::Min(LooseSoilM3, Record.MovedCellCount * CellM3 * Swell);
+	LooseSoilM3 = FMath::Max(0.f, LooseSoilM3 - Used);
+	return FString::Printf(TEXT("Toprak döküldü −%.2f m³  (çuval %.2f / %.1f m³)"), Used, LooseSoilM3, MaxLooseSoilM3);
+}
+
+FString AForestCharacter::TestShovel(FVector Point, FVector Normal, bool bFill)
+{
+	const FString Result = ShovelStroke(Point, Normal, bFill);
+	ShowMessage(Result);
+	return Result;
 }
 
 void AForestCharacter::UpdateTool(float DeltaSeconds)
@@ -2109,6 +2182,19 @@ void AForestCharacter::PerformHit()
 		ShowMessage(Enemy->IsAlive() ? TEXT("Düşmana vuruldu") : TEXT("Düşman öldü"));
 		return;
 	}
+	if (CurrentTool == EForestTool::Shovel)
+	{
+		// Ground: the voxel terrain, or any flat static surface standing in for it.
+		if (Hit.GetActor() && (Hit.GetActor()->IsA<AExcavationTerrainChunkActor>() || Hit.ImpactNormal.Z > 0.3f))
+		{
+			ShowMessage(ShovelStroke(Hit.ImpactPoint, Hit.ImpactNormal, false));
+		}
+		else
+		{
+			ShowMessage(TEXT("Kürek yalnız toprağa  —  yere bak"));
+		}
+		return;
+	}
 	if (CurrentTool == EForestTool::Trowel)
 	{
 		// Trowel applies chinking sealant to log walls, interior plaster, or mortar to stone foundations
@@ -2955,6 +3041,15 @@ void AForestCharacter::CancelBuild()
 		return;
 	}
 
+	if (CurrentTool == EForestTool::Shovel && !bBuildMode && !IsHandsBusy())
+	{
+		FHitResult Hit;
+		if (TraceFromView(ReachDistance, Hit))
+		{
+			ShowMessage(ShovelStroke(Hit.ImpactPoint, Hit.ImpactNormal, true));
+		}
+		return;
+	}
 	if (bBuildMode && bWallStartSet)
 	{
 		bWallStartSet = false;

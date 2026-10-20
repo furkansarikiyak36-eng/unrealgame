@@ -128,6 +128,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestLastMessage() const;
 	/** An axe hit on Log at a point of its surface given in its local space (point and outward normal), as PerformHit does. */
 	UFUNCTION(BlueprintCallable, Category = "Forest|Test") void TestShapeHit(ACarvableLog* Log, FVector LocalPoint, FVector LocalNormal, bool bChannel);
+	/** One shovel stroke at a ground point (as if aimed there): bFill dumps soil from the sack. Returns the message. */
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestShovel(FVector Point, FVector Normal, bool bFill);
+	UFUNCTION(BlueprintPure, Category = "Forest|Test") float TestLooseSoil() const { return LooseSoilM3; }
 	static bool IsProfileTool(ECarveTool Tool)
 	{
 		return Tool == ECarveTool::NotchRound || Tool == ECarveTool::NotchFlat || Tool == ECarveTool::Dovetail;
@@ -160,6 +163,10 @@ private:
 	void CraftPlank();
 	void ToggleBuildMode();
 	void ToggleTrowel();
+	/** [B] Shovel on/off. Left click digs soil into the sack, right click dumps it. Rock cannot be dug. */
+	void ToggleShovel();
+	/** Digs (or with bFill fills) a 45 cm ball of soil at Point; Normal points out of the ground. Returns the message. */
+	FString ShovelStroke(const FVector& Point, const FVector& Normal, bool bFill);
 	void RotateBuild();
 	void CycleBuildItem(const FInputActionValue& Value);
 	void CancelBuild();
@@ -407,6 +414,10 @@ private:
 
 	EForestTool CurrentTool = EForestTool::Axe;
 	float SwingTime = -1.f;
+	/** Loose soil in the sack, m3 (dug soil swells by 25 %). */
+	float LooseSoilM3 = 0.f;
+	static constexpr float MaxLooseSoilM3 = 1.0f;
+	static constexpr float ShovelRadiusCm = 45.f;
 	bool bPendingHit = false;
 
 	bool bWallStartSet = false;

@@ -80,6 +80,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Excavation|Persistence")
     bool ImportSnapshot(const FExcavationVolumeSnapshot& Snapshot, bool bReplaceExistingState = false);
 
+    /**
+     * Densities of the Side x Side x Side cells starting at BaseCell (X fastest, then Y, then Z), exactly what
+     * TrySampleDensityAtWorld gives at each cell centre, in one pass: the base source once per cell, then this
+     * block's overrides from the per-chunk index. Mesh rebuilds use it. False on invalid configuration or density.
+     */
+    bool SampleDensityBlock(const FIntVector& BaseCell, int32 Side, TArray<float>& OutDensities) const;
+
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool ResolveDensityAtCell(const FIntVector& Cell, float BaseDensity, float& OutDensity) const;
 
@@ -116,6 +123,13 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Config", meta = (ClampMin = "4"))
     int32 CellsPerChunkAxis = 32;
+
+    /**
+     * Base material IDs a carve never removes (rock). Only the unmodified base world is protected: cells someone
+     * filled are loose soil and can be dug again anywhere.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Rules")
+    TArray<int32> UndiggableMaterialIds = { 2 };
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Persistence", meta = (ClampMin = "1"))
     int32 MaxSnapshotOverrideCells = 2000000;

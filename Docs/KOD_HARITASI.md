@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (20 October 2026 17:26) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (20 October 2026 18:14) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -166,7 +166,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsLighterHeld() const` — F held: the lighter heats what is in sight (a piece of wood or a fire pit).
 - `void TakeEnemyHit(float Amount)` — An enemy hit on the player.
 - `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
-- `static bool IsProfileTool(ECarveTool Tool)` — An axe hit on Log at a point of its surface given in its local space (point and outward normal), as PerformHit does.
+- `static bool IsProfileTool(ECarveTool Tool)` — One shovel stroke at a ground point (as if aimed there): bFill dumps soil from the sack. Returns the message.
 - `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
 - `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
 - `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).

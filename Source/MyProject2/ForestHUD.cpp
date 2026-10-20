@@ -293,7 +293,8 @@ void AForestHUD::DrawHUD()
 		const float X0 = 20.f, Y0 = Canvas->ClipY - SlotH - 20.f;
 		const FString Tool = Player->GetCurrentTool() == EForestTool::Pickaxe
 			? TEXT("Kazma")
-			: (Player->GetCurrentTool() == EForestTool::Trowel ? TEXT("Mala [T]") : TEXT("Balta"));
+			: (Player->GetCurrentTool() == EForestTool::Trowel ? TEXT("Mala [T]")
+			: (Player->GetCurrentTool() == EForestTool::Shovel ? TEXT("Kürek [B]") : TEXT("Balta")));
 		const FString Labels[3] = { Tool, TEXT("\u2014"), TEXT("\u2014") };
 		const FString Titles[3] = { TEXT("Alet"), TEXT("Yiyecek"), TEXT("Su") };
 		for (int32 Index = 0; Index < 3; ++Index)

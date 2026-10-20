@@ -101,6 +101,14 @@ struct MYPROJECT2_API FExcavationEditRecord
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
     bool bCommitted = false;
+
+    /** Cells inside the shape left alone because their material cannot be dug (rock); set even when the edit fails. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
+    int32 BlockedCellCount = 0;
+
+    /** Cells that went from solid to empty (carve) or empty to solid (fill): the soil moved, in cells. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
+    int32 MovedCellCount = 0;
 };
 
 /** Persistable sparse override row. Runtime rollback ownership IDs are intentionally not saved. */

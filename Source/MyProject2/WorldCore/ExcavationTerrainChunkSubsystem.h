@@ -54,6 +54,20 @@ public:
     UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming", meta = (ClampMin = "0.01", ClampMax = "5.0"))
     float StreamingIntervalSeconds = 0.05f;
 
+    /**
+     * Edits queue their chunks; each frame rebuilds queued chunks until this many ms are spent (at least one).
+     * Rapid digging then rebuilds a chunk once instead of once per hit, and a hit never stalls a frame for long.
+     */
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Renderer", meta = (ClampMin = "0.5", ClampMax = "50.0"))
+    float RebuildBudgetMs = 4.0f;
+
+    UFUNCTION(BlueprintPure, Category = "Excavation|Renderer")
+    int32 GetPendingRebuildCount() const { return PendingRebuilds.Num(); }
+
+    /** Rebuilds every queued chunk now (tests, save/load). */
+    UFUNCTION(BlueprintCallable, Category = "Excavation|Renderer")
+    int32 FlushPendingRebuilds();
+
 protected:
     UFUNCTION()
     void HandleVolumeChanged(const FExcavationEditRecord& Record, bool bIsRollback);
@@ -77,6 +91,10 @@ protected:
 
     TMap<FIntVector, TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>> RegisteredChunks;
     TMap<FIntVector, TWeakObjectPtr<AExcavationTerrainChunkActor>> ManagedChunkActors;
+    void QueueRebuild(AExcavationTerrainChunkActor* Actor);
+    void RemoveGroundCoverAround(const FExcavationEditRecord& Record);
+    void ProcessPendingRebuilds(double BudgetMs);
+    TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>> PendingRebuilds;
     float StreamingAccumulatorSeconds = 0.0f;
     float LandscapeDiscoveryAccumulatorSeconds = 0.0f;
     float LandscapeDiscoveryIntervalSeconds = 1.0f;

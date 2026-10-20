@@ -8,6 +8,7 @@
 #include "ExcavationTerrainChunkSubsystem.h"
 #include "Engine/World.h"
 #include "NavigationSystem.h"
+#include "HAL/PlatformTime.h"
 
 namespace
 {
@@ -80,7 +81,9 @@ namespace
         FVector3d P0 = A;
         FVector3d P1 = B;
         FVector3d P2 = C;
-        const FVector3d Normal = FVector3d::CrossProduct(P1 - P0, P2 - P0);
+        // FDynamicMesh3 front faces (render culling, normals, one-sided physics) follow GeometryCore's
+        // VectorUtil::Normal = (C - A) x (B - A); wind so that points out of the solid.
+        const FVector3d Normal = FVector3d::CrossProduct(P2 - P0, P1 - P0);
         const FVector3d Outward = EmptyCentroid - SolidCentroid;
         if (FVector3d::DotProduct(Normal, Outward) < 0.0)
         {
@@ -117,9 +120,7 @@ namespace
         const int32 TetraNodeIds[4],
         const TArray<float>& Densities,
         const TArray<FVector3d>& Positions,
-        const FVector3d& WorldOrigin,
-        const UExcavationVolumeSubsystem* Excavation,
-        const TMap<int32, int32>& MaterialSlotByBaseId,
+        int32 MaterialSlotId,
         int32 TriangleLimit,
         bool& bExceededTriangleLimit)
     {
@@ -152,17 +153,6 @@ namespace
 
         SolidCentroid /= static_cast<double>(SolidCount);
         EmptyCentroid /= static_cast<double>(EmptyCount);
-
-        int32 MaterialSlotId = 0;
-        int32 BaseMaterialId = 0;
-        if (Excavation
-            && Excavation->TrySampleBaseMaterialIdAtWorld(FVector(WorldOrigin + SolidCentroid), BaseMaterialId))
-        {
-            if (const int32* ResolvedSlot = MaterialSlotByBaseId.Find(BaseMaterialId))
-            {
-                MaterialSlotId = *ResolvedSlot;
-            }
-        }
 
         if (SolidCount == 1)
         {
@@ -211,6 +201,22 @@ AExcavationTerrainChunkActor::AExcavationTerrainChunkActor()
 void AExcavationTerrainChunkActor::BeginPlay()
 {
     Super::BeginPlay();
+
+    // Project defaults when nothing is set: soil on top, rock (base material 2) where the walls reach bedrock or a boulder.
+    if (!SurfaceMaterial)
+    {
+        SurfaceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Excavation/MI_VoxelSoil.MI_VoxelSoil"));
+    }
+    if (StratifiedMaterialLayers.IsEmpty())
+    {
+        if (UMaterialInterface* Rock = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Excavation/MI_VoxelRock.MI_VoxelRock")))
+        {
+            FExcavationTerrainMaterialLayer Layer;
+            Layer.BaseMaterialId = 2;
+            Layer.Material = Rock;
+            StratifiedMaterialLayers.Add(Layer);
+        }
+    }
 
     if (RefreshChunkWorldTransform())
     {
@@ -374,6 +380,7 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
     const double CellSize = Excavation->CellSizeCm;
     const double HalfCell = CellSize * 0.5;
 
+    const double TimeStart = FPlatformTime::Seconds();
     TArray<float> Densities;
     TArray<FVector3d> Positions;
     Densities.SetNumUninitialized(SampleCount);
@@ -385,30 +392,51 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
         {
             for (int32 X = 0; X < Side; ++X)
             {
-                const int32 Sample = GridIndex(X, Y, Z, Side);
-                Positions[Sample] = FVector3d(
+                Positions[GridIndex(X, Y, Z, Side)] = FVector3d(
                     (static_cast<double>(X) * CellSize) + HalfCell,
                     (static_cast<double>(Y) * CellSize) + HalfCell,
                     (static_cast<double>(Z) * CellSize) + HalfCell);
-
-                const FVector WorldSample(
-                    (static_cast<double>(BaseCell.X + X) * CellSize) + HalfCell,
-                    (static_cast<double>(BaseCell.Y + Y) * CellSize) + HalfCell,
-                    (static_cast<double>(BaseCell.Z + Z) * CellSize) + HalfCell);
-
-                if (!Excavation->TrySampleDensityAtWorld(WorldSample, Densities[Sample]))
-                {
-                    ClearMeshAndCollision();
-                    return false;
-                }
             }
         }
+    }
+    if (!Excavation->SampleDensityBlock(BaseCell, Side, Densities))
+    {
+        ClearMeshAndCollision();
+        return false;
+    }
+
+    const double TimeSampled = FPlatformTime::Seconds();
+    LastSampleMs = static_cast<float>((TimeSampled - TimeStart) * 1000.0);
+
+    // All solid or all empty: no surface. Skip meshing, and the upload too when the chunk is already empty.
+    bool bAnySolid = false;
+    bool bAnyEmpty = false;
+    for (const float Density : Densities)
+    {
+        (Density >= SurfaceIsoLevel ? bAnySolid : bAnyEmpty) = true;
+        if (bAnySolid && bAnyEmpty)
+        {
+            break;
+        }
+    }
+    if (!bAnySolid || !bAnyEmpty)
+    {
+        LastMeshMs = 0.0f;
+        const bool bHadMesh = DynamicMeshComponent->GetMesh() && DynamicMeshComponent->GetMesh()->TriangleCount() > 0;
+        if (bHadMesh)
+        {
+            ClearMeshAndCollision();
+        }
+        LastUploadMs = static_cast<float>((FPlatformTime::Seconds() - TimeSampled) * 1000.0);
+        LastTriangleCount = 0;
+        return true;
     }
 
     UE::Geometry::FDynamicMesh3 CandidateMesh;
     CandidateMesh.EnableAttributes();
     CandidateMesh.Attributes()->EnableMaterialID();
     bool bExceededTriangleLimit = false;
+    const FVector3d ActorOrigin(GetActorLocation());
 
     for (int32 Z = 0; Z < Cells && !bExceededTriangleLimit; ++Z)
     {
@@ -426,6 +454,37 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
                         Side);
                 }
 
+                // Most cubes are wholly solid or wholly empty; only the ones the surface crosses make triangles.
+                int32 SolidCorners = 0;
+                for (int32 Corner = 0; Corner < 8; ++Corner)
+                {
+                    SolidCorners += Densities[CubeNodes[Corner]] >= SurfaceIsoLevel ? 1 : 0;
+                }
+                if (SolidCorners == 0 || SolidCorners == 8)
+                {
+                    continue;
+                }
+
+                // Material of the solid side, sampled once per surface cube.
+                int32 MaterialSlotId = 0;
+                if (MaterialSlotByBaseId.Num() > 1)
+                {
+                    FVector3d SolidCentroid(0.0, 0.0, 0.0);
+                    for (int32 Corner = 0; Corner < 8; ++Corner)
+                    {
+                        if (Densities[CubeNodes[Corner]] >= SurfaceIsoLevel) SolidCentroid += Positions[CubeNodes[Corner]];
+                    }
+                    SolidCentroid /= static_cast<double>(SolidCorners);
+                    int32 BaseMaterialId = 0;
+                    if (Excavation->TrySampleBaseMaterialIdAtWorld(FVector(ActorOrigin + SolidCentroid), BaseMaterialId))
+                    {
+                        if (const int32* ResolvedSlot = MaterialSlotByBaseId.Find(BaseMaterialId))
+                        {
+                            MaterialSlotId = *ResolvedSlot;
+                        }
+                    }
+                }
+
                 for (int32 Tetra = 0; Tetra < 6 && !bExceededTriangleLimit; ++Tetra)
                 {
                     int32 TetraNodes[4];
@@ -439,9 +498,7 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
                         TetraNodes,
                         Densities,
                         Positions,
-                        FVector3d(GetActorLocation()),
-                        Excavation,
-                        MaterialSlotByBaseId,
+                        MaterialSlotId,
                         FMath::Max(1000, MaxGeneratedTriangles),
                         bExceededTriangleLimit);
                 }
@@ -454,6 +511,20 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
         ClearMeshAndCollision();
         return false;
     }
+
+    // Face normals into the normal overlay (the renderer reads the overlay; vertices are not shared, so shading is flat).
+    if (UE::Geometry::FDynamicMeshNormalOverlay* Normals = CandidateMesh.Attributes() ? CandidateMesh.Attributes()->PrimaryNormals() : nullptr)
+    {
+        for (const int32 TriangleId : CandidateMesh.TriangleIndicesItr())
+        {
+            const int32 Element = Normals->AppendElement(static_cast<FVector3f>(CandidateMesh.GetTriNormal(TriangleId)));
+            Normals->SetTriangle(TriangleId, UE::Geometry::FIndex3i(Element, Element, Element));
+        }
+    }
+
+    const double TimeMeshed = FPlatformTime::Seconds();
+    LastMeshMs = static_cast<float>((TimeMeshed - TimeSampled) * 1000.0);
+    LastTriangleCount = CandidateMesh.TriangleCount();
 
     DynamicMeshComponent->SetMesh(MoveTemp(CandidateMesh));
     if (DynamicMeshComponent->GetMesh() && DynamicMeshComponent->GetMesh()->TriangleCount() > 0)
@@ -468,5 +539,6 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
     }
 
     UNavigationSystemV1::UpdateComponentInNavOctree(*DynamicMeshComponent);
+    LastUploadMs = static_cast<float>((FPlatformTime::Seconds() - TimeMeshed) * 1000.0);
     return true;
 }
