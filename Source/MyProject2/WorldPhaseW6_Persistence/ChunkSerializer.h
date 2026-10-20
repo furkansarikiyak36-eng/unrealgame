@@ -20,6 +20,7 @@ struct FSerializedCell
     UPROPERTY() bool bWaterSource=false;
     UPROPERTY() bool bWaterFlowing=false;
     UPROPERTY() float SoilMoisture=0.3f;
+    UPROPERTY() FSoilHydrologyState Hydrology;
     UPROPERTY() float SoilN=50.0f;
     UPROPERTY() float SoilP=30.0f;
     UPROPERTY() float SoilK=40.0f;
