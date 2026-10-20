@@ -174,7 +174,7 @@ float UWorldStateSubsystem::ComputeRainfallForDay(int32 DayNumber) const
     const float Roll = DailyRng.NextFloat();
     if (Roll >= 0.75f && Roll < 0.90f) return DailyRng.Range(3.0f, 15.0f);
     if (Roll >= 0.90f && Roll < 0.98f) return DailyRng.Range(15.0f, 40.0f);
-    if (Roll >= 0.98f) return DailyRng.Range(2.0f, 10.0f); // Snow is currently represented as precipitation water; no snowpack layer yet.
+    if (Roll >= 0.98f) return DailyRng.Range(2.0f, 10.0f); // The advanced hydrology solver routes precipitation into liquid water or snowpack.
     return 0.0f;
 }
 
@@ -211,7 +211,17 @@ void UWorldStateSubsystem::RequestChunkSimulation(UChunkState* Chunk,float Days)
 }
 void UWorldStateSubsystem::SimulateChunk(UChunkState* Chunk,float Days,float TargetDay)
 {
-    if(!Chunk||Days<=0)return; if(WaterSimulation) WaterSimulation->SimulateChunk(Chunk,Days); if(SoilSimulation) SoilSimulation->SimulateChunk(Chunk,Days,TemperatureC);
+    if (!Chunk || Days <= 0.0f) return;
+    if (AdvancedWaterSoilSimulation)
+    {
+        AdvancedWaterSoilSimulation->CellSizeMeters = ChunkSettings.GetCellSizeMeters();
+        AdvancedWaterSoilSimulation->SimulateChunk(Chunk, Days, TemperatureC, 0.55f);
+    }
+    else
+    {
+        if (WaterSimulation) WaterSimulation->SimulateChunk(Chunk, Days);
+        if (SoilSimulation) SoilSimulation->SimulateChunk(Chunk, Days, TemperatureC);
+    }
     if(FireSimulation) FireSimulation->SimulateChunk(Chunk,Days,WindSpeed,FVector2D::ZeroVector); if(DecaySimulation)DecaySimulation->SimulateChunk(Chunk,Days,TemperatureC);
     if(ChemistrySimulation)ChemistrySimulation->SimulateChunk(Chunk,Days); Chunk->Metadata.LastUpdateDay=(TargetDay>=0.0f)?TargetDay:WorldTime.ToTotalDays(); Chunk->Metadata.bHasPendingEvents=false;
 }
