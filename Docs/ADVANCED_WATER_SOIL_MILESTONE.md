@@ -31,7 +31,7 @@ The advanced solver is the authoritative water/soil step used by `UWorldStateSub
 
 ## Important model boundaries
 
-- Soil hydraulic properties are currently solver-wide tuning values plus the existing terrain permeability scalar. Per-cell soil texture-specific retention curves, van Genuchten parameters, macropore flow and capillary rise are not implemented.
+- Soil hydraulic properties use per-cell texture, compaction, organic matter, rooting depth and bedrock depth, combined with solver-wide tuning values. Per-cell calibrated retention curves, van Genuchten parameters, macropore flow and capillary rise are not implemented.
 - Groundwater receives deep drainage but has no lateral aquifer flow, spring emergence or water-table feedback yet.
 - Surface flow remains within the chunk grid. Cross-chunk edge exchange and watershed-scale routing are not implemented in this milestone.
 - Erosion currently tracks pressure/index and a sediment proxy; it does not deform terrain or move sediment to downstream cells.
@@ -42,7 +42,7 @@ The advanced solver is the authoritative water/soil step used by `UWorldStateSub
 ## Required Claude Code validation
 
 - Compile under UE 5.8/UHT and fix integration errors without removing the physical rules.
-- Run `MyProject2.Hydrology.MassBalance`, `MyProject2.Hydrology.SnowpackAndMelt` and `MyProject2.Hydrology.PersistenceRoundTrip` and `MyProject2.Hydrology.SoilTextureResponse` automation tests.
+- Run the `MyProject2.Hydrology.MassBalance`, `MyProject2.Hydrology.SnowpackAndMelt`, `MyProject2.Hydrology.PersistenceRoundTrip` and `MyProject2.Hydrology.SoilTextureResponse` automation tests.
 - Add tests for dry-soil infiltration, saturated-soil infiltration slowdown, frozen-soil inhibition, nutrient non-negativity, lateral-flow conservation, 1.0-day versus multi-day catch-up, serialization round-trip and legacy cell migration.
 - Check water balance over 1, 7 and 30 simulation days. Water balance should equal initial water plus explicit precipitation inputs minus modeled evapotranspiration and any future explicitly modeled external exports.
 - Profile large chunk counts and ensure the event system does not become the dominant cost.
