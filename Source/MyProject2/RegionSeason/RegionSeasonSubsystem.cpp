@@ -7,6 +7,7 @@
 
 void URegionSeasonSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+    Collection.InitializeDependency<USimulationSubsystem>();
     Super::Initialize(Collection);
     CurrentWorldDay = FMath::Max(1, InitialWorldDay);
     CurrentSeason = GetSeasonForWorldDay(CurrentWorldDay);
