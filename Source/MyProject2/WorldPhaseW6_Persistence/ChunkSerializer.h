@@ -13,6 +13,11 @@ struct FSerializedCell
     UPROPERTY() float TerrainDeformation=0.0f;
     UPROPERTY() float TerrainPermeability=0.5f;
     UPROPERTY() FName TerrainMaterialID=NAME_None;
+    UPROPERTY() EWorldSoilTexture SoilTexture=EWorldSoilTexture::Loam;
+    UPROPERTY() float SoilCompaction=0.0f;
+    UPROPERTY() float SoilOrganicMatterFraction=0.03f;
+    UPROPERTY() float BedrockDepthMeters=3.0f;
+    UPROPERTY() float RootingDepthMeters=0.6f;
     UPROPERTY() float WaterVolume=0.0f;
     UPROPERTY() float WaterLevel=0.0f;
     UPROPERTY() float WaterFlowRate=0.0f;
