@@ -147,6 +147,7 @@ namespace WorldScanSystem
 		FVector TraceEnd = FVector::ZeroVector;
 		FVector QueryCenter = FVector::ZeroVector;
 		ECollisionChannel TraceChannel = ECC_Visibility;
+		ECollisionChannel OverlapChannel = ECC_WorldDynamic;
 		bool bTraceComplex = false;
 		FShapeTraceRequest ShapeRequest;
 		FVector ShapeTraceStart = FVector::ZeroVector;
