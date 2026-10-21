@@ -2890,16 +2890,42 @@ bool AForestCharacter::TraceFromView(float Distance, FHitResult& OutHit, bool bI
 {
 	const FVector Start = Camera->GetComponentLocation();
 	const FVector End = Start + Camera->GetForwardVector() * Distance;
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(ForestView), false, this);
+	bool bHit = false;
+
 	if (bIgnorePlans)
 	{
-		// Placing pieces looks through see-through wall plans; they are only filled with [E].
+		// Preserve the existing wall-plan exception: only its ghost components are ignored.
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(ForestView), false, this);
+		Params.bReturnPhysicalMaterial = true;
 		for (TActorIterator<ALogWallBlueprint> It(GetWorld()); It; ++It)
 		{
 			Params.AddIgnoredComponent(It->GetGhosts());
 		}
+		bHit = GetWorld() && GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);
 	}
-	return GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);
+	else
+	{
+		WorldScanSystem::FScanResult Scan;
+		bHit = WorldScanSystem::Trace(GetWorld(), Start, End, this, Scan, ECC_Visibility, false);
+		if (bHit)
+		{
+			OutHit = Scan.Hit;
+		}
+	}
+
+	// Keep acquisition and interpretation together so all existing view-trace callers
+	// can query the same normalized classification without duplicating hit logic.
+	WorldScanSystem::FScanResult AnalysisInput;
+	AnalysisInput.bHit = bHit;
+	AnalysisInput.Hit = OutHit;
+	AnalysisInput.TraceStart = Start;
+	AnalysisInput.TraceEnd = End;
+	AnalysisInput.TraceLengthCm = Distance;
+	if (!WorldScanSystem::AnalyzeHit(AnalysisInput, LastWorldAnalysis))
+	{
+		LastWorldAnalysis = WorldScanSystem::FWorldAnalysis{};
+	}
+	return bHit;
 }
 
 void AForestCharacter::UpdateFocus()

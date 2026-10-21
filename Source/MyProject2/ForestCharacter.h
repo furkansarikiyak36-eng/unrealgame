@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"
 #include "ForestTypes.h"
+#include "WorldScanSystem.h"
 #include "CarvableLog.h"
 #include "ForestCharacter.generated.h"
 
@@ -252,6 +253,8 @@ private:
 
 	UInputAction* MakeAction(const TCHAR* Name, EInputActionValueType Type);
 	bool TraceFromView(float Distance, FHitResult& OutHit, bool bIgnorePlans = false) const;
+	/** Most recent normalized world-hit analysis produced by TraceFromView. */
+	const WorldScanSystem::FWorldAnalysis& GetLastWorldAnalysis() const { return LastWorldAnalysis; }
 	void UpdateFocus();
 	void UpdateBuildPreview();
 	bool ComputeBuildTransform(FTransform& OutTransform, const UInstancedStaticMeshComponent** OutSnappedTo = nullptr) const;
@@ -273,6 +276,7 @@ private:
 	/** Raw UnrealExport logs: the axe hit is a cross cut, a split, hewing or a channel by where it lands (RawLogShapes). */
 	void ApplyShapeHit(ACarvableLog* Log, const FHitResult& Hit);
 	/** R on a raw log: hits open a channel (gutter, then trough) instead of cutting / splitting / hewing. */
+	mutable WorldScanSystem::FWorldAnalysis LastWorldAnalysis;
 	bool bChannelMode = false;
 	TWeakObjectPtr<ACarvableLog> ShapeTarget;
 	uint8 ShapeAction = 0;
