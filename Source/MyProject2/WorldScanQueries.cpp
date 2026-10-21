@@ -2,6 +2,7 @@
 
 #include "WorldScanSystem.h"
 
+#include "CollisionShape.h"
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
