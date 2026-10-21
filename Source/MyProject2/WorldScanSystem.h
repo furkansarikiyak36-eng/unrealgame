@@ -133,6 +133,54 @@ namespace WorldScanSystem
 		bool bRigidBodyAwake = false;
 	};
 
+	/** Selective orchestration request. Disabled methods do no work. */
+	struct FWorldScanRequest
+	{
+		bool bRunRaycast = true;
+		bool bRunShapeTrace = false;
+		bool bRunOverlapSphere = false;
+		bool bRunOverlapBox = false;
+		bool bRunSurfaceSampling = false;
+		bool bRunBoundsAnalysis = true;
+		bool bRunPhysicsQuery = true;
+		FVector TraceStart = FVector::ZeroVector;
+		FVector TraceEnd = FVector::ZeroVector;
+		FVector QueryCenter = FVector::ZeroVector;
+		ECollisionChannel TraceChannel = ECC_Visibility;
+		bool bTraceComplex = false;
+		FShapeTraceRequest ShapeRequest;
+		FVector ShapeTraceStart = FVector::ZeroVector;
+		FVector ShapeTraceEnd = FVector::ZeroVector;
+		float OverlapRadiusCm = 150.f;
+		FVector OverlapHalfExtentCm = FVector(100.f);
+		FQuat OverlapRotation = FQuat::Identity;
+		FGeometrySampleSettings GeometrySettings;
+	};
+
+	struct FWorldScanBundle
+	{
+		bool bRaycastAttempted = false;
+		bool bShapeTraceAttempted = false;
+		bool bOverlapSphereAttempted = false;
+		bool bOverlapBoxAttempted = false;
+		bool bSurfaceSamplingAttempted = false;
+		bool bBoundsAnalysisAttempted = false;
+		bool bPhysicsQueryAttempted = false;
+		FScanResult Raycast;
+		FWorldAnalysis TargetAnalysis;
+		FShapeScanResult ShapeTrace;
+		FOverlapScanResult OverlapSphere;
+		FOverlapScanResult OverlapBox;
+		FGeometrySampleResult Surface;
+		FBoundsAnalysis Bounds;
+		FPhysicsStateAnalysis Physics;
+	};
+
+	/** Execute only the methods enabled in the request; raycast hit supplies a default target for bounds/physics. */
+	MYPROJECT2_API bool ExecuteScanPlan(UWorld* World, const FWorldScanRequest& Request,
+		const AActor* ActorToIgnore, const AActor* TargetActorOverride,
+		const UPrimitiveComponent* TargetComponentOverride, FWorldScanBundle& OutBundle);
+
 	/** Method 1: line trace. */
 	MYPROJECT2_API bool Trace(UWorld* World, const FVector& Start, const FVector& End,
 		const AActor* ActorToIgnore, FScanResult& OutResult,
