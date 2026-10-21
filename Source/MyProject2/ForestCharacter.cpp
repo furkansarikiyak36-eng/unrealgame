@@ -1538,6 +1538,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	}
 	// A split piece onto a lying log: a floor board, flat face up, resting on it.
 	AActor* Lower = HitActor;
+	const FVector SnapAimPoint = SelectedSnapPointId != NAME_None && SocketNormal.Z > 0.5f ? SocketChosen : Hit.ImpactPoint;
 	// Snap points on every face of a lying log: aimed at its front, back, bottom or an end (not the top, which keeps
 	// the wall rules below), the piece attaches to that face at the nearest 75 cm line. Its direction to the log is the
 	// nearest of 0 / 45 / 90 degrees from the view, as everywhere: parallel beside it, square into it (a T), or at 45.
@@ -1702,7 +1703,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			else
 			{
 				// Let into the log a little (a seat is cut into it when the post goes in).
-				const FVector Foot(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, BaseCentre.Z + BaseRadius - JointSeatDepth(BaseRadius, Piece->GetRadius()));
+				const FVector Foot(SnapAimPoint.X, SnapAimPoint.Y, BaseCentre.Z + BaseRadius - JointSeatDepth(BaseRadius, Piece->GetRadius()));
 				PlaceTransform = Piece->GetStandTransform(Foot, Facing.Rotation().Yaw);
 				StandBase = const_cast<ACarvableLog*>(Base);
 				CarryPlace = ECarryPlace::Stand;
@@ -1711,7 +1712,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			return;
 		}
 	}
-	if (Lower && Lower->IsA<ACarvableLog>() && ACarvableLog::ComputeFloorPlacement(Lower, Hit.ImpactPoint, GetActorLocation(), Piece, PlaceTransform))
+	if (Lower && Lower->IsA<ACarvableLog>() && ACarvableLog::ComputeFloorPlacement(Lower, SnapAimPoint, GetActorLocation(), Piece, PlaceTransform))
 	{
 		CarryPlace = ECarryPlace::Floor;
 		bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
@@ -1803,12 +1804,12 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			// The new log runs to the parallel log of the opposite wall when there is one and seats on both.
 			if (FMath::Abs(Delta) > 67.5f)
 			{
-				const float AimAlong = FVector::DotProduct(Hit.ImpactPoint - LowerCentre, FVector(LowerAxis.X, LowerAxis.Y, 0.f).GetSafeNormal());
+				const float AimAlong = FVector::DotProduct(SnapAimPoint - LowerCentre, FVector(LowerAxis.X, LowerAxis.Y, 0.f).GetSafeNormal());
 				if (LowerHalf - FMath::Abs(AimAlong) <= ACarvableLog::ModuleLength)
 				{
 					TArray<ACarvableLog*> Nearby;
 					FindLocalLogs(GetWorld(), Hit.ImpactPoint, Piece->GetLength() + 50.f, Nearby);
-					if (ACarvableLog::ComputeCornerPlacement(LowerLog, Hit.ImpactPoint, GetActorLocation(), Piece, Nearby, CrossPlacement))
+					if (ACarvableLog::ComputeCornerPlacement(LowerLog, SnapAimPoint, GetActorLocation(), Piece, Nearby, CrossPlacement))
 					{
 						CrossLower = LowerLog;
 						CarryPlace = ECarryPlace::Corner;
@@ -1829,7 +1830,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				const float Sector = Sectors[Index];
 				if (Sector == 0.f)
 				{
-					if (ComputeStackPlacement(LowerLog, Hit.ImpactPoint, Piece, PlaceTransform))
+					if (ComputeStackPlacement(LowerLog, SnapAimPoint, Piece, PlaceTransform))
 					{
 						CarryPlace = ECarryPlace::Stack;
 						bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
@@ -1838,7 +1839,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				}
 				else if (Sector == 90.f)
 				{
-					if (ACarvableLog::ComputeCrossPlacement(LowerLog, Hit.ImpactPoint, GetActorLocation(), Piece, CrossPlacement))
+					if (ACarvableLog::ComputeCrossPlacement(LowerLog, SnapAimPoint, GetActorLocation(), Piece, CrossPlacement))
 					{
 						CrossLower = LowerLog;
 						CarryPlace = ECarryPlace::Across;
@@ -1846,7 +1847,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 						return;
 					}
 				}
-				else if (ACarvableLog::ComputeComplementarySnapPlacement(LowerLog, Hit.ImpactPoint, Piece, ReferenceYaw,
+				else if (ACarvableLog::ComputeComplementarySnapPlacement(LowerLog, SnapAimPoint, Piece, ReferenceYaw,
 					ReferenceYaw + Sector, CrossPlacement))
 				{
 					CrossLower = LowerLog;
@@ -1862,7 +1863,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	}
 	// Onto a lying log: square across it, notched (whichever mode is chosen, a post does not stand on a log).
 	if (Lower && (Lower->IsA<ACarvableLog>() || Lower->IsA<APickupItem>())
-		&& ACarvableLog::ComputeCrossPlacement(Lower, Hit.ImpactPoint, GetActorLocation(), Piece, CrossPlacement))
+		&& ACarvableLog::ComputeCrossPlacement(Lower, SnapAimPoint, GetActorLocation(), Piece, CrossPlacement))
 	{
 		CrossLower = Lower;
 		CarryPlace = ECarryPlace::Across;
