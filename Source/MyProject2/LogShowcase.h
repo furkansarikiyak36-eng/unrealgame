@@ -35,6 +35,13 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Showcase")
 	float StationSpacingCm = 1400.f;
 
+	/**
+	 * Build the stations when play starts. Off: the stations are baked into the level instead (Scripts/bake_log_showcase.sh
+	 * builds them once in play with the real mechanics and places static copies in the map).
+	 */
+	UPROPERTY(EditAnywhere, Category = "Showcase")
+	bool bBuildOnPlay = false;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -81,6 +88,7 @@ private:
 	void StationHauling();
 	void StationModuleOpening();
 	void StationFaceSockets();
+	void StationUnderSockets();
 
 	FVector StationSignSpot;
 	FString StationTitle;

@@ -126,6 +126,10 @@ int32 UExcavationTerrainChunkSubsystem::FlushPendingRebuilds()
 
 void UExcavationTerrainChunkSubsystem::Tick(float DeltaTime)
 {
+    if (bGroundDisabledForWorld)
+    {
+        return;
+    }
     ProcessPendingRebuilds(FMath::Clamp(RebuildBudgetMs, 0.5f, 50.0f));
 
     LandscapeDiscoveryAccumulatorSeconds += FMath::Max(0.0f, DeltaTime);
@@ -307,6 +311,14 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
 void UExcavationTerrainChunkSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
     Super::OnWorldBeginPlay(InWorld);
+    for (TActorIterator<AActor> It(&InWorld); It; ++It)
+    {
+        if (It->ActorHasTag(TEXT("NoDiggableGround")))
+        {
+            bGroundDisabledForWorld = true;
+            return;
+        }
+    }
     if (!bEnableAutomaticStreaming || !InWorld.IsGameWorld())
     {
         return;
@@ -483,6 +495,10 @@ AExcavationTerrainChunkActor* UExcavationTerrainChunkSubsystem::SpawnManagedChun
 
 void UExcavationTerrainChunkSubsystem::EnsureGroundAt(const FVector& Location)
 {
+    if (bGroundDisabledForWorld)
+    {
+        return;
+    }
     UWorld* World = GetWorld();
     UExcavationVolumeSubsystem* Excavation = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
     if (!Excavation || !bEnableAutomaticStreaming || !World->IsGameWorld())

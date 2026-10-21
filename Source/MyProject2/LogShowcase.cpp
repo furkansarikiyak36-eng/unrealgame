@@ -30,6 +30,10 @@ ALogShowcase::ALogShowcase()
 void ALogShowcase::BeginPlay()
 {
 	Super::BeginPlay();
+	if (!bBuildOnPlay)
+	{
+		return;
+	}
 	// After the player is spawned and the ground is in.
 	FTimerHandle Start;
 	GetWorldTimerManager().SetTimer(Start, [this]() { BuildAll(); }, 1.5f, false);
@@ -239,6 +243,7 @@ FString ALogShowcase::BuildAll()
 	StationHauling();
 	StationModuleOpening();
 	StationFaceSockets();
+	StationUnderSockets();
 
 	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
 	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
@@ -586,6 +591,11 @@ void ALogShowcase::StationFaceSockets()
 		{ TEXT("uç B, uca uç uzatma"),     A,       0.f,   0.f, static_cast<uint8>(EHold::Lay),   150 },
 		{ TEXT("uç A, ucuna dik (T)"),    -A,       0.f,  90.f, static_cast<uint8>(EHold::Lay),   150 },
 		{ TEXT("ön yüz, yanına direk"),    Side,   75.f,   0.f, static_cast<uint8>(EHold::Stand), 150 },
+		{ TEXT("ön yüz, dik (T)"),         Side,  -75.f,  90.f, static_cast<uint8>(EHold::Lay),   150 },
+		{ TEXT("ön yüz, 45°"),             Side,    0.f, -45.f, static_cast<uint8>(EHold::Lay),   150 },
+		{ TEXT("uç B, 45°"),               A,       0.f,  45.f, static_cast<uint8>(EHold::Lay),   150 },
+		{ TEXT("uç A, 45°"),              -A,       0.f, -45.f, static_cast<uint8>(EHold::Lay),   150 },
+		{ TEXT("uç B, ucuna direk"),       A,       0.f,   0.f, static_cast<uint8>(EHold::Stand), 150 },
 	};
 	for (const FCase& Case : Cases)
 	{
@@ -606,5 +616,35 @@ void ALogShowcase::StationFaceSockets()
 		}
 		(void)View;
 	}
+	EndStation();
+}
+
+
+// 13. The bottom face: a log raised on two posts as a beam, a log laid under it and a support post under it.
+void ALogShowcase::StationUnderSockets()
+{
+	BeginStation(12, TEXT("Alt yüz: kirişin altına paralel kütük ve destek direği"));
+	ACarvableLog* PostA = StandAt(Mesh(150), O - R * 112.f, FYaw, TEXT("direk 1"));
+	StandAt(Mesh(150), O + R * 113.f, FYaw, TEXT("direk 2"));
+	ACarvableLog* Beam = OnPostTop(Mesh(300), PostA, FYaw + 90.f, TEXT("kiriş"), P(EPlace::Beam));
+	FVector C, A;
+	float Radius, Half;
+	if (!Beam || !ACarvableLog::GetLogAxis(Beam, C, A, Radius, Half))
+	{
+		EndStation();
+		return;
+	}
+	A = FVector(A.X, A.Y, 0.f).GetSafeNormal();
+	const float AxisYaw = A.Rotation().Yaw;
+	auto Under = [&](const TCHAR* What, float Along, uint8 Hold, int32 Length)
+	{
+		const FVector Aim = C + A * Along - FVector::UpVector * Radius;
+		Player->SetActorLocation(Aim - FVector::UpVector * 100.f - FRotator(0.f, AxisYaw - 90.f, 0.f).Vector() * 200.f, false, nullptr, ETeleportType::TeleportPhysics);
+		ACarvableLog* Piece = Spawn(Mesh(Length));
+		const uint8 Got = Piece ? P(Player->PlaceForShowcase(Piece, Beam, Aim, -FVector::UpVector, AxisYaw - 90.f, static_cast<EHold>(Hold))) : P(EPlace::None);
+		Note(What, Got, P(EPlace::Socket));
+	};
+	Under(TEXT("alt yüz, altına paralel"), 0.f, static_cast<uint8>(EHold::Lay), 150);
+	Under(TEXT("alt yüz, destek direği"), 75.f, static_cast<uint8>(EHold::Stand), 150);
 	EndStation();
 }

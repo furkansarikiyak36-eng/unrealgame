@@ -115,4 +115,6 @@ protected:
     float LandscapeDiscoveryAccumulatorSeconds = 0.0f;
     float LandscapeDiscoveryIntervalSeconds = 1.0f;
     bool bDidInitialLandscapeDiscovery = false;
+    /** A level with an actor tagged NoDiggableGround keeps its own ground: no voxel ground is built there. */
+    bool bGroundDisabledForWorld = false;
 };

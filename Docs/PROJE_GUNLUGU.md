@@ -1132,3 +1132,11 @@ Kullanıcı: "asıl soruna çözüm bulamamışsın; her log snap noktası olmal
 - Önizleme: taşırken bakılan yüzün snap noktaları beyaz küçük artı, seçilen yeşil ve büyük. HUD "[Sol tık] yan yana (ön yüz) — bakışını çevirerek 0 / 45 / 90"; mesaj "Kütük kondu: …".
 - Vitrin 12. istasyon: 6/6 (ön yan yana: merkezler arası 35 cm; arka T: merkez 92,5 = 17,5 + 75; arka 45°; uç uzatma: merkez 225 = 150 + 75; uca dik T; yanına direk). Toplam 118/118.
 - Not: snap işaretleri yalnız taşırken görünür (ekran görüntüsünde yok); oyunda denenmeli.
+
+### 2026-10-21 — LogShowcase artık Play'de kurulmuyor; bütün snap varyasyonları haritaya pişirildi (CC)
+Kullanıcı: "Play'de oynatılan şeyleri kaldır; tüm snap varyasyonlarında oluşanları sahneye diz — Play değil, sahneye".
+- `ALogShowcase::bBuildOnPlay` (varsayılan kapalı): Play'de kendiliğinden kurulum yok. Kurulum yalnız pişirme aracıyla: `Scripts/bake_log_showcase.sh` → Play'de istasyonları bir kez gerçek yerleştirmeyle kurar (`bake_showcase_capture.py`), her kütük parçasını (kesik ve çentikleriyle) `/Game/LogShowcase/Baked/SM_ShowcasePiece_NNN` statik mesh'ine çevirir (aynı parçalar tek asset), Play'i kapatır ve editör haritasına aynı yerlerine `StaticMeshActor` olarak dizer (`bake_showcase_place.py`, outliner klasörü Showcase/Baked; yeniden pişirince eskisi silinir). Tabelalar `TextRenderActor`, araba/kızak/raf parçaları da statik olarak.
+- Yeni varyasyonlar: ön yüze T ve 45°, uç A/B'den 45°, ucuna direk; 13. istasyon alt yüz (iki direk üstündeki kirişin altına paralel kütük ve destek direği).
+- Haritanın kendi zemini: şablon zemini z=0'a alındı, `NoDiggableGround` etiketi (bu etiket olan haritada voksel zemin kurulmaz — `UExcavationTerrainChunkSubsystem::bGroundDisabledForWorld`) ve çarpışma profili `BlockAll` (şablondaki `BlockAllDynamic` WorldDynamic olduğu için yapı desteği ve zemin ışınları görmüyordu; direkler devriliyor, kirişler kurulamıyordu).
+- Pişirme sırasında eski pişmiş kopyalar Play dünyasından silinir (önce kopyaların üstüne kurup tabelaları iki katına çıkarıyordu).
+- Sonuç: 128/128 yerleştirme; haritada 143 kütük (25 asset), 11 araba parçası, 13 tabela. Editör görüntüsünde (Play'siz) istasyonlar ve kare kulübe görünüyor. Pişmiş kütükler statik: oyunda kesilip taşınmaz, üzerinde yürünür.
