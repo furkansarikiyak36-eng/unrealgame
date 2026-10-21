@@ -544,6 +544,7 @@ private:
 	TWeakObjectPtr<AActor> CachedSupportPreviewTarget;
 	ECarryPlace CachedSupportPreviewMode = ECarryPlace::None;
 	FName CachedSupportPreviewSnapPointId = NAME_None;
+	int32 CachedSupportPreviewStructureVersion = INDEX_NONE;
 	FTransform CachedSupportPreviewTransform;
 	TWeakObjectPtr<AActor> PlaceTarget;
 	/** Re-checks the structure after a piece went in or came out; says how many pieces fell. */
