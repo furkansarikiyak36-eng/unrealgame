@@ -55,6 +55,8 @@ namespace StructureLink
 	FString DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log);
 	/** Something in the structure changed: the next Features() works it out afresh. */
 	void MarkChanged();
+	/** Monotonic version incremented whenever the structural graph is invalidated. */
+	int32 Version();
 
 	/** Every standing piece with its role, whether it rests on the ground, and what holds it: for reading what the graph sees. */
 	FString Describe(UWorld* World);
