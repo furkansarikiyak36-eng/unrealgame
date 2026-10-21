@@ -55,6 +55,15 @@ AHaulCart* AHaulCart::Spawn(UWorld* World, const FVector& Ground, float Yaw, EHa
 	return Cart;
 }
 
+void AHaulCart::SetKind(EHaulKind NewKind)
+{
+	if (Loaded.Num() > 0 || NewKind == Kind)
+	{
+		return;
+	}
+	Configure(NewKind);
+}
+
 FString AHaulCart::KindName(EHaulKind Kind)
 {
 	switch (Kind)

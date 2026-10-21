@@ -24,7 +24,8 @@ class MYPROJECT2_API AHarvestableActor : public AActor
 public:
 	AHarvestableActor();
 
-	/** Copies mesh and materials from a level placed actor and sizes health and drops from it. */
+	/** Copies mesh/materials and initializes health/drop balance from a placed source prop. */
+	UFUNCTION(BlueprintCallable, Category = "Harvest")
 	void InitFrom(const UStaticMeshComponent* Source, EHarvestType InType);
 
 	/** Lays a big log of the given stage (1 or 2) on the ground, centred at Center along Direction. */

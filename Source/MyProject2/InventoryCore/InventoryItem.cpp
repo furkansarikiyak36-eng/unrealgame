@@ -6,7 +6,7 @@ bool UInventoryItemData::ValidateData(FString& OutError) const
 {
     if (ItemID.IsNone()) { OutError = TEXT("ItemID boş"); return false; }
     if (MaxStack <= 0) { OutError = TEXT("MaxStack <= 0"); return false; }
-    if (Weight < 0.0f) { OutError = TEXT("Weight < 0"); return false; }
+    if (!FMath::IsFinite(Weight) || Weight < 0.0f) { OutError = TEXT("Weight must be finite and >= 0"); return false; }
     if (!bStackable && MaxStack != 1) { OutError = TEXT("Stackable olmayan eşyanın MaxStack değeri 1 olmalı"); return false; }
     OutError.Empty(); return true;
 }
@@ -26,7 +26,15 @@ UInventoryItemData* UInventoryItemLibrary::FindItemData(FName ItemID)
 }
 void UInventoryItemLibrary::RegisterItemData(UInventoryItemData* ItemData)
 {
-    if (ItemData && !ItemData->ItemID.IsNone()) ItemRegistry.Add(ItemData->ItemID, ItemData);
+    if (!ItemData) return;
+    FString ValidationError;
+    if (!ItemData->ValidateData(ValidationError))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Inventory item definition '%s' rejected: %s"),
+            *ItemData->GetName(), *ValidationError);
+        return;
+    }
+    ItemRegistry.Add(ItemData->ItemID, ItemData);
 }
 TArray<UInventoryItemData*> UInventoryItemLibrary::GetAllItems()
 {

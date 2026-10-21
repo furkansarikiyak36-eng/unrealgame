@@ -27,6 +27,10 @@ class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UCableComponent;
 class ULineBatchComponent;
+class UStoneCarryComponent;
+class UStonePlacementComponent;
+class UInventoryComponent;
+class AStoneActor;
 
 /**
  * First person survival character: chop trees, break rocks, pick up drops,
@@ -45,6 +49,10 @@ public:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 	int32 GetItemCount(EForestItem Item) const;
+	/** Canonical stack inventory shared with storage, crafting and persistence. */
+	UInventoryComponent* GetInventoryComponent() const { return CoreInventory; }
+	/** Drop stackable inventory resources into the world; stock is consumed only after spawn succeeds. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory") AActor* DropInventoryItem(EForestItem Item, int32 Count = 1);
 
 	/** Backpack (GDD 6.3): 24 slots, stacks of 20. */
 	static constexpr int32 InventorySlots = 24;
@@ -236,8 +244,10 @@ private:
 
 	/** Adds as many as fit in the backpack; returns how many went in. */
 	int32 AddItem(EForestItem Item, int32 Count);
-	/** Would Count of Item fit, after Freed of FreedItem left the backpack? */
-	bool CanAddItem(EForestItem Item, int32 Count, EForestItem FreedItem = EForestItem::None, int32 Freed = 0) const;
+	/** Would the full stack fit without partially consuming the world pickup? */
+	bool CanAddItem(EForestItem Item, int32 Count) const;
+	/** Adds definitions for this project's stackable items to the canonical inventory. */
+	void InitializeCoreInventoryDefinitions();
 	void ToggleInventory();
 	bool RemoveItem(EForestItem Item, int32 Count);
 	void Craft(EForestItem Input, int32 InputCount, EForestItem Output, int32 OutputCount);
@@ -248,6 +258,16 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USurvivalComponent> Survival;
+
+	UPROPERTY(VisibleAnywhere, Category = "Inventory")
+	TObjectPtr<UInventoryComponent> CoreInventory;
+
+	/** Physical stone handling uses the same actor from pickup through placement. */
+	UPROPERTY(VisibleAnywhere, Category = "Stone")
+	TObjectPtr<UStoneCarryComponent> StoneCarry;
+
+	UPROPERTY(VisibleAnywhere, Category = "Stone")
+	TObjectPtr<UStonePlacementComponent> StonePlacement;
 
 	/** Heavy actions cost stamina (GDD 6.1). */
 	UPROPERTY(EditAnywhere, Category = "Forest")
@@ -312,7 +332,7 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Forest")
 	float SprintSpeed = 650.f;
 
-	TMap<EForestItem, int32> Inventory;
+	// Item counts now have one owner: CoreInventory. Physical logs remain ACarvableLog actors.
 	bool bInventoryOpen = false;
 	bool bAdminMode = false;
 	TWeakObjectPtr<AHarvestableActor> FocusedHarvestable;

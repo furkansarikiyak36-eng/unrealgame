@@ -278,7 +278,8 @@ namespace
 		{ TEXT("Oyma: düz çentik"), TEXT("[R] Düz çentik: köşe, orta ya da tam uç (uç geçmesi)  |  [Tekerlek] derinlik  |  2 vuruş") },
 		{ TEXT("Oyma: enine kesim"), TEXT("[R] Enine kesim: 65 cm'lik modül çizgilerinden birine bak  |  2 vuruş") },
 		{ TEXT("Oyma: boyuna yarma"), TEXT("[R] Boyuna yarma  |  [Tekerlek] dikey/yatay  |  2 vuruş") },
-		{ TEXT("Uç: sivriltme (kazık)"), TEXT("[R] Sivri uç, kütüğün ucuna bak, 2 vuruş") },
+		{ TEXT("Oluk: önce boyuna yar, sonra yarım kütüğe kanal aç"), TEXT("Yuvarlak kütüğe oluk açılmaz. [R] Boyuna yarma yap; yarım kütüğün düz yüzüne bakıp [R] Oluk seç ve aynı yere 2 vuruş yap.") },
+		{ TEXT("Uç: sivriltme (malzeme hazırlama)"), TEXT("[R] Sivri uç, kütüğün ucuna bak, 2 vuruş. Bu tek başına işlevsel tuzak değildir; kazık için dik yerleştirip zemine sabitlemelisin.") },
 		{ TEXT("Uç: pah kırma"), TEXT("[R] Pah, diğer ucuna bak, 2 vuruş") },
 		{ TEXT("Uç: düzeltme"), TEXT("[R] Uç düzeltme, sivri ya da pahlı uca bak, 2 vuruş (sivri uç geri kesilir)") },
 		{ TEXT("Kırlangıç kuyruğu aç"), TEXT("[R] Kırlangıç, kütüğün bir geçme noktasına bak, 2 vuruş") },
@@ -287,11 +288,11 @@ namespace
 		{ TEXT("Payanda: direk ile kirişin arasına"), TEXT("Direğe kiriş koy (2 direk), 2-4 modül boyunda bir parçayla direğe bak, [Sol tık]: 45° payanda") },
 		{ TEXT("Platform kur"), TEXT("4 direk, 2 kiriş, üstüne yarım kütük (boyuna yarılmış) döşeme tahtaları: yarım kütükle kirişe bak, [Sol tık]") },
 		{ TEXT("Kapı kasası: iki duvar arası boşluk + lento"), TEXT("Üçer direkli iki duvar, arada 100 cm; üstüne uzun kütük koy") },
-		{ TEXT("Sivri kazık duvarı"), TEXT("Direklerin ucunu sivriltip 3-4 tanesini yan yana dik") },
+		{ TEXT("Sivri kazık duvarı"), TEXT("3-4 kütüğün üst ucunu sivrilt; her parçayı dik yerleştirip tabanını doğrudan zemine sabitle. Başka kütüğün üstüne dayanan veya sivri ucu aşağı bakan parça kazık sayılmaz.") },
 		{ TEXT("Ateş yak"), TEXT("7 taş topla, düz yere bakıp [C] ile ateş yeri kur; küçük bir parçayı omza alıp ateşe bak, [Sol tık]; sonra [F] çakmağı ateşe tutup bekle") },
 		{ TEXT("Hasarlı parçayı onar"), TEXT("Yapıdaki yanık parçaya (ateşin yanında ya da [Y] admin) aynı boyda sağlam parçayla bak, [Sol tık]") },
 	};
-	static_assert(UE_ARRAY_COUNT(GoalTexts) == 20, "one text per goal");
+	static_assert(UE_ARRAY_COUNT(GoalTexts) == 21, "one text per goal");
 }
 
 void AMechanicsDemo::GetGuide(TArray<FDemoGoalLine>& OutLines, FString& OutHint) const
@@ -386,6 +387,12 @@ void AMechanicsDemo::HandleLogCarved(ACarvableLog* Log, ECarveTool Tool)
 	case ECarveTool::NotchFlat:  CompleteGoal(GoalNotchFlat); break;
 	case ECarveTool::CrossCut:   CompleteGoal(GoalCrossCut); break;
 	case ECarveTool::Split:      CompleteGoal(GoalSplit); break;
+	case ECarveTool::Groove:
+		if (Log->GetSplitCount() == 1)
+		{
+			CompleteGoal(GoalGroove);
+		}
+		break;
 	case ECarveTool::Point:      CompleteGoal(GoalPoint); break;
 	case ECarveTool::Chamfer:    CompleteGoal(GoalChamfer); break;
 	case ECarveTool::Trim:       CompleteGoal(GoalTrim); break;
@@ -985,6 +992,101 @@ void AMechanicsDemo::RunShaping(AForestCharacter* Character)
 			&& FMath::Abs(FMath::FindDeltaAngleDegrees(QuarterA->GetFlatAngle(), Half->GetFlatAngle())) > 170.f,
 		FString::Printf(TEXT("Yarma tekrar: yarım (%.0f%%) sonra çeyrek (her biri %.1f%%), yarma sayısı %d; aynı yarmadan çıkan iki parçanın düz yüzleri ters (%.0f° ve %.0f°)"),
 			bQuarters ? 50.f : 0.f, Share * 100.f, Half->GetSplitCount(), Half->GetFlatAngle(), QuarterA ? QuarterA->GetFlatAngle() : 0.f));
+
+	// Context gate: a round log must not offer or accept a trough.
+	ACarvableLog* RoundStock = Fresh();
+	TArray<float> RoundGroovePoints;
+	TArray<TArray<FVector>> RoundGuide;
+	TArray<bool> RoundClosed;
+	RoundStock->GetSnapPoints(ECarveTool::Groove, 0.f, RoundGroovePoints);
+	RoundStock->GetCutGuide(ECarveTool::Groove, RoundStock->GetCenterX(), 0.f, 0.f, 0.f, 0.f, RoundGuide, RoundClosed);
+	const float RoundVolume = RoundStock->GetVolume();
+	const bool bRoundRejected = RoundGroovePoints.IsEmpty() && RoundGuide.IsEmpty()
+		&& !RoundStock->CutGroove(0.f) && FMath::IsNearlyEqual(RoundStock->GetVolume(), RoundVolume, 1.f);
+	Report(bRoundRejected, TEXT("Oluk önkoşulu: yuvarlak/boyuna yarılmamış kütükte kesim çizgisi veya oluk yok"));
+
+	// Context gate: after exactly one lengthwise split, the half-log gets a full-length channel.
+	ACarvableLog* HalfForGroove = Fresh();
+	ACarvableLog* OppositeHalf = HalfForGroove->Split(0.f);
+	if (OppositeHalf)
+	{
+		OppositeHalf->Anchor();
+	}
+	HalfForGroove->Anchor();
+	TArray<float> HalfGroovePoints;
+	TArray<TArray<FVector>> HalfGuide;
+	TArray<bool> HalfClosed;
+	HalfForGroove->GetSnapPoints(ECarveTool::Groove, 0.f, HalfGroovePoints);
+	HalfForGroove->GetCutGuide(ECarveTool::Groove, HalfForGroove->GetCenterX(), 0.f, 0.f, 0.f, 0.f, HalfGuide, HalfClosed);
+	const float HalfVolumeBefore = HalfForGroove->GetVolume();
+	const FVector FlatWorld = HalfForGroove->GetActorTransform().TransformPosition(FVector(HalfForGroove->GetCenterX(), 0.f, 0.f));
+	const FVector FlatNormal = HalfForGroove->GetActorTransform().TransformVectorNoScale(FVector(0.f, 1.f, 0.f));
+	Character->TestCarveHit(HalfForGroove, ECarveTool::Groove, FlatWorld, FlatNormal);
+	const bool bHalfCut = Character->TestCarveHit(HalfForGroove, ECarveTool::Groove, FlatWorld, FlatNormal);
+	const float HalfVolumeAfter = HalfForGroove->GetVolume();
+	TArray<float> DuplicateGroovePoints;
+	HalfForGroove->GetSnapPoints(ECarveTool::Groove, 0.f, DuplicateGroovePoints);
+	bool bGuideSpansFullLength = HalfGuide.Num() == 2;
+	for (const TArray<FVector>& Line : HalfGuide)
+	{
+		bGuideSpansFullLength &= Line.Num() == 2
+			&& Line[0].X < HalfForGroove->GetMinX()
+			&& Line.Last().X > HalfForGroove->GetMaxX();
+	}
+	Report(bGuideSpansFullLength,
+		TEXT("Oluk önizlemesi: iki kılavuz çizgisi yarım kütüğün düz yüzünde baştan sona uzanıyor"));
+	Report(OppositeHalf && HalfGroovePoints.Num() == 1 && bGuideSpansFullLength && bHalfCut
+			&& HalfVolumeAfter < HalfVolumeBefore && DuplicateGroovePoints.IsEmpty(),
+		FString::Printf(TEXT("Oluk doğru bağlamda: yarım kütüğün tamamı boyunca kanal açıldı, hacim %.0f -> %.0f cm3; ikinci oluk kapatıldı"),
+			HalfVolumeBefore, HalfVolumeAfter));
+
+	// Context gate: a second lengthwise split creates a quarter-piece, which is not a trough stock.
+	ACarvableLog* QuarterStock = Fresh();
+	ACarvableLog* QuarterOpposite = QuarterStock->Split(0.f);
+	ACarvableLog* QuarterPiece = QuarterStock->Split(90.f);
+	if (QuarterOpposite) QuarterOpposite->Anchor();
+	if (QuarterPiece) QuarterPiece->Anchor();
+	TArray<float> QuarterGroovePoints;
+	TArray<TArray<FVector>> QuarterGuide;
+	TArray<bool> QuarterClosed;
+	if (QuarterPiece)
+	{
+		QuarterPiece->GetSnapPoints(ECarveTool::Groove, 0.f, QuarterGroovePoints);
+		QuarterPiece->GetCutGuide(ECarveTool::Groove, QuarterPiece->GetCenterX(), 0.f, 0.f, 0.f, 0.f, QuarterGuide, QuarterClosed);
+	}
+	const bool bQuarterRejected = QuarterPiece && QuarterPiece->GetSplitCount() == 2
+		&& QuarterGroovePoints.IsEmpty() && QuarterGuide.IsEmpty() && !QuarterPiece->CutGroove(0.f);
+	Report(bQuarterRejected, TEXT("Oluk önkoşulu: ikinci kez boyuna yarılıp çeyrek olan parçada oluk seçeneği sunulmuyor"));
+
+	// A pointed end is only a functional stake when it is vertical, anchored to the ground,
+	// and the point faces upward. Pointing the end alone must not make a defensive wall piece.
+	const FVector StakeGround(2500.f, -2500.f, 0.f);
+	ACarvableLog* GroundedStake = ACarvableLog::SpawnLog(World,
+		FTransform(FRotator::ZeroRotator, StakeGround + FVector(0.f, 0.f, 35.f)));
+	GroundedStake->ShapeEnd(true, ECarveTool::Point);
+	GroundedStake->PlaceAt(GroundedStake->GetStandTransform(StakeGround, 0.f), true);
+	const WoodStructure::FNode GroundedStakeNode = StructureLink::MakeNode(GroundedStake, 9901);
+	Report(GroundedStakeNode.Role == EWoodRole::Stake && GroundedStakeNode.bGrounded,
+		TEXT("Kazık bağlamı: sivri uç yukarıda ve tabanı doğrudan zeminde olan sabit parça savunma kazığı"));
+
+	ACarvableLog* SupportLog = ACarvableLog::SpawnLog(World,
+		FTransform(FRotator::ZeroRotator, FVector(2850.f, -2500.f, 36.f)));
+	SupportLog->Anchor();
+	ACarvableLog* RaisedPointedPost = ACarvableLog::SpawnLog(World,
+		FTransform(FRotator::ZeroRotator, FVector(2850.f, -2500.f, 200.f)));
+	RaisedPointedPost->ShapeEnd(true, ECarveTool::Point);
+	RaisedPointedPost->PlaceAt(RaisedPointedPost->GetStandTransform(FVector(2850.f, -2500.f, 71.f), 0.f), true);
+	const WoodStructure::FNode RaisedPointedNode = StructureLink::MakeNode(RaisedPointedPost, 9902);
+	Report(!RaisedPointedNode.bGrounded && RaisedPointedNode.Role == EWoodRole::Post,
+		TEXT("Kazık bağlamı: sivri parça başka kütüğün üstünde duruyorsa zemine sabitlenmiş kazık sayılmaz"));
+
+	ACarvableLog* DownPointedStake = ACarvableLog::SpawnLog(World,
+		FTransform(FRotator::ZeroRotator, FVector(3250.f, -2500.f, 35.f)));
+	DownPointedStake->ShapeEnd(false, ECarveTool::Point);
+	DownPointedStake->PlaceAt(DownPointedStake->GetStandTransform(FVector(3250.f, -2500.f, 0.f), 0.f), true);
+	const WoodStructure::FNode DownPointedNode = StructureLink::MakeNode(DownPointedStake, 9903);
+	Report(DownPointedNode.bGrounded && DownPointedNode.Role == EWoodRole::Post,
+		TEXT("Kazık bağlamı: ucu aşağı bakan dik parça sivri uçlu dikme olsa da savunma kazığı değildir"));
 }
 
 ACarvableLog* AMechanicsDemo::Piece(FName Name) const

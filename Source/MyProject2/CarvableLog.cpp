@@ -10,6 +10,7 @@
 #include "PickupItem.h"
 #include "Campfire.h"
 #include "BurnSubsystem.h"
+#include "MaterialCore/MaterialDefinition.h"
 #include "RaidEnemy.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -159,6 +160,10 @@ void ACarvableLog::AddDamage(float Amount)
 
 void ACarvableLog::SetDamage(float Value)
 {
+	if (!FMath::IsFinite(Value))
+	{
+		return;
+	}
 	const float Before = Damage;
 	Damage = FMath::Clamp(Value, 0.f, 1.f);
 	if (FMath::IsNearlyEqual(Before, Damage, 0.0001f))
@@ -166,7 +171,8 @@ void ACarvableLog::SetDamage(float Value)
 		return;
 	}
 	UpdateDamageLook();
-	// Crossing a threshold changes what a piece in a structure can hold: look at the whole structure again.
+	// The existing StructureLink graph owns load-bearing effects. Re-evaluate only
+	// when the same thresholds its evaluator consumes have been crossed.
 	const auto Crossed = [Before, this](float Threshold) { return (Before < Threshold) != (Damage < Threshold); };
 	if (bAnchored && (Crossed(WoodStructure::JointLooseDamage) || Crossed(WoodStructure::FailureDamage)))
 	{
@@ -174,9 +180,64 @@ void ACarvableLog::SetDamage(float Value)
 	}
 }
 
+void ACarvableLog::SimulateMaterialEnvironment(
+	float ElapsedDays, float AmbientTemperatureC, bool bRainExposed, float RainfallMm)
+{
+	if (!FMath::IsFinite(ElapsedDays) || ElapsedDays <= 0.0f ||
+		!FMath::IsFinite(AmbientTemperatureC) || !FMath::IsFinite(RainfallMm))
+	{
+		return;
+	}
+
+	ElapsedDays = FMath::Min(ElapsedDays, 365.0f);
+	MaterialAgeDays = FMath::Min(MaterialAgeDays + ElapsedDays, 1000000.0f);
+
+	const FMaterialProperties* Properties = MaterialDefinition ? &MaterialDefinition->Properties : nullptr;
+	const float WaterAbsorption = Properties
+		? FMath::Clamp(Properties->WaterAbsorption, 0.0f, 1.0f)
+		: 0.35f;
+	const float WaterDamageRate = Properties
+		? FMath::Clamp(Properties->WaterDamageRate, 0.0f, 0.1f)
+		: 0.02f;
+	const float DecayRate = Properties
+		? FMath::Clamp(Properties->DecayRate, 0.0f, 0.1f)
+		: 0.0015f;
+
+	if (bRainExposed && RainfallMm > 0.0f && WaterAbsorption > 0.0f)
+	{
+		// Rainfall is a per-world-day total. Applying at most one day's total avoids
+		// multiplying today's weather by a long offline catch-up interval.
+		const float DailyRainFactor = FMath::Min(ElapsedDays, 1.0f);
+		const float AddedMoisture = (RainfallMm / 100.0f) * WaterAbsorption * DailyRainFactor;
+		MoistureContent = FMath::Clamp(MoistureContent + AddedMoisture, 0.0f, 1.0f);
+	}
+	else
+	{
+		const float DryingRate = AmbientTemperatureC < 2.0f ? 0.02f : 0.08f;
+		MoistureContent = FMath::Max(0.0f, MoistureContent - DryingRate * ElapsedDays);
+	}
+
+	// Burning/charred state belongs exclusively to UBurnSubsystem/EBurnState.
+	// Wetness changes damage and burn resistance without creating another fire state.
+	if (BurnState == EBurnState::Charred || Damage >= 1.0f)
+	{
+		return;
+	}
+
+	const float ThermalFactor = FMath::Clamp((AmbientTemperatureC + 5.0f) / 25.0f, 0.0f, 1.5f);
+	const float MoistureFactor = FMath::Clamp(MoistureContent, 0.0f, 1.0f);
+	const float EnvironmentalDamage = ElapsedDays * ThermalFactor * MoistureFactor *
+		(DecayRate + WaterDamageRate * 0.01f);
+	if (EnvironmentalDamage > 0.0f && FMath::IsFinite(EnvironmentalDamage))
+	{
+		AddDamage(EnvironmentalDamage);
+	}
+}
+
 float ACarvableLog::GetIgniteSeconds() const
 {
-	return FMath::Clamp(Radius * 0.4f, 2.f, 20.f);
+	// Wet timber takes longer to catch; UBurnSubsystem still owns the ignition/warm lists.
+	return FMath::Clamp(Radius * 0.4f * (1.0f + 2.0f * MoistureContent), 2.f, 60.f);
 }
 
 float ACarvableLog::GetHeatShare() const
@@ -215,7 +276,8 @@ bool ACarvableLog::Ignite()
 	{
 		BurnState = EBurnState::Burning;
 		HeatSeconds = GetIgniteSeconds();
-		BurnTotal = FMath::Max(ACampfire::FuelSecondsOf(this), 1.f);
+		// Moisture lowers the effective burn rate without creating a second fire-state owner.
+		BurnTotal = FMath::Max(ACampfire::FuelSecondsOf(this), 1.f) * (1.0f + 1.5f * MoistureContent);
 		BurnLeft = BurnTotal;
 		Burn->Light(this);
 		ShowFlames(true, 1.f);
@@ -316,9 +378,23 @@ void ACarvableLog::ShowFlames(bool bShow, float Strength)
 
 bool ACarvableLog::CanReplace(const ACarvableLog* Old, const ACarvableLog* Replacement)
 {
-	return Old && Replacement && Old != Replacement && Old->IsAnchored() && !Replacement->IsAnchored() && Old->GetDamage() >= 0.2f
-		&& Replacement->GetDamage() < Old->GetDamage() && Old->IsSplit() == Replacement->IsSplit()
-		&& FMath::IsNearlyEqual(Old->GetLength(), Replacement->GetLength(), 1.5f);
+	if (!Old || !Replacement || Old == Replacement || !Old->IsAnchored() || Replacement->IsAnchored()
+		|| Replacement->IsCarried() || Replacement->MeshComponent->IsSimulatingPhysics()
+		|| Replacement->BurnState != EBurnState::Intact || Old->GetDamage() < 0.2f
+		|| Replacement->GetDamage() >= Old->GetDamage() || Old->IsSplit() != Replacement->IsSplit()
+		|| Old->GetSplitCount() != Replacement->GetSplitCount()
+		|| !Replacement->JointCuts.IsEmpty() || !Replacement->CutSpans.IsEmpty())
+	{
+		return false;
+	}
+
+	// "Same size" includes cross-section: length alone lets a thin/quarter-split piece replace a full beam.
+	const FVector OldSize = Old->GetLocalBox().GetSize();
+	const FVector ReplacementSize = Replacement->GetLocalBox().GetSize();
+	return FMath::IsNearlyEqual(Old->GetLength(), Replacement->GetLength(), 1.5f)
+		&& FMath::IsNearlyEqual(Old->GetRadius(), Replacement->GetRadius(), 1.5f)
+		&& FMath::IsNearlyEqual(OldSize.Y, ReplacementSize.Y, 1.5f)
+		&& FMath::IsNearlyEqual(OldSize.Z, ReplacementSize.Z, 1.5f);
 }
 
 bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
@@ -327,29 +403,70 @@ bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
 	{
 		return false;
 	}
-	// Two pieces of the same length can come from different places of their logs: their local frames start at different
-	// X. The new piece is set so that its box lies exactly where the old one's did, and the joints are cut shifted the same way.
+
+	// Rebuilding joints is one repair transaction: never leave a partly notched replacement in the structure.
+	UDynamicMesh* BackupMesh = NewObject<UDynamicMesh>(Replacement);
+	if (!BackupMesh)
+	{
+		return false;
+	}
+	BackupMesh->SetMesh(Replacement->MeshComponent->GetDynamicMesh()->GetMeshRef());
+	const FTransform OriginalTransform = Replacement->GetActorTransform();
+	const TArray<FJointCut> OriginalJointCuts = Replacement->JointCuts;
+	const TArray<FVector2f> OriginalCutSpans = Replacement->CutSpans;
 	const float Shift = Replacement->MinX - Old->MinX;
+	const float StockMinX = Replacement->MinX;
+	const float StockMaxX = Replacement->MaxX;
+
 	FTransform Where = Old->GetActorTransform();
 	Where.AddToTranslation(-Where.GetRotation().RotateVector(FVector(Shift, 0.f, 0.f)));
 	Replacement->PlaceAt(Where, /*bAnchorIt*/ true);
+	Replacement->JointCuts.Reset();
+	Replacement->CutSpans.Reset();
+
+	auto RollbackReplacement = [&]()
+	{
+		Replacement->MeshComponent->GetDynamicMesh()->SetMesh(BackupMesh->GetMeshRef());
+		Replacement->JointCuts = OriginalJointCuts;
+		Replacement->CutSpans = OriginalCutSpans;
+		Replacement->FinishEdit();
+		Replacement->SetActorTransform(OriginalTransform, false, nullptr, ETeleportType::TeleportPhysics);
+		Replacement->bAnchored = false;
+		Replacement->MeshComponent->SetSimulatePhysics(false);
+		Replacement->SetActorTickEnabled(false);
+		Replacement->UpdateDamageLook();
+	};
+
 	for (const FJointCut& Cut : Old->JointCuts)
 	{
 		const float X = Cut.LocalX + Shift;
-		if (X < Replacement->MinX || X > Replacement->MaxX)
+		if (X < StockMinX || X > StockMaxX)
 		{
-			continue;
+			RollbackReplacement();
+			return false;
 		}
+
+		bool bCutRebuilt = false;
 		switch (Cut.Tool)
 		{
-		case ECarveTool::Notch:      Replacement->Notch(X, Cut.SideAngleDeg, Cut.AngleDeg, Cut.MateRadius, Cut.Depth); break;
-		case ECarveTool::NotchRound: Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, true); break;
-		case ECarveTool::NotchFlat:  Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, false); break;
-		case ECarveTool::Dovetail:   Replacement->CutDovetail(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth); break;
-		default: break;
+		case ECarveTool::Notch:      bCutRebuilt = Replacement->Notch(X, Cut.SideAngleDeg, Cut.AngleDeg, Cut.MateRadius, Cut.Depth); break;
+		case ECarveTool::NotchRound: bCutRebuilt = Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, true); break;
+		case ECarveTool::NotchFlat:  bCutRebuilt = Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, false); break;
+		case ECarveTool::Dovetail:   bCutRebuilt = Replacement->CutDovetail(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth); break;
+		case ECarveTool::Groove:     bCutRebuilt = Replacement->CutGroove(Cut.SideAngleDeg); break;
+		default:                     bCutRebuilt = false; break;
+		}
+
+		if (!bCutRebuilt)
+		{
+			RollbackReplacement();
+			return false;
 		}
 	}
+
+	// The replacement's new geometry changes both the support graph and cached feature classification.
 	Old->Release();
+	StructureLink::Settle(GetWorld());
 	OnLogRepaired.Broadcast(Replacement);
 	return true;
 }
@@ -456,7 +573,62 @@ ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
 
 bool ACarvableLog::CutGroove(float SideAngleDeg)
 {
-	return Notch(GetCenterX(), SideAngleDeg, 0.f, Radius, Radius * 0.3f);
+	// A trough is cut into the exposed flat face of a half-log, never into an untouched round log.
+	// SideAngleDeg is intentionally not used: the physical split determines the only valid groove face.
+	(void)SideAngleDeg;
+	if (!bSplitPiece || SplitCount != 1)
+	{
+		return false;
+	}
+	if (JointCuts.ContainsByPredicate([](const FJointCut& Cut) { return Cut.Tool == ECarveTool::Groove; }))
+	{
+		return false; // one continuous channel per half-log
+	}
+
+	const float GrooveRadius = FMath::Min(Radius * 0.35f, GetLength() * 0.04f);
+	if (GrooveRadius < 2.f || GetLength() < 2.f * ModuleLength)
+	{
+		return false;
+	}
+
+	const float BeforeVolume = Volume;
+	UDynamicMesh* Mesh = MeshComponent->GetDynamicMesh();
+	UDynamicMesh* Backup = NewObject<UDynamicMesh>(this);
+	UDynamicMesh* Cutter = NewObject<UDynamicMesh>(this);
+	if (!Mesh || !Backup || !Cutter)
+	{
+		return false;
+	}
+	Backup->SetMesh(Mesh->GetMeshRef());
+
+	// FlatAngle is the normal of the split plane. Move the cutter slightly into the solid,
+	// then sweep its cylinder along the entire log axis to make a true longitudinal channel.
+	const float Flat = FMath::DegreesToRadians(FlatAngle);
+	const FVector FaceOut(0.f, FMath::Cos(Flat), -FMath::Sin(Flat));
+	const float CentreOffset = GrooveRadius * 0.30f;
+	const FVector Centre = FVector(GetCenterX(), 0.f, 0.f) - FaceOut * CentreOffset;
+	const FTransform CutterTransform(FRotationMatrix::MakeFromZ(FVector::XAxisVector).ToQuat(), Centre);
+	UGeometryScriptLibrary_MeshPrimitiveFunctions::AppendCylinder(
+		Cutter, FGeometryScriptPrimitiveOptions(), CutterTransform, GrooveRadius, GetLength() + 2.f * ModuleLength,
+		64, 0, true, EGeometryScriptPrimitiveOriginMode::Center);
+
+	SubtractTool(Mesh, Cutter);
+	FinishEdit();
+	if (Volume >= BeforeVolume - 1.f)
+	{
+		// Do not report a successful groove if the mesh boolean did not remove material.
+		Mesh->SetMesh(Backup->GetMeshRef());
+		FinishEdit();
+		return false;
+	}
+
+	JointCuts.Add({ ECarveTool::Groove, GetCenterX(), FlatAngle, 0.f, 0.f, GrooveRadius, GrooveRadius });
+	if (!(SourceMesh && bStartAsleep))
+	{
+		Resettle();
+	}
+	OnLogCarved.Broadcast(this, ECarveTool::Groove);
+	return true;
 }
 
 void ACarvableLog::LetFall()
@@ -655,7 +827,8 @@ void ACarvableLog::GetSnapPoints(ECarveTool Tool, float Width, TArray<float>& Ou
 		break;
 	}
 	case ECarveTool::Groove:
-		if (CutSpans.Num() == 0)
+		if (bSplitPiece && SplitCount == 1
+			&& !JointCuts.ContainsByPredicate([](const FJointCut& Cut) { return Cut.Tool == ECarveTool::Groove; }))
 		{
 			OutX.Add(GetCenterX());
 		}
@@ -1089,8 +1262,28 @@ void ACarvableLog::GetCutGuide(ECarveTool Tool, float LocalX, float SideAngleDeg
 		break;
 	}
 	case ECarveTool::Groove:
-		GetCutGuide(ECarveTool::Notch, GetCenterX(), SideAngleDeg, 0.f, Width, Depth, OutLines, OutClosed);
+	{
+		if (!bSplitPiece || SplitCount != 1
+			|| JointCuts.ContainsByPredicate([](const FJointCut& Cut) { return Cut.Tool == ECarveTool::Groove; }))
+		{
+			break;
+		}
+		const float GrooveRadius = FMath::Min(R * 0.35f, GetLength() * 0.04f);
+		const float CentreOffset = GrooveRadius * 0.30f;
+		const float HalfOpening = FMath::Sqrt(FMath::Max(0.f, GrooveRadius * GrooveRadius - CentreOffset * CentreOffset));
+		const float Flat = FMath::DegreesToRadians(FlatAngle);
+		const FVector FaceOut(0.f, FMath::Cos(Flat), -FMath::Sin(Flat));
+		const FVector Across = FVector::CrossProduct(FVector::XAxisVector, FaceOut).GetSafeNormal();
+		// The two preview rails lie just outside the split face and extend from end to end.
+		for (const float Sign : { -1.f, 1.f })
+		{
+			OutLines.Add({
+				FVector(MinX - GuideLift, 0.f, 0.f) + Across * (HalfOpening * Sign) + FaceOut * GuideLift,
+				FVector(MaxX + GuideLift, 0.f, 0.f) + Across * (HalfOpening * Sign) + FaceOut * GuideLift });
+			OutClosed.Add(false);
+		}
 		break;
+	}
 	case ECarveTool::NotchRound:
 	{
 		FVector Centre, Out, Across;
