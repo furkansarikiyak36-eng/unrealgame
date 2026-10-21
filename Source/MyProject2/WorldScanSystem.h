@@ -147,7 +147,7 @@ namespace WorldScanSystem
 		FVector TraceEnd = FVector::ZeroVector;
 		FVector QueryCenter = FVector::ZeroVector;
 		ECollisionChannel TraceChannel = ECC_Visibility;
-		ECollisionChannel OverlapChannel = ECC_WorldDynamic;
+		ECollisionChannel OverlapChannel = ECC_Visibility;
 		bool bTraceComplex = false;
 		FShapeTraceRequest ShapeRequest;
 		FVector ShapeTraceStart = FVector::ZeroVector;
@@ -195,7 +195,7 @@ namespace WorldScanSystem
 	/** Method 3: collect overlaps in a sphere or oriented box. */
 	MYPROJECT2_API bool OverlapSphere(UWorld* World, const FVector& Center, float RadiusCm,
 		const AActor* ActorToIgnore, FOverlapScanResult& OutResult,
-		ECollisionChannel Channel = ECC_WorldDynamic);
+		ECollisionChannel Channel = ECC_Visibility);
 	MYPROJECT2_API bool OverlapBox(UWorld* World, const FVector& Center, const FVector& HalfExtentCm,
 		const FQuat& Rotation, const AActor* ActorToIgnore, FOverlapScanResult& OutResult,
 		ECollisionChannel Channel = ECC_WorldDynamic);
