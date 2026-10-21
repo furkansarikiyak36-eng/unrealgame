@@ -56,3 +56,8 @@ Capability tags:
 This commit adds the shared query APIs; it does not yet replace all placement, digging, support, snap or actor-specific gameplay checks with these APIs. Existing systems should migrate incrementally so their behavior can be compared and regression-tested.
 
 **Validation status:** source files and API wiring were inspected through repository reads. This environment did not run Unreal Build Tool, Editor or PIE. Compilation and in-engine behavior are not yet verified.
+
+
+## Linked snap consumer
+
+The reusable snap-point resolver is implemented as the independent runtime plugin `Plugins/WorldSnap`. It consumes generic hit/candidate data and does not depend on this scanner module. The project-side `WorldSnapScanBridge` adapts a successful `FWorldScanBundle` raycast plus current `LogSnapSystem` points into the plugin API. It resolves a snap candidate only; placement transforms and structural-support approval remain separate decisions. See `Docs/WorldSnapLinkedPackage.md`.
