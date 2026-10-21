@@ -484,9 +484,10 @@ void AForestCharacter::DrawPreviewLines()
 	if (const ACarvableLog* Piece = GetTopCarried(); Piece && CarryPlace != ECarryPlace::None)
 	{
 		// Only a base line where the piece will lie (along its underside) with short end marks; a crossing notches by itself.
-		const FTransform& Where = GetCarryPlacementTransform();
+		const FLogPlacementResult Placement = GetLogPlacementResult();
+		const FTransform& Where = Placement.Transform;
 		const FBox Box = Piece->GetLocalBox();
-		const FLinearColor Color = bPlaceSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
+		const FLinearColor Color = Placement.bSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
 		const FVector A = Where.TransformPosition(FVector(Box.Min.X, 0.f, Box.Min.Z + 1.f));
 		const FVector B = Where.TransformPosition(FVector(Box.Max.X, 0.f, Box.Min.Z + 1.f));
 		const FVector Across = Where.TransformVectorNoScale(FVector(0.f, Box.GetExtent().Y, 0.f));
@@ -1275,6 +1276,7 @@ namespace
 		TArray<float> Lines;   // module lines, measured from the centre along the axis
 		ELogFace Face = ELogFace::Top;
 		float Along = 0.f;     // the chosen line (or ±Half on an end)
+		FName PointId = NAME_None;
 
 		bool Init(const ACarvableLog* Log, const FVector& Point, const FVector& Normal)
 		{
@@ -1306,6 +1308,7 @@ namespace
 			case LogSnapSystem::EFace::EndB: Face = ELogFace::EndB; break;
 			}
 			Along = Selected.AlongAxis;
+			PointId = Selected.Id;
 			TArray<float> Local;
 			Log->GetModuleLines(Local);
 			const float CentreX = Log->GetActorTransform().InverseTransformPosition(Centre).X;
@@ -1381,6 +1384,26 @@ const FTransform& AForestCharacter::GetCarryPlacementTransform() const
 		: PlaceTransform;
 }
 
+AForestCharacter::FLogPlacementResult AForestCharacter::GetLogPlacementResult() const
+{
+	FLogPlacementResult Result;
+	Result.Mode = CarryPlace;
+	Result.Transform = GetCarryPlacementTransform();
+	Result.TargetActor = PlaceTarget;
+	Result.SnapPointId = SelectedSnapPointId;
+	Result.bValid = CarryPlace != ECarryPlace::None;
+	Result.bSupported = bPlaceSupported;
+	if (!Result.bValid)
+	{
+		Result.InvalidReason = TEXT("NoCompatiblePlacement");
+	}
+	else if (!Result.bSupported)
+	{
+		Result.InvalidReason = TEXT("UnsupportedConnection");
+	}
+	return Result;
+}
+
 bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const FTransform& Transform, bool bForce)
 {
 	if (!GetWorld() || !Piece) return false;
@@ -1410,6 +1433,8 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	CrossLower = nullptr;
 	StandBase = nullptr;
 	SocketMarkers.Reset();
+	SelectedSnapPointId = NAME_None;
+	PlaceTarget = nullptr;
 	bPlaceSupported = true;
 	ACarvableLog* Piece = GetTopCarried();
 	if (!Piece || !bHit)
@@ -1505,6 +1530,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		{
 			Sockets.Markers(SocketMarkers);
 			SocketChosen = Sockets.SurfacePoint(Sockets.Along);
+			SelectedSnapPointId = Sockets.PointId;
 			SocketNormal = Sockets.FaceNormal();
 			if (Sockets.Face != ELogFace::Top)
 			{
@@ -1923,14 +1949,14 @@ bool AForestCharacter::PlaceCarried()
 		ShowMessage(TEXT("Buraya konmaz  —  yere ya da yerdeki bir kütüğe bak"));
 		return false;
 	}
-	const bool bCrossTransform = CarryPlace == ECarryPlace::Across || CarryPlace == ECarryPlace::Corner || CarryPlace == ECarryPlace::Diagonal;
 	const bool bNeedsSupportCheck = CarryPlace == ECarryPlace::Brace || CarryPlace == ECarryPlace::Beam
 		|| CarryPlace == ECarryPlace::Socket || CarryPlace == ECarryPlace::Stand || CarryPlace == ECarryPlace::Floor
 		|| CarryPlace == ECarryPlace::Corner || CarryPlace == ECarryPlace::Stack || CarryPlace == ECarryPlace::Across
 		|| CarryPlace == ECarryPlace::Diagonal || CarryPlace == ECarryPlace::Slope;
 	if (bNeedsSupportCheck)
 	{
-		const FTransform& FinalTransform = GetCarryPlacementTransform();
+		const FLogPlacementResult Placement = GetLogPlacementResult();
+		const FTransform& FinalTransform = Placement.Transform;
 		if (!EvaluateSupportPreview(Piece, FinalTransform, true))
 		{
 			ShowMessage(TEXT("Bu bağlantı yapısal olarak desteklenmiyor."));
