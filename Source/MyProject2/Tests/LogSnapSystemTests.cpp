@@ -65,7 +65,7 @@ bool FLogSnapResolveNearestCompatiblePointTest::RunTest(const FString& Parameter
 
 	LogSnapSystem::FPoint Resolved;
 	TestTrue(TEXT("a compatible point resolves"), LogSnapSystem::Resolve(Points, Query, Resolved));
-	TestEqual(TEXT("the closest module point wins"), Resolved.Id, FName(TEXT("Top_01")));
+	TestTrue(TEXT("the closest module point wins"), Resolved.Id == FName(TEXT("Top_01")));
 	return true;
 }
 
@@ -94,7 +94,7 @@ bool FLogSnapResolveTieIsDeterministicTest::RunTest(const FString& Parameters)
 	Query.MaxAlongAxisError = 45.f;
 	LogSnapSystem::FPoint Resolved;
 	TestTrue(TEXT("tie still resolves"), LogSnapSystem::Resolve(Points, Query, Resolved));
-	TestEqual(TEXT("generation order breaks ties deterministically"), Resolved.Id, FName(TEXT("Top_00")));
+	TestTrue(TEXT("generation order breaks ties deterministically"), Resolved.Id == FName(TEXT("Top_00")));
 	return true;
 }
 #endif
