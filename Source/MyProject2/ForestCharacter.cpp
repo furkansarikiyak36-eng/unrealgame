@@ -1557,9 +1557,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 				const FVector Desired = FVector::CrossProduct(FVector::UpVector, Facing);
 				// Angle of the piece to the log, folded into (-90, 90], snapped to 0 / 45 / -45 / 90.
-				float Delta = FMath::FindDeltaAngleDegrees(Sockets.Axis.Rotation().Yaw, Desired.Rotation().Yaw);
-				if (Delta > 90.f) Delta -= 180.f;
-				if (Delta <= -90.f) Delta += 180.f;
+				const float Delta = LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(Sockets.Axis.Rotation().Yaw, Desired.Rotation().Yaw));
 				const float Sector = FMath::Abs(Delta) > 67.5f ? 90.f : FMath::Abs(Delta) < 22.5f ? 0.f : (Delta > 0.f ? 45.f : -45.f);
 				const float Rt = Sockets.Radius;
 				const float Rp = Piece->GetRadius();
@@ -1789,10 +1787,8 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 					break;
 				}
 
-				float CourseDelta = FMath::FindDeltaAngleDegrees(BestSupportYaw,
-					FVector(CurrentAxis.X, CurrentAxis.Y, 0.f).Rotation().Yaw);
-				if (CourseDelta > 90.f) CourseDelta -= 180.f;
-				else if (CourseDelta < -90.f) CourseDelta += 180.f;
+				const float CourseDelta = LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(BestSupportYaw,
+					FVector(CurrentAxis.X, CurrentAxis.Y, 0.f).Rotation().Yaw));
 				if (FMath::Abs(CourseDelta) >= 20.f)
 				{
 					ReferenceYaw = BestSupportYaw;
@@ -1802,9 +1798,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				CurrentCourse = BestSupport;
 			}
 			// Angle between the two axes, folded into (-90, 90]: a log has no front or back.
-			float Delta = FMath::FindDeltaAngleDegrees(LowerYaw, DesiredYaw);
-			if (Delta > 90.f) Delta -= 180.f;
-			if (Delta <= -90.f) Delta += 180.f;
+			const float Delta = LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(LowerYaw, DesiredYaw));
 			// A wall corner: square to the log and aimed at its last module joins the ends of the two (a log cabin's corner).
 			// The new log runs to the parallel log of the opposite wall when there is one and seats on both.
 			if (FMath::Abs(Delta) > 67.5f)
@@ -1857,10 +1851,8 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				{
 					CrossLower = LowerLog;
 					CarryPlace = ECarryPlace::Diagonal;
-					float ActualDelta = FMath::FindDeltaAngleDegrees(ReferenceYaw,
-						CrossPlacement.Upper.GetRotation().Rotator().Yaw);
-					if (ActualDelta > 90.f) ActualDelta -= 180.f;
-					else if (ActualDelta < -90.f) ActualDelta += 180.f;
+					const float ActualDelta = LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(ReferenceYaw,
+						CrossPlacement.Upper.GetRotation().Rotator().Yaw));
 					DiagonalAngle = ActualDelta;
 					bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
 					return;
