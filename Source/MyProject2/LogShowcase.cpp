@@ -244,6 +244,7 @@ FString ALogShowcase::BuildAll()
 	StationModuleOpening();
 	StationFaceSockets();
 	StationUnderSockets();
+	StationLogHouse();
 
 	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
 	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
@@ -648,5 +649,153 @@ void ALogShowcase::StationUnderSockets()
 	};
 	Under(TEXT("alt yüz, altına paralel"), 0.f, static_cast<uint8>(EHold::Lay), 150);
 	Under(TEXT("alt yüz, destek direği"), 75.f, static_cast<uint8>(EHold::Stand), 150);
+	EndStation();
+}
+
+
+// 14. A log house: four walls of 600 cm logs joined at the corners (12 courses, a 5.25 m square room), a door through the
+// front wall, a window in a side wall, and a ridge roof frame (gable posts, ridge beam, rafters from both side walls).
+void ALogShowcase::StationLogHouse()
+{
+	BeginStation(13, TEXT("Kütük ev: 600'lük kütükler, 12 sıra köşe geçmeli, kapı, pencere, çatı iskeleti"));
+	const float Span = 525.f;     // 600 cm logs joined half a module in from each end
+	const int32 Courses = 12;
+	TArray<TArray<ACarvableLog*>> Walls;
+	Walls.Add({ LayAt(Mesh(600), O, FYaw, TEXT("eşik kütüğü 1")), LayAt(Mesh(600), O + R * Span, FYaw, TEXT("eşik kütüğü 2")) });
+	for (int32 Course = 1; Course < Courses; ++Course)
+	{
+		const TArray<ACarvableLog*>& Lower = Walls.Last();
+		if (Lower.Num() != 2 || !Lower[0] || !Lower[1])
+		{
+			break;
+		}
+		TArray<ACarvableLog*> Next;
+		for (int32 End = 0; End < 2; ++End)
+		{
+			FVector C, Axis;
+			float Radius, Half;
+			ACarvableLog::GetLogAxis(Lower[0], C, Axis, Radius, Half);
+			const FVector Aim = C + Axis * ((End == 0 ? -1.f : 1.f) * (Half - 35.f)) + FVector(0.f, 0.f, Radius);
+			const FVector Inward = (Lower[1]->GetActorLocation() - Lower[0]->GetActorLocation()).GetSafeNormal2D();
+			Player->SetActorLocation(Aim - Inward * 220.f + FVector(0.f, 0.f, 60.f), false, nullptr, ETeleportType::TeleportPhysics);
+			ACarvableLog* Piece = Spawn(Mesh(600));
+			const uint8 Got = Piece ? P(Player->PlaceForShowcase(Piece, Lower[0], Aim, FVector::UpVector,
+				FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal().Rotation().Yaw, EHold::Lay)) : P(EPlace::None);
+			Note(*FString::Printf(TEXT("sıra %d köşe %d"), Course + 1, End + 1), Got, P(EPlace::Corner));
+			Next.Add(Got == P(EPlace::Corner) ? Piece : nullptr);
+			FVector PC, PA;
+			float PR, PH;
+			if (Piece && ACarvableLog::GetLogAxis(Piece, PC, PA, PR, PH))
+			{
+				Report += FString::Printf(TEXT("      merkez F=%.0f R=%.0f z=%.0f boy=%.0f  (alttaki boy=%.0f)\n"), FVector::DotProduct(PC - O, F),
+					FVector::DotProduct(PC - O, R), PC.Z - O.Z, PH * 2.f, Half * 2.f);
+			}
+		}
+		Walls.Add(Next);
+	}
+
+	// Which log of a course is where: along F or along R, and on which side.
+	auto AlongF = [this](const ACarvableLog* Log)
+	{
+		const float Yaw = FMath::Fmod(FMath::Abs(FRotator::NormalizeAxis(Log->GetActorRotation().Yaw - FYaw)), 180.f);
+		return Yaw < 45.f || Yaw > 135.f;
+	};
+	auto Local = [this](const ACarvableLog* Log)
+	{
+		FVector C, A;
+		float Radius, Half;
+		return ACarvableLog::GetLogAxis(Log, C, A, Radius, Half) ? C - O : Log->GetActorLocation() - O;
+	};
+	auto Cut = [this](ACarvableLog* Log, const TCHAR* What)
+	{
+		ACarvableLog* Right = Log ? Log->CutOpening(Log->GetCenterX(), 2, O - F * 600.f + R * 262.f) : nullptr;
+		Report += FString::Printf(TEXT("    %s %s\n"), Right ? TEXT("OK ") : TEXT("XX "), What);
+		Right ? ++Placed : ++Failed;
+		if (!Right)
+		{
+			StationNotes += FString::Printf(TEXT("\nolmadı: %s"), What);
+		}
+	};
+	// Door: the front gable wall (logs along R, the one at the smaller F), its lowest five courses.
+	int32 DoorCourses = 0;
+	// Window: the side wall at the larger R (logs along F), two courses about a metre up.
+	int32 WindowCourses = 0;
+	for (int32 Course = 0; Course < Walls.Num(); ++Course)
+	{
+		for (ACarvableLog* Log : Walls[Course])
+		{
+			if (!Log)
+			{
+				continue;
+			}
+			if (!AlongF(Log) && FVector::DotProduct(Local(Log), F) < 0.f && DoorCourses < 5)
+			{
+				++DoorCourses;
+				Cut(Log, *FString::Printf(TEXT("kapı, sıra %d"), Course + 1));
+			}
+			else if (AlongF(Log) && FVector::DotProduct(Local(Log), R) > Span * 0.5f && (Course == 4 || Course == 6) && WindowCourses < 2)
+			{
+				++WindowCourses;
+				Cut(Log, *FString::Printf(TEXT("pencere, sıra %d"), Course + 1));
+			}
+		}
+	}
+
+	// Roof frame. The top course runs along R (the gables); the course under it along F (the side walls).
+	ACarvableLog* GableFront = nullptr;
+	ACarvableLog* GableBack = nullptr;
+	ACarvableLog* SideNear = nullptr;
+	ACarvableLog* SideFar = nullptr;
+	for (int32 Course = Walls.Num() - 1; Course >= 0; --Course)
+	{
+		for (ACarvableLog* Log : Walls[Course])
+		{
+			if (!IsValid(Log))
+			{
+				continue;
+			}
+			if (!AlongF(Log))
+			{
+				if (FVector::DotProduct(Local(Log), F) < 0.f) { GableFront = GableFront ? GableFront : Log; }
+				else { GableBack = GableBack ? GableBack : Log; }
+			}
+			else
+			{
+				if (FVector::DotProduct(Local(Log), R) < Span * 0.5f) { SideNear = SideNear ? SideNear : Log; }
+				else { SideFar = SideFar ? SideFar : Log; }
+			}
+		}
+	}
+	// Gable posts on the middle of the top gable logs, the ridge beam from one to the other.
+	auto MiddleAlong = [this, Span](ACarvableLog* Log)
+	{
+		FVector C, A;
+		float Radius, Half;
+		ACarvableLog::GetLogAxis(Log, C, A, Radius, Half);
+		return FVector::DotProduct(O + R * (Span * 0.5f) - C, A);
+	};
+	ACarvableLog* PostFront = GableFront ? OnLog(Mesh(75), GableFront, MiddleAlong(GableFront), FYaw, static_cast<uint8>(EHold::Stand), 0.f, TEXT("mahya direği ön"), P(EPlace::Stand)) : nullptr;
+	if (GableBack)
+	{
+		OnLog(Mesh(75), GableBack, MiddleAlong(GableBack), FYaw, static_cast<uint8>(EHold::Stand), 0.f, TEXT("mahya direği arka"), P(EPlace::Stand));
+	}
+	if (PostFront)
+	{
+		OnPostTop(Mesh(600), PostFront, FYaw, TEXT("mahya kirişi"), P(EPlace::Beam));
+	}
+	// Rafters every 75 cm along both side walls, leaning in to the ridge.
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		ACarvableLog* Wall = Side == 0 ? SideNear : SideFar;
+		if (!Wall)
+		{
+			continue;
+		}
+		for (int32 Index = 0; Index < 7; ++Index)
+		{
+			OnLog(Mesh(300), Wall, -225.f + Index * 75.f, FYaw + (Side == 0 ? 90.f : -90.f), static_cast<uint8>(EHold::Slope), 30.f,
+				*FString::Printf(TEXT("çatı kirişi %s %d"), Side == 0 ? TEXT("sol") : TEXT("sağ"), Index + 1), P(EPlace::Slope));
+		}
+	}
 	EndStation();
 }

@@ -30,3 +30,9 @@ DerivedDataCache/
 
 # Editor tool output
 /Scripts/editor_tools/build_last.log
+
+# Python cache
+__pycache__/
+*.pyc
+# Local backups of maps
+*.umap.bak

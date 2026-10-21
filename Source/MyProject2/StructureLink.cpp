@@ -92,8 +92,14 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 					const double H0 = FVector::DotProduct((*Holder)->A - Beam.A, BeamAxis);
 					const double H1 = FVector::DotProduct((*Holder)->B - Beam.A, BeamAxis);
 					const double BeamLength = Beam.Length();
-					At.Add(static_cast<float>(FMath::Clamp(FMath::Min(H0, H1), 0.0, BeamLength)));
-					At.Add(static_cast<float>(FMath::Clamp(FMath::Max(H0, H1), 0.0, BeamLength)));
+					// A bed holds it all along: a support point every module over the common stretch, not just its two ends.
+					const double Lo = FMath::Clamp(FMath::Min(H0, H1), 0.0, BeamLength);
+					const double Hi = FMath::Clamp(FMath::Max(H0, H1), 0.0, BeamLength);
+					for (double Point = Lo; Point < Hi; Point += ACarvableLog::ModuleLength)
+					{
+						At.Add(static_cast<float>(Point));
+					}
+					At.Add(static_cast<float>(Hi));
 					continue;
 				}
 				double S = 0.0, T = 0.0;

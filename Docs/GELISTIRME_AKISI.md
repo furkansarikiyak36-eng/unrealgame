@@ -1,5 +1,8 @@
 # Geliştirme Akışı
 
+> **2026-10-21 güncellemesi — iş bölümü:** C++ kodunu **ChatGPT** yazar (web'den GitHub'a doğrudan erişir), kendi dalında: `chatgpt/<konu>`. Editör işleri, derleme düzeltmeleri, bağlama, Play testi, vitrin pişirme ve birleştirme **Claude Code**'da. Codex kullanılmıyor. Ayrıntı: `AGENTS.md`, klasörler: `Docs/DEPO_YAPISI.md`.
+
+
 Bu proje iki elden geliştiriliyor.
 - **Kod yazan taraf** (kullanıcı ya da kullandığı yapay zekâ aracı) mekaniği yazıp GitHub'a ekler.
 - **Editör tarafı** (Claude Code, Unreal'ın açık olduğu bilgisayarda) kodu çeker. Ardından derler, editörde bağlar (asset, harita, ayar), oyun içinde test eder ve düzeltmeleri geri gönderir.

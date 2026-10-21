@@ -1162,3 +1162,9 @@ Kullanıcı LogShowcase'te elle düzenleme yapıp: "kontrol et; plank yerleşimi
   - `JointSeatDepth` 0.4 → 0.95 × ince yarıçap: direk–kiriş, kirişe dikilen direk ~16,6 cm iç içe.
   - Vitrin platformu: kirişler 285 cm arayla (tahta uçlarının altında), 9 tahta 30 cm arayla.
 - Yeniden pişirildi: 133/133; 4. istasyon ölçüleri kullanıcınınkiyle uyumlu (tahta gömülme 10,5 cm, geçmeler 16,6 cm, tahta ortası 142,5).
+
+### 2026-10-21 — Kütük ev (14. istasyon), yatak desteği düzeltmesi; yeni iş bölümü ve depo düzeni (CC)
+Kullanıcı: "bana log house kurar mısın" → ardından "weekly limit bitmek üzere, bununla uğraşmayalım; C++'ı ChatGPT yapsın (web'den GitHub'a rahat erişiyor), editör ve detay işlerini Claude; Codex'e gerek yok; GitHub güncel, dosyalar düzenli".
+- Kütük ev (`ALogShowcase::StationLogHouse`, pişirildi): 600'lük kütükler, 12 sıra köşe geçmeli, 5,25 × 5,25 m kare oda (doğrulandı: her sıra 600 boyunda, duvarlar F=±262 / R=0, 525), ön duvarda kapı (4 sıra), yan duvarda pencere (2 sıra), iki mahya direği, 14 çatı kirişi. **Eksik:** mahya kirişi kurulmuyor — yapı sistemi 75'lik mahya direğini desteksiz sayıp serbest bırakıyor (`IsAnchored()=0`), kiriş sabit olmayan direğe konmuyor; çatı kirişleri mahyayı bulamadığından varsayılan 30°. Kullanıcı isteğiyle araştırma durduruldu; sıradaki iş.
+- Düzeltme: üst üste paralel yatak (`Stacked`) kiriş açıklığı kontrolünde yalnız iki uç destek sayılıyordu → 600'lük duvar kütükleri köşeler arası 525 cm "boşluk" yüzünden konur konmaz ortadan kırılıyordu. Artık yatak boyu boyunca her modülde destek noktası (`StructureLink::Evaluate`).
+- Yeni iş bölümü: `AGENTS.md` (ChatGPT: C++ kendi dalında `chatgpt/<konu>`; Claude: editör, derleme düzeltme, bağlama, test, pişirme, birleştirme; Codex yok), `Docs/GELISTIRME_AKISI.md` notu, yeni `Docs/DEPO_YAPISI.md` (ne nerede). Depo düzeni: `Scripts/__pycache__` repodan çıkarıldı ve `.gitignore`'a eklendi (yerel `*.umap.bak` yedekleri de).

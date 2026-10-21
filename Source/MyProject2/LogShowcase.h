@@ -89,6 +89,7 @@ private:
 	void StationModuleOpening();
 	void StationFaceSockets();
 	void StationUnderSockets();
+	void StationLogHouse();
 
 	FVector StationSignSpot;
 	FString StationTitle;
