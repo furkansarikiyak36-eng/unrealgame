@@ -2,16 +2,16 @@
 
 **Target:** Unreal Engine 5.8 / C++  
 **Branch:** feature/log-snap-system-v01  
-**Status:** Implementation draft; editor build and gameplay validation still required.
+**Status:** Code draft committed to the feature branch; Unreal Editor/UBT build and gameplay validation still required.
 
 ## Architecture
 
 1. Raycast target acquisition selects a target actor and surface normal. It does not directly define the final transform.
 2. Predefined snap points: LogSnapSystem builds deterministic module-line points on the top, bottom, front and back faces of a horizontal log, plus two end points.
-3. Resolver: chooses a compatible point using axis distance and hit-normal alignment. Equal scores preserve generation order to prevent random flips at ties.
+3. Resolver: chooses a compatible point using axis distance and hit-normal alignment. Equal scores preserve generation order to prevent random flips at ties. Short logs without an interior module line receive a centre snap.
 4. Placement rules: existing project functions continue to calculate stack, end-to-end, side/T, corner, and diagonal transforms.
 5. Connection/support: StructureLink remains the authority for structural support and settling. Its graph is currently reconstructed from installed log geometry and contact; this branch does not yet add serialized socket IDs to save data.
-6. Preview/commit: preview and commit should use the same chosen transform. Revalidate support on commit rather than trusting stale preview data.
+6. Preview/commit: a shared placement-result snapshot carries mode, transform, target, snap ID, validity and support state. Preview and commit use the same transform resolver; support is force-revalidated on commit.
 
 ## First-pass rules
 
@@ -26,13 +26,14 @@
 ## Performance
 
 - Do not iterate all ACarvableLog actors from the placement-preview path when a local spatial query is sufficient.
-- Cache support preview results briefly for small transform changes; always perform a fresh support check on commit.
+- Cache support preview by piece, target, mode, snap ID, transform and structural graph version. Reuse unchanged results; throttle changed-candidate graph checks to 10 Hz; always perform a fresh support check on commit.
+- The three all-log iterators inside ForestCharacter placement preview were replaced by local overlap queries. Other systems, including the structural graph itself, still perform global scans when rebuilding the graph.
 - Keep StructureLink::Settle as a structural-change operation, not a per-frame operation.
 - Profile with Unreal Insights before making performance claims.
 
 ## Automation tests
 
-Initial tests cover axis-yaw folding and standard angle sectors. World tests are still needed for top stacking and anchoring, end-to-end connection, complementary +45/-45 courses, post embed depth, support removal/fall propagation, save/load reconstruction, and preview-cost profiling.
+Automation tests cover axis-yaw folding, standard angle sectors, nearest compatible snap selection, and deterministic tie-breaking. World tests are still needed for top stacking and anchoring, end-to-end connection, complementary +45/-45 courses, post embed depth, support removal/fall propagation, save/load reconstruction, and preview-cost profiling.
 
 ## Known limitations
 
