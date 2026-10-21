@@ -1200,6 +1200,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		return;
 	}
 	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	constexpr float GroundYawStep = 15.f;
 	if (bPlaceSlope)
 	{
 		if (ACarvableLog::ComputeSlopePlacement(Hit.ImpactPoint, Forward, SlopeAngle, Piece, PlaceTransform))
@@ -1211,22 +1212,34 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	}
 	float Yaw = bPlaceStanding ? Forward.Rotation().Yaw : Forward.Rotation().Yaw + 90.f;
 	FVector Ground = Hit.ImpactPoint;
-	// Snap to the nearest lying log within 4 m: parallel or square to it (never at an odd angle), and on its 75 cm
-	// module grid, so pieces laid next to each other line up into one structure.
+	// Snap to a nearby installed lying log: the ground aim stays the placement target, while installed pieces provide
+	// a stable local frame. Prefer the frame whose parallel/perpendicular direction best matches the player's view.
 	const ACarvableLog* Near = nullptr;
-	float NearDistance = 400.f;
+	float NearScore = TNumericLimits<float>::Max();
+	float NearDistance = TNumericLimits<float>::Max();
 	for (TActorIterator<ACarvableLog> It(GetWorld()); It; ++It)
 	{
 		FVector C, A;
 		float R, H;
-		if (*It == Piece || It->IsCarried() || !ACarvableLog::GetLogAxis(*It, C, A, R, H) || FMath::Abs(A.Z) > 0.3f)
+		if (*It == Piece || !It->IsAnchored() || It->IsCarried()
+			|| !ACarvableLog::GetLogAxis(*It, C, A, R, H) || FMath::Abs(A.Z) > 0.3f)
 		{
 			continue;
 		}
 		const FVector Closest = FMath::ClosestPointOnSegment(Ground, C - A * H, C + A * H);
 		const float Distance = FVector::Dist2D(Closest, Ground);
-		if (Distance < NearDistance)
+		if (Distance > 400.f)
 		{
+			continue;
+		}
+		const float ReferenceYaw = FVector(A.X, A.Y, 0.f).Rotation().Yaw;
+		const float DeltaYaw = FMath::FindDeltaAngleDegrees(ReferenceYaw, Yaw);
+		const float DirectionError = FMath::Abs(DeltaYaw - GroundYawStep * FMath::RoundToFloat(DeltaYaw / GroundYawStep));
+		// Keep the aim point in charge, but prefer a nearby installed frame whose regular angular grid matches the view.
+		const float Score = Distance + DirectionError * 2.f;
+		if (Score < NearScore || (FMath::IsNearlyEqual(Score, NearScore) && Distance < NearDistance))
+		{
+			NearScore = Score;
 			NearDistance = Distance;
 			Near = *It;
 		}
@@ -1235,13 +1248,18 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	{
 		const FTransform NearFrame = Near->GetActorTransform();
 		const float NearYaw = NearFrame.GetRotation().Rotator().Yaw;
-		Yaw = NearYaw + 90.f * FMath::RoundToFloat(FMath::FindDeltaAngleDegrees(NearYaw, Yaw) / 90.f);
+		Yaw = NearYaw + GroundYawStep * FMath::RoundToFloat(FMath::FindDeltaAngleDegrees(NearYaw, Yaw) / GroundYawStep);
 		FVector Local = NearFrame.InverseTransformPosition(Ground);
 		const float MinX = Near->GetLocalBox().Min.X;
 		const float Module = ACarvableLog::ModuleLength;
 		Local.X = MinX + FMath::RoundToFloat((Local.X - MinX) / Module) * Module;
 		Local.Y = FMath::RoundToFloat(Local.Y / Module) * Module;
 		Ground = FVector(NearFrame.TransformPosition(Local).X, NearFrame.TransformPosition(Local).Y, Ground.Z);
+	}
+	else
+	{
+		// Keep free placement equally predictable when there is no installed piece close enough to anchor its grid.
+		Yaw = GroundYawStep * FMath::RoundToFloat(Yaw / GroundYawStep);
 	}
 	PlaceTransform = bPlaceStanding ? Piece->GetStandTransform(Ground, Yaw) : Piece->GetLayTransform(Ground, Yaw);
 	CarryPlace = bPlaceStanding ? ECarryPlace::Stand : ECarryPlace::Lay;
