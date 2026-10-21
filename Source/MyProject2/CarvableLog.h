@@ -232,9 +232,13 @@ public:
 	/**
 	 * Cuts a gap Modules wide (an even number, at least 2) out of this piece, on the module lines nearest CentreX, leaving a
 	 * piece on each side: a door or window opening in a wall course. At least one module must stay on each side. Pieces of an
-	 * installed log stay installed. Returns the piece to the right of the gap, or null if there is no room.
+	 * installed log stay installed. What comes out is not lost: each module of the gap drops out as a 75 cm log (a raw log
+	 * gives SM_RawLog_75 of the same profile), pushed towards PushTowards (a world point, e.g. the player) if given.
+	 * Returns the piece to the right of the gap, or null if there is no room.
 	 */
-	ACarvableLog* CutOpening(float CentreX, int32 Modules);
+	ACarvableLog* CutOpening(float CentreX, int32 Modules, const FVector& PushTowards = FVector::ZeroVector);
+	/** The 75 cm pieces the last CutOpening dropped (for tests and the showcase). */
+	const TArray<TWeakObjectPtr<ACarvableLog>>& GetLastOpeningOffcuts() const { return LastOpeningOffcuts; }
 
 	/** Cuts a channel along the whole log, opening towards SideAngleDeg (0 = top). */
 	bool CutGroove(float SideAngleDeg);
@@ -362,6 +366,8 @@ public:
 	/** Placed in a level: the raw mesh this log starts from (loaded when play begins). */
 	UPROPERTY(EditAnywhere, Category = "Carving")
 	TObjectPtr<UStaticMesh> SourceMesh;
+
+	TArray<TWeakObjectPtr<ACarvableLog>> LastOpeningOffcuts;
 
 	/** Start without physics (stays where it was placed until hit apart). */
 	UPROPERTY(EditAnywhere, Category = "Carving")

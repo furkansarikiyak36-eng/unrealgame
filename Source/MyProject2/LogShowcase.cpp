@@ -171,6 +171,18 @@ void ALogShowcase::BeginStation(int32 Index, const FString& Title)
 	StationTitle = FString::Printf(TEXT("%d. %s"), Index + 1, *Title);
 	StationNotes.Reset();
 	StationSignSpot = O - F * 450.f;
+	// The ground round the whole station (things dropped there must land on it).
+	if (UExcavationTerrainChunkSubsystem* Terrain = GetWorld()->GetSubsystem<UExcavationTerrainChunkSubsystem>())
+	{
+		for (int32 X = -1; X <= 1; ++X)
+		{
+			for (int32 Y = -1; Y <= 1; ++Y)
+			{
+				const FVector At = O + F * (X * 800.f) + R * (Y * 800.f);
+				Terrain->EnsureGroundAt(FVector(At.X, At.Y, 0.f));
+			}
+		}
+	}
 	Report += StationTitle + TEXT("\n");
 }
 
@@ -225,6 +237,7 @@ FString ALogShowcase::BuildAll()
 	StationSteps();
 	StationFurniture();
 	StationHauling();
+	StationModuleOpening();
 
 	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
 	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
@@ -285,14 +298,14 @@ void ALogShowcase::StationWall()
 		float LocalX = 0.f;
 		for (ACarvableLog* Log : Pieces[Course])
 		{
-			const float X = Log ? Log->GetActorTransform().InverseTransformPosition(O + R * WorldAlongR + FVector(0.f, 0.f, Log->GetActorLocation().Z - O.Z)).X : 0.f;
-			if (Log && X > Log->GetMinX() && X < Log->GetMaxX())
+			const float X = IsValid(Log) ? Log->GetActorTransform().InverseTransformPosition(O + R * WorldAlongR + FVector(0.f, 0.f, Log->GetActorLocation().Z - O.Z)).X : 0.f;
+			if (IsValid(Log) && X > Log->GetMinX() && X < Log->GetMaxX())
 			{
 				Into = Log;
 				LocalX = X;
 			}
 		}
-		ACarvableLog* Other = Into ? Into->CutOpening(LocalX, 2) : nullptr;
+		ACarvableLog* Other = Into ? Into->CutOpening(LocalX, 2, O - F * 400.f) : nullptr;
 		Report += FString::Printf(TEXT("    %s %s\n"), Other ? TEXT("OK ") : TEXT("XX "), What);
 		Other ? ++Placed : ++Failed;
 		if (Other)
@@ -491,5 +504,48 @@ void ALogShowcase::StationHauling()
 			Note(*FString::Printf(TEXT("%s yük %d"), *AHaulCart::KindName(Kinds[Kind]), Index + 1), Got, P(EPlace::Load));
 		}
 	}
+	EndStation();
+}
+
+// 11. The 75 cm module at work: a wall of four 300 cm courses, a 2 x 2 module opening cut out of its middle; the
+// four modules that come out drop as four 75 cm logs, ready to be used again.
+void ALogShowcase::StationModuleOpening()
+{
+	BeginStation(10, TEXT("Modül: 4 x 300 duvar, ortadan 2 x 2 açıklık -> 4 adet 75 cm kütük düşer"));
+	TArray<ACarvableLog*> Courses;
+	ACarvableLog* Top = LayAt(Mesh(300), O, FYaw + 90.f, TEXT("sıra 1"));
+	Courses.Add(Top);
+	for (int32 Course = 2; Course <= 4 && Top; ++Course)
+	{
+		Top = OnLog(Mesh(300), Top, 0.f, FYaw, static_cast<uint8>(EHold::Lay), 0.f, *FString::Printf(TEXT("sıra %d"), Course), P(EPlace::Stack));
+		Courses.Add(Top);
+	}
+	int32 Offcuts = 0;
+	for (int32 Course = 1; Course <= 2 && Course < Courses.Num(); ++Course)
+	{
+		ACarvableLog* Log = Courses[Course];
+		ACarvableLog* Right = Log ? Log->CutOpening(Log->GetCenterX(), 2, O - F * 400.f) : nullptr;
+		const TCHAR* What = Course == 1 ? TEXT("açıklık, sıra 2") : TEXT("açıklık, sıra 3");
+		Report += FString::Printf(TEXT("    %s %s\n"), Right ? TEXT("OK ") : TEXT("XX "), What);
+		Right ? ++Placed : ++Failed;
+		if (!Right)
+		{
+			StationNotes += FString::Printf(TEXT("\nolmadı: %s"), What);
+			continue;
+		}
+		Report += FString::Printf(TEXT("      kalan: sol %.0f cm, sağ %.0f cm\n"), Log->GetLength(), Right->GetLength());
+		for (const TWeakObjectPtr<ACarvableLog>& Piece : Log->GetLastOpeningOffcuts())
+		{
+			if (Piece.IsValid())
+			{
+				++Offcuts;
+				Report += FString::Printf(TEXT("      düşen parça: %.0f cm\n"), Piece->GetLength());
+			}
+		}
+	}
+	const bool bFour = Offcuts == 4;
+	Report += FString::Printf(TEXT("    %s düşen 75 cm kütük: %d (beklenen 4)\n"), bFour ? TEXT("OK ") : TEXT("XX "), Offcuts);
+	bFour ? ++Placed : ++Failed;
+	StationNotes += FString::Printf(TEXT("\n%d adet 75 cm kütük düştü"), Offcuts);
 	EndStation();
 }

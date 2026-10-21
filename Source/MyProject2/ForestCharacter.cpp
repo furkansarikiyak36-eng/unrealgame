@@ -1772,9 +1772,9 @@ void AForestCharacter::OpenAimed()
 		return;
 	}
 	const float LocalX = Piece->GetActorTransform().InverseTransformPosition(Hit.ImpactPoint).X;
-	if (Piece->CutOpening(LocalX, 2))
+	if (Piece->CutOpening(LocalX, 2, GetActorLocation()))
 	{
-		ShowMessage(TEXT("Açıklık açıldı (2 modül)"));
+		ShowMessage(TEXT("Açıklık açıldı (2 modül)  —  çıkan parçalar 75 cm kütük olarak düştü"));
 		SettleStructure();
 	}
 	else

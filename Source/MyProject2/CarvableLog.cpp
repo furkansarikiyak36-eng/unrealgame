@@ -4,6 +4,7 @@
 #include "Wood/WoodStructureGeometry.h"
 #include "Wood/WoodStructureLogic.h"
 #include "StructureLink.h"
+#include "RawLogShapes.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "EngineUtils.h"
 #include "ForestTypes.h"
@@ -534,7 +535,7 @@ bool ACarvableLog::ComputeSlopePlacement(const FVector& LowEnd, const FVector& F
 	return true;
 }
 
-ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
+ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules, const FVector& PushTowards)
 {
 	TArray<float> Lines;
 	GetModuleLines(Lines);
@@ -554,6 +555,9 @@ ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
 	{
 		return nullptr;
 	}
+	LastOpeningOffcuts.Reset();
+	const RawLogShapes::FShape Shape = RawLogShapes::FromLog(this);
+	const FTransform Frame = GetActorTransform();
 	const bool bWasAnchored = bAnchored;
 	ACarvableLog* Middle = CrossCut(X0);
 	if (!Middle)
@@ -562,6 +566,54 @@ ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
 	}
 	ACarvableLog* Right = Middle->CrossCut(X1);
 	Middle->Destroy();
+
+	// The sides stay as they were cut (with their corner notches), but know their new length: a raw log's side that is a
+	// whole raw length (75 / 150 / 300 / 600) is that raw shape for the axe; other lengths are plain building pieces.
+	auto Relabel = [&Shape](ACarvableLog* Piece)
+	{
+		if (Piece && Shape.IsValid())
+		{
+			const int32 Length = FMath::RoundToInt(Piece->GetLength() / ModuleLength) * static_cast<int32>(ModuleLength);
+			Piece->SourceMesh = RawLogShapes::LoadMesh(Length, Shape.Profile);
+		}
+	};
+	Relabel(this);
+	Relabel(Right);
+
+	// What came out of the gap: one 75 cm log per module, dropping out of the wall towards the player.
+	UStaticMesh* Offcut = Shape.IsValid() ? RawLogShapes::LoadMesh(RawLogShapes::ShortestCm, Shape.Profile) : nullptr;
+	if (!Offcut)
+	{
+		Offcut = RawLogShapes::LoadMesh(RawLogShapes::ShortestCm, RawLogShapes::EProfile::Raw);
+	}
+	const FVector Axis = Frame.GetUnitAxis(EAxis::X);
+	for (int32 Module = 0; Module < Modules && Offcut; ++Module)
+	{
+		const FVector Where = Frame.TransformPosition(FVector(X0 + (Module + 0.5f) * ModuleLength, 0.f, 0.f));
+		FVector Out = PushTowards.IsZero() ? Frame.GetUnitAxis(EAxis::Y) : PushTowards - Where;
+		Out = (Out - Axis * FVector::DotProduct(Out, Axis)).GetSafeNormal2D();
+		// Out of the wall on the cutter's side, then down to the ground (it would otherwise settle back into the gap).
+		ACarvableLog* Piece = SpawnFromStaticMesh(GetWorld(), Offcut, FTransform(Frame.GetRotation(), Where + Out * (Radius * 2.f + 45.f)));
+		if (!Piece)
+		{
+			continue;
+		}
+		// Down onto the ground, or onto an offcut that already fell there.
+		FHitResult Below;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(OffcutDrop), false, Piece);
+		Params.AddIgnoredActor(this);
+		if (Right)
+		{
+			Params.AddIgnoredActor(Right);
+		}
+		const FVector From = Piece->GetActorLocation();
+		if (GetWorld()->LineTraceSingleByChannel(Below, From, From - FVector(0.f, 0.f, 2000.f), ECC_Visibility, Params))
+		{
+			Piece->SetActorLocation(FVector(From.X, From.Y, Below.ImpactPoint.Z + Piece->GetRadius() + 1.f));
+		}
+		LastOpeningOffcuts.Add(Piece);
+	}
+
 	if (bWasAnchored)
 	{
 		Anchor();

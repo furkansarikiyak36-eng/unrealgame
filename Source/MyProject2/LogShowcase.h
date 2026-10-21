@@ -79,6 +79,7 @@ private:
 	void StationSteps();
 	void StationFurniture();
 	void StationHauling();
+	void StationModuleOpening();
 
 	FVector StationSignSpot;
 	FString StationTitle;

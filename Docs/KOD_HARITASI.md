@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (21 October 2026 12:21) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (21 October 2026 12:41) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -80,7 +80,8 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void AddImpactDamage(float ImpulseSize)` — A hard landing or hit hurts wood. ImpulseSize is the normal impulse of the hit (kg cm/s); small knocks do nothing.
 - `static void HitEnemy(ARaidEnemy* Enemy, float ImpulseSize)` — A moving piece that strikes an enemy hurts it, by the impulse of the blow.
 - `static bool ComputeSlopePlacement(const FVector& LowEnd, const FVector& Forward, float AngleDeg, const ACarvableLog* Piece, FTrans …` — A piece leaning at AngleDeg (10..80) with its lower end on the ground at LowEnd, rising in the direction of Forward (flattened): a ramp, a rafter, a stair stringer. …
-- `ACarvableLog* CutOpening(float CentreX, int32 Modules)` — Cuts a gap Modules wide (an even number, at least 2) out of this piece, on the module lines nearest CentreX, leaving a piece on each side: a door or window opening in a …
+- `ACarvableLog* CutOpening(float CentreX, int32 Modules, const FVector& PushTowards = FVector::ZeroVector)` — Cuts a gap Modules wide (an even number, at least 2) out of this piece, on the module lines nearest CentreX, leaving a piece on each side: a door or window opening in a …
+- `const TArray<TWeakObjectPtr<ACarvableLog>>& GetLastOpeningOffcuts() const` — The 75 cm pieces the last CutOpening dropped (for tests and the showcase).
 - `bool CutGroove(float SideAngleDeg)` — Cuts a channel along the whole log, opening towards SideAngleDeg (0 = top).
 - `float GetVolume() const` — Wood in this piece (cm3); what it weighs on the shoulder.
 - `static float GetShoulderCapacity()` — How much wood fits on the shoulder: one whole log (390 x 70 cm), or two halves, or six one-module pieces.
@@ -592,4 +593,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-203 / 504 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+203 / 505 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
