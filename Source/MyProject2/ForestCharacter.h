@@ -102,6 +102,19 @@ public:
 
 	/** What a left click does with the carried piece where the player is looking. */
 	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack, Diagonal, Corner, Socket };
+
+	/** One snapshot shared by the ghost preview, support validation and placement commit. */
+	struct FLogPlacementResult
+	{
+		ECarryPlace Mode = ECarryPlace::None;
+		FTransform Transform;
+		TWeakObjectPtr<AActor> TargetActor;
+		FName SnapPointId = NAME_None;
+		bool bValid = false;
+		bool bSupported = false;
+		FString InvalidReason;
+	};
+	FLogPlacementResult GetLogPlacementResult() const;
 	ECarryPlace GetCarryPlace() const { return CarryPlace; }
 	/** Socket placement: what it does, e.g. "yan yana (ön yüz)". */
 	const FString& GetSocketLabel() const { return SocketLabel; }
@@ -536,6 +549,7 @@ private:
 	TWeakObjectPtr<ACarvableLog> StandBase;
 	/** The snap points of the face of a log being aimed at (module lines on that face), and the one chosen. */
 	TArray<FVector> SocketMarkers;
+	FName SelectedSnapPointId = NAME_None;
 	FVector SocketChosen = FVector::ZeroVector;
 	FVector SocketNormal = FVector::UpVector;
 	FString SocketLabel;
