@@ -1413,6 +1413,7 @@ bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const F
 		&& CachedSupportPreviewTarget.Get() == PlaceTarget.Get()
 		&& CachedSupportPreviewMode == CarryPlace
 		&& CachedSupportPreviewSnapPointId == SelectedSnapPointId
+		&& CachedSupportPreviewStructureVersion == StructureLink::Version()
 		&& CachedSupportPreviewTransform.GetLocation().Equals(Transform.GetLocation(), 2.f)
 		&& CachedSupportPreviewTransform.GetRotation().AngularDistance(Transform.GetRotation()) <= FMath::DegreesToRadians(2.f);
 
@@ -1432,6 +1433,7 @@ bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const F
 	CachedSupportPreviewTarget = PlaceTarget;
 	CachedSupportPreviewMode = CarryPlace;
 	CachedSupportPreviewSnapPointId = SelectedSnapPointId;
+	CachedSupportPreviewStructureVersion = StructureLink::Version();
 	CachedSupportPreviewTransform = Transform;
 	LastSupportPreviewEvaluation = Now;
 	bSupportPreviewCacheValid = true;
