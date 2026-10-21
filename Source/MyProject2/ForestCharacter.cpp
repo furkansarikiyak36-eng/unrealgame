@@ -1341,6 +1341,11 @@ namespace
 				Out.Add(SurfacePoint(Along));
 				return;
 			}
+			if (Lines.IsEmpty())
+			{
+				Out.Add(SurfacePoint(Along));
+				return;
+			}
 			for (const float Line : Lines)
 			{
 				if (FMath::Abs(Line) < Half - 1.f)
@@ -1380,8 +1385,6 @@ bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const F
 		return bCachedSupportPreview;
 	}
 	bCachedSupportPreview = StructureLink::WouldBeSupported(GetWorld(), Piece, Transform);
-	CachedSupportPreviewTransform = Transform;
-	CachedSupportPreviewPiece = const_cast<ACarvableLog*>(Piece);
 	LastSupportPreviewEvaluation = Now;
 	bSupportPreviewCacheValid = true;
 	return bCachedSupportPreview;
@@ -1847,31 +1850,29 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	const ACarvableLog* Near = nullptr;
 	float NearScore = TNumericLimits<float>::Max();
 	float NearDistance = TNumericLimits<float>::Max();
-	for (TActorIterator<ACarvableLog> It(GetWorld()); It; ++It)
+	TArray<ACarvableLog*> NearbyGroundLogs;
+	FindLocalLogs(GetWorld(), Ground, 450.f, NearbyGroundLogs);
+	for (ACarvableLog* Candidate : NearbyGroundLogs)
 	{
 		FVector C, A;
 		float R, H;
-		if (*It == Piece || !It->IsAnchored() || It->IsCarried()
-			|| !ACarvableLog::GetLogAxis(*It, C, A, R, H) || FMath::Abs(A.Z) > 0.3f)
+		if (Candidate == Piece || !Candidate->IsAnchored() || Candidate->IsCarried()
+			|| !ACarvableLog::GetLogAxis(Candidate, C, A, R, H) || FMath::Abs(A.Z) > 0.3f)
 		{
 			continue;
 		}
 		const FVector Closest = FMath::ClosestPointOnSegment(Ground, C - A * H, C + A * H);
 		const float Distance = FVector::Dist2D(Closest, Ground);
-		if (Distance > 400.f)
-		{
-			continue;
-		}
+		if (Distance > 400.f) continue;
 		const float ReferenceYaw = FVector(A.X, A.Y, 0.f).Rotation().Yaw;
 		const float DeltaYaw = FMath::FindDeltaAngleDegrees(ReferenceYaw, Yaw);
 		const float DirectionError = FMath::Abs(DeltaYaw - NearYawStep * FMath::RoundToFloat(DeltaYaw / NearYawStep));
-		// Keep the aim point in charge, but prefer a nearby installed frame whose regular angular grid matches the view.
 		const float Score = Distance + DirectionError * 2.f;
 		if (Score < NearScore || (FMath::IsNearlyEqual(Score, NearScore) && Distance < NearDistance))
 		{
 			NearScore = Score;
 			NearDistance = Distance;
-			Near = *It;
+			Near = Candidate;
 		}
 	}
 	if (Near)
