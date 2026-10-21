@@ -39,14 +39,14 @@ bool WorldScanSystem::ExecuteScanPlan(
 	{
 		OutBundle.bOverlapSphereAttempted = true;
 		OverlapSphere(World, Request.QueryCenter, Request.OverlapRadiusCm, ActorToIgnore,
-			OutBundle.OverlapSphere, Request.TraceChannel);
+			OutBundle.OverlapSphere, Request.OverlapChannel);
 	}
 
 	if (Request.bRunOverlapBox)
 	{
 		OutBundle.bOverlapBoxAttempted = true;
 		OverlapBox(World, Request.QueryCenter, Request.OverlapHalfExtentCm, Request.OverlapRotation,
-			ActorToIgnore, OutBundle.OverlapBox, Request.TraceChannel);
+			ActorToIgnore, OutBundle.OverlapBox, Request.OverlapChannel);
 	}
 
 	if (Request.bRunSurfaceSampling)
