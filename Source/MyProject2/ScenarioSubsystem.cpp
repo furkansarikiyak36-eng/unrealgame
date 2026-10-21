@@ -93,7 +93,7 @@ void UScenarioSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		return;
 	}
 	// Small demo stages lay themselves out: the scenario's river and cliff would not fit on them.
-	if (InWorld.GetMapName().Contains(TEXT("Demo_RawMaterials")))
+	if (InWorld.GetMapName().Contains(TEXT("Demo_RawMaterials")) || InWorld.GetMapName().Contains(TEXT("LogShowcase")))
 	{
 		return;
 	}

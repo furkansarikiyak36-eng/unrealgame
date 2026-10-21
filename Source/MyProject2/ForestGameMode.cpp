@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestGameMode.h"
+#include "LogShowcase.h"
 #include "WorldCore/ExcavationTerrainChunkSubsystem.h"
 #include "ForestCharacter.h"
 #include "ForestHUD.h"
@@ -33,7 +34,7 @@ void AForestGameMode::StartPlay()
 	ConvertHarvestables();
 
 	// The wood chain demo level keeps its stage clear of the building stations.
-	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) ? true : false;
+	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) || TActorIterator<ALogShowcase>(GetWorld());
 	if (bSpawnDemoShowcase && !bDemoLevel)
 	{
 		SetupDemoShowcase();

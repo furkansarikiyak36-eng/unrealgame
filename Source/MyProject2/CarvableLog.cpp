@@ -675,6 +675,17 @@ ACarvableLog* ACarvableLog::SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh
 
 	const FBox Box = UGeometryScriptLibrary_MeshQueryFunctions::GetMeshBoundingBox(Log->MeshComponent->GetDynamicMesh());
 	Log->Radius = Box.GetSize().Z * 0.5f;
+	// Split and hewn shapes have a flat face, so they can go down as floor boards (ComputeFloorPlacement). That rolls
+	// the piece by FlatAngle + 90: -90 keeps the mesh as it is (flat face up), 90 turns it over (flat face down in the mesh).
+	{
+		const FString Name = Mesh->GetName();
+		if (Name.Contains(TEXT("_Half")) || Name.Contains(TEXT("_Plank")) || Name.Contains(TEXT("_Hewn"))
+			|| Name.Contains(TEXT("_Quarter")) || Name.Contains(TEXT("_Kalas")))
+		{
+			Log->bSplitPiece = true;
+			Log->FlatAngle = Box.Max.Z <= -Box.Min.Z ? -90.f : 90.f;
+		}
+	}
 	// Remember what it was made from (RawLogShapes reads the shape from the mesh name); unlike a placed log it still
 	// falls and settles, and the copy above is not loaded again.
 	Log->SourceMesh = Mesh;

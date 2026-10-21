@@ -832,6 +832,72 @@ FString AForestCharacter::TestSnapSectors(int32 LengthCm)
 	return Report;
 }
 
+const TCHAR* AForestCharacter::CarryPlaceName(ECarryPlace Place)
+{
+	switch (Place)
+	{
+	case ECarryPlace::Across:   return TEXT("köşe çaprazı");
+	case ECarryPlace::Lay:      return TEXT("yatırıldı");
+	case ECarryPlace::Stand:    return TEXT("dikildi");
+	case ECarryPlace::Beam:     return TEXT("kiriş");
+	case ECarryPlace::Brace:    return TEXT("payanda");
+	case ECarryPlace::Floor:    return TEXT("döşeme");
+	case ECarryPlace::Slope:    return TEXT("eğik");
+	case ECarryPlace::Stack:    return TEXT("üst üste");
+	case ECarryPlace::Diagonal: return TEXT("45° çapraz");
+	case ECarryPlace::Load:     return TEXT("yüklendi");
+	default:                    return TEXT("YOK");
+	}
+}
+
+AForestCharacter::ECarryPlace AForestCharacter::PlaceForShowcase(ACarvableLog* Piece, AActor* Target, const FVector& Aim,
+	const FVector& Normal, float ViewYaw, EShowcaseHold Hold, float SlopeDeg)
+{
+	if (!Piece)
+	{
+		return ECarryPlace::None;
+	}
+	// Long logs are over a shoulder load: the showcase carries them anyway (in play they are dragged by rope).
+	if (!StartCarry(Piece))
+	{
+		Piece->Release();
+		CarriedItem = EForestItem::Log;
+		CarriedLogs.Add(Piece);
+		Piece->BeginCarry(Camera, FTransform::Identity);
+	}
+	const bool bWasStanding = bPlaceStanding;
+	const bool bWasSlope = bPlaceSlope;
+	const float WasAngle = SlopeAngle;
+	bPlaceStanding = Hold == EShowcaseHold::Stand;
+	bPlaceSlope = Hold == EShowcaseHold::Slope;
+	SlopeAngle = SlopeDeg;
+	SetActorRotation(FRotator(0.f, ViewYaw, 0.f));
+	FHitResult Hit;
+	Hit.HitObjectHandle = FActorInstanceHandle(Target);
+	Hit.ImpactPoint = Aim;
+	Hit.Location = Aim;
+	Hit.ImpactNormal = Normal;
+	Hit.Normal = Normal;
+	Hit.bBlockingHit = true;
+	UpdateCarryPlacementAt(Hit, true);
+	const ECarryPlace Chosen = CarryPlace;
+	const bool bPlaced = Chosen != ECarryPlace::None && PlaceCarried();
+	if (!bPlaced && CarriedLogs.Num() > 0 && GetTopCarried() == Piece)
+	{
+		// Nothing fits: put it down at the aim, lying, so it is still there to see.
+		CarriedLogs.Pop();
+		if (CarriedLogs.Num() == 0)
+		{
+			CarriedItem = EForestItem::None;
+		}
+		Piece->PlaceAt(Piece->GetLayTransform(Aim, ViewYaw + 90.f), true);
+	}
+	bPlaceStanding = bWasStanding;
+	bPlaceSlope = bWasSlope;
+	SlopeAngle = WasAngle;
+	return bPlaced ? Chosen : ECarryPlace::None;
+}
+
 FString AForestCharacter::TestShovel(FVector Point, FVector Normal, bool bFill)
 {
 	const FString Result = ShovelStroke(Point, Normal, bFill);
@@ -1227,13 +1293,13 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	}
 	// A split piece onto a lying log: a floor board, flat face up, resting on it.
 	AActor* Lower = Hit.GetActor();
-	// A post stood on the top of an installed lying log (a platform beam): its foot rests on it.
+	// A post stood, or a rafter leant, on the top of a lying log (a platform beam, a sill on the ground): its foot rests on it.
 	if ((bPlaceStanding || bPlaceSlope) && Lower && Hit.ImpactNormal.Z > 0.6f && !Piece->IsSplit())
 	{
 		FVector BaseCentre, BaseAxis;
 		float BaseRadius, BaseHalf;
 		const ACarvableLog* Base = Cast<ACarvableLog>(Lower);
-		if (Base && Base->IsAnchored() && ACarvableLog::GetLogAxis(Base, BaseCentre, BaseAxis, BaseRadius, BaseHalf) && FMath::Abs(BaseAxis.Z) < 0.3f)
+		if (Base && !Base->IsCarried() && ACarvableLog::GetLogAxis(Base, BaseCentre, BaseAxis, BaseRadius, BaseHalf) && FMath::Abs(BaseAxis.Z) < 0.3f)
 		{
 			const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 			if (bPlaceSlope)

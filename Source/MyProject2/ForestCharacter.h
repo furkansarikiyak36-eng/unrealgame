@@ -144,6 +144,18 @@ public:
 	 * and reports each angle to the first log.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestSnapSectors(int32 LengthCm);
+
+	/** How the player holds a piece when it goes down: lying, standing up as a post, or leaning at an angle. */
+	enum class EShowcaseHold : uint8 { Lay, Stand, Slope };
+	/**
+	 * Puts Piece down exactly as the player would: shoulders it, faces ViewYaw, aims at Aim on Target (or the ground),
+	 * picks the placement the game would pick and places it. Used by ALogShowcase to build its stations with the real
+	 * mechanics. Returns what was chosen (None when nothing fits; the piece is then dropped back where it was).
+	 */
+	ECarryPlace PlaceForShowcase(ACarvableLog* Piece, AActor* Target, const FVector& Aim, const FVector& Normal, float ViewYaw,
+		EShowcaseHold Hold, float SlopeDeg = 45.f);
+	/** Name of a placement for reports. */
+	static const TCHAR* CarryPlaceName(ECarryPlace Place);
 	static bool IsProfileTool(ECarveTool Tool)
 	{
 		return Tool == ECarveTool::NotchRound || Tool == ECarveTool::NotchFlat || Tool == ECarveTool::Dovetail;

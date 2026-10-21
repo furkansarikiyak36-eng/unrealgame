@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (21 October 2026 11:45) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (21 October 2026 12:21) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -169,7 +169,8 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsLighterHeld() const` — F held: the lighter heats what is in sight (a piece of wood or a fire pit).
 - `void TakeEnemyHit(float Amount)` — An enemy hit on the player.
 - `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
-- `static bool IsProfileTool(ECarveTool Tool)` — Snap sectors on a log: lays a raw log, then looks at it from view offsets -90..90 (step 5) and reports which placement each picks and its angle to the log; then builds …
+- `ECarryPlace PlaceForShowcase(ACarvableLog* Piece, AActor* Target, const FVector& Aim, const FVector& Normal, float ViewYaw, EShowc …` — Puts Piece down exactly as the player would: shoulders it, faces ViewYaw, aims at Aim on Target (or the ground), picks the placement the game would pick and places it. …
+- `static const TCHAR* CarryPlaceName(ECarryPlace Place)` — Name of a placement for reports.
 - `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
 - `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
 - `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).
@@ -192,7 +193,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsHelpOpen() const` — [F1]: the full list of controls.
 - `void TestLight(AActor* Target, float Seconds)` — For the mechanics test: the lighter held on Target for Seconds.
 - `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
-- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `GetSlopeAngle`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
 
 ## ForestOutline.h
 
@@ -282,6 +283,13 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `float CalculateShearCapacity() const` — Lateral shear capacity based on Kessler & Hahney LBN 32 formula
 - `EForestItem GetItemType() const` — --- Getters & Setters ---
 - Ayrıca (açıklamasız): `ALogConstructionActor`, `IsChinked`, `IsPlastered`, `IsSimulatingPhysics`
+
+## LogShowcase.h
+
+**ALogShowcase** (class) — Builds, when play starts, a row of stations that show what logs can be made into, each built piece by piece with the player's own placement …
+
+- `FString BuildAll()` — Builds every station now (also called by itself shortly after play starts). Returns the report.
+- Ayrıca (açıklamasız): `ALogShowcase`
 
 ## LogWallBlueprint.h
 
@@ -584,4 +592,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-201 / 500 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+203 / 504 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
