@@ -527,8 +527,6 @@ private:
 	bool bSupportPreviewCacheValid = false;
 	bool bCachedSupportPreview = false;
 	double LastSupportPreviewEvaluation = -1000.0;
-	TWeakObjectPtr<ACarvableLog> CachedSupportPreviewPiece;
-	FTransform CachedSupportPreviewTransform;
 	TWeakObjectPtr<AActor> PlaceTarget;
 	/** Re-checks the structure after a piece went in or came out; says how many pieces fell. */
 	void SettleStructure();
