@@ -540,6 +540,11 @@ private:
 	bool bSupportPreviewCacheValid = false;
 	bool bCachedSupportPreview = false;
 	double LastSupportPreviewEvaluation = -1000.0;
+	TWeakObjectPtr<ACarvableLog> CachedSupportPreviewPiece;
+	TWeakObjectPtr<AActor> CachedSupportPreviewTarget;
+	ECarryPlace CachedSupportPreviewMode = ECarryPlace::None;
+	FName CachedSupportPreviewSnapPointId = NAME_None;
+	FTransform CachedSupportPreviewTransform;
 	TWeakObjectPtr<AActor> PlaceTarget;
 	/** Re-checks the structure after a piece went in or came out; says how many pieces fell. */
 	void SettleStructure();
