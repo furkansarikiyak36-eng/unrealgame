@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestCharacter.h"
+#include "Algo/Sort.h"
 #include "RawLogShapes.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryItem.h"
@@ -744,6 +745,93 @@ FString AForestCharacter::TestBuildWall(int32 LengthCm, int32 Courses)
 	return Report;
 }
 
+FString AForestCharacter::TestSnapSectors(int32 LengthCm)
+{
+	UStaticMesh* LogMesh = AHarvestableActor::LoadRawLog(LengthCm);
+	if (!LogMesh)
+	{
+		return TEXT("no log mesh");
+	}
+	const FRotator Start = GetActorRotation();
+	const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	FHitResult Ground;
+	const FVector Ahead = GetActorLocation() + Facing * 300.f;
+	GetWorld()->LineTraceSingleByChannel(Ground, Ahead + FVector(0, 0, 200.f), Ahead - FVector(0, 0, 500.f), ECC_Visibility);
+	ACarvableLog* Base = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+	if (!Base)
+	{
+		return TEXT("spawn failed");
+	}
+	const float BaseYaw = FRotator::NormalizeAxis(Facing.Rotation().Yaw + 90.f);
+	Base->PlaceAt(Base->GetLayTransform(Ground.ImpactPoint, BaseYaw), true);
+	auto RelYaw = [BaseYaw](float Yaw)
+	{
+		float D = FMath::FindDeltaAngleDegrees(BaseYaw, Yaw);
+		if (D > 90.f) D -= 180.f;
+		if (D <= -90.f) D += 180.f;
+		return D;
+	};
+	auto ModeName = [](ECarryPlace P)
+	{
+		return P == ECarryPlace::Stack ? TEXT("S") : P == ECarryPlace::Diagonal ? TEXT("D") : P == ECarryPlace::Across ? TEXT("X") : TEXT("-");
+	};
+	// Look from each offset: the carried piece lies across the view, so a view yaw of BaseYaw - 90 + Offset aims it at Offset.
+	ACarvableLog* Probe = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+	FString Report = TEXT("sweep");
+	if (Probe && StartCarry(Probe))
+	{
+		for (int32 Offset = -90; Offset <= 90; Offset += 5)
+		{
+			SetActorRotation(FRotator(0.f, BaseYaw - 90.f + Offset, 0.f));
+			FHitResult Hit;
+			Hit.HitObjectHandle = FActorInstanceHandle(Base);
+			Hit.ImpactPoint = Base->GetActorLocation() + FVector(0, 0, Base->GetRadius());
+			Hit.ImpactNormal = FVector::UpVector;
+			UpdateCarryPlacementAt(Hit, true);
+			const FTransform& Where = CarryPlace == ECarryPlace::Stack ? PlaceTransform : CrossPlacement.Upper;
+			Report += FString::Printf(TEXT(" %d:%s%.0f"), Offset, ModeName(CarryPlace), CarryPlace == ECarryPlace::None ? 0.f : RelYaw(Where.Rotator().Yaw));
+		}
+	}
+	// The user's example: +45 on the base, four courses on it, then one square across on top: -45 to the base.
+	auto PlaceAt = [&](ACarvableLog* Lower, float ViewOffset) -> ACarvableLog*
+	{
+		ACarvableLog* Piece = CarriedLogs.Num() > 0 ? GetTopCarried() : ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+		if (!Piece || (!Piece->IsCarried() && !StartCarry(Piece)))
+		{
+			return nullptr;
+		}
+		FVector C, A;
+		float R, H;
+		ACarvableLog::GetLogAxis(Lower, C, A, R, H);
+		SetActorRotation(FRotator(0.f, FVector(A.X, A.Y, 0.f).Rotation().Yaw - 90.f + ViewOffset, 0.f));
+		FHitResult Hit;
+		Hit.HitObjectHandle = FActorInstanceHandle(Lower);
+		Hit.ImpactPoint = C + FVector(0, 0, R);
+		Hit.ImpactNormal = FVector::UpVector;
+		UpdateCarryPlacementAt(Hit, true);
+		const ECarryPlace Chosen = CarryPlace;
+		if (!PlaceCarried())
+		{
+			return nullptr;
+		}
+		Report += FString::Printf(TEXT(" | %s base%+.0f z=%.0f"), ModeName(Chosen), RelYaw(Piece->GetActorRotation().Yaw), Piece->GetActorLocation().Z);
+		return Piece;
+	};
+	Report += TEXT(" || build");
+	ACarvableLog* Top = PlaceAt(Base, 45.f);
+	for (int32 Course = 0; Course < 4 && Top; ++Course)
+	{
+		Top = PlaceAt(Top, 0.f);
+	}
+	if (Top)
+	{
+		PlaceAt(Top, 90.f);
+	}
+	SetActorRotation(Start);
+	ShowMessage(Report);
+	return Report;
+}
+
 FString AForestCharacter::TestShovel(FVector Point, FVector Normal, bool bFill)
 {
 	const FString Result = ShovelStroke(Point, Normal, bFill);
@@ -1168,21 +1256,63 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
 		return;
 	}
-	// Onto a lying log, lying the same way as it: a wall course on top. The carried piece always lies across the
-	// view (as on the ground), so facing a wall stacks on it and looking along a log crosses it at a corner.
-	if (const ACarvableLog* LowerLog = Cast<ACarvableLog>(Lower); LowerLog && !bPlaceStanding && !bPlaceSlope)
+	// Onto a lying log. The carried piece lies across the view (as on the ground); its angle to the log under it is
+	// snapped to the nearest of four equal 45 degree sectors: 0 = a wall course on top, +45 / -45 = a diagonal course,
+	// 90 = square across (a corner). A +45 course with a square-across log above it gives the complementary -45.
+	// If the chosen fit is impossible (too short, no free notch line) the next nearest sector is tried, so a piece
+	// aimed at a log always goes on it when it can.
+	if (ACarvableLog* LowerLog = Cast<ACarvableLog>(Lower); LowerLog && !bPlaceStanding && !bPlaceSlope)
 	{
 		FVector LowerCentre, LowerAxis;
 		float LowerRadius, LowerHalf;
-		const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
-		const FVector AcrossView = FVector::CrossProduct(FVector::UpVector, Facing);
-		if (ACarvableLog::GetLogAxis(LowerLog, LowerCentre, LowerAxis, LowerRadius, LowerHalf) && FMath::Abs(LowerAxis.Z) < 0.3f
-			&& FMath::Abs(FVector::DotProduct(AcrossView, FVector(LowerAxis.X, LowerAxis.Y, 0.f).GetSafeNormal())) > 0.7071f
-			&& ComputeStackPlacement(LowerLog, Hit.ImpactPoint, Piece, PlaceTransform))
+		if (ACarvableLog::GetLogAxis(LowerLog, LowerCentre, LowerAxis, LowerRadius, LowerHalf) && FMath::Abs(LowerAxis.Z) < 0.3f)
 		{
-			CarryPlace = ECarryPlace::Stack;
-			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
-			return;
+			const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+			const float DesiredYaw = FVector::CrossProduct(FVector::UpVector, Facing).Rotation().Yaw;
+			const float LowerYaw = FVector(LowerAxis.X, LowerAxis.Y, 0.f).Rotation().Yaw;
+			// Angle between the two axes, folded into (-90, 90]: a log has no front or back.
+			float Delta = FMath::FindDeltaAngleDegrees(LowerYaw, DesiredYaw);
+			if (Delta > 90.f) Delta -= 180.f;
+			if (Delta <= -90.f) Delta += 180.f;
+			const float Sectors[4] = { 0.f, 45.f, -45.f, 90.f };
+			auto Distance = [Delta](float Sector)
+			{
+				return Sector == 90.f ? 90.f - FMath::Abs(Delta) : FMath::Abs(Delta - Sector);
+			};
+			int32 Order[4] = { 0, 1, 2, 3 };
+			Algo::Sort(Order, [&](int32 A, int32 B) { return Distance(Sectors[A]) < Distance(Sectors[B]); });
+			for (const int32 Index : Order)
+			{
+				const float Sector = Sectors[Index];
+				if (Sector == 0.f)
+				{
+					if (ComputeStackPlacement(LowerLog, Hit.ImpactPoint, Piece, PlaceTransform))
+					{
+						CarryPlace = ECarryPlace::Stack;
+						bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+						return;
+					}
+				}
+				else if (Sector == 90.f)
+				{
+					if (ACarvableLog::ComputeCrossPlacement(LowerLog, Hit.ImpactPoint, GetActorLocation(), Piece, CrossPlacement))
+					{
+						CrossLower = LowerLog;
+						CarryPlace = ECarryPlace::Across;
+						bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
+						return;
+					}
+				}
+				else if (ACarvableLog::ComputeComplementarySnapPlacement(LowerLog, Hit.ImpactPoint, Piece, LowerYaw,
+					LowerYaw + Sector, CrossPlacement))
+				{
+					CrossLower = LowerLog;
+					CarryPlace = ECarryPlace::Diagonal;
+					DiagonalAngle = Sector;
+					bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
+					return;
+				}
+			}
 		}
 	}
 	// Onto a lying log: square across it, notched (whichever mode is chosen, a post does not stand on a log).
@@ -1200,6 +1330,9 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		return;
 	}
 	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	// Next to a laid log: parallel, square or 45 degrees to it, each an equal 45 degree slice of the view.
+	// Free on the ground: whole 15 degree steps.
+	constexpr float NearYawStep = 45.f;
 	constexpr float GroundYawStep = 15.f;
 	if (bPlaceSlope)
 	{
@@ -1234,7 +1367,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		}
 		const float ReferenceYaw = FVector(A.X, A.Y, 0.f).Rotation().Yaw;
 		const float DeltaYaw = FMath::FindDeltaAngleDegrees(ReferenceYaw, Yaw);
-		const float DirectionError = FMath::Abs(DeltaYaw - GroundYawStep * FMath::RoundToFloat(DeltaYaw / GroundYawStep));
+		const float DirectionError = FMath::Abs(DeltaYaw - NearYawStep * FMath::RoundToFloat(DeltaYaw / NearYawStep));
 		// Keep the aim point in charge, but prefer a nearby installed frame whose regular angular grid matches the view.
 		const float Score = Distance + DirectionError * 2.f;
 		if (Score < NearScore || (FMath::IsNearlyEqual(Score, NearScore) && Distance < NearDistance))
@@ -1248,7 +1381,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	{
 		const FTransform NearFrame = Near->GetActorTransform();
 		const float NearYaw = NearFrame.GetRotation().Rotator().Yaw;
-		Yaw = NearYaw + GroundYawStep * FMath::RoundToFloat(FMath::FindDeltaAngleDegrees(NearYaw, Yaw) / GroundYawStep);
+		Yaw = NearYaw + NearYawStep * FMath::RoundToFloat(FMath::FindDeltaAngleDegrees(NearYaw, Yaw) / NearYawStep);
 		FVector Local = NearFrame.InverseTransformPosition(Ground);
 		const float MinX = Near->GetLocalBox().Min.X;
 		const float Module = ACarvableLog::ModuleLength;
@@ -1291,6 +1424,11 @@ bool AForestCharacter::PlaceCarried()
 	case ECarryPlace::Stack:
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
 		ShowMessage(TEXT("Kütük alttakinin üstüne oturdu  —  duvar sırası"));
+		SettleStructure();
+		break;
+	case ECarryPlace::Diagonal:
+		ACarvableLog::PlaceAcross(CrossLower.Get(), CrossPlacement, Piece);
+		ShowMessage(FString::Printf(TEXT("Kütük alttakine %+.0f° çaprazlama oturdu"), DiagonalAngle));
 		SettleStructure();
 		break;
 	case ECarryPlace::Beam:

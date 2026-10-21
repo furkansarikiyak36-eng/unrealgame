@@ -2440,6 +2440,51 @@ void AMechanicsDemo::BuildScript(AForestCharacter* Character)
 	ScriptIndex = 0;
 	Named.Reset();
 	StructureLink::bLogFalls = true;
+	Script.Add([this]()
+	{
+		UWorld* World = GetWorld();
+		const FVector TestOrigin = GetActorLocation() + FVector(0.f, 12000.f, 1200.f);
+		const float ReferenceYaw = 23.f;
+		TArray<ACarvableLog*> TestLogs;
+		ACarvableLog* Lower = ACarvableLog::SpawnLog(World, FTransform(FRotator::ZeroRotator, TestOrigin));
+		bool bAlternates = Lower != nullptr;
+		float Angles[4] = {};
+		if (Lower)
+		{
+			Lower->PlaceAt(Lower->GetLayTransform(TestOrigin, ReferenceYaw), true);
+			TestLogs.Add(Lower);
+		}
+		for (int32 Course = 0; Course < 4 && bAlternates; ++Course)
+		{
+			const float Side = Course % 2 == 0 ? 1.f : -1.f;
+			const float ExpectedYaw = FRotator::NormalizeAxis(ReferenceYaw + Side * 45.f);
+			ACarvableLog* Upper = ACarvableLog::SpawnLog(World,
+				FTransform(FRotator::ZeroRotator, TestOrigin + FVector(0.f, 0.f, 500.f + Course * 100.f)));
+			FCrossPlacement Placement;
+			if (!Upper || !ACarvableLog::ComputeComplementarySnapPlacement(
+				Lower, Lower->GetActorLocation(), Upper, ReferenceYaw, ExpectedYaw, Placement))
+			{
+				bAlternates = false;
+				if (Upper) Upper->Destroy();
+				break;
+			}
+			Angles[Course] = Placement.Upper.GetRotation().Rotator().Yaw;
+			float Error = FMath::Abs(FMath::FindDeltaAngleDegrees(ExpectedYaw, Angles[Course]));
+			Error = FMath::Min(Error, 180.f - Error);
+			bAlternates &= Error < 1.f && Placement.Upper.GetLocation().Z > Lower->GetActorLocation().Z
+				&& Placement.NotchX >= Upper->GetMinX() && Placement.NotchX <= Upper->GetMaxX();
+			Upper->PlaceAt(Placement.Upper, true);
+			TestLogs.Add(Upper);
+			Lower = Upper;
+		}
+		for (ACarvableLog* Log : TestLogs)
+		{
+			if (Log) Log->Destroy();
+		}
+		Report(bAlternates, FString::Printf(TEXT("Kütük üstü tamamlayıcı snap: +45/-45/+45/-45 (%.0f/%.0f/%.0f/%.0f°)"),
+			Angles[0], Angles[1], Angles[2], Angles[3]));
+		return 0.25f;
+	});
 	AddBraceScript(Character);
 	AddPlatformScript(Character);
 	AddCabinScript(Character);

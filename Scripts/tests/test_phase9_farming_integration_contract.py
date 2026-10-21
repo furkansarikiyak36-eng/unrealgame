@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Static contracts for Phase 9 crop/feed/animal/product/manure integration."""
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,8 +43,11 @@ class FarmingIntegrationTests(unittest.TestCase):
         self.assertIn("SharedCell->SoilPhosphorus", CROP_CPP)
         self.assertIn("SharedCell->SoilPotassium", CROP_CPP)
         daily = section(CROP_CPP, "void ACropFieldActor::UpdateDaily", "void ACropFieldActor::HandleStageChanged")
-        self.assertIn("if(!SharedCell){SoilComponent->UpdateDaily", daily)
-        self.assertIn("BiomassGain/Def->MaxBiomass", daily)
+        compact_daily = re.sub(r"\s+", "", daily)
+        self.assertIn("if(SharedCell)", compact_daily)
+        self.assertIn("else{", compact_daily)
+        self.assertIn("SoilComponent->UpdateDaily(Rainfall,0.f,Evaporation,0.f,Runoff,ExcessWater-Runoff)", compact_daily)
+        self.assertIn("GrowthComponent->UpdateDailyAdvanced", daily)
         self.assertIn("Chunk->Metadata.ActivationMode=EChunkActivationMode::Scheduled", CROP_CPP)
 
     def test_harvest_is_preflighted_before_feed_stock_is_committed(self):

@@ -111,6 +111,13 @@ public:
 	/** Axis of a log lying in the world: a carvable log or a carryable log item. False for anything else. */
 	static bool GetLogAxis(const AActor* Log, FVector& OutCentre, FVector& OutAxis, float& OutRadius, float& OutHalfLength);
 
+	/** Pick the complementary +45/-45 degree course in a shared reference frame, alternating above an existing diagonal log. */
+	static float GetComplementarySnapYaw(float ReferenceYaw, float LowerYaw, float DesiredYaw);
+
+	/** Place a horizontal log above Lower at the shared-frame complementary 45 degree angle with a seated notch. */
+	static bool ComputeComplementarySnapPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper,
+		float ReferenceYaw, float DesiredYaw, FCrossPlacement& OutPlacement);
+
 	/**
 	 * Laying a log (UpperMesh) square across Lower, aimed at Aim by a player standing at Viewer, like the corner of a
 	 * log wall: it crosses near one end (an overhang past the lower log), runs away from the viewer and sits in a

@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (21 October 2026 10:13) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (21 October 2026 11:45) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -51,6 +51,8 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static ACarvableLog* SpawnLog(UWorld* World, const FTransform& Transform)` — A whole log as a tree gives it (the greybox log, six modules long), falling into place.
 - `static ACarvableLog* SpawnFromPickup(APickupItem* Pickup)` — Puts a log lying on the ground on the bench: replaces the pickup with a carvable log of the same mesh, in place.
 - `static bool GetLogAxis(const AActor* Log, FVector& OutCentre, FVector& OutAxis, float& OutRadius, float& OutHalfLength)` — Axis of a log lying in the world: a carvable log or a carryable log item. False for anything else.
+- `static float GetComplementarySnapYaw(float ReferenceYaw, float LowerYaw, float DesiredYaw)` — Pick the complementary +45/-45 degree course in a shared reference frame, alternating above an existing diagonal log.
+- `static bool ComputeComplementarySnapPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper, float Refe …` — Place a horizontal log above Lower at the shared-frame complementary 45 degree angle with a seated notch.
 - `static bool ComputeCrossPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper, FCros …` — Laying a log (UpperMesh) square across Lower, aimed at Aim by a player standing at Viewer, like the corner of a log wall: it crosses near one end (an overhang past the …
 - `static ACarvableLog* FindBeamOnPost(const ACarvableLog* Post)` — An anchored, horizontal log lying across the top of Post (a beam on a post), if there is one.
 - `static bool ComputeBracePlacement(const ACarvableLog* Post, const ACarvableLog* Piece, FTransform& OutTransform)` — A brace for Piece: from the side of Post up to the underside of the beam on its top at 45 degrees, running towards the middle of the beam. It needs a piece between two …
@@ -160,13 +162,14 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static float GetCarveDepthFraction(int32 Index)` — Round / flat notch depth as a share of the log's thickness: 1/6, 1/3, 1/2.
 - `bool IsCarveSpotValid() const` — The log in sight still has a place for the selected tool.
 - `bool CanPlaceAcross() const` — E would lay the carried log across the log in sight.
+- `float GetDiagonalAngle() const` — Diagonal placement: its angle to the log below, +45 or -45.
 - `bool IsPlaceSupported() const` — The piece would be held up where it is about to go (the structure graph says so); false: it would fall.
 - `bool IsPlacingStanding() const` — R while carrying: lay pieces down or stand them up as posts.
 - `bool IsPlacingSlope() const` — R again: a piece leaning at an angle, a ramp or rafter; the wheel changes the angle.
 - `bool IsLighterHeld() const` — F held: the lighter heats what is in sight (a piece of wood or a fire pit).
 - `void TakeEnemyHit(float Amount)` — An enemy hit on the player.
 - `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
-- `static bool IsProfileTool(ECarveTool Tool)` — Lays a raw log of LengthCm across the view 3 m ahead, then shoulders and places Courses more on it facing it (a wall), and finally one more while looking along the wall …
+- `static bool IsProfileTool(ECarveTool Tool)` — Snap sectors on a log: lays a raw log, then looks at it from view offsets -90..90 (step 5) and reports which placement each picks and its angle to the log; then builds …
 - `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
 - `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
 - `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).
@@ -581,4 +584,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-201 / 497 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+201 / 500 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

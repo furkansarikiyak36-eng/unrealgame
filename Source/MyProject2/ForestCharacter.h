@@ -101,8 +101,10 @@ public:
 	bool CanPlaceAcross() const { return CarryPlace == ECarryPlace::Across; }
 
 	/** What a left click does with the carried piece where the player is looking. */
-	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack };
+	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack, Diagonal };
 	ECarryPlace GetCarryPlace() const { return CarryPlace; }
+	/** Diagonal placement: its angle to the log below, +45 or -45. */
+	float GetDiagonalAngle() const { return DiagonalAngle; }
 	/** The piece would be held up where it is about to go (the structure graph says so); false: it would fall. */
 	bool IsPlaceSupported() const { return bPlaceSupported; }
 	/** R while carrying: lay pieces down or stand them up as posts. */
@@ -136,6 +138,12 @@ public:
 	 * and finally one more while looking along the wall (a corner). Returns what each placement chose and where it went.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestBuildWall(int32 LengthCm, int32 Courses);
+	/**
+	 * Snap sectors on a log: lays a raw log, then looks at it from view offsets -90..90 (step 5) and reports which
+	 * placement each picks and its angle to the log; then builds +45, four courses on it and a square-across log on top
+	 * and reports each angle to the first log.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestSnapSectors(int32 LengthCm);
 	static bool IsProfileTool(ECarveTool Tool)
 	{
 		return Tool == ECarveTool::NotchRound || Tool == ECarveTool::NotchFlat || Tool == ECarveTool::Dovetail;
@@ -419,6 +427,7 @@ private:
 
 	EForestTool CurrentTool = EForestTool::Axe;
 	float SwingTime = -1.f;
+	float DiagonalAngle = 45.f;
 	/** Loose soil in the sack, m3 (dug soil swells by 25 %). */
 	float LooseSoilM3 = 0.f;
 	static constexpr float MaxLooseSoilM3 = 1.0f;

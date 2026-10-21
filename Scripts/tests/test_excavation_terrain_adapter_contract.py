@@ -26,7 +26,11 @@ class ExcavationTerrainAdapterContractTests(unittest.TestCase):
         self.assertIn("UpdateCollision(false)", ACTOR_CPP)
 
     def test_volume_samples_generate_surface_with_bounded_triangle_budget(self):
-        self.assertIn("TrySampleDensityAtWorld(WorldSample", ACTOR_CPP)
+        # Chunks sample the full density grid in one subsystem call to avoid
+        # thousands of virtual/provider lookups through the scalar API.
+        self.assertIn("SampleDensityBlock(BaseCell, Side, Densities)", ACTOR_CPP)
+        self.assertIn("bool SampleDensityBlock(const FIntVector& BaseCell, int32 Side", VOLUME_H)
+        self.assertNotIn("TrySampleDensityAtWorld(WorldSample", ACTOR_CPP)
         self.assertIn("SurfaceIsoLevel = 0.5f", ACTOR_CPP)
         self.assertIn("CubeTetrahedra[6][4]", ACTOR_CPP)
         self.assertIn("MaxGeneratedTriangles", ACTOR_H)

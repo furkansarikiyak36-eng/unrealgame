@@ -54,13 +54,17 @@ class WorldStateIntegrationTests(unittest.TestCase):
 
     def test_domain_simulations_share_a_single_ordered_chunk_pipeline(self):
         pipeline = section(WORLD_CPP, "void UWorldStateSubsystem::SimulateChunk", "void UWorldStateSubsystem::ApplyCrossDomainCoupling")
+        # Hydrology is either the newer layered adapter or the legacy water/soil
+        # pair; the legacy names also occur inside AdvancedWaterSoilSimulation.
+        self.assertIn("if (AdvancedWaterSoilSimulation)", pipeline)
+        self.assertIn("AdvancedWaterSoilSimulation->SimulateChunk", pipeline)
+        fallback = pipeline[pipeline.index("else", pipeline.index("if (AdvancedWaterSoilSimulation)")):]
+        self.assertLess(fallback.index("WaterSimulation->SimulateChunk"), fallback.index("SoilSimulation->SimulateChunk"))
         ordered = (
-            "WaterSimulation->SimulateChunk",
-            "SoilSimulation->SimulateChunk",
-            "ChemistrySimulation->SimulateChunk",
-            "ApplyCrossDomainCoupling",
-            "FireSimulation->SimulateChunk",
-            "DecaySimulation->SimulateChunk",
+            "if(ChemistrySimulation)",
+            "ApplyCrossDomainCoupling(Chunk,StepDays)",
+            "if(FireSimulation)",
+            "if(DecaySimulation)",
         )
         positions = [pipeline.index(token) for token in ordered]
         self.assertEqual(positions, sorted(positions))

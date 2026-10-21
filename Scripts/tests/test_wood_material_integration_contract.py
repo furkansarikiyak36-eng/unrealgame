@@ -6,6 +6,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 LOG_H = (ROOT / "Source/MyProject2/CarvableLog.h").read_text(encoding="utf-8")
 LOG_CPP = (ROOT / "Source/MyProject2/CarvableLog.cpp").read_text(encoding="utf-8")
+FOREST_CPP = (ROOT / "Source/MyProject2/ForestCharacter.cpp").read_text(encoding="utf-8")
+DEMO_CPP = (ROOT / "Source/MyProject2/MechanicsDemo.cpp").read_text(encoding="utf-8")
 WOOD_H = (ROOT / "Source/MyProject2/WorldCore/WoodMaterialSubsystem.h").read_text(encoding="utf-8")
 WOOD_CPP = (ROOT / "Source/MyProject2/WorldCore/WoodMaterialSubsystem.cpp").read_text(encoding="utf-8")
 BURN_H = (ROOT / "Source/MyProject2/BurnSubsystem.h").read_text(encoding="utf-8")
@@ -22,6 +24,17 @@ def section(source: str, start: str, end: str) -> str:
 
 
 class WoodMaterialIntegrationTests(unittest.TestCase):
+    def test_complementary_log_snap_alternates_and_mechanics_demo_checks_four_courses(self):
+        self.assertIn("GetComplementarySnapYaw", LOG_H)
+        self.assertIn("ComputeComplementarySnapPlacement", LOG_H)
+        yaw = section(LOG_CPP, "float ACarvableLog::GetComplementarySnapYaw", "bool ACarvableLog::ComputeComplementarySnapPlacement")
+        self.assertIn("Side = LowerDelta > 0.f ? -1.f : 1.f", yaw)
+        self.assertIn("ReferenceYaw + Side * 45.f", yaw)
+        self.assertIn("FindComplementarySnapReferenceYaw", FOREST_CPP)
+        self.assertIn("CarryPlace = ECarryPlace::Diagonal", FOREST_CPP)
+        self.assertIn("+45/-45/+45/-45", DEMO_CPP)
+        self.assertIn("ComputeComplementarySnapPlacement(", DEMO_CPP)
+
     def test_existing_damage_remains_the_single_structural_integrity_value(self):
         self.assertIn("float Damage = 0.f;", LOG_H)
         self.assertIn("void ACarvableLog::SetDamage(float Value)", LOG_CPP)

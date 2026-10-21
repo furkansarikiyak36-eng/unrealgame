@@ -1310,6 +1310,100 @@ bool ACarvableLog::GetLogAxis(const AActor* Log, FVector& OutCentre, FVector& Ou
 	return true;
 }
 
+float ACarvableLog::GetComplementarySnapYaw(float ReferenceYaw, float LowerYaw, float DesiredYaw)
+{
+	auto SignedAxisDelta = [](float From, float To)
+	{
+		float Delta = FMath::FindDeltaAngleDegrees(From, To);
+		if (Delta > 90.f) Delta -= 180.f;
+		else if (Delta < -90.f) Delta += 180.f;
+		return Delta;
+	};
+
+	const float LowerDelta = SignedAxisDelta(ReferenceYaw, LowerYaw);
+	float Side = 1.f;
+	if (FMath::IsNearlyEqual(FMath::Abs(LowerDelta), 45.f, 12.f))
+	{
+		// A log already at +45 gets -45 above it, and vice versa, relative to the same base axis.
+		Side = LowerDelta > 0.f ? -1.f : 1.f;
+	}
+	else
+	{
+		// The first course chooses the side the player is aiming toward; an exact tie is consistently +45.
+		Side = SignedAxisDelta(ReferenceYaw, DesiredYaw) < 0.f ? -1.f : 1.f;
+	}
+	return FRotator::NormalizeAxis(ReferenceYaw + Side * 45.f);
+}
+
+bool ACarvableLog::ComputeComplementarySnapPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper,
+	float ReferenceYaw, float DesiredYaw, FCrossPlacement& OutPlacement)
+{
+	FVector Centre, Axis;
+	float LowerRadius, HalfLength;
+	if (!Lower || !Upper || Lower == Upper || Lower->IsCarried()
+		|| !GetLogAxis(Lower, Centre, Axis, LowerRadius, HalfLength) || FMath::Abs(Axis.Z) > 0.3f)
+	{
+		return false;
+	}
+	Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+	const float UpperRadius = Upper->GetRadius();
+	const float Room = FMath::Max(0.f, HalfLength - UpperRadius);
+	float Along = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis), -Room, Room);
+
+	TArray<float> ModuleLines;
+	Lower->GetModuleLines(ModuleLines);
+	const float LocalCentreX = Lower->GetActorTransform().InverseTransformPosition(Centre).X;
+	float BestError = TNumericLimits<float>::Max();
+	for (const float Line : ModuleLines)
+	{
+		const float Candidate = Line - LocalCentreX;
+		const float Error = FMath::Abs(Candidate - Along);
+		if (FMath::Abs(Candidate) <= Room && Error < BestError)
+		{
+			Along = Candidate;
+			BestError = Error;
+		}
+	}
+	if (BestError == TNumericLimits<float>::Max())
+	{
+		Along = FMath::GridSnap(Along, ModuleLength);
+		Along = FMath::Clamp(Along, -Room, Room);
+	}
+
+	TArray<float> UpperLines;
+	Upper->GetModuleLines(UpperLines);
+	float NotchX = 0.f;
+	float BestLineError = TNumericLimits<float>::Max();
+	for (const float Line : UpperLines)
+	{
+		if (!Upper->IsSpanFree(Line - LowerRadius * CupFit, Line + LowerRadius * CupFit))
+		{
+			continue;
+		}
+		const float Error = FMath::Abs(Line - Upper->GetCenterX());
+		if (Error < BestLineError)
+		{
+			BestLineError = Error;
+			NotchX = Line;
+		}
+	}
+	if (BestLineError == TNumericLimits<float>::Max())
+	{
+		return false;
+	}
+
+	const float Yaw = GetComplementarySnapYaw(ReferenceYaw, Axis.Rotation().Yaw, DesiredYaw);
+	const FQuat Rotation = FRotator(0.f, Yaw, 0.f).Quaternion();
+	const FVector Crossing = Centre + Axis * Along;
+	const FVector UpperCentre = Crossing - Rotation.RotateVector(FVector(NotchX - Upper->GetCenterX(), 0.f, 0.f))
+		+ FVector(0.f, 0.f, LowerRadius + UpperRadius - 0.25f * FMath::Min(LowerRadius, UpperRadius));
+	OutPlacement.NotchX = NotchX;
+	OutPlacement.LowerRadius = LowerRadius;
+	OutPlacement.UpperRadius = UpperRadius;
+	OutPlacement.Upper = FTransform(Rotation, UpperCentre - Rotation.RotateVector(FVector(Upper->GetCenterX(), 0.f, 0.f)));
+	return true;
+}
+
 bool ACarvableLog::ComputeCrossPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper,
 	FCrossPlacement& Out)
 {
