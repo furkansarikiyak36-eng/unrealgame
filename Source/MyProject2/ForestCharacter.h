@@ -523,6 +523,12 @@ private:
 	/** Admin [9]: the clock three hours on. */
 	void DebugSkipTime();
 	bool bPlaceSupported = true;
+	/** Support preview is throttled; placement commit always forces a fresh structural check. */
+	bool bSupportPreviewCacheValid = false;
+	bool bCachedSupportPreview = false;
+	double LastSupportPreviewEvaluation = -1000.0;
+	TWeakObjectPtr<ACarvableLog> CachedSupportPreviewPiece;
+	FTransform CachedSupportPreviewTransform;
 	TWeakObjectPtr<AActor> PlaceTarget;
 	/** Re-checks the structure after a piece went in or came out; says how many pieces fell. */
 	void SettleStructure();
@@ -538,6 +544,7 @@ private:
 	FTransform PlaceTransform;
 	void UpdateCarryPlacement();
 	void UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit);
+	bool EvaluateSupportPreview(const ACarvableLog* Piece, const FTransform& Transform, bool bForce = false);
 	ACarvableLog* GetTopCarried() const;
 	bool PlaceCarried();
 
