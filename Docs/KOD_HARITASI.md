@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (21 October 2026 16:05) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (21 October 2026 17:18) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -97,6 +97,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `int32 GetTriangleCount() const` — Triangles in the current mesh; grows with every cut, used by the mechanics demo to check a cut landed.
 - `float GetWidth() const` — Width across the axis (local Y) of the piece as it is now: 35 cm for a round log, 24 for a plank.
 - `void CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth)` — Cuts a flat seat Depth deep and Width wide across this lying log at WorldPoint, on the side facing WorldSide (up for a post standing on it, down for the top of a post …
+- `static float FloorBoardSeatDepth(float BeamRadius)` — How deep a floor board is let into a beam of this radius.
 - `void GetModuleLines(TArray<float>& OutX) const` — Local X of the grid lines that lie inside the log (not its ends).
 - `void GetSnapPoints(ECarveTool Tool, float Width, TArray<float>& OutX) const` — Where an axe can make this cut on this log, all on the module grid. Joints (notch, round, flat) go at the corners, one module in from each end, and on the middle line of …
 - `bool FindSnapPoint(ECarveTool Tool, float LocalX, float Width, float& OutX) const` — The snap point nearest LocalX; false when the log has none left for this tool.
@@ -598,4 +599,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-203 / 510 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+203 / 511 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

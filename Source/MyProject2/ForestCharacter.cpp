@@ -2,6 +2,7 @@
 
 #include "ForestCharacter.h"
 #include "Algo/Sort.h"
+#include "Wood/WoodStructureGeometry.h"
 #include "Engine/OverlapResult.h"
 #include "RawLogShapes.h"
 #include "InventoryCore/InventoryComponent.h"
@@ -1360,7 +1361,8 @@ namespace
 	/** How deep two pieces that stand on each other are let into one another. */
 	float JointSeatDepth(float RadiusA, float RadiusB)
 	{
-		return 0.4f * FMath::Min(RadiusA, RadiusB);
+		// About a radius: posts and beams, posts and the logs they stand on, sit well into each other.
+		return 0.95f * FMath::Min(RadiusA, RadiusB);
 	}
 }
 
@@ -1977,6 +1979,36 @@ bool AForestCharacter::PlaceCarried()
 		break;
 	case ECarryPlace::Floor:
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		{
+			// Every lying log under the board gets a seat the board's width, so the board lies in it.
+			FVector C, A;
+			float R, H;
+			ACarvableLog::GetLogAxis(Piece, C, A, R, H);
+			const FVector BoardA = C - A * H;
+			const FVector BoardB = C + A * H;
+			const float Bottom = C.Z - R;
+			TArray<ACarvableLog*> Nearby;
+			FindLocalLogs(GetWorld(), C, H + 50.f, Nearby);
+			for (ACarvableLog* Beam : Nearby)
+			{
+				FVector BC, BA;
+				float BR, BH;
+				if (!Beam || Beam == Piece || Beam->IsCarried() || !ACarvableLog::GetLogAxis(Beam, BC, BA, BR, BH) || FMath::Abs(BA.Z) > 0.3f
+					|| FMath::Abs(FVector::DotProduct(BA, A)) > 0.3f)
+				{
+					continue;
+				}
+				double S = 0.0, T = 0.0;
+				WoodStructure::Geo::ClosestSegSeg(BoardA * FVector(1, 1, 0), BoardB * FVector(1, 1, 0), (BC - BA * BH) * FVector(1, 1, 0), (BC + BA * BH) * FVector(1, 1, 0), S, T);
+				const FVector OnBeam = FMath::Lerp(BC - BA * BH, BC + BA * BH, static_cast<float>(T));
+				const FVector OnBoard = FMath::Lerp(BoardA, BoardB, static_cast<float>(S));
+				const float Top = OnBeam.Z + BR;
+				if (FVector::Dist2D(OnBeam, OnBoard) < BR && Top > Bottom + 0.5f && Top < Bottom + BR * 2.f)
+				{
+					Beam->CutSeat(OnBeam, FVector::UpVector, Piece->GetWidth() + 1.f, Top - Bottom + 0.5f);
+				}
+			}
+		}
 		ShowMessage(TEXT("Döşeme tahtası kondu"));
 		SettleStructure();
 		break;

@@ -1151,3 +1151,14 @@ Kullanıcı (pişmiş vitrine bakıp): "plankların aralıkları çok daha kısa
   - Yerde paralel komşunun yanına konan parça ona değer (adım = iki enin yarısı toplamı); dik ya da 45° ise 75 cm ızgarası kalır.
   - Çatı kirişi (eğik koyma, yatan kütükten): önündeki en yakın, daha yüksek paralel kütüğü (aynı uzaklıktakilerden en üsttekini) bulur ve eğimi iki kütüğe birden oturacak şekilde kendisi ayarlar.
 - Vitrin: kesim zinciri bitişik (38 cm arayla), platformda 12 bitişik tahta. Yeniden pişirildi: 136/136; çatı kirişleri 15°; editör görüntüleri: bitişik kesim zinciri, iki duvara oturan çatı kirişleri, kesintisiz döşeme ve yuvalı direk–kiriş.
+
+### 2026-10-21 — Kullanıcının sahne düzeltmelerinden kurallar: 30 cm tahta aralığı, bir yarıçap geçme (CC)
+Kullanıcı LogShowcase'te elle düzenleme yapıp: "kontrol et; plank yerleşimi 30 cm aralıklı, daha fazla olmamalı; loglar biraz içine girmeli".
+- Ölçüm (`Scripts/showcase_diff.py`: pişmiş haritayı son pişirme kaydıyla karşılaştırır; sonuç `Docs/LogShowcase_kullanici_duzeni_2026-10-21.json`, harita yedeği yerelde `Content/Maps/LogShowcase_KullaniciDuzeni.umap.bak`):
+  - 4. istasyon: 12 bitişik tahta silinip 30 cm arayla 9 tahta kondu, 10 cm indirildi (kirişe ~11 cm gömülü), tahta ortası y=142,5; karşı taraf (2 direk, kiriş, payanda, 2. kat direkleri, üst kiriş) +60 cm dışarı → 300'lük tahtanın iki ucu kirişlere oturuyor; 2. kat direkleri/üst kirişler 10–20 cm indirildi → geçmeler ~17 cm (bir yarıçap).
+  - 5. istasyon: çatı kirişleri 40 cm indirildi (alçak duvarın içinden geçiyor) — kurala çevrilmedi, kullanıcıya soruldu.
+- Kurallar (mekanikte):
+  - Döşeme tahtası aralığı (merkezden merkeze) en az 30 cm, tahta daha enliyse kendi eni; tahta kirişin dış kenarından 10 cm içeriden başlar; kirişe `FloorBoardSeatDepth` = kiriş yarıçapının %60'ı gömülür ve yerleşince altındaki her kirişe tahta eninde yuva açılır.
+  - `JointSeatDepth` 0.4 → 0.95 × ince yarıçap: direk–kiriş, kirişe dikilen direk ~16,6 cm iç içe.
+  - Vitrin platformu: kirişler 285 cm arayla (tahta uçlarının altında), 9 tahta 30 cm arayla.
+- Yeniden pişirildi: 133/133; 4. istasyon ölçüleri kullanıcınınkiyle uyumlu (tahta gömülme 10,5 cm, geçmeler 16,6 cm, tahta ortası 142,5).

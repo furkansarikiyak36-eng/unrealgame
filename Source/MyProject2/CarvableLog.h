@@ -301,6 +301,8 @@ public:
 	 * (up for a post standing on it, down for the top of a post under it): two pieces joined into each other.
 	 */
 	void CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth);
+	/** How deep a floor board is let into a beam of this radius. */
+	static float FloorBoardSeatDepth(float BeamRadius);
 	float GetCenterX() const { return (MinX + MaxX) * 0.5f; }
 
 	float GetDiameter() const { return Radius * 2.f; }

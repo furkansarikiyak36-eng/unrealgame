@@ -1772,6 +1772,11 @@ void ACarvableLog::CutSeat(const FVector& WorldPoint, const FVector& WorldSide, 
 	}
 }
 
+float ACarvableLog::FloorBoardSeatDepth(float BeamRadius)
+{
+	return 0.6f * BeamRadius;
+}
+
 bool ACarvableLog::ComputeFloorPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Piece,
 	FTransform& OutTransform)
 {
@@ -1782,7 +1787,8 @@ bool ACarvableLog::ComputeFloorPlacement(const AActor* Lower, const FVector& Aim
 		return false;
 	}
 	// Boards lie side by side: on a grid one board wide from the beam's end, so the next board touches the last.
-	const float BoardWidth = FMath::Max(4.f, Piece->GetWidth());
+	// Board pitch (centre to centre): 30 cm, or the board's own width when it is wider (the user's spacing).
+	const float BoardWidth = FMath::Max(FMath::Max(4.f, Piece->GetWidth()), 30.f);
 	const float FromEnd = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis) + HalfLength, 0.f, HalfLength * 2.f - 1.f);
 	const float Along = FMath::Clamp((FMath::FloorToFloat(FromEnd / BoardWidth) + 0.5f) * BoardWidth - HalfLength,
 		-(HalfLength - BoardWidth * 0.5f), HalfLength - BoardWidth * 0.5f);
@@ -1795,9 +1801,10 @@ bool ACarvableLog::ComputeFloorPlacement(const AActor* Lower, const FVector& Aim
 	// Flat face up: the face's outward direction (the split angle) is turned to point up by rolling about the log's own axis.
 	const float Roll = FMath::DegreesToRadians(Piece->GetFlatAngle() + 90.f);
 	const FQuat Rotation = FRotator(0.f, Direction.Rotation().Yaw, 0.f).Quaternion() * FQuat(FVector::XAxisVector, Roll);
-	const FVector Near = Cross - Direction * LowerRadius;
+	// The board starts a little in from the beam's outer edge and is let into the beam (a seat is cut when it goes in).
+	const FVector Near = Cross - Direction * FMath::Max(0.f, LowerRadius - 10.f);
 	FVector AxisPoint = Near + Direction * (Piece->GetLength() * 0.5f);
-	AxisPoint.Z = Centre.Z + LowerRadius + Piece->GetRadius() * 0.6f;
+	AxisPoint.Z = Centre.Z + LowerRadius + Piece->GetRadius() - FloorBoardSeatDepth(LowerRadius);
 	OutTransform = FTransform(Rotation, AxisPoint - Rotation.RotateVector(FVector(Piece->GetCenterX(), 0.f, 0.f)));
 	return true;
 }

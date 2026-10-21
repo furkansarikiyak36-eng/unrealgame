@@ -385,7 +385,8 @@ void ALogShowcase::StationCabin()
 void ALogShowcase::StationPlatform()
 {
 	BeginStation(3, TEXT("Platform: direk, kiriş, payanda, döşeme; rampa ve ikinci kat"));
-	const float Span = 225.f;
+	// The two beams under the two ends of a 300 cm board (the user's layout).
+	const float Span = 285.f;
 	ACarvableLog* P00 = StandAt(Mesh(150), O, FYaw, TEXT("direk 1"));
 	ACarvableLog* P10 = StandAt(Mesh(150), O + F * Span, FYaw, TEXT("direk 2"));
 	ACarvableLog* P01 = StandAt(Mesh(150), O + R * Span, FYaw, TEXT("direk 3"));
@@ -394,10 +395,10 @@ void ALogShowcase::StationPlatform()
 	ACarvableLog* BeamB = OnPostTop(Mesh(300), P01, FYaw, TEXT("kiriş 2"), P(EPlace::Beam));
 	OnPostTop(Mesh(150), P00, FYaw, TEXT("payanda 1"), P(EPlace::Brace));
 	OnPostTop(Mesh(150), P01, FYaw, TEXT("payanda 2"), P(EPlace::Brace));
-	for (int32 Board = 0; Board < 12 && BeamA; ++Board)
+	for (int32 Board = 0; Board < 9 && BeamA; ++Board)
 	{
-		// Planks are 24 cm wide: one after another along the beam, each touching the last.
-		OnLog(Mesh(300, TEXT("Plank")), BeamA, -138.f + Board * 24.f, FYaw + 90.f, static_cast<uint8>(EHold::Lay), 0.f,
+		// Boards 30 cm centre to centre along the beam (the user's spacing).
+		OnLog(Mesh(300, TEXT("Plank")), BeamA, -120.f + Board * 30.f, FYaw + 90.f, static_cast<uint8>(EHold::Lay), 0.f,
 			*FString::Printf(TEXT("döşeme tahtası %d"), Board + 1), P(EPlace::Floor));
 	}
 	// Ramp: a log from the ground up to the platform's front edge.
