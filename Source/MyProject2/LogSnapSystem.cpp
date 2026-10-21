@@ -76,6 +76,14 @@ bool LogSnapSystem::BuildPoints(const ACarvableLog* Log, TArray<FPoint>& OutPoin
 		AddPoint(EFace::Back, Along, ModuleIndex, false);
 		++ModuleIndex;
 	}
+	// One-module logs may have no interior cut/module line; their centre is still a valid support snap.
+	if (ModuleIndex == 0)
+	{
+		AddPoint(EFace::Top, 0.f, 0, false);
+		AddPoint(EFace::Bottom, 0.f, 0, false);
+		AddPoint(EFace::Front, 0.f, 0, false);
+		AddPoint(EFace::Back, 0.f, 0, false);
+	}
 	AddPoint(EFace::EndA, -Half, INDEX_NONE, true);
 	AddPoint(EFace::EndB, Half, INDEX_NONE, true);
 	return !OutPoints.IsEmpty();
