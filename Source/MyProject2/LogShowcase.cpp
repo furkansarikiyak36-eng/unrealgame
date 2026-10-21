@@ -331,7 +331,7 @@ void ALogShowcase::StationWall()
 // 3. A small cabin: four walls of 300 cm logs joined at the corners, courses alternating direction.
 void ALogShowcase::StationCabin()
 {
-	BeginStation(2, TEXT("Kütük kulübe: dört duvar, köşe geçmeli (6 sıra)"));
+	BeginStation(2, TEXT("Kütük kulübe: dört duvar, köşe geçmeli (6 sıra, 2.25 m oda)"));
 	const float Span = 225.f;
 	ACarvableLog* A = LayAt(Mesh(300), O, FYaw, TEXT("taban sol"));
 	ACarvableLog* B = LayAt(Mesh(300), O + R * Span, FYaw, TEXT("taban sağ"));
@@ -357,8 +357,17 @@ void ALogShowcase::StationCabin()
 			Player->SetActorLocation(Aim - Inward * 220.f + FVector(0.f, 0.f, 60.f), false, nullptr, ETeleportType::TeleportPhysics);
 			ACarvableLog* Piece = Spawn(Mesh(300));
 			const uint8 Got = Piece ? P(Player->PlaceForShowcase(Piece, On, Aim, FVector::UpVector, ViewYaw, EHold::Lay)) : P(EPlace::None);
-			Note(*FString::Printf(TEXT("sıra %d köşe %d"), Course + 1, End + 1), Got, P(EPlace::Across));
+			Note(*FString::Printf(TEXT("sıra %d köşe %d"), Course + 1, End + 1), Got, P(EPlace::Corner));
 			Next.Add(Piece);
+			if (Piece)
+			{
+				// Where it went, in the room's own frame (F forward, R right of the first base log): a square room puts
+				// the logs of one course on two lines 225 apart.
+				const FVector Local = Piece->GetActorLocation() - O;
+				const float Yaw = FMath::Fmod(FMath::Abs(FRotator::NormalizeAxis(Piece->GetActorRotation().Yaw - FYaw)), 180.f);
+				Report += FString::Printf(TEXT("      %s  F=%.0f R=%.0f yükseklik=%.0f\n"), Yaw < 45.f || Yaw > 135.f ? TEXT("boyuna (F)") : TEXT("enine (R)"),
+					FVector::DotProduct(Local, F), FVector::DotProduct(Local, R), Local.Z);
+			}
 		}
 		Lower = Next;
 		bAlongF = !bAlongF;

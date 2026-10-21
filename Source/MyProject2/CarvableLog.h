@@ -126,6 +126,24 @@ public:
 	static bool ComputeCrossPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper,
 		FCrossPlacement& Out);
 
+	/**
+	 * A real log-wall corner. Course and Adjacent meet at one of their ends; Upper follows Adjacent's wall direction
+	 * and seats over Course at that shared end. Unlike ComputeCrossPlacement this has no viewer-direction choice: the
+	 * two existing wall courses define the only meaningful orientation.
+	 */
+	static bool ComputeWallCornerPlacement(const ACarvableLog* Course, const ACarvableLog* Adjacent, const FVector& Aim,
+		const ACarvableLog* Upper, FCrossPlacement& Out);
+
+	/**
+	 * A log-cabin corner joint: Upper laid square across the END of Lower (aim within the last module). The joint sits
+	 * half a module in from Lower's end and half a module in from Upper's end, so with 300 cm logs the walls stand 225 cm
+	 * apart. Upper runs towards the nearest log among Nearby that is parallel to Lower, at about the same height and
+	 * within reach (the other wall of the room), and seats on it as well; with none, it runs away from Viewer.
+	 * Upper rests on the higher of the logs it crosses, with the usual flat notches (PlaceAcross).
+	 */
+	static bool ComputeCornerPlacement(const ACarvableLog* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper,
+		const TArray<ACarvableLog*>& Nearby, FCrossPlacement& Out);
+
 	/** An anchored, horizontal log lying across the top of Post (a beam on a post), if there is one. */
 	static ACarvableLog* FindBeamOnPost(const ACarvableLog* Post);
 

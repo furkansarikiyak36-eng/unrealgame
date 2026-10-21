@@ -1558,6 +1558,136 @@ bool ACarvableLog::ComputeCrossPlacement(const AActor* Lower, const FVector& Aim
 	return true;
 }
 
+bool ACarvableLog::ComputeWallCornerPlacement(const ACarvableLog* Course, const ACarvableLog* Adjacent, const FVector& Aim,
+	const ACarvableLog* Upper, FCrossPlacement& Out)
+{
+	FVector CourseCentre, CourseAxis, AdjacentCentre, AdjacentAxis;
+	float CourseRadius, CourseHalf, AdjacentRadius, AdjacentHalf;
+	if (!Course || !Adjacent || !Upper || Course == Adjacent || Upper == Course || Upper == Adjacent
+		|| Course->IsCarried() || Adjacent->IsCarried()
+		|| !GetLogAxis(Course, CourseCentre, CourseAxis, CourseRadius, CourseHalf)
+		|| !GetLogAxis(Adjacent, AdjacentCentre, AdjacentAxis, AdjacentRadius, AdjacentHalf)
+		|| FMath::Abs(CourseAxis.Z) > 0.3f || FMath::Abs(AdjacentAxis.Z) > 0.3f)
+	{
+		return false;
+	}
+
+	CourseAxis = FVector(CourseAxis.X, CourseAxis.Y, 0.f).GetSafeNormal();
+	AdjacentAxis = FVector(AdjacentAxis.X, AdjacentAxis.Y, 0.f).GetSafeNormal();
+	if (FMath::Abs(FVector::DotProduct(CourseAxis, AdjacentAxis)) > 0.3f)
+	{
+		return false;
+	}
+
+	const FVector CourseA = CourseCentre - CourseAxis * CourseHalf;
+	const FVector CourseB = CourseCentre + CourseAxis * CourseHalf;
+	const FVector Corner = FVector::DistSquared2D(Aim, CourseA) <= FVector::DistSquared2D(Aim, CourseB) ? CourseA : CourseB;
+	const FVector AdjacentA = AdjacentCentre - AdjacentAxis * AdjacentHalf;
+	const FVector AdjacentB = AdjacentCentre + AdjacentAxis * AdjacentHalf;
+	const FVector AdjacentEnd = FVector::DistSquared2D(Corner, AdjacentA) <= FVector::DistSquared2D(Corner, AdjacentB) ? AdjacentA : AdjacentB;
+	const float EndTolerance = CourseRadius + AdjacentRadius + ModuleLength * 0.45f;
+	if (FVector::Dist2D(Corner, AdjacentEnd) > EndTolerance
+		|| FMath::Abs(CourseCentre.Z - AdjacentCentre.Z) > CourseRadius + AdjacentRadius + 15.f)
+	{
+		return false;
+	}
+
+	// The adjacent wall course tells us which way the new log must run. Pick the sign that extends away from the corner.
+	FVector Direction = FVector(AdjacentCentre.X - AdjacentEnd.X, AdjacentCentre.Y - AdjacentEnd.Y, 0.f).GetSafeNormal();
+	if (Direction.IsNearlyZero())
+	{
+		Direction = AdjacentAxis;
+	}
+	const FBox Box = Upper->GetLocalBox();
+	TArray<float> Lines;
+	Upper->GetModuleLines(Lines);
+	const float* Notch = Lines.FindByPredicate([&Box, CourseRadius, Upper](float X)
+	{
+		return X - Box.Min.X >= ModuleLength - 1.f
+			&& Box.Max.X - X >= ModuleLength - 1.f
+			&& Upper->IsSpanFree(X - CourseRadius * CupFit, X + CourseRadius * CupFit);
+	});
+	if (!Notch)
+	{
+		return false;
+	}
+
+	const float UpperRadius = Upper->GetRadius();
+	const float Sink = 0.25f * FMath::Min(CourseRadius, UpperRadius);
+	const FVector Location = Corner + FVector(0.f, 0.f, CourseRadius + UpperRadius - Sink) - Direction * *Notch;
+	Out.NotchX = *Notch;
+	Out.LowerRadius = CourseRadius;
+	Out.UpperRadius = UpperRadius;
+	Out.Upper = FTransform(FRotator(0.f, Direction.Rotation().Yaw, 0.f), Location);
+	return true;
+}
+
+bool ACarvableLog::ComputeCornerPlacement(const ACarvableLog* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper,
+	const TArray<ACarvableLog*>& Nearby, FCrossPlacement& Out)
+{
+	FVector Centre, Axis;
+	float LowerRadius, HalfLength;
+	if (!Lower || !Upper || Upper == Lower || Lower->IsCarried() || !GetLogAxis(Lower, Centre, Axis, LowerRadius, HalfLength)
+		|| FMath::Abs(Axis.Z) > 0.3f || HalfLength < ModuleLength - 1.f)
+	{
+		return false;
+	}
+	Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+	const float HalfModule = ModuleLength * 0.5f;
+	const float End = FVector::DotProduct(Aim - Centre, Axis) >= 0.f ? 1.f : -1.f;
+	const FVector Joint = Centre + Axis * End * (HalfLength - HalfModule);
+
+	// Which way the new log runs: to the other wall of the room if there is one (a log parallel to Lower, about as
+	// high, crossed by the joint line, that the new log reaches with half a module to spare), else away from the player.
+	const float Length = Upper->GetLength();
+	const FVector Side = FVector::CrossProduct(FVector::UpVector, Axis);
+	float BestReach = TNumericLimits<float>::Max();
+	FVector Direction = FVector::ZeroVector;
+	float PartnerAxisZ = Centre.Z;
+	for (const ACarvableLog* Other : Nearby)
+	{
+		FVector OtherCentre, OtherAxis;
+		float OtherRadius, OtherHalf;
+		if (!Other || Other == Lower || Other == Upper || Other->IsCarried() || !GetLogAxis(Other, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
+			|| FMath::Abs(OtherAxis.Z) > 0.3f || FMath::Abs(FVector::DotProduct(FVector(OtherAxis.X, OtherAxis.Y, 0.f).GetSafeNormal(), Axis)) < 0.95f
+			|| FMath::Abs(OtherCentre.Z - Centre.Z) > LowerRadius + OtherRadius)
+		{
+			continue;
+		}
+		const float Across = FVector::DotProduct(OtherCentre - Joint, Side);
+		const float Reach = FMath::Abs(Across);
+		const float AlongOther = FVector::DotProduct(Joint - OtherCentre, Axis);
+		if (Reach < LowerRadius + OtherRadius || Reach > Length - HalfModule * 2.f + 1.f || FMath::Abs(AlongOther) > OtherHalf - OtherRadius
+			|| Reach >= BestReach)
+		{
+			continue;
+		}
+		BestReach = Reach;
+		Direction = Side * FMath::Sign(Across);
+		PartnerAxisZ = OtherCentre.Z;
+	}
+	if (Direction.IsZero())
+	{
+		Direction = FVector::DotProduct(Side, Joint - Viewer) >= 0.f ? Side : -Side;
+	}
+
+	const FBox Box = Upper->GetLocalBox();
+	const float NotchX = Box.Min.X + HalfModule;
+	if (!Upper->IsSpanFree(NotchX - LowerRadius * CupFit, NotchX + LowerRadius * CupFit))
+	{
+		return false;
+	}
+	const float UpperRadius = Upper->GetRadius();
+	const float AxisGap = UpperRadius + LowerRadius * CupFit - LowerRadius;
+	FVector Location = Joint - Direction * NotchX;
+	Location.Z = FMath::Max(Centre.Z, PartnerAxisZ) + AxisGap;
+	Out.NotchX = NotchX;
+	Out.LowerRadius = LowerRadius;
+	Out.UpperRadius = UpperRadius;
+	Out.Upper = FTransform(FRotator(0.f, Direction.Rotation().Yaw, 0.f), Location);
+	return true;
+}
+
 ACarvableLog* ACarvableLog::FindBeamOnPost(const ACarvableLog* Post)
 {
 	FVector PostCentre, PostAxis;

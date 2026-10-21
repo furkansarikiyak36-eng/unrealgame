@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (21 October 2026 12:41) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (21 October 2026 15:18) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -54,6 +54,8 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static float GetComplementarySnapYaw(float ReferenceYaw, float LowerYaw, float DesiredYaw)` — Pick the complementary +45/-45 degree course in a shared reference frame, alternating above an existing diagonal log.
 - `static bool ComputeComplementarySnapPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper, float Refe …` — Place a horizontal log above Lower at the shared-frame complementary 45 degree angle with a seated notch.
 - `static bool ComputeCrossPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper, FCros …` — Laying a log (UpperMesh) square across Lower, aimed at Aim by a player standing at Viewer, like the corner of a log wall: it crosses near one end (an overhang past the …
+- `static bool ComputeWallCornerPlacement(const ACarvableLog* Course, const ACarvableLog* Adjacent, const FVector& Aim, const ACarvab …` — A real log-wall corner. Course and Adjacent meet at one of their ends; Upper follows Adjacent's wall direction and seats over Course at that shared end. Unlike …
+- `static bool ComputeCornerPlacement(const ACarvableLog* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper …` — A log-cabin corner joint: Upper laid square across the END of Lower (aim within the last module). The joint sits half a module in from Lower's end and half a module in …
 - `static ACarvableLog* FindBeamOnPost(const ACarvableLog* Post)` — An anchored, horizontal log lying across the top of Post (a beam on a post), if there is one.
 - `static bool ComputeBracePlacement(const ACarvableLog* Post, const ACarvableLog* Piece, FTransform& OutTransform)` — A brace for Piece: from the side of Post up to the underside of the beam on its top at 45 degrees, running towards the middle of the beam. It needs a piece between two …
 - `static bool ComputeFloorPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Piece, FTran …` — A split piece laid across a lying log as a floor board: flat face up, running away from Viewer over the log, its near end a little past it, resting on top. False if …
@@ -593,4 +595,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-203 / 505 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+203 / 507 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

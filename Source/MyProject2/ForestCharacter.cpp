@@ -2,6 +2,7 @@
 
 #include "ForestCharacter.h"
 #include "Algo/Sort.h"
+#include "Engine/OverlapResult.h"
 #include "RawLogShapes.h"
 #include "InventoryCore/InventoryComponent.h"
 #include "InventoryCore/InventoryItem.h"
@@ -481,7 +482,7 @@ void AForestCharacter::DrawPreviewLines()
 	if (const ACarvableLog* Piece = GetTopCarried(); Piece && CarryPlace != ECarryPlace::None)
 	{
 		// Only a base line where the piece will lie (along its underside) with short end marks; a crossing notches by itself.
-		const FTransform& Where = CarryPlace == ECarryPlace::Across ? CrossPlacement.Upper : PlaceTransform;
+		const FTransform& Where = (CarryPlace == ECarryPlace::Across || CarryPlace == ECarryPlace::Diagonal || CarryPlace == ECarryPlace::Corner) ? CrossPlacement.Upper : PlaceTransform;
 		const FBox Box = Piece->GetLocalBox();
 		const FLinearColor Color = bPlaceSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
 		const FVector A = Where.TransformPosition(FVector(Box.Min.X, 0.f, Box.Min.Z + 1.f));
@@ -773,7 +774,7 @@ FString AForestCharacter::TestSnapSectors(int32 LengthCm)
 	};
 	auto ModeName = [](ECarryPlace P)
 	{
-		return P == ECarryPlace::Stack ? TEXT("S") : P == ECarryPlace::Diagonal ? TEXT("D") : P == ECarryPlace::Across ? TEXT("X") : TEXT("-");
+		return P == ECarryPlace::Stack ? TEXT("S") : P == ECarryPlace::Diagonal ? TEXT("D") : P == ECarryPlace::Across ? TEXT("X") : P == ECarryPlace::Corner ? TEXT("C") : TEXT("-");
 	};
 	// Look from each offset: the carried piece lies across the view, so a view yaw of BaseYaw - 90 + Offset aims it at Offset.
 	ACarvableLog* Probe = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
@@ -845,6 +846,7 @@ const TCHAR* AForestCharacter::CarryPlaceName(ECarryPlace Place)
 	case ECarryPlace::Slope:    return TEXT("eğik");
 	case ECarryPlace::Stack:    return TEXT("üst üste");
 	case ECarryPlace::Diagonal: return TEXT("45° çapraz");
+	case ECarryPlace::Corner:   return TEXT("köşe geçmesi");
 	case ECarryPlace::Load:     return TEXT("yüklendi");
 	default:                    return TEXT("YOK");
 	}
@@ -1202,6 +1204,26 @@ namespace
 		Out = FTransform(Rotation, UpperCentre - Rotation.RotateVector(FVector(Upper->GetCenterX(), 0.f, 0.f)));
 		return true;
 	}
+
+	/** A placement decision may inspect only the immediate construction neighbourhood, never every log in the level. */
+	void FindLocalLogs(UWorld* World, const FVector& Centre, float Radius, TArray<ACarvableLog*>& OutLogs)
+	{
+		OutLogs.Reset();
+		if (!World)
+		{
+			return;
+		}
+		TArray<FOverlapResult> Hits;
+		World->OverlapMultiByObjectType(Hits, Centre, FQuat::Identity, FCollisionObjectQueryParams::AllObjects,
+			FCollisionShape::MakeSphere(Radius));
+		for (const FOverlapResult& Hit : Hits)
+		{
+			if (ACarvableLog* Log = Cast<ACarvableLog>(Hit.GetActor()))
+			{
+				OutLogs.AddUnique(Log);
+			}
+		}
+	}
 }
 
 void AForestCharacter::UpdateCarryPlacement()
@@ -1221,20 +1243,22 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	{
 		return;
 	}
+	AActor* HitActor = Hit.GetActor();
+
 	// A fire: any wood goes on it. A damaged piece of a structure: swap it for the carried one of the same size.
-	PlaceTarget = Hit.GetActor();
-	if (ACampfire* Fire = Cast<ACampfire>(Hit.GetActor()))
+	PlaceTarget = HitActor;
+	if (ACampfire* Fire = Cast<ACampfire>(HitActor))
 	{
 		CarryPlace = ECarryPlace::Fuel;
 		return;
 	}
 	// A cart, sled or rack takes whatever fits on it.
-	if (AHaulCart* Cart = Cast<AHaulCart>(Hit.GetActor()))
+	if (AHaulCart* Cart = Cast<AHaulCart>(HitActor))
 	{
 		CarryPlace = Cart->CanLoad(Piece) ? ECarryPlace::Load : ECarryPlace::None;
 		return;
 	}
-	if (ACarvableLog* Damaged = Cast<ACarvableLog>(Hit.GetActor()); Damaged && ACarvableLog::CanReplace(Damaged, Piece))
+	if (ACarvableLog* Damaged = Cast<ACarvableLog>(HitActor); Damaged && ACarvableLog::CanReplace(Damaged, Piece))
 	{
 		CarryPlace = ECarryPlace::Repair;
 		return;
@@ -1292,9 +1316,9 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		}
 	}
 	// A split piece onto a lying log: a floor board, flat face up, resting on it.
-	AActor* Lower = Hit.GetActor();
+	AActor* Lower = HitActor;
 	// A post stood, or a rafter leant, on the top of a lying log (a platform beam, a sill on the ground): its foot rests on it.
-	if ((bPlaceStanding || bPlaceSlope) && Lower && Hit.ImpactNormal.Z > 0.6f && !Piece->IsSplit())
+	if ((bPlaceStanding || bPlaceSlope) && Lower && Lower == HitActor && Hit.ImpactNormal.Z > 0.6f && !Piece->IsSplit())
 	{
 		FVector BaseCentre, BaseAxis;
 		float BaseRadius, BaseHalf;
@@ -1336,10 +1360,104 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 			const float DesiredYaw = FVector::CrossProduct(FVector::UpVector, Facing).Rotation().Yaw;
 			const float LowerYaw = FVector(LowerAxis.X, LowerAxis.Y, 0.f).Rotation().Yaw;
+			// Keep a stable base axis when the player targets the top of a stack. Walking down parallel,
+			// touching courses finds the first crossing support; otherwise the next diagonal would be
+			// calculated from the immediately previous +45 course and drift to 0/90 instead of -45.
+			float ReferenceYaw = LowerYaw;
+			const ACarvableLog* CurrentCourse = LowerLog;
+			for (int32 Course = 0; Course < 12 && CurrentCourse; ++Course)
+			{
+				FVector CurrentCentre, CurrentAxis;
+				float CurrentRadius, CurrentHalf;
+				if (!ACarvableLog::GetLogAxis(CurrentCourse, CurrentCentre, CurrentAxis, CurrentRadius, CurrentHalf)
+					|| FMath::Abs(CurrentAxis.Z) > 0.3f)
+				{
+					break;
+				}
+				const FVector CurrentStart = CurrentCentre - CurrentAxis * CurrentHalf;
+				const FVector CurrentEnd = CurrentCentre + CurrentAxis * CurrentHalf;
+				const float CurrentBottom = CurrentCentre.Z - CurrentRadius;
+				const ACarvableLog* BestSupport = nullptr;
+				float BestSupportScore = TNumericLimits<float>::Max();
+				float BestSupportYaw = LowerYaw;
+
+				for (TActorIterator<ACarvableLog> It(GetWorld()); It; ++It)
+				{
+					const ACarvableLog* Candidate = *It;
+					FVector CandidateCentre, CandidateAxis;
+					float CandidateRadius, CandidateHalf;
+					if (Candidate == CurrentCourse || Candidate->IsCarried()
+						|| !ACarvableLog::GetLogAxis(Candidate, CandidateCentre, CandidateAxis, CandidateRadius, CandidateHalf)
+						|| FMath::Abs(CandidateAxis.Z) > 0.3f || CandidateCentre.Z >= CurrentCentre.Z - 1.f)
+					{
+						continue;
+					}
+
+					const float VerticalGap = CurrentBottom - (CandidateCentre.Z + CandidateRadius);
+					if (FMath::Abs(VerticalGap) > 18.f)
+					{
+						continue;
+					}
+
+					const FVector CandidateStart = CandidateCentre - CandidateAxis * CandidateHalf;
+					const FVector CandidateEnd = CandidateCentre + CandidateAxis * CandidateHalf;
+					FVector OnCandidate = FMath::ClosestPointOnSegment(CurrentCentre, CandidateStart, CandidateEnd);
+					FVector OnCurrent = FMath::ClosestPointOnSegment(OnCandidate, CurrentStart, CurrentEnd);
+					OnCandidate = FMath::ClosestPointOnSegment(OnCurrent, CandidateStart, CandidateEnd);
+					const float AxisGap = FVector::Dist2D(OnCurrent, OnCandidate);
+					if (AxisGap > CurrentRadius + CandidateRadius + 12.f)
+					{
+						continue;
+					}
+
+					const float Score = FMath::Abs(VerticalGap) + AxisGap * 0.1f;
+					if (Score < BestSupportScore)
+					{
+						BestSupport = Candidate;
+						BestSupportScore = Score;
+						BestSupportYaw = FVector(CandidateAxis.X, CandidateAxis.Y, 0.f).Rotation().Yaw;
+					}
+				}
+
+				if (!BestSupport)
+				{
+					break;
+				}
+
+				float CourseDelta = FMath::FindDeltaAngleDegrees(BestSupportYaw,
+					FVector(CurrentAxis.X, CurrentAxis.Y, 0.f).Rotation().Yaw);
+				if (CourseDelta > 90.f) CourseDelta -= 180.f;
+				else if (CourseDelta < -90.f) CourseDelta += 180.f;
+				if (FMath::Abs(CourseDelta) >= 20.f)
+				{
+					ReferenceYaw = BestSupportYaw;
+					break;
+				}
+
+				CurrentCourse = BestSupport;
+			}
 			// Angle between the two axes, folded into (-90, 90]: a log has no front or back.
 			float Delta = FMath::FindDeltaAngleDegrees(LowerYaw, DesiredYaw);
 			if (Delta > 90.f) Delta -= 180.f;
 			if (Delta <= -90.f) Delta += 180.f;
+			// A wall corner: square to the log and aimed at its last module joins the ends of the two (a log cabin's corner).
+			// The new log runs to the parallel log of the opposite wall when there is one and seats on both.
+			if (FMath::Abs(Delta) > 67.5f)
+			{
+				const float AimAlong = FVector::DotProduct(Hit.ImpactPoint - LowerCentre, FVector(LowerAxis.X, LowerAxis.Y, 0.f).GetSafeNormal());
+				if (LowerHalf - FMath::Abs(AimAlong) <= ACarvableLog::ModuleLength)
+				{
+					TArray<ACarvableLog*> Nearby;
+					FindLocalLogs(GetWorld(), Hit.ImpactPoint, Piece->GetLength() + 50.f, Nearby);
+					if (ACarvableLog::ComputeCornerPlacement(LowerLog, Hit.ImpactPoint, GetActorLocation(), Piece, Nearby, CrossPlacement))
+					{
+						CrossLower = LowerLog;
+						CarryPlace = ECarryPlace::Corner;
+						bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
+						return;
+					}
+				}
+			}
 			const float Sectors[4] = { 0.f, 45.f, -45.f, 90.f };
 			auto Distance = [Delta](float Sector)
 			{
@@ -1369,12 +1487,16 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 						return;
 					}
 				}
-				else if (ACarvableLog::ComputeComplementarySnapPlacement(LowerLog, Hit.ImpactPoint, Piece, LowerYaw,
-					LowerYaw + Sector, CrossPlacement))
+				else if (ACarvableLog::ComputeComplementarySnapPlacement(LowerLog, Hit.ImpactPoint, Piece, ReferenceYaw,
+					ReferenceYaw + Sector, CrossPlacement))
 				{
 					CrossLower = LowerLog;
 					CarryPlace = ECarryPlace::Diagonal;
-					DiagonalAngle = Sector;
+					float ActualDelta = FMath::FindDeltaAngleDegrees(ReferenceYaw,
+						CrossPlacement.Upper.GetRotation().Rotator().Yaw);
+					if (ActualDelta > 90.f) ActualDelta -= 180.f;
+					else if (ActualDelta < -90.f) ActualDelta += 180.f;
+					DiagonalAngle = ActualDelta;
 					bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
 					return;
 				}
@@ -1492,9 +1614,14 @@ bool AForestCharacter::PlaceCarried()
 		ShowMessage(TEXT("Kütük alttakinin üstüne oturdu  —  duvar sırası"));
 		SettleStructure();
 		break;
+	case ECarryPlace::Corner:
+		ACarvableLog::PlaceAcross(CrossLower.Get(), CrossPlacement, Piece);
+		ShowMessage(TEXT("Köşe geçmesi  —  uçlar birbirine oturdu"));
+		SettleStructure();
+		break;
 	case ECarryPlace::Diagonal:
 		ACarvableLog::PlaceAcross(CrossLower.Get(), CrossPlacement, Piece);
-		ShowMessage(FString::Printf(TEXT("Kütük alttakine %+.0f° çaprazlama oturdu"), DiagonalAngle));
+		ShowMessage(FString::Printf(TEXT("Kütük taban eksenine %+.0f° çaprazlama oturdu"), DiagonalAngle));
 		SettleStructure();
 		break;
 	case ECarryPlace::Beam:

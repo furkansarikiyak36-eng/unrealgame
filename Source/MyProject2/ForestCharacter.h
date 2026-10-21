@@ -101,7 +101,7 @@ public:
 	bool CanPlaceAcross() const { return CarryPlace == ECarryPlace::Across; }
 
 	/** What a left click does with the carried piece where the player is looking. */
-	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack, Diagonal };
+	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack, Diagonal, Corner };
 	ECarryPlace GetCarryPlace() const { return CarryPlace; }
 	/** Diagonal placement: its angle to the log below, +45 or -45. */
 	float GetDiagonalAngle() const { return DiagonalAngle; }
