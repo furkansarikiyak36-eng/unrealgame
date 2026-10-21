@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/EngineTypes.h"
+#include "Engine/HitResult.h"
 
 /**
  * Global world-hit acquisition, physical analysis and classification.
