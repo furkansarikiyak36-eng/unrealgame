@@ -1408,13 +1408,31 @@ bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const F
 {
 	if (!GetWorld() || !Piece) return false;
 	const double Now = GetWorld()->GetTimeSeconds();
-	// The graph rebuild performs world-wide geometry checks and ground traces. Preview is capped at 10 Hz.
-	// The commit path passes bForce=true and always checks the exact final transform.
+	const bool bSameCandidate = bSupportPreviewCacheValid
+		&& CachedSupportPreviewPiece.Get() == Piece
+		&& CachedSupportPreviewTarget.Get() == PlaceTarget.Get()
+		&& CachedSupportPreviewMode == CarryPlace
+		&& CachedSupportPreviewSnapPointId == SelectedSnapPointId
+		&& CachedSupportPreviewTransform.GetLocation().Equals(Transform.GetLocation(), 2.f)
+		&& CachedSupportPreviewTransform.GetRotation().AngularDistance(Transform.GetRotation()) <= FMath::DegreesToRadians(2.f);
+
+	// The structure graph rebuild is expensive. Reuse an unchanged candidate indefinitely; when the candidate
+	// changes, throttle graph evaluation to 10 Hz. Placement commit passes bForce=true and always rechecks.
+	if (!bForce && bSameCandidate)
+	{
+		return bCachedSupportPreview;
+	}
 	if (!bForce && bSupportPreviewCacheValid && Now - LastSupportPreviewEvaluation < 0.1)
 	{
 		return bCachedSupportPreview;
 	}
+
 	bCachedSupportPreview = StructureLink::WouldBeSupported(GetWorld(), Piece, Transform);
+	CachedSupportPreviewPiece = const_cast<ACarvableLog*>(Piece);
+	CachedSupportPreviewTarget = PlaceTarget;
+	CachedSupportPreviewMode = CarryPlace;
+	CachedSupportPreviewSnapPointId = SelectedSnapPointId;
+	CachedSupportPreviewTransform = Transform;
 	LastSupportPreviewEvaluation = Now;
 	bSupportPreviewCacheValid = true;
 	return bCachedSupportPreview;
