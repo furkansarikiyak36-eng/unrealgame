@@ -1,0 +1,338 @@
+{
+ "report": {
+  "target_d": 36.0,
+  "ground": 0.0,
+  "sockets_J": [
+   "Top",
+   "Bottom",
+   "SideR",
+   "SideL",
+   "EndA",
+   "EndB"
+  ],
+  "sockets_O": [
+   "Top",
+   "Bottom",
+   "SideR",
+   "SideL",
+   "EndA",
+   "EndB"
+  ],
+  "sockets_L": [
+   "Top",
+   "Bottom",
+   "SideR",
+   "SideL",
+   "EndA",
+   "EndB"
+  ],
+  "joints": [
+   {
+    "a": "LogWallFit_Joint_J_Top_A",
+    "face_a": "Top",
+    "b": "LogWallFit_Joint_J_Top_B",
+    "face_b": "Bottom",
+    "offset_cm": [
+     0.0,
+     0.0,
+     33.1
+    ],
+    "sink_max_cm": 4.7
+   },
+   {
+    "a": "LogWallFit_Joint_J_Bottom_A",
+    "face_a": "Bottom",
+    "b": "LogWallFit_Joint_J_Bottom_B",
+    "face_b": "Top",
+    "offset_cm": [
+     0.0,
+     0.0,
+     -33.1
+    ],
+    "sink_max_cm": 4.7
+   },
+   {
+    "a": "LogWallFit_Joint_J_EndA_A",
+    "face_a": "EndA",
+    "b": "LogWallFit_Joint_J_EndA_B",
+    "face_b": "EndB",
+    "offset_cm": [
+     194.6,
+     0.0,
+     0.0
+    ],
+    "sink_max_cm": 0.2
+   },
+   {
+    "a": "LogWallFit_Joint_J_EndB_A",
+    "face_a": "EndB",
+    "b": "LogWallFit_Joint_J_EndB_B",
+    "face_b": "EndA",
+    "offset_cm": [
+     -194.6,
+     0.0,
+     0.0
+    ],
+    "sink_max_cm": 0.2
+   },
+   {
+    "a": "LogWallFit_Joint_J_SideL_A",
+    "face_a": "SideL",
+    "b": "LogWallFit_Joint_J_SideL_B",
+    "face_b": "SideR",
+    "offset_cm": [
+     0.0,
+     -33.5,
+     0.0
+    ],
+    "sink_max_cm": 4.1
+   },
+   {
+    "a": "LogWallFit_Joint_J_SideR_A",
+    "face_a": "SideR",
+    "b": "LogWallFit_Joint_J_SideR_B",
+    "face_b": "SideL",
+    "offset_cm": [
+     0.0,
+     33.5,
+     0.0
+    ],
+    "sink_max_cm": 4.1
+   },
+   {
+    "a": "LogWallFit_Joint_O_Top_A",
+    "face_a": "Top",
+    "b": "LogWallFit_Joint_O_Top_B",
+    "face_b": "Bottom",
+    "offset_cm": [
+     0.0,
+     0.0,
+     34.0
+    ],
+    "sink_max_cm": 4.0
+   },
+   {
+    "a": "LogWallFit_Joint_O_Bottom_A",
+    "face_a": "Bottom",
+    "b": "LogWallFit_Joint_O_Bottom_B",
+    "face_b": "Top",
+    "offset_cm": [
+     0.0,
+     0.0,
+     -34.0
+    ],
+    "sink_max_cm": 4.0
+   },
+   {
+    "a": "LogWallFit_Joint_O_EndA_A",
+    "face_a": "EndA",
+    "b": "LogWallFit_Joint_O_EndA_B",
+    "face_b": "EndB",
+    "offset_cm": [
+     324.6,
+     0.0,
+     0.0
+    ],
+    "sink_max_cm": 0.2
+   },
+   {
+    "a": "LogWallFit_Joint_O_EndB_A",
+    "face_a": "EndB",
+    "b": "LogWallFit_Joint_O_EndB_B",
+    "face_b": "EndA",
+    "offset_cm": [
+     -324.6,
+     0.0,
+     0.0
+    ],
+    "sink_max_cm": 0.2
+   },
+   {
+    "a": "LogWallFit_Joint_O_SideL_A",
+    "face_a": "SideL",
+    "b": "LogWallFit_Joint_O_SideL_B",
+    "face_b": "SideR",
+    "offset_cm": [
+     0.0,
+     -32.1,
+     0.0
+    ],
+    "sink_max_cm": 4.5
+   },
+   {
+    "a": "LogWallFit_Joint_O_SideR_A",
+    "face_a": "SideR",
+    "b": "LogWallFit_Joint_O_SideR_B",
+    "face_b": "SideL",
+    "offset_cm": [
+     0.0,
+     32.1,
+     0.0
+    ],
+    "sink_max_cm": 4.5
+   },
+   {
+    "a": "LogWallFit_Joint_L_Top_A",
+    "face_a": "Top",
+    "b": "LogWallFit_Joint_L_Top_B",
+    "face_b": "Bottom",
+    "offset_cm": [
+     0.0,
+     0.0,
+     33.6
+    ],
+    "sink_max_cm": 5.9
+   },
+   {
+    "a": "LogWallFit_Joint_L_Bottom_A",
+    "face_a": "Bottom",
+    "b": "LogWallFit_Joint_L_Bottom_B",
+    "face_b": "Top",
+    "offset_cm": [
+     0.0,
+     0.0,
+     -33.6
+    ],
+    "sink_max_cm": 5.9
+   },
+   {
+    "a": "LogWallFit_Joint_L_EndA_A",
+    "face_a": "EndA",
+    "b": "LogWallFit_Joint_L_EndA_B",
+    "face_b": "EndB",
+    "offset_cm": [
+     324.6,
+     0.0,
+     0.0
+    ],
+    "sink_max_cm": 0.2
+   },
+   {
+    "a": "LogWallFit_Joint_L_EndB_A",
+    "face_a": "EndB",
+    "b": "LogWallFit_Joint_L_EndB_B",
+    "face_b": "EndA",
+    "offset_cm": [
+     -324.6,
+     0.0,
+     0.0
+    ],
+    "sink_max_cm": 0.2
+   },
+   {
+    "a": "LogWallFit_Joint_L_SideL_A",
+    "face_a": "SideL",
+    "b": "LogWallFit_Joint_L_SideL_B",
+    "face_b": "SideR",
+    "offset_cm": [
+     0.0,
+     -34.0,
+     0.0
+    ],
+    "sink_max_cm": 8.1
+   },
+   {
+    "a": "LogWallFit_Joint_L_SideR_A",
+    "face_a": "SideR",
+    "b": "LogWallFit_Joint_L_SideR_B",
+    "face_b": "SideL",
+    "offset_cm": [
+     0.0,
+     34.0,
+     0.0
+    ],
+    "sink_max_cm": 8.1
+   }
+  ],
+  "floor_J": {
+   "logs": 5,
+   "spacing": [
+    31.6,
+    33.5,
+    33.5,
+    33.5
+   ],
+   "sink": [
+    3.8,
+    4.1,
+    4.1,
+    4.1
+   ]
+  },
+  "crib_J": {
+   "side": 151.8,
+   "half_step": 16.1,
+   "notch_depth": 19.9
+  },
+  "floor_O": {
+   "logs": 5,
+   "spacing": [
+    33.2,
+    32.2,
+    32.2,
+    32.2
+   ],
+   "sink": [
+    3.4,
+    4.2,
+    4.2,
+    4.2
+   ]
+  },
+  "crib_O": {
+   "side": 281.8,
+   "half_step": 17.4,
+   "notch_depth": 18.6
+  },
+  "floor_L": {
+   "logs": 5,
+   "spacing": [
+    35.3,
+    33.8,
+    35.3,
+    33.8
+   ],
+   "sink": [
+    5.1,
+    7.2,
+    5.1,
+    7.2
+   ]
+  },
+  "crib_L": {
+   "side": 281.8,
+   "half_step": 17.1,
+   "notch_depth": 18.9
+  },
+  "corner": {
+   "x_courses": 7,
+   "y_courses": 7,
+   "half_step": 17.1
+  }
+ },
+ "log": [
+  "removed 123 old wall actors",
+  "J source /Game/Fab/Megascans/3D/Old_Wooden_Log_wcjheff/Low/wcjheff_tier_3/StaticMeshes/wcjheff_tier_3",
+  "J end grain from the scan on 2 of 2 caps {1.0: 0.021, -1.0: 0.003}",
+  "J: wcjheff_tier_3 257 -> 195 cm (3 modules, sawn 29 + 12 cm off the ragged ends, stretch 0.90), diameter 48 -> 36 cm, bend 7.3 -> 0.7 cm",
+  "J surface samples 5445",
+  "O source /Game/Fab/Megascans/3D/Old_Wooden_Log_wcokfdy/Low/wcokfdy_tier_3/StaticMeshes/wcokfdy_tier_3",
+  "O end grain from the scan on 2 of 2 caps {1.0: 0.021, -1.0: 0.003}",
+  "O: wcokfdy_tier_3 447 -> 325 cm (5 modules, sawn 80 + 12 cm off the ragged ends, stretch 0.92), diameter 34 -> 36 cm, bend 5.3 -> 0.5 cm",
+  "O surface samples 6675",
+  "L source /Game/Fab/Megascans/3D/Old_Wooden_Log_wcolfdz/Low/wcolfdz_tier_3/StaticMeshes/wcolfdz_tier_3",
+  "L end grain from the scan on 2 of 2 caps {1.0: 0.019, -1.0: 0.003}",
+  "L: wcolfdz_tier_3 323 -> 325 cm (5 modules, sawn 12 + 17 cm off the ragged ends, stretch 1.10), diameter 26 -> 36 cm, bend 2.4 -> 0.2 cm",
+  "L surface samples 10800",
+  "joints J faces {'Top': [0.0, 0.0, 16.6], 'Bottom': [0.0, 0.0, -16.6], 'EndA': [97.3, 0.0, 0.0], 'EndB': [-97.3, 0.0, 0.0], 'SideL': [0.0, -16.7, 0.0], 'SideR': [0.0, 16.7, 0.0]}",
+  "joints O faces {'Top': [0.0, 0.0, 17.0], 'Bottom': [0.0, 0.0, -17.0], 'EndA': [162.3, 0.0, 0.0], 'EndB': [-162.3, 0.0, 0.0], 'SideL': [0.0, -16.0, 0.0], 'SideR': [0.0, 16.0, 0.0]}",
+  "joints L faces {'Top': [0.0, 0.0, 16.8], 'Bottom': [0.0, 0.0, -16.8], 'EndA': [162.3, 0.0, 0.0], 'EndB': [-162.3, 0.0, 0.0], 'SideL': [0.0, -17.0, 0.0], 'SideR': [0.0, 17.0, 0.0]}",
+  "floor J 5 logs, spacing [31.6, 33.5, 33.5, 33.5] sink [3.8, 4.1, 4.1, 4.1]",
+  "crib J side 152 half step 16.1",
+  "floor O 5 logs, spacing [33.2, 32.2, 32.2, 32.2] sink [3.4, 4.2, 4.2, 4.2]",
+  "crib O side 282 half step 17.4",
+  "floor L 5 logs, spacing [35.3, 33.8, 35.3, 33.8] sink [5.1, 7.2, 5.1, 7.2]",
+  "crib L side 282 half step 17.1",
+  "corner 7 + 7 courses"
+ ]
+}

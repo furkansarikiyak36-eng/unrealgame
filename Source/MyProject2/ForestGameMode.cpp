@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestGameMode.h"
+#include "LogShowcase.h"
+#include "WorldCore/ExcavationTerrainChunkSubsystem.h"
 #include "ForestCharacter.h"
 #include "ForestHUD.h"
 #include "HarvestableActor.h"
@@ -32,7 +34,7 @@ void AForestGameMode::StartPlay()
 	ConvertHarvestables();
 
 	// The wood chain demo level keeps its stage clear of the building stations.
-	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) ? true : false;
+	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) || TActorIterator<ALogShowcase>(GetWorld());
 	if (bSpawnDemoShowcase && !bDemoLevel)
 	{
 		SetupDemoShowcase();
@@ -118,6 +120,10 @@ void AForestGameMode::SetupDemoShowcase()
 
 	auto SnapToGround = [World](const FVector& Pos) -> FVector
 	{
+		if (UExcavationTerrainChunkSubsystem* Ground = World->GetSubsystem<UExcavationTerrainChunkSubsystem>())
+		{
+			Ground->EnsureGroundAt(FVector(Pos.X, Pos.Y, 0.f));
+		}
 		FHitResult Hit;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(DemoSnap), false);
 		if (World->LineTraceSingleByChannel(Hit, Pos + FVector(0, 0, 600.f), Pos - FVector(0, 0, 2000.f), ECC_Visibility, Params))

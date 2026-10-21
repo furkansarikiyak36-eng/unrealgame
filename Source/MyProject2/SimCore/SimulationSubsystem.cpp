@@ -14,12 +14,16 @@ void USimulationSubsystem::Tick(float DeltaTime){Super::Tick(DeltaTime); if(!Sta
  State->TimeOfDay=FMath::Fmod(State->TimeOfDay+DeltaTime/SecPerHour,24.f); UpdateWeather(); }
 void USimulationSubsystem::AdvanceOneHour(){if(!State)return; State->HourOfDay=(State->HourOfDay+1)%FMath::Max(1,int32(TickRates.HoursPerDay)); if(OnHourTick.IsBound())OnHourTick.Broadcast(State->HourOfDay);}
 void USimulationSubsystem::AdvanceOneDay(){if(!State)return; ++State->DayNumber; TickRates.WeekAccumulator+=1.f;
- FDeterministicRandom DailyRng(uint32(State->RandomSeed)^uint32(State->DayNumber*7919)); const float R=DailyRng.NextFloat();
+ FDeterministicRandom DailyRng(uint32(State->RandomSeed)^uint32(State->DayNumber*7919)); const float R=DailyRng.NextFloat(); bool bStormWind=false;
  State->Rainfall=0.f; State->bIsRaining=false; State->bIsSnowing=false;
  if(R>=.75f&&R<.90f){State->Rainfall=DailyRng.Range(3.f,15.f);State->bIsRaining=true;}
- else if(R>=.90f&&R<.98f){State->Rainfall=DailyRng.Range(15.f,40.f);State->bIsRaining=true;State->WindSpeed=DailyRng.Range(15.f,45.f);}
+ else if(R>=.90f&&R<.98f){State->Rainfall=DailyRng.Range(15.f,40.f);State->bIsRaining=true;State->WindSpeed=DailyRng.Range(15.f,45.f);bStormWind=true;}
  else if(R>=.98f){State->Rainfall=DailyRng.Range(2.f,10.f);State->bIsSnowing=true;}
  State->TempMax=DailyRng.Range(10.f,32.f);State->TempMin=State->TempMax-DailyRng.Range(5.f,15.f);
+ if(!bStormWind) State->WindSpeed=DailyRng.Range(0.f,12.f);
+ const float WindAngle=DailyRng.Range(0.f,2.f*PI);
+ State->WindDirection=FVector2D(FMath::Cos(WindAngle),FMath::Sin(WindAngle)).GetSafeNormal();
+ if(State->WindDirection.IsNearlyZero()) State->WindDirection=FVector2D(1.f,0.f);
  if(TickRates.WeekAccumulator>=FMath::Max(1.f,TickRates.DaysPerWeek))TickRates.WeekAccumulator-=FMath::Max(1.f,TickRates.DaysPerWeek);
  UpdateWeather(); if(OnDayTick.IsBound())OnDayTick.Broadcast(State->DayNumber); }
 void USimulationSubsystem::AdvanceDays(int32 Days){if(!State||Days<=0)return; for(int32 I=0;I<Days;++I)AdvanceOneDay();}

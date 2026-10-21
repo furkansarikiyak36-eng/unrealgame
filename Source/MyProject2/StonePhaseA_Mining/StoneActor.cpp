@@ -30,7 +30,7 @@ void AStoneActor::InitializeFromDefinition(UStoneDefinition* Def)
     SetStructuralState_Implementation(EStructuralNodeState::Loose);
 }
 
-EMaterialType AStoneActor::GetMaterialType_Implementation() const { return EMaterialType::Stone; }
+EStructuralMaterialType AStoneActor::GetMaterialType_Implementation() const { return EStructuralMaterialType::Stone; }
 EStructuralNodeState AStoneActor::GetStructuralState_Implementation() const
 { return StateMachine ? StateMachine->GetState() : EStructuralNodeState::Loose; }
 bool AStoneActor::SetStructuralState_Implementation(EStructuralNodeState NewState)

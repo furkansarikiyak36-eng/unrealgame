@@ -14,6 +14,7 @@ class UStaticMesh;
 class UStaticMeshComponent;
 class UPointLightComponent;
 class APickupItem;
+class UMaterialDefinition;
 
 UENUM()
 enum class ECarveTool : uint8
@@ -110,6 +111,13 @@ public:
 	/** Axis of a log lying in the world: a carvable log or a carryable log item. False for anything else. */
 	static bool GetLogAxis(const AActor* Log, FVector& OutCentre, FVector& OutAxis, float& OutRadius, float& OutHalfLength);
 
+	/** Pick the complementary +45/-45 degree course in a shared reference frame, alternating above an existing diagonal log. */
+	static float GetComplementarySnapYaw(float ReferenceYaw, float LowerYaw, float DesiredYaw);
+
+	/** Place a horizontal log above Lower at the shared-frame complementary 45 degree angle with a seated notch. */
+	static bool ComputeComplementarySnapPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper,
+		float ReferenceYaw, float DesiredYaw, FCrossPlacement& OutPlacement);
+
 	/**
 	 * Laying a log (UpperMesh) square across Lower, aimed at Aim by a player standing at Viewer, like the corner of a
 	 * log wall: it crosses near one end (an overhang past the lower log), runs away from the viewer and sits in a
@@ -117,6 +125,24 @@ public:
 	 */
 	static bool ComputeCrossPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper,
 		FCrossPlacement& Out);
+
+	/**
+	 * A real log-wall corner. Course and Adjacent meet at one of their ends; Upper follows Adjacent's wall direction
+	 * and seats over Course at that shared end. Unlike ComputeCrossPlacement this has no viewer-direction choice: the
+	 * two existing wall courses define the only meaningful orientation.
+	 */
+	static bool ComputeWallCornerPlacement(const ACarvableLog* Course, const ACarvableLog* Adjacent, const FVector& Aim,
+		const ACarvableLog* Upper, FCrossPlacement& Out);
+
+	/**
+	 * A log-cabin corner joint: Upper laid square across the END of Lower (aim within the last module). The joint sits
+	 * half a module in from Lower's end and half a module in from Upper's end, so with 300 cm logs the walls stand 225 cm
+	 * apart. Upper runs towards the nearest log among Nearby that is parallel to Lower, at about the same height and
+	 * within reach (the other wall of the room), and seats on it as well; with none, it runs away from Viewer.
+	 * Upper rests on the higher of the logs it crosses, with the usual flat notches (PlaceAcross).
+	 */
+	static bool ComputeCornerPlacement(const ACarvableLog* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper,
+		const TArray<ACarvableLog*>& Nearby, FCrossPlacement& Out);
 
 	/** An anchored, horizontal log lying across the top of Post (a beam on a post), if there is one. */
 	static ACarvableLog* FindBeamOnPost(const ACarvableLog* Post);
@@ -152,6 +178,11 @@ public:
 	float GetDamage() const { return Damage; }
 	void AddDamage(float Amount);
 	void SetDamage(float Value);
+
+	/** Apply one bounded world-weather interval to this existing wood condition state. */
+	void SimulateMaterialEnvironment(float ElapsedDays, float AmbientTemperatureC, bool bRainExposed, float RainfallMm);
+	UFUNCTION(BlueprintPure, Category = "Material|Condition") float GetMoistureContent() const { return MoistureContent; }
+	UFUNCTION(BlueprintPure, Category = "Material|Condition") float GetMaterialAgeDays() const { return MaterialAgeDays; }
 
 	// --- Fire. Any piece of wood burns. It takes heat to catch (thin pieces quickly, thick ones slowly), burns for as long as
 	// the wood it holds (see ACampfire::FuelSecondsOf) taking damage all the while, and ends up charred. Burning pieces
@@ -219,9 +250,13 @@ public:
 	/**
 	 * Cuts a gap Modules wide (an even number, at least 2) out of this piece, on the module lines nearest CentreX, leaving a
 	 * piece on each side: a door or window opening in a wall course. At least one module must stay on each side. Pieces of an
-	 * installed log stay installed. Returns the piece to the right of the gap, or null if there is no room.
+	 * installed log stay installed. What comes out is not lost: each module of the gap drops out as a 75 cm log (a raw log
+	 * gives SM_RawLog_75 of the same profile), pushed towards PushTowards (a world point, e.g. the player) if given.
+	 * Returns the piece to the right of the gap, or null if there is no room.
 	 */
-	ACarvableLog* CutOpening(float CentreX, int32 Modules);
+	ACarvableLog* CutOpening(float CentreX, int32 Modules, const FVector& PushTowards = FVector::ZeroVector);
+	/** The 75 cm pieces the last CutOpening dropped (for tests and the showcase). */
+	const TArray<TWeakObjectPtr<ACarvableLog>>& GetLastOpeningOffcuts() const { return LastOpeningOffcuts; }
 
 	/** Cuts a channel along the whole log, opening towards SideAngleDeg (0 = top). */
 	bool CutGroove(float SideAngleDeg);
@@ -239,7 +274,8 @@ public:
 	/** Split lengthwise at some point (a half, a quarter): not a round log any more. */
 	bool IsSplit() const { return bSplitPiece; }
 	/** A whole round log, full length: what a wall plan or a recipe takes as "a log". */
-	bool IsFullLog() const { return !bSplitPiece && GetLength() >= 6.f * ModuleLength - 5.f; }
+	/** A whole carryable log: four modules (the 300 cm raw log), not split. */
+	bool IsFullLog() const { return !bSplitPiece && GetLength() >= 4.f * ModuleLength - 5.f; }
 	/** The piece's extent in its own frame. */
 	FBox GetLocalBox() const { return FBox(FVector(MinX, -Radius, -Radius), FVector(MaxX, Radius, Radius)); }
 
@@ -258,6 +294,15 @@ public:
 	/** Triangles in the current mesh; grows with every cut, used by the mechanics demo to check a cut landed. */
 	int32 GetTriangleCount() const;
 	float GetRadius() const { return Radius; }
+	/** Width across the axis (local Y) of the piece as it is now: 35 cm for a round log, 24 for a plank. */
+	float GetWidth() const;
+	/**
+	 * Cuts a flat seat Depth deep and Width wide across this lying log at WorldPoint, on the side facing WorldSide
+	 * (up for a post standing on it, down for the top of a post under it): two pieces joined into each other.
+	 */
+	void CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth);
+	/** How deep a floor board is let into a beam of this radius. */
+	static float FloorBoardSeatDepth(float BeamRadius);
 	float GetCenterX() const { return (MinX + MaxX) * 0.5f; }
 
 	float GetDiameter() const { return Radius * 2.f; }
@@ -267,7 +312,7 @@ public:
 	 * Pieces keep the same lines (they share the log's local frame), so pieces cut on the grid always fit together.
 	 * A 390 cm log is exactly six modules.
 	 */
-	static constexpr float ModuleLength = 65.f;
+	static constexpr float ModuleLength = 75.f;
 
 	/** Local X of the grid lines that lie inside the log (not its ends). */
 	void GetModuleLines(TArray<float>& OutX) const;
@@ -349,6 +394,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Carving")
 	TObjectPtr<UStaticMesh> SourceMesh;
 
+	TArray<TWeakObjectPtr<ACarvableLog>> LastOpeningOffcuts;
+
 	/** Start without physics (stays where it was placed until hit apart). */
 	UPROPERTY(EditAnywhere, Category = "Carving")
 	bool bStartAsleep = true;
@@ -386,6 +433,17 @@ private:
 	float Radius = 0.f;
 
 	float Damage = 0.f;
+
+	/** Optional project-tuned material profile; absent profiles use the timber defaults in CarvableLog.cpp. */
+	UPROPERTY(EditDefaultsOnly, Category = "Material|Profile")
+	TObjectPtr<UMaterialDefinition> MaterialDefinition = nullptr;
+
+	/** Moisture is a material condition, while Damage remains the single shared structural integrity value. */
+	UPROPERTY(VisibleInstanceOnly, SaveGame, Category = "Material|Condition")
+	float MoistureContent = 0.0f;
+
+	UPROPERTY(VisibleInstanceOnly, SaveGame, Category = "Material|Condition")
+	float MaterialAgeDays = 0.0f;
 	bool bTemporary = false;
 	TArray<FJointCut> JointCuts;
 	UPROPERTY(Transient)
@@ -394,6 +452,8 @@ private:
 
 	EBurnState BurnState = EBurnState::Intact;
 	float HeatSeconds = 0.f;
+	/** A piece just made (spawned, cut) lands without impact damage for this many seconds. */
+	float ImpactGrace = 2.f;
 	bool bHeatedSinceStep = false;
 	float BurnLeft = 0.f;
 	float BurnTotal = 0.f;

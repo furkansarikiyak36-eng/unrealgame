@@ -11,7 +11,7 @@ USTRUCT(BlueprintType) struct FTreeProfile
     UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="1.0")) float TrunkHeight = 800.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="1.0")) float TrunkDiameter = 30.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="1")) int32 HitsToFell = 6;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="1.0")) float ModuleLength = 65.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="1.0")) float ModuleLength = 75.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 BranchCount = 3;
 };
 UCLASS() class MYPROJECT2_API ATreeActor : public AActor

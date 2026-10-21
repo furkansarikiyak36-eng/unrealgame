@@ -23,6 +23,7 @@ public:
     UStoneCarryComponent();
     UFUNCTION(BlueprintCallable) bool PickUp(AStoneActor* Stone, EStoneCarryMode Mode = EStoneCarryMode::SingleHand);
     UFUNCTION(BlueprintCallable) bool Drop();
+    UFUNCTION(BlueprintCallable) bool ReleaseForPlacement(AStoneActor* Stone);
     UFUNCTION(BlueprintCallable) int32 AddToStack(AStoneActor* SmallStone);
     UFUNCTION(BlueprintCallable) AStoneActor* TakeFromStack();
     UFUNCTION(BlueprintPure) AStoneActor* GetCarried() const { return CarriedStone; }

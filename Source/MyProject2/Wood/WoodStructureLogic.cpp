@@ -75,6 +75,47 @@ namespace WoodStructure
 			return E;
 		}
 
+		/**
+		 * Paralel iki parça üst üste mi: ortak boy en az bir kalınlık, yatayda neredeyse aynı çizgide, aradaki dikey
+		 * mesafe iki yarıçapın toplamına yakın (sığ yuva oyuğu kadar az da olabilir). Üstteki alttakine yatar.
+		 */
+		bool TryStack(const FNode& N, const FNode& E, double ContactTol, FEdge& Out)
+		{
+			const FVector Axis = N.Axis();
+			if (FMath::Abs(Axis.Z) > 0.3)
+			{
+				return false; // dikmeler yan yana durur, üst üste yatmaz
+			}
+			const double LengthN = N.Length();
+			const double T0 = FVector::DotProduct(E.A - N.A, Axis);
+			const double T1 = FVector::DotProduct(E.B - N.A, Axis);
+			const double From = FMath::Max(0.0, FMath::Min(T0, T1));
+			const double To = FMath::Min(LengthN, FMath::Max(T0, T1));
+			const double Thin = FMath::Min(N.RadiusCm, E.RadiusCm);
+			if (To - From < 2.0 * Thin)
+			{
+				return false;
+			}
+			const FVector OnN = N.A + Axis * (0.5 * (From + To));
+			double TE = 0.0;
+			DistToSegment(OnN, E.A, E.B, TE);
+			const FVector OnE = PointAt(E.A, E.B, TE);
+			const FVector Offset = OnN - OnE;
+			const double Lateral = FVector(Offset.X, Offset.Y, 0.0).Size();
+			const double Vertical = FMath::Abs(Offset.Z);
+			const double Touch = N.RadiusCm + E.RadiusCm;
+			if (Lateral > 0.5 * Thin || Vertical < 0.5 * Touch || Vertical > Touch + ContactTol)
+			{
+				return false;
+			}
+			Out = FEdge();
+			Out.Kind = EWoodConnectionKind::Stacked;
+			Out.A = Offset.Z > 0.0 ? N.Id : E.Id; // üstteki taşınan
+			Out.B = Offset.Z > 0.0 ? E.Id : N.Id;
+			Out.bOneWay = true;
+			return true;
+		}
+
 		bool TryConnect(const FNode& N, const FNode& E, double ContactTol, double OrientTol, FEdge& Out)
 		{
 			const double DeltaTol = FMath::Max(ContactTol * 0.5, 1.0);
@@ -182,7 +223,8 @@ namespace WoodStructure
 				const double Parallel = FMath::Abs(FVector::DotProduct(N.Axis(), E.Axis()));
 				if (Parallel >= CosTol)
 				{
-					return false; // yan yana paralel parçalar bağlanmaz
+					// Yan yana paralel parçalar bağlanmaz; üst üste olanlar (kütük duvar sırası) yatak bağlantısıdır.
+					return TryStack(N, E, ContactTol, Out);
 				}
 
 				double S = 0.0, T = 0.0;
@@ -392,7 +434,17 @@ namespace WoodStructure
 					}
 				}
 
-				if (Supporters.Num() >= RequiredSupports(N))
+				// Boydan boya yatak (üst üste paralel kütük) tek başına yeter.
+				bool bBedded = false;
+				for (const FEdge& E : Edges)
+				{
+					if (E.Kind == EWoodConnectionKind::Stacked && E.A == N.Id && Supported.Contains(E.B) && JointHolds(E))
+					{
+						bBedded = true;
+						break;
+					}
+				}
+				if (bBedded || Supporters.Num() >= RequiredSupports(N))
 				{
 					Supported.Add(N.Id);
 					bChanged = true;

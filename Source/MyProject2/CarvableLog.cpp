@@ -4,12 +4,14 @@
 #include "Wood/WoodStructureGeometry.h"
 #include "Wood/WoodStructureLogic.h"
 #include "StructureLink.h"
+#include "RawLogShapes.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "EngineUtils.h"
 #include "ForestTypes.h"
 #include "PickupItem.h"
 #include "Campfire.h"
 #include "BurnSubsystem.h"
+#include "MaterialCore/MaterialDefinition.h"
 #include "RaidEnemy.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -46,8 +48,9 @@ FOnLogRepaired ACarvableLog::OnLogRepaired;
 
 float ACarvableLog::GetShoulderCapacity()
 {
-	// One whole greybox log, 70 cm thick and six modules long, with a little slack for rounding.
-	return 1.03f * PI * 35.f * 35.f * 6.f * ModuleLength;
+	// One 300 cm raw log (UnrealExport, 36 cm thick, four modules), with a little slack for rounding: one 300, two 150
+	// or four 75 cm logs fill a shoulder.
+	return 1.03f * PI * 18.f * 18.f * 4.f * ModuleLength;
 }
 
 ACarvableLog* ACarvableLog::SpawnLog(UWorld* World, const FTransform& Transform)
@@ -159,6 +162,10 @@ void ACarvableLog::AddDamage(float Amount)
 
 void ACarvableLog::SetDamage(float Value)
 {
+	if (!FMath::IsFinite(Value))
+	{
+		return;
+	}
 	const float Before = Damage;
 	Damage = FMath::Clamp(Value, 0.f, 1.f);
 	if (FMath::IsNearlyEqual(Before, Damage, 0.0001f))
@@ -166,7 +173,8 @@ void ACarvableLog::SetDamage(float Value)
 		return;
 	}
 	UpdateDamageLook();
-	// Crossing a threshold changes what a piece in a structure can hold: look at the whole structure again.
+	// The existing StructureLink graph owns load-bearing effects. Re-evaluate only
+	// when the same thresholds its evaluator consumes have been crossed.
 	const auto Crossed = [Before, this](float Threshold) { return (Before < Threshold) != (Damage < Threshold); };
 	if (bAnchored && (Crossed(WoodStructure::JointLooseDamage) || Crossed(WoodStructure::FailureDamage)))
 	{
@@ -174,9 +182,64 @@ void ACarvableLog::SetDamage(float Value)
 	}
 }
 
+void ACarvableLog::SimulateMaterialEnvironment(
+	float ElapsedDays, float AmbientTemperatureC, bool bRainExposed, float RainfallMm)
+{
+	if (!FMath::IsFinite(ElapsedDays) || ElapsedDays <= 0.0f ||
+		!FMath::IsFinite(AmbientTemperatureC) || !FMath::IsFinite(RainfallMm))
+	{
+		return;
+	}
+
+	ElapsedDays = FMath::Min(ElapsedDays, 365.0f);
+	MaterialAgeDays = FMath::Min(MaterialAgeDays + ElapsedDays, 1000000.0f);
+
+	const FMaterialProperties* Properties = MaterialDefinition ? &MaterialDefinition->Properties : nullptr;
+	const float WaterAbsorption = Properties
+		? FMath::Clamp(Properties->WaterAbsorption, 0.0f, 1.0f)
+		: 0.35f;
+	const float WaterDamageRate = Properties
+		? FMath::Clamp(Properties->WaterDamageRate, 0.0f, 0.1f)
+		: 0.02f;
+	const float DecayRate = Properties
+		? FMath::Clamp(Properties->DecayRate, 0.0f, 0.1f)
+		: 0.0015f;
+
+	if (bRainExposed && RainfallMm > 0.0f && WaterAbsorption > 0.0f)
+	{
+		// Rainfall is a per-world-day total. Applying at most one day's total avoids
+		// multiplying today's weather by a long offline catch-up interval.
+		const float DailyRainFactor = FMath::Min(ElapsedDays, 1.0f);
+		const float AddedMoisture = (RainfallMm / 100.0f) * WaterAbsorption * DailyRainFactor;
+		MoistureContent = FMath::Clamp(MoistureContent + AddedMoisture, 0.0f, 1.0f);
+	}
+	else
+	{
+		const float DryingRate = AmbientTemperatureC < 2.0f ? 0.02f : 0.08f;
+		MoistureContent = FMath::Max(0.0f, MoistureContent - DryingRate * ElapsedDays);
+	}
+
+	// Burning/charred state belongs exclusively to UBurnSubsystem/EBurnState.
+	// Wetness changes damage and burn resistance without creating another fire state.
+	if (BurnState == EBurnState::Charred || Damage >= 1.0f)
+	{
+		return;
+	}
+
+	const float ThermalFactor = FMath::Clamp((AmbientTemperatureC + 5.0f) / 25.0f, 0.0f, 1.5f);
+	const float MoistureFactor = FMath::Clamp(MoistureContent, 0.0f, 1.0f);
+	const float EnvironmentalDamage = ElapsedDays * ThermalFactor * MoistureFactor *
+		(DecayRate + WaterDamageRate * 0.01f);
+	if (EnvironmentalDamage > 0.0f && FMath::IsFinite(EnvironmentalDamage))
+	{
+		AddDamage(EnvironmentalDamage);
+	}
+}
+
 float ACarvableLog::GetIgniteSeconds() const
 {
-	return FMath::Clamp(Radius * 0.4f, 2.f, 20.f);
+	// Wet timber takes longer to catch; UBurnSubsystem still owns the ignition/warm lists.
+	return FMath::Clamp(Radius * 0.4f * (1.0f + 2.0f * MoistureContent), 2.f, 60.f);
 }
 
 float ACarvableLog::GetHeatShare() const
@@ -215,7 +278,8 @@ bool ACarvableLog::Ignite()
 	{
 		BurnState = EBurnState::Burning;
 		HeatSeconds = GetIgniteSeconds();
-		BurnTotal = FMath::Max(ACampfire::FuelSecondsOf(this), 1.f);
+		// Moisture lowers the effective burn rate without creating a second fire-state owner.
+		BurnTotal = FMath::Max(ACampfire::FuelSecondsOf(this), 1.f) * (1.0f + 1.5f * MoistureContent);
 		BurnLeft = BurnTotal;
 		Burn->Light(this);
 		ShowFlames(true, 1.f);
@@ -316,9 +380,24 @@ void ACarvableLog::ShowFlames(bool bShow, float Strength)
 
 bool ACarvableLog::CanReplace(const ACarvableLog* Old, const ACarvableLog* Replacement)
 {
-	return Old && Replacement && Old != Replacement && Old->IsAnchored() && !Replacement->IsAnchored() && Old->GetDamage() >= 0.2f
-		&& Replacement->GetDamage() < Old->GetDamage() && Old->IsSplit() == Replacement->IsSplit()
-		&& FMath::IsNearlyEqual(Old->GetLength(), Replacement->GetLength(), 1.5f);
+	// The replacement is normally on the player's shoulder when it is put in: carried is fine, falling is not.
+	if (!Old || !Replacement || Old == Replacement || !Old->IsAnchored() || Replacement->IsAnchored()
+		|| Replacement->MeshComponent->IsSimulatingPhysics()
+		|| Replacement->BurnState != EBurnState::Intact || Old->GetDamage() < 0.2f
+		|| Replacement->GetDamage() >= Old->GetDamage() || Old->IsSplit() != Replacement->IsSplit()
+		|| Old->GetSplitCount() != Replacement->GetSplitCount()
+		|| !Replacement->JointCuts.IsEmpty() || !Replacement->CutSpans.IsEmpty())
+	{
+		return false;
+	}
+
+	// "Same size" includes cross-section: length alone lets a thin/quarter-split piece replace a full beam.
+	const FVector OldSize = Old->GetLocalBox().GetSize();
+	const FVector ReplacementSize = Replacement->GetLocalBox().GetSize();
+	return FMath::IsNearlyEqual(Old->GetLength(), Replacement->GetLength(), 1.5f)
+		&& FMath::IsNearlyEqual(Old->GetRadius(), Replacement->GetRadius(), 1.5f)
+		&& FMath::IsNearlyEqual(OldSize.Y, ReplacementSize.Y, 1.5f)
+		&& FMath::IsNearlyEqual(OldSize.Z, ReplacementSize.Z, 1.5f);
 }
 
 bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
@@ -327,29 +406,69 @@ bool ACarvableLog::ReplaceDamaged(ACarvableLog* Old, ACarvableLog* Replacement)
 	{
 		return false;
 	}
-	// Two pieces of the same length can come from different places of their logs: their local frames start at different
-	// X. The new piece is set so that its box lies exactly where the old one's did, and the joints are cut shifted the same way.
+
+	// Rebuilding joints is one repair transaction: never leave a partly notched replacement in the structure.
+	UDynamicMesh* BackupMesh = NewObject<UDynamicMesh>(Replacement);
+	if (!BackupMesh)
+	{
+		return false;
+	}
+	BackupMesh->SetMesh(Replacement->MeshComponent->GetDynamicMesh()->GetMeshRef());
+	const FTransform OriginalTransform = Replacement->GetActorTransform();
+	const TArray<FJointCut> OriginalJointCuts = Replacement->JointCuts;
+	const TArray<FVector2f> OriginalCutSpans = Replacement->CutSpans;
 	const float Shift = Replacement->MinX - Old->MinX;
+	const float StockMinX = Replacement->MinX;
+	const float StockMaxX = Replacement->MaxX;
+
 	FTransform Where = Old->GetActorTransform();
 	Where.AddToTranslation(-Where.GetRotation().RotateVector(FVector(Shift, 0.f, 0.f)));
 	Replacement->PlaceAt(Where, /*bAnchorIt*/ true);
+	Replacement->JointCuts.Reset();
+	Replacement->CutSpans.Reset();
+
+	auto RollbackReplacement = [&]()
+	{
+		Replacement->MeshComponent->GetDynamicMesh()->SetMesh(BackupMesh->GetMeshRef());
+		Replacement->JointCuts = OriginalJointCuts;
+		Replacement->CutSpans = OriginalCutSpans;
+		Replacement->FinishEdit();
+		Replacement->SetActorTransform(OriginalTransform, false, nullptr, ETeleportType::TeleportPhysics);
+		Replacement->bAnchored = false;
+		Replacement->MeshComponent->SetSimulatePhysics(false);
+		Replacement->SetActorTickEnabled(false);
+		Replacement->UpdateDamageLook();
+	};
+
 	for (const FJointCut& Cut : Old->JointCuts)
 	{
 		const float X = Cut.LocalX + Shift;
-		if (X < Replacement->MinX || X > Replacement->MaxX)
+		if (X < StockMinX || X > StockMaxX)
 		{
-			continue;
+			RollbackReplacement();
+			return false;
 		}
+
+		bool bCutRebuilt = false;
 		switch (Cut.Tool)
 		{
-		case ECarveTool::Notch:      Replacement->Notch(X, Cut.SideAngleDeg, Cut.AngleDeg, Cut.MateRadius, Cut.Depth); break;
-		case ECarveTool::NotchRound: Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, true); break;
-		case ECarveTool::NotchFlat:  Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, false); break;
-		case ECarveTool::Dovetail:   Replacement->CutDovetail(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth); break;
-		default: break;
+		case ECarveTool::Notch:      bCutRebuilt = Replacement->Notch(X, Cut.SideAngleDeg, Cut.AngleDeg, Cut.MateRadius, Cut.Depth); break;
+		case ECarveTool::NotchRound: bCutRebuilt = Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, true); break;
+		case ECarveTool::NotchFlat:  bCutRebuilt = Replacement->CutProfile(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth, false); break;
+		case ECarveTool::Dovetail:   bCutRebuilt = Replacement->CutDovetail(X, Cut.SideAngleDeg, Cut.Width, Cut.Depth); break;
+		default:                     bCutRebuilt = false; break;
+		}
+
+		if (!bCutRebuilt)
+		{
+			RollbackReplacement();
+			return false;
 		}
 	}
+
+	// The replacement's new geometry changes both the support graph and cached feature classification.
 	Old->Release();
+	StructureLink::Settle(Old->GetWorld());
 	OnLogRepaired.Broadcast(Replacement);
 	return true;
 }
@@ -394,7 +513,10 @@ void ACarvableLog::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimit
 		HitEnemy(Enemy, NormalImpulse.Size());
 		return;
 	}
-	AddImpactDamage(NormalImpulse.Size());
+	if (ImpactGrace <= 0.f)
+	{
+		AddImpactDamage(NormalImpulse.Size());
+	}
 }
 
 bool ACarvableLog::ComputeSlopePlacement(const FVector& LowEnd, const FVector& Forward, float AngleDeg, const ACarvableLog* Piece, FTransform& Out)
@@ -413,7 +535,7 @@ bool ACarvableLog::ComputeSlopePlacement(const FVector& LowEnd, const FVector& F
 	return true;
 }
 
-ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
+ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules, const FVector& PushTowards)
 {
 	TArray<float> Lines;
 	GetModuleLines(Lines);
@@ -433,6 +555,9 @@ ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
 	{
 		return nullptr;
 	}
+	LastOpeningOffcuts.Reset();
+	const RawLogShapes::FShape Shape = RawLogShapes::FromLog(this);
+	const FTransform Frame = GetActorTransform();
 	const bool bWasAnchored = bAnchored;
 	ACarvableLog* Middle = CrossCut(X0);
 	if (!Middle)
@@ -441,6 +566,54 @@ ACarvableLog* ACarvableLog::CutOpening(float CentreX, int32 Modules)
 	}
 	ACarvableLog* Right = Middle->CrossCut(X1);
 	Middle->Destroy();
+
+	// The sides stay as they were cut (with their corner notches), but know their new length: a raw log's side that is a
+	// whole raw length (75 / 150 / 300 / 600) is that raw shape for the axe; other lengths are plain building pieces.
+	auto Relabel = [&Shape](ACarvableLog* Piece)
+	{
+		if (Piece && Shape.IsValid())
+		{
+			const int32 Length = FMath::RoundToInt(Piece->GetLength() / ModuleLength) * static_cast<int32>(ModuleLength);
+			Piece->SourceMesh = RawLogShapes::LoadMesh(Length, Shape.Profile);
+		}
+	};
+	Relabel(this);
+	Relabel(Right);
+
+	// What came out of the gap: one 75 cm log per module, dropping out of the wall towards the player.
+	UStaticMesh* Offcut = Shape.IsValid() ? RawLogShapes::LoadMesh(RawLogShapes::ShortestCm, Shape.Profile) : nullptr;
+	if (!Offcut)
+	{
+		Offcut = RawLogShapes::LoadMesh(RawLogShapes::ShortestCm, RawLogShapes::EProfile::Raw);
+	}
+	const FVector Axis = Frame.GetUnitAxis(EAxis::X);
+	for (int32 Module = 0; Module < Modules && Offcut; ++Module)
+	{
+		const FVector Where = Frame.TransformPosition(FVector(X0 + (Module + 0.5f) * ModuleLength, 0.f, 0.f));
+		FVector Out = PushTowards.IsZero() ? Frame.GetUnitAxis(EAxis::Y) : PushTowards - Where;
+		Out = (Out - Axis * FVector::DotProduct(Out, Axis)).GetSafeNormal2D();
+		// Out of the wall on the cutter's side, then down to the ground (it would otherwise settle back into the gap).
+		ACarvableLog* Piece = SpawnFromStaticMesh(GetWorld(), Offcut, FTransform(Frame.GetRotation(), Where + Out * (Radius * 2.f + 45.f)));
+		if (!Piece)
+		{
+			continue;
+		}
+		// Down onto the ground, or onto an offcut that already fell there.
+		FHitResult Below;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(OffcutDrop), false, Piece);
+		Params.AddIgnoredActor(this);
+		if (Right)
+		{
+			Params.AddIgnoredActor(Right);
+		}
+		const FVector From = Piece->GetActorLocation();
+		if (GetWorld()->LineTraceSingleByChannel(Below, From, From - FVector(0.f, 0.f, 2000.f), ECC_Visibility, Params))
+		{
+			Piece->SetActorLocation(FVector(From.X, From.Y, Below.ImpactPoint.Z + Piece->GetRadius() + 1.f));
+		}
+		LastOpeningOffcuts.Add(Piece);
+	}
+
 	if (bWasAnchored)
 	{
 		Anchor();
@@ -480,6 +653,7 @@ void ACarvableLog::Tick(float DeltaSeconds)
 		return;
 	}
 	SettleTime += DeltaSeconds;
+	ImpactGrace = FMath::Max(0.f, ImpactGrace - DeltaSeconds);
 	const bool bStill = MeshComponent->GetPhysicsLinearVelocity().SizeSquared() < 25.f
 		&& MeshComponent->GetPhysicsAngularVelocityInDegrees().SizeSquared() < 25.f;
 	StillTime = bStill ? StillTime + DeltaSeconds : 0.f;
@@ -509,10 +683,10 @@ void ACarvableLog::LoadSource()
 	const FBox Box = UGeometryScriptLibrary_MeshQueryFunctions::GetMeshBoundingBox(MeshComponent->GetDynamicMesh());
 	Radius = FMath::Max(Box.GetSize().Y, Box.GetSize().Z) * 0.5f;
 	SetMaterials(SourceMesh->GetMaterial(0));
-	if (SourceMesh->GetStaticMaterials().Num() > 1)
+	// Pieces whose surface is already cut wood keep it on the carved faces too; every further slot keeps its material.
+	for (int32 Slot = 1; Slot < SourceMesh->GetStaticMaterials().Num(); ++Slot)
 	{
-		// Pieces whose surface is already cut wood keep it on the carved faces too.
-		MeshComponent->SetMaterial(1, SourceMesh->GetMaterial(1));
+		MeshComponent->SetMaterial(Slot, SourceMesh->GetMaterial(Slot));
 	}
 	FinishEdit();
 }
@@ -553,7 +727,27 @@ ACarvableLog* ACarvableLog::SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh
 
 	const FBox Box = UGeometryScriptLibrary_MeshQueryFunctions::GetMeshBoundingBox(Log->MeshComponent->GetDynamicMesh());
 	Log->Radius = Box.GetSize().Z * 0.5f;
+	// Split and hewn shapes have a flat face, so they can go down as floor boards (ComputeFloorPlacement). That rolls
+	// the piece by FlatAngle + 90: -90 keeps the mesh as it is (flat face up), 90 turns it over (flat face down in the mesh).
+	{
+		const FString Name = Mesh->GetName();
+		if (Name.Contains(TEXT("_Half")) || Name.Contains(TEXT("_Plank")) || Name.Contains(TEXT("_Hewn"))
+			|| Name.Contains(TEXT("_Quarter")) || Name.Contains(TEXT("_Kalas")))
+		{
+			Log->bSplitPiece = true;
+			Log->FlatAngle = Box.Max.Z <= -Box.Min.Z ? -90.f : 90.f;
+		}
+	}
+	// Remember what it was made from (RawLogShapes reads the shape from the mesh name); unlike a placed log it still
+	// falls and settles, and the copy above is not loaded again.
+	Log->SourceMesh = Mesh;
+	Log->bStartAsleep = false;
 	Log->SetMaterials(Mesh->GetMaterial(0));
+	// Every slot of the source keeps its own material (raw logs: bark, cut wood with the end grain, hewn wood).
+	for (int32 Slot = 1; Slot < Mesh->GetStaticMaterials().Num(); ++Slot)
+	{
+		Log->MeshComponent->SetMaterial(Slot, Mesh->GetMaterial(Slot));
+	}
 	Log->FinishEdit();
 	Log->FinishSpawning(Transform);
 	return Log;
@@ -1179,6 +1373,100 @@ bool ACarvableLog::GetLogAxis(const AActor* Log, FVector& OutCentre, FVector& Ou
 	return true;
 }
 
+float ACarvableLog::GetComplementarySnapYaw(float ReferenceYaw, float LowerYaw, float DesiredYaw)
+{
+	auto SignedAxisDelta = [](float From, float To)
+	{
+		float Delta = FMath::FindDeltaAngleDegrees(From, To);
+		if (Delta > 90.f) Delta -= 180.f;
+		else if (Delta < -90.f) Delta += 180.f;
+		return Delta;
+	};
+
+	const float LowerDelta = SignedAxisDelta(ReferenceYaw, LowerYaw);
+	float Side = 1.f;
+	if (FMath::IsNearlyEqual(FMath::Abs(LowerDelta), 45.f, 12.f))
+	{
+		// A log already at +45 gets -45 above it, and vice versa, relative to the same base axis.
+		Side = LowerDelta > 0.f ? -1.f : 1.f;
+	}
+	else
+	{
+		// The first course chooses the side the player is aiming toward; an exact tie is consistently +45.
+		Side = SignedAxisDelta(ReferenceYaw, DesiredYaw) < 0.f ? -1.f : 1.f;
+	}
+	return FRotator::NormalizeAxis(ReferenceYaw + Side * 45.f);
+}
+
+bool ACarvableLog::ComputeComplementarySnapPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper,
+	float ReferenceYaw, float DesiredYaw, FCrossPlacement& OutPlacement)
+{
+	FVector Centre, Axis;
+	float LowerRadius, HalfLength;
+	if (!Lower || !Upper || Lower == Upper || Lower->IsCarried()
+		|| !GetLogAxis(Lower, Centre, Axis, LowerRadius, HalfLength) || FMath::Abs(Axis.Z) > 0.3f)
+	{
+		return false;
+	}
+	Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+	const float UpperRadius = Upper->GetRadius();
+	const float Room = FMath::Max(0.f, HalfLength - UpperRadius);
+	float Along = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis), -Room, Room);
+
+	TArray<float> ModuleLines;
+	Lower->GetModuleLines(ModuleLines);
+	const float LocalCentreX = Lower->GetActorTransform().InverseTransformPosition(Centre).X;
+	float BestError = TNumericLimits<float>::Max();
+	for (const float Line : ModuleLines)
+	{
+		const float Candidate = Line - LocalCentreX;
+		const float Error = FMath::Abs(Candidate - Along);
+		if (FMath::Abs(Candidate) <= Room && Error < BestError)
+		{
+			Along = Candidate;
+			BestError = Error;
+		}
+	}
+	if (BestError == TNumericLimits<float>::Max())
+	{
+		Along = FMath::GridSnap(Along, ModuleLength);
+		Along = FMath::Clamp(Along, -Room, Room);
+	}
+
+	TArray<float> UpperLines;
+	Upper->GetModuleLines(UpperLines);
+	float NotchX = 0.f;
+	float BestLineError = TNumericLimits<float>::Max();
+	for (const float Line : UpperLines)
+	{
+		if (!Upper->IsSpanFree(Line - LowerRadius * CupFit, Line + LowerRadius * CupFit))
+		{
+			continue;
+		}
+		const float Error = FMath::Abs(Line - Upper->GetCenterX());
+		if (Error < BestLineError)
+		{
+			BestLineError = Error;
+			NotchX = Line;
+		}
+	}
+	if (BestLineError == TNumericLimits<float>::Max())
+	{
+		return false;
+	}
+
+	const float Yaw = GetComplementarySnapYaw(ReferenceYaw, Axis.Rotation().Yaw, DesiredYaw);
+	const FQuat Rotation = FRotator(0.f, Yaw, 0.f).Quaternion();
+	const FVector Crossing = Centre + Axis * Along;
+	const FVector UpperCentre = Crossing - Rotation.RotateVector(FVector(NotchX - Upper->GetCenterX(), 0.f, 0.f))
+		+ FVector(0.f, 0.f, LowerRadius + UpperRadius - 0.25f * FMath::Min(LowerRadius, UpperRadius));
+	OutPlacement.NotchX = NotchX;
+	OutPlacement.LowerRadius = LowerRadius;
+	OutPlacement.UpperRadius = UpperRadius;
+	OutPlacement.Upper = FTransform(Rotation, UpperCentre - Rotation.RotateVector(FVector(Upper->GetCenterX(), 0.f, 0.f)));
+	return true;
+}
+
 bool ACarvableLog::ComputeCrossPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper,
 	FCrossPlacement& Out)
 {
@@ -1197,7 +1485,24 @@ bool ACarvableLog::ComputeCrossPlacement(const AActor* Lower, const FVector& Aim
 	{
 		return false;
 	}
-	const float Along = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis), -Room, Room);
+	float Along = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis), -Room, Room);
+	// The crossing snaps to the lower log's 75 cm module lines (its joint points).
+	if (const ACarvableLog* LowerLog = Cast<ACarvableLog>(Lower))
+	{
+		TArray<float> LowerLines;
+		LowerLog->GetModuleLines(LowerLines);
+		const float CentreX = LowerLog->GetActorTransform().InverseTransformPosition(Centre).X;
+		float Best = TNumericLimits<float>::Max();
+		for (const float Line : LowerLines)
+		{
+			const float Candidate = Line - CentreX;
+			if (FMath::Abs(Candidate) <= Room && FMath::Abs(Candidate - Along) < Best)
+			{
+				Best = FMath::Abs(Candidate - Along);
+				Along = Candidate;
+			}
+		}
+	}
 	const FVector Cross = Centre + Axis * Along;
 
 	// Square across, running away from the player.
@@ -1221,7 +1526,164 @@ bool ACarvableLog::ComputeCrossPlacement(const AActor* Lower, const FVector& Aim
 	Out.LowerRadius = LowerRadius;
 	Out.UpperRadius = UpperRadius;
 	const float AxisGap = UpperRadius + LowerRadius * CupFit - LowerRadius;
-	const FVector Location = Cross + FVector(0.f, 0.f, AxisGap) - Direction * Out.NotchX;
+	FVector Location = Cross + FVector(0.f, 0.f, AxisGap) - Direction * Out.NotchX;
+
+	// Level: the upper log rests on the highest lying log under its span, so it never tilts across logs at different
+	// heights. Lower logs under it stay as they are (a support piece can go into the gap).
+	const FVector SpanA = Location + Direction * Box.Min.X;
+	const FVector SpanB = Location + Direction * Box.Max.X;
+	for (TActorIterator<ACarvableLog> It(Upper->GetWorld()); It; ++It)
+	{
+		const ACarvableLog* Other = *It;
+		FVector OtherCentre, OtherAxis;
+		float OtherRadius, OtherHalf;
+		if (Other == Upper || Other == Lower || Other->IsCarried() || !GetLogAxis(Other, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
+			|| FMath::Abs(OtherAxis.Z) > 0.3f)
+		{
+			continue;
+		}
+		const FVector Flat(1.f, 1.f, 0.f);
+		double S = 0.0, T = 0.0;
+		const FVector P0 = SpanA * Flat, P1 = SpanB * Flat;
+		const FVector Q0 = (OtherCentre - OtherAxis * OtherHalf) * Flat, Q1 = (OtherCentre + OtherAxis * OtherHalf) * Flat;
+		WoodStructure::Geo::ClosestSegSeg(P0, P1, Q0, Q1, S, T);
+		if (FVector::Dist(FMath::Lerp(P0, P1, static_cast<float>(S)), FMath::Lerp(Q0, Q1, static_cast<float>(T))) > OtherRadius + UpperRadius * 0.5f)
+		{
+			continue;
+		}
+		const float OtherAxisZ = FMath::Lerp(OtherCentre - OtherAxis * OtherHalf, OtherCentre + OtherAxis * OtherHalf, static_cast<float>(T)).Z;
+		Location.Z = FMath::Max(Location.Z, OtherAxisZ + UpperRadius + OtherRadius * CupFit - OtherRadius);
+	}
+	Out.Upper = FTransform(FRotator(0.f, Direction.Rotation().Yaw, 0.f), Location);
+	return true;
+}
+
+bool ACarvableLog::ComputeWallCornerPlacement(const ACarvableLog* Course, const ACarvableLog* Adjacent, const FVector& Aim,
+	const ACarvableLog* Upper, FCrossPlacement& Out)
+{
+	FVector CourseCentre, CourseAxis, AdjacentCentre, AdjacentAxis;
+	float CourseRadius, CourseHalf, AdjacentRadius, AdjacentHalf;
+	if (!Course || !Adjacent || !Upper || Course == Adjacent || Upper == Course || Upper == Adjacent
+		|| Course->IsCarried() || Adjacent->IsCarried()
+		|| !GetLogAxis(Course, CourseCentre, CourseAxis, CourseRadius, CourseHalf)
+		|| !GetLogAxis(Adjacent, AdjacentCentre, AdjacentAxis, AdjacentRadius, AdjacentHalf)
+		|| FMath::Abs(CourseAxis.Z) > 0.3f || FMath::Abs(AdjacentAxis.Z) > 0.3f)
+	{
+		return false;
+	}
+
+	CourseAxis = FVector(CourseAxis.X, CourseAxis.Y, 0.f).GetSafeNormal();
+	AdjacentAxis = FVector(AdjacentAxis.X, AdjacentAxis.Y, 0.f).GetSafeNormal();
+	if (FMath::Abs(FVector::DotProduct(CourseAxis, AdjacentAxis)) > 0.3f)
+	{
+		return false;
+	}
+
+	const FVector CourseA = CourseCentre - CourseAxis * CourseHalf;
+	const FVector CourseB = CourseCentre + CourseAxis * CourseHalf;
+	const FVector Corner = FVector::DistSquared2D(Aim, CourseA) <= FVector::DistSquared2D(Aim, CourseB) ? CourseA : CourseB;
+	const FVector AdjacentA = AdjacentCentre - AdjacentAxis * AdjacentHalf;
+	const FVector AdjacentB = AdjacentCentre + AdjacentAxis * AdjacentHalf;
+	const FVector AdjacentEnd = FVector::DistSquared2D(Corner, AdjacentA) <= FVector::DistSquared2D(Corner, AdjacentB) ? AdjacentA : AdjacentB;
+	const float EndTolerance = CourseRadius + AdjacentRadius + ModuleLength * 0.45f;
+	if (FVector::Dist2D(Corner, AdjacentEnd) > EndTolerance
+		|| FMath::Abs(CourseCentre.Z - AdjacentCentre.Z) > CourseRadius + AdjacentRadius + 15.f)
+	{
+		return false;
+	}
+
+	// The adjacent wall course tells us which way the new log must run. Pick the sign that extends away from the corner.
+	FVector Direction = FVector(AdjacentCentre.X - AdjacentEnd.X, AdjacentCentre.Y - AdjacentEnd.Y, 0.f).GetSafeNormal();
+	if (Direction.IsNearlyZero())
+	{
+		Direction = AdjacentAxis;
+	}
+	const FBox Box = Upper->GetLocalBox();
+	TArray<float> Lines;
+	Upper->GetModuleLines(Lines);
+	const float* Notch = Lines.FindByPredicate([&Box, CourseRadius, Upper](float X)
+	{
+		return X - Box.Min.X >= ModuleLength - 1.f
+			&& Box.Max.X - X >= ModuleLength - 1.f
+			&& Upper->IsSpanFree(X - CourseRadius * CupFit, X + CourseRadius * CupFit);
+	});
+	if (!Notch)
+	{
+		return false;
+	}
+
+	const float UpperRadius = Upper->GetRadius();
+	const float Sink = 0.25f * FMath::Min(CourseRadius, UpperRadius);
+	const FVector Location = Corner + FVector(0.f, 0.f, CourseRadius + UpperRadius - Sink) - Direction * *Notch;
+	Out.NotchX = *Notch;
+	Out.LowerRadius = CourseRadius;
+	Out.UpperRadius = UpperRadius;
+	Out.Upper = FTransform(FRotator(0.f, Direction.Rotation().Yaw, 0.f), Location);
+	return true;
+}
+
+bool ACarvableLog::ComputeCornerPlacement(const ACarvableLog* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Upper,
+	const TArray<ACarvableLog*>& Nearby, FCrossPlacement& Out)
+{
+	FVector Centre, Axis;
+	float LowerRadius, HalfLength;
+	if (!Lower || !Upper || Upper == Lower || Lower->IsCarried() || !GetLogAxis(Lower, Centre, Axis, LowerRadius, HalfLength)
+		|| FMath::Abs(Axis.Z) > 0.3f || HalfLength < ModuleLength - 1.f)
+	{
+		return false;
+	}
+	Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+	const float HalfModule = ModuleLength * 0.5f;
+	const float End = FVector::DotProduct(Aim - Centre, Axis) >= 0.f ? 1.f : -1.f;
+	const FVector Joint = Centre + Axis * End * (HalfLength - HalfModule);
+
+	// Which way the new log runs: to the other wall of the room if there is one (a log parallel to Lower, about as
+	// high, crossed by the joint line, that the new log reaches with half a module to spare), else away from the player.
+	const float Length = Upper->GetLength();
+	const FVector Side = FVector::CrossProduct(FVector::UpVector, Axis);
+	float BestReach = TNumericLimits<float>::Max();
+	FVector Direction = FVector::ZeroVector;
+	float PartnerAxisZ = Centre.Z;
+	for (const ACarvableLog* Other : Nearby)
+	{
+		FVector OtherCentre, OtherAxis;
+		float OtherRadius, OtherHalf;
+		if (!Other || Other == Lower || Other == Upper || Other->IsCarried() || !GetLogAxis(Other, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
+			|| FMath::Abs(OtherAxis.Z) > 0.3f || FMath::Abs(FVector::DotProduct(FVector(OtherAxis.X, OtherAxis.Y, 0.f).GetSafeNormal(), Axis)) < 0.95f
+			|| FMath::Abs(OtherCentre.Z - Centre.Z) > LowerRadius + OtherRadius)
+		{
+			continue;
+		}
+		const float Across = FVector::DotProduct(OtherCentre - Joint, Side);
+		const float Reach = FMath::Abs(Across);
+		const float AlongOther = FVector::DotProduct(Joint - OtherCentre, Axis);
+		if (Reach < LowerRadius + OtherRadius || Reach > Length - HalfModule * 2.f + 1.f || FMath::Abs(AlongOther) > OtherHalf - OtherRadius
+			|| Reach >= BestReach)
+		{
+			continue;
+		}
+		BestReach = Reach;
+		Direction = Side * FMath::Sign(Across);
+		PartnerAxisZ = OtherCentre.Z;
+	}
+	if (Direction.IsZero())
+	{
+		Direction = FVector::DotProduct(Side, Joint - Viewer) >= 0.f ? Side : -Side;
+	}
+
+	const FBox Box = Upper->GetLocalBox();
+	const float NotchX = Box.Min.X + HalfModule;
+	if (!Upper->IsSpanFree(NotchX - LowerRadius * CupFit, NotchX + LowerRadius * CupFit))
+	{
+		return false;
+	}
+	const float UpperRadius = Upper->GetRadius();
+	const float AxisGap = UpperRadius + LowerRadius * CupFit - LowerRadius;
+	FVector Location = Joint - Direction * NotchX;
+	Location.Z = FMath::Max(Centre.Z, PartnerAxisZ) + AxisGap;
+	Out.NotchX = NotchX;
+	Out.LowerRadius = LowerRadius;
+	Out.UpperRadius = UpperRadius;
 	Out.Upper = FTransform(FRotator(0.f, Direction.Rotation().Yaw, 0.f), Location);
 	return true;
 }
@@ -1293,6 +1755,28 @@ bool ACarvableLog::ComputeBracePlacement(const ACarvableLog* Post, const ACarvab
 	return true;
 }
 
+float ACarvableLog::GetWidth() const
+{
+	const FBox Box = UGeometryScriptLibrary_MeshQueryFunctions::GetMeshBoundingBox(MeshComponent->GetDynamicMesh());
+	return Box.IsValid ? Box.GetSize().Y : Radius * 2.f;
+}
+
+void ACarvableLog::CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth)
+{
+	const FVector Local = GetActorTransform().InverseTransformVectorNoScale(WorldSide);
+	const float SideAngle = FMath::RadiansToDegrees(FMath::Atan2(Local.Y, Local.Z));
+	const float LocalX = GetActorTransform().InverseTransformPosition(WorldPoint).X;
+	if (Depth > 0.5f && IsSpanFree(LocalX - Width * 0.5f, LocalX + Width * 0.5f))
+	{
+		CutProfile(LocalX, SideAngle, Width, Depth, false);
+	}
+}
+
+float ACarvableLog::FloorBoardSeatDepth(float BeamRadius)
+{
+	return 0.6f * BeamRadius;
+}
+
 bool ACarvableLog::ComputeFloorPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Piece,
 	FTransform& OutTransform)
 {
@@ -1302,7 +1786,12 @@ bool ACarvableLog::ComputeFloorPlacement(const AActor* Lower, const FVector& Aim
 	{
 		return false;
 	}
-	const float Along = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis), -(HalfLength - 10.f), HalfLength - 10.f);
+	// Boards lie side by side: on a grid one board wide from the beam's end, so the next board touches the last.
+	// Board pitch (centre to centre): 30 cm, or the board's own width when it is wider (the user's spacing).
+	const float BoardWidth = FMath::Max(FMath::Max(4.f, Piece->GetWidth()), 30.f);
+	const float FromEnd = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis) + HalfLength, 0.f, HalfLength * 2.f - 1.f);
+	const float Along = FMath::Clamp((FMath::FloorToFloat(FromEnd / BoardWidth) + 0.5f) * BoardWidth - HalfLength,
+		-(HalfLength - BoardWidth * 0.5f), HalfLength - BoardWidth * 0.5f);
 	const FVector Cross = Centre + Axis * Along;
 	FVector Direction = FVector::CrossProduct(FVector::UpVector, FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal());
 	if (FVector::DotProduct(Direction, Cross - Viewer) < 0.f)
@@ -1312,9 +1801,10 @@ bool ACarvableLog::ComputeFloorPlacement(const AActor* Lower, const FVector& Aim
 	// Flat face up: the face's outward direction (the split angle) is turned to point up by rolling about the log's own axis.
 	const float Roll = FMath::DegreesToRadians(Piece->GetFlatAngle() + 90.f);
 	const FQuat Rotation = FRotator(0.f, Direction.Rotation().Yaw, 0.f).Quaternion() * FQuat(FVector::XAxisVector, Roll);
-	const FVector Near = Cross - Direction * LowerRadius;
+	// The board starts a little in from the beam's outer edge and is let into the beam (a seat is cut when it goes in).
+	const FVector Near = Cross - Direction * FMath::Max(0.f, LowerRadius - 10.f);
 	FVector AxisPoint = Near + Direction * (Piece->GetLength() * 0.5f);
-	AxisPoint.Z = Centre.Z + LowerRadius + Piece->GetRadius() * 0.6f;
+	AxisPoint.Z = Centre.Z + LowerRadius + Piece->GetRadius() - FloorBoardSeatDepth(LowerRadius);
 	OutTransform = FTransform(Rotation, AxisPoint - Rotation.RotateVector(FVector(Piece->GetCenterX(), 0.f, 0.f)));
 	return true;
 }
@@ -1353,8 +1843,25 @@ ACarvableLog* ACarvableLog::PlaceAcross(AActor* Lower, const FCrossPlacement& Pl
 	}
 
 	Upper->PlaceAt(Placement.Upper, /*bAnchorIt*/ true);
-	// Underside (180), square across (90), cup as round as the lower log and half of it deep: it seats onto it.
-	Upper->Notch(Placement.NotchX, 180.f, 90.f, Placement.LowerRadius, Placement.LowerRadius);
+	// Flat notches top and bottom, like SM_RawLog_75_FlatNotch_TopBottom: the upper log's underside and the lower log's
+	// top each lose a quarter of the lower log's thickness, so together they seat it half a log deep as before.
+	auto SideAngleFor = [](const ACarvableLog* Log, const FVector& WorldDir)
+	{
+		const FVector Local = Log->GetActorTransform().InverseTransformVectorNoScale(WorldDir);
+		return FMath::RadiansToDegrees(FMath::Atan2(Local.Y, Local.Z));
+	};
+	const float NotchDepth = Placement.LowerRadius * 0.5f;
+	Upper->CutProfile(Placement.NotchX, SideAngleFor(Upper, -FVector::UpVector), Placement.LowerRadius * 2.f + 2.f, NotchDepth, false);
+	if (LowerLog)
+	{
+		const FVector Crossing = Upper->GetActorTransform().TransformPosition(FVector(Placement.NotchX, 0.f, 0.f));
+		const float LowerX = LowerLog->GetActorTransform().InverseTransformPosition(Crossing).X;
+		const float Width = Placement.UpperRadius * 2.f + 2.f;
+		if (LowerLog->IsSpanFree(LowerX - Width * 0.5f, LowerX + Width * 0.5f))
+		{
+			LowerLog->CutProfile(LowerX, SideAngleFor(LowerLog, FVector::UpVector), Width, NotchDepth, false);
+		}
+	}
 
 	// A wall corner rests on more than one log: every other log the upper one crosses gets a cup too, cut to the
 	// depth that seats it at the height it already has, and becomes part of the corner.
@@ -1388,7 +1895,7 @@ ACarvableLog* ACarvableLog::PlaceAcross(AActor* Lower, const FCrossPlacement& Pl
 		const float Depth = Placement.UpperRadius + OtherRadius * CupFit - Gap;
 		if (Upper->IsSpanFree(LocalX - OtherRadius, LocalX + OtherRadius))
 		{
-			Upper->Notch(LocalX, 180.f, 90.f, OtherRadius, Depth);
+			Upper->CutProfile(LocalX, 180.f, OtherRadius * 2.f + 2.f, Depth, false);
 		}
 		Other->Anchor();
 	}

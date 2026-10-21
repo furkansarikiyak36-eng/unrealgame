@@ -30,7 +30,26 @@ enum class EForestItem : uint8
 	Stone,
 	StoneBlock,
 	WindowBuck UMETA(DisplayName = "Pencere Kasası (Window Buck)"),
-	DoorBuck UMETA(DisplayName = "Kapı Kasası (Door Buck)")
+	DoorBuck UMETA(DisplayName = "Kapı Kasası (Door Buck)"),
+	/** Stackable small timber resource; distinct from physical ACarvableLog pieces. */
+	Stick UMETA(DisplayName = "Çubuk"),
+	/** Farming and animals: seeds to sow, grain and meat to eat, hide and wool to wear and twist into rope. */
+	Seed UMETA(DisplayName = "Tohum"),
+	Grain UMETA(DisplayName = "Tahıl"),
+	Meat UMETA(DisplayName = "Et"),
+	Hide UMETA(DisplayName = "Deri"),
+	Wool UMETA(DisplayName = "Yün"),
+	Egg UMETA(DisplayName = "Yumurta"),
+	Milk UMETA(DisplayName = "Süt"),
+	Rope UMETA(DisplayName = "İp"),
+	/** Raw materials gathered by hand at ARawMaterialNode sources: they bind and seal pieces, they are not pieces. */
+	PlantFiber UMETA(DisplayName = "Bitki Lifi"),
+	Vine UMETA(DisplayName = "Asma"),
+	Bark UMETA(DisplayName = "Ağaç Kabuğu"),
+	Resin UMETA(DisplayName = "Reçine"),
+	Clay UMETA(DisplayName = "Kil"),
+	Flint UMETA(DisplayName = "Çakmak Taşı"),
+	Bone UMETA(DisplayName = "Kemik")
 };
 
 UENUM(BlueprintType)
@@ -47,7 +66,8 @@ enum class EForestTool : uint8
 {
 	Axe,
 	Pickaxe,
-	Trowel UMETA(DisplayName = "Mala (Chinking Trowel)")
+	Trowel UMETA(DisplayName = "Mala (Chinking Trowel)"),
+	Shovel UMETA(DisplayName = "Kürek")
 };
 
 namespace ForestItems
@@ -56,6 +76,9 @@ namespace ForestItems
 	MYPROJECT2_API const TArray<EForestItem>& GetAllItems();
 
 	MYPROJECT2_API FString GetDisplayName(EForestItem Item);
+
+	/** Stable item ID shared by the character inventory and modular InventoryCore. */
+	MYPROJECT2_API FName GetInventoryID(EForestItem Item);
 
 	/** Any of the three log stages (trunk, big log, log): they nest when stacked. */
 	MYPROJECT2_API bool IsLogItem(EForestItem Item);
@@ -71,6 +94,9 @@ namespace ForestItems
 	 * Lets a piece read bigger without touching its mesh asset.
 	 */
 	MYPROJECT2_API FVector GetItemScale(EForestItem Item);
+
+	/** Approximate stack weight used by storage and transfer policies (kg per item). */
+	MYPROJECT2_API float GetItemWeight(EForestItem Item);
 
 	/**
 	 * Big logs left by a felled tree. Stage 1 is the trunk, cutting it gives two stage 2 logs,

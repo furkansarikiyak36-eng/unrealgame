@@ -1,0 +1,661 @@
+{
+ "moved": [
+  {
+   "label": "ShowcaseLog_050",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_002.SM_ShowcasePiece_002",
+   "was": [
+    4200.0,
+    225.0,
+    75.0,
+    0.0,
+    90.0,
+    0.0
+   ],
+   "move": [
+    -10.0,
+    60.0,
+    10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_051",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_002.SM_ShowcasePiece_002",
+   "was": [
+    4425.0,
+    225.0,
+    75.0,
+    0.0,
+    90.0,
+    0.0
+   ],
+   "move": [
+    -10.0,
+    60.0,
+    10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_053",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_022.SM_ShowcasePiece_022",
+   "was": [
+    4332.5,
+    225.0,
+    160.5,
+    -0.0,
+    0.0,
+    0.0
+   ],
+   "move": [
+    -10.0,
+    60.0,
+    0.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_054",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_002.SM_ShowcasePiece_002",
+   "was": [
+    4246.8,
+    0.0,
+    120.7,
+    -0.0,
+    45.0,
+    0.0
+   ],
+   "move": [
+    0.0,
+    0.0,
+    -10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_055",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_002.SM_ShowcasePiece_002",
+   "was": [
+    4246.8,
+    225.0,
+    120.7,
+    -0.0,
+    45.0,
+    0.0
+   ],
+   "move": [
+    -10.0,
+    60.0,
+    -10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_056",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009",
+   "was": [
+    4194.5,
+    132.5,
+    179.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "move": [
+    -2.5,
+    10.0,
+    -10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_057",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009",
+   "was": [
+    4218.5,
+    132.5,
+    179.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "move": [
+    3.5,
+    10.0,
+    -10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_058",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009",
+   "was": [
+    4242.5,
+    132.5,
+    179.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "move": [
+    9.5,
+    10.0,
+    -10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_068",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_001.SM_ShowcasePiece_001",
+   "was": [
+    4074.9,
+    112.5,
+    90.2,
+    -0.0,
+    30.0,
+    0.0
+   ],
+   "move": [
+    0.0,
+    -110.0,
+    0.0
+   ],
+   "turn": [
+    0.0,
+    -0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_069",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_002.SM_ShowcasePiece_002",
+   "was": [
+    4232.5,
+    0.0,
+    246.5,
+    0.0,
+    90.0,
+    0.0
+   ],
+   "move": [
+    0.0,
+    0.0,
+    -10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_070",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_002.SM_ShowcasePiece_002",
+   "was": [
+    4232.5,
+    225.0,
+    246.5,
+    0.0,
+    90.0,
+    0.0
+   ],
+   "move": [
+    -10.0,
+    60.0,
+    -10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_071",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_002.SM_ShowcasePiece_002",
+   "was": [
+    4432.5,
+    0.0,
+    246.5,
+    0.0,
+    90.0,
+    0.0
+   ],
+   "move": [
+    0.0,
+    0.0,
+    -20.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_072",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_002.SM_ShowcasePiece_002",
+   "was": [
+    4432.5,
+    225.0,
+    246.5,
+    0.0,
+    90.0,
+    0.0
+   ],
+   "move": [
+    -10.0,
+    60.0,
+    -10.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_073",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_021.SM_ShowcasePiece_021",
+   "was": [
+    4365.0,
+    0.0,
+    332.0,
+    -0.0,
+    0.0,
+    0.0
+   ],
+   "move": [
+    -10.0,
+    0.0,
+    -21.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_074",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_021.SM_ShowcasePiece_021",
+   "was": [
+    4365.0,
+    225.0,
+    332.0,
+    -0.0,
+    0.0,
+    0.0
+   ],
+   "move": [
+    -30.0,
+    60.0,
+    -20.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_079",
+   "station": 5,
+   "mesh": "SM_ShowcasePiece_001.SM_ShowcasePiece_001",
+   "was": [
+    5500.0,
+    144.7,
+    92.3,
+    0.0,
+    15.2,
+    90.0
+   ],
+   "move": [
+    0.0,
+    0.0,
+    -40.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_080",
+   "station": 5,
+   "mesh": "SM_ShowcasePiece_001.SM_ShowcasePiece_001",
+   "was": [
+    5600.0,
+    144.7,
+    92.3,
+    0.0,
+    15.2,
+    90.0
+   ],
+   "move": [
+    0.0,
+    0.0,
+    -40.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "label": "ShowcaseLog_081",
+   "station": 5,
+   "mesh": "SM_ShowcasePiece_001.SM_ShowcasePiece_001",
+   "was": [
+    5700.0,
+    144.7,
+    92.3,
+    0.0,
+    15.2,
+    90.0
+   ],
+   "move": [
+    0.0,
+    0.0,
+    -40.0
+   ],
+   "turn": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "scale": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ ],
+ "missing": [
+  {
+   "label": "ShowcaseLog_059",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  },
+  {
+   "label": "ShowcaseLog_060",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  },
+  {
+   "label": "ShowcaseLog_061",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  },
+  {
+   "label": "ShowcaseLog_062",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  },
+  {
+   "label": "ShowcaseLog_063",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  },
+  {
+   "label": "ShowcaseLog_064",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  },
+  {
+   "label": "ShowcaseLog_065",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  },
+  {
+   "label": "ShowcaseLog_066",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  },
+  {
+   "label": "ShowcaseLog_067",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009.SM_ShowcasePiece_009"
+  }
+ ],
+ "extra": [
+  {
+   "label": "SM_SkySphere",
+   "station": 1,
+   "mesh": "SM_SkySphere",
+   "at": [
+    0.0,
+    0.0,
+    -310.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "folder": "Lighting"
+  },
+  {
+   "label": "ShowcaseLog_58",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009",
+   "at": [
+    4312.0,
+    142.5,
+    169.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "folder": "Showcase/Baked"
+  },
+  {
+   "label": "ShowcaseLog_57",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009",
+   "at": [
+    4282.0,
+    142.5,
+    169.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "folder": "Showcase/Baked"
+  },
+  {
+   "label": "ShowcaseLog_59",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009",
+   "at": [
+    4342.0,
+    142.5,
+    169.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "folder": "Showcase/Baked"
+  },
+  {
+   "label": "ShowcaseLog_63",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009",
+   "at": [
+    4432.0,
+    142.5,
+    169.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "folder": "Showcase/Baked"
+  },
+  {
+   "label": "ShowcaseLog_64",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009",
+   "at": [
+    4402.0,
+    142.5,
+    169.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "folder": "Showcase/Baked"
+  },
+  {
+   "label": "ShowcaseLog_65",
+   "station": 4,
+   "mesh": "SM_ShowcasePiece_009",
+   "at": [
+    4372.0,
+    142.5,
+    169.8,
+    -0.0,
+    0.0,
+    90.0
+   ],
+   "folder": "Showcase/Baked"
+  }
+ ],
+ "map": "/Game/Maps/LogShowcase",
+ "counts": {
+  "moved": 18,
+  "missing": 9,
+  "extra": 7
+ }
+}

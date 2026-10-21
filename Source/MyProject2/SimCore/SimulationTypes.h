@@ -34,6 +34,18 @@ USTRUCT(BlueprintType) struct FPlantState { GENERATED_BODY()
  UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 SeedCount=0;
  UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bIsAlive=true;
  UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bIsHarvestable=false;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float DaysSincePlanting=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float CumulativeSevereStressDays=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float FrostDamage=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float HeatDamage=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float DiseaseSeverity=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float YieldPotential=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float QualityIndex=1.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float WaterUptakeTodayMm=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float NitrogenUptakeToday=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float PhosphorusUptakeToday=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float PotassiumUptakeToday=0.f;
+ UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bHasFailed=false;
 };
 USTRUCT(BlueprintType) struct FAnimalState { GENERATED_BODY()
  UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float AgeDays=0.f;

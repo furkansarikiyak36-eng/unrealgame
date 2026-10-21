@@ -15,7 +15,7 @@ class MYPROJECT2_API IStructuralNode
     GENERATED_BODY()
 public:
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Structural")
-    EMaterialType GetMaterialType() const;
+    EStructuralMaterialType GetMaterialType() const;
 
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Structural")
     EStructuralNodeState GetStructuralState() const;

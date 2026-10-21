@@ -59,8 +59,8 @@ struct FStoneSocket
 {
     GENERATED_BODY()
     UPROPERTY(EditAnywhere, BlueprintReadWrite) FName SocketName;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) FVector LocalPosition;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite) FRotator LocalRotation;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) FVector LocalPosition = FVector::ZeroVector;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) FRotator LocalRotation = FRotator::ZeroRotator;
     UPROPERTY(EditAnywhere, BlueprintReadWrite) float SocketRadius = 10.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bIsVertical = false;
     UPROPERTY(Transient) TWeakObjectPtr<AActor> Occupant;

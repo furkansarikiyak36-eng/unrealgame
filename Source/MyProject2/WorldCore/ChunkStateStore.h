@@ -15,6 +15,7 @@ public:
     UFUNCTION(BlueprintPure, Category="Store") int32 GetChunkCount() const { return Chunks.Num(); }
     UFUNCTION(BlueprintCallable, Category="Store") void ClearAll() { Chunks.Empty(); }
     UFUNCTION(BlueprintCallable, Category="Store") void AddOrReplaceChunk(UChunkState* Chunk);
+    bool ReplaceAllChunks(const TArray<FChunkStateSnapshot>& SnapshotChunks, int32 CellsPerAxis);
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Config") int32 CellsPerChunkAxis = 16;
 protected:
     UPROPERTY() TMap<FIntPoint, TObjectPtr<UChunkState>> Chunks;

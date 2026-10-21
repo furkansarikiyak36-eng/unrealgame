@@ -17,4 +17,9 @@ public:
 
 private:
 	void DrawPanel(float X, float Y, float Width, float Height);
+
+	/** -HudShot=Seconds: a screenshot of the screen with the HUD that many seconds in, then the game quits (to check the layout). */
+	void UpdateHudShot();
+	bool bShotTaken = false;
+	double ShotTakenAt = 0.0;
 };

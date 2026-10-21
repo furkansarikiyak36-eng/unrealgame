@@ -19,7 +19,11 @@ const TArray<EForestItem>& ForestItems::GetAllItems()
 		EForestItem::TrunkLog, EForestItem::BigLog, EForestItem::Log,
 		EForestItem::HalfLog, EForestItem::ShortLog, EForestItem::HollowLog, EForestItem::Plank,
 		EForestItem::Beam, EForestItem::Firewood, EForestItem::Stone, EForestItem::StoneBlock,
-		EForestItem::WindowBuck, EForestItem::DoorBuck };
+		EForestItem::WindowBuck, EForestItem::DoorBuck, EForestItem::Stick,
+		EForestItem::Seed, EForestItem::Grain, EForestItem::Meat, EForestItem::Hide, EForestItem::Wool, EForestItem::Egg,
+		EForestItem::Milk, EForestItem::Rope,
+		EForestItem::PlantFiber, EForestItem::Vine, EForestItem::Bark, EForestItem::Resin, EForestItem::Clay,
+		EForestItem::Flint, EForestItem::Bone };
 	return Items;
 }
 
@@ -40,7 +44,69 @@ FString ForestItems::GetDisplayName(EForestItem Item)
 	case EForestItem::StoneBlock: return TEXT("Taş Blok");
 	case EForestItem::WindowBuck: return TEXT("Pencere Kasası");
 	case EForestItem::DoorBuck:   return TEXT("Kapı Kasası");
+	case EForestItem::Stick:      return TEXT("Çubuk");
+	case EForestItem::Seed:       return TEXT("Tohum");
+	case EForestItem::Grain:      return TEXT("Tahıl");
+	case EForestItem::Meat:       return TEXT("Et");
+	case EForestItem::Hide:       return TEXT("Deri");
+	case EForestItem::Wool:       return TEXT("Yün");
+	case EForestItem::Egg:        return TEXT("Yumurta");
+	case EForestItem::Milk:       return TEXT("Süt");
+	case EForestItem::Rope:       return TEXT("İp");
+	case EForestItem::PlantFiber: return TEXT("Bitki Lifi");
+	case EForestItem::Vine:       return TEXT("Asma");
+	case EForestItem::Bark:       return TEXT("Ağaç Kabuğu");
+	case EForestItem::Resin:      return TEXT("Reçine");
+	case EForestItem::Clay:       return TEXT("Kil");
+	case EForestItem::Flint:      return TEXT("Çakmak Taşı");
+	case EForestItem::Bone:       return TEXT("Kemik");
 	default:                      return TEXT("");
+	}
+}
+
+FName ForestItems::GetInventoryID(EForestItem Item)
+{
+	if (Item == EForestItem::None)
+	{
+		return NAME_None;
+	}
+	const UEnum* ItemEnum = StaticEnum<EForestItem>();
+	return ItemEnum
+		? FName(*ItemEnum->GetNameStringByValue(static_cast<int64>(Item)))
+		: NAME_None;
+}
+
+float ForestItems::GetItemWeight(EForestItem Item)
+{
+	switch (Item)
+	{
+	case EForestItem::Stick:      return 0.2f;
+	case EForestItem::Seed:       return 0.05f;
+	case EForestItem::Grain:      return 0.3f;
+	case EForestItem::Meat:       return 0.8f;
+	case EForestItem::Hide:       return 1.5f;
+	case EForestItem::Wool:       return 0.3f;
+	case EForestItem::Egg:        return 0.1f;
+	case EForestItem::Milk:       return 1.0f;
+	case EForestItem::Rope:       return 0.6f;
+	case EForestItem::PlantFiber: return 0.05f;
+	case EForestItem::Vine:       return 0.2f;
+	case EForestItem::Bark:       return 0.4f;
+	case EForestItem::Resin:      return 0.1f;
+	case EForestItem::Clay:       return 2.0f;
+	case EForestItem::Flint:      return 0.5f;
+	case EForestItem::Bone:       return 0.3f;
+	case EForestItem::Firewood:   return 0.8f;
+	case EForestItem::Stone:      return 2.0f;
+	case EForestItem::StoneBlock: return 45.0f;
+	case EForestItem::HalfLog:   return 18.0f;
+	case EForestItem::ShortLog:  return 8.0f;
+	case EForestItem::HollowLog: return 20.0f;
+	case EForestItem::Plank:     return 5.0f;
+	case EForestItem::Beam:      return 12.0f;
+	case EForestItem::WindowBuck:return 15.0f;
+	case EForestItem::DoorBuck:  return 25.0f;
+	default:                     return 1.0f;
 	}
 }
 
@@ -60,13 +126,14 @@ UStaticMesh* ForestItems::GetMesh(EForestItem Item, int32 Variant)
 	{
 	case EForestItem::TrunkLog:   return GetLogStageMesh(1);
 	case EForestItem::BigLog:     return GetLogStageMesh(2);
-	case EForestItem::Log:        return LoadGreybox(TEXT("SM_GB_Log"));
+	case EForestItem::Log:        return LoadObject<UStaticMesh>(nullptr, TEXT("/Game/UnrealExport/SM_RawLog_300.SM_RawLog_300"));
 	case EForestItem::HalfLog:    return LoadGreybox(TEXT("SM_GB_LogHalf"));
 	case EForestItem::ShortLog:   return LoadGreybox(TEXT("SM_GB_LogShort"));
 	case EForestItem::HollowLog:  return LoadGreybox(TEXT("SM_GB_LogHollow"));
 	case EForestItem::Plank:      return LoadGreybox(TEXT("SM_GB_Plank"));
 	case EForestItem::Beam:       return LoadGreybox(TEXT("SM_GB_Beam"));
 	case EForestItem::Firewood:   return LoadGreybox(TEXT("SM_GB_Firewood"));
+	case EForestItem::Stick:      return LoadGreybox(TEXT("SM_GB_Stick"));
 	case EForestItem::Stone:      return LoadGreybox(TEXT("SM_GB_Stone"));
 	case EForestItem::StoneBlock: return LoadGreybox(TEXT("SM_GB_StoneBlock"));
 	// A 100 x 100 cm frame, stood on its bottom edge and scaled to the opening.

@@ -42,6 +42,27 @@ public:
 
 	bool IsStarving() const { return Hunger <= 0.f || Thirst <= 0.f; }
 
+	/**
+	 * Body heat (0..MaxValue): the air around the player (see UDayLoopSubsystem::GetTemperatureAt) warms or cools it.
+	 * Below ComfortC it falls, the faster the colder, less so in warm clothes (Insulation 0..1); above it, it comes back.
+	 * At zero the player freezes and loses health.
+	 */
+	float GetBodyHeat() const { return BodyHeat; }
+	void SetAmbientTemperature(float TemperatureC) { AmbientC = TemperatureC; }
+	float GetAmbientTemperature() const { return AmbientC; }
+	bool IsFreezing() const { return BodyHeat <= 0.f; }
+	/** Clothing: 0 none, up to 1 (a full hide outfit keeps most of the cold off). */
+	float Insulation = 0.f;
+	static constexpr float ComfortC = 12.f;
+	/** Body heat lost per second for each degree below comfort, and gained per degree above it. */
+	static constexpr float HeatLossPerDegree = 0.06f;
+	static constexpr float HeatGainPerDegree = 0.15f;
+	static constexpr float FreezeDamagePerSecond = 0.5f;
+	/** Runs the warmth rules for Seconds (the tick does it; the mechanics test calls it to skip time). */
+	void StepWarmth(float Seconds);
+	/** For the mechanics test: hunger and thirst set directly. */
+	void SetNeedsForTest(float InHunger, float InThirst) { Hunger = FMath::Clamp(InHunger, 0.f, MaxValue); Thirst = FMath::Clamp(InThirst, 0.f, MaxValue); }
+
 	/** Called once when health reaches zero. */
 	TFunction<void()> OnDeath;
 
@@ -90,4 +111,6 @@ private:
 	bool bDead = false;
 	float StaminaIdleTime = 0.f;
 	float StarvingTime = 0.f;
+	float BodyHeat = 100.f;
+	float AmbientC = 20.f;
 };

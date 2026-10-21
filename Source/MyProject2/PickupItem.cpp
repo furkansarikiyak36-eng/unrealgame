@@ -21,6 +21,10 @@ APickupItem::APickupItem()
 
 APickupItem* APickupItem::Spawn(UWorld* World, EForestItem Item, int32 Count, const FTransform& Transform, const FVector& Impulse)
 {
+	if (!World || Item == EForestItem::None || Count <= 0)
+	{
+		return nullptr;
+	}
 	UStaticMesh* ItemMesh = ForestItems::GetMesh(Item, FMath::Rand());
 	if (!World || !ItemMesh)
 	{
