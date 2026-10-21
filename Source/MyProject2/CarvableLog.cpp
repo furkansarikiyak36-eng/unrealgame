@@ -1755,6 +1755,23 @@ bool ACarvableLog::ComputeBracePlacement(const ACarvableLog* Post, const ACarvab
 	return true;
 }
 
+float ACarvableLog::GetWidth() const
+{
+	const FBox Box = UGeometryScriptLibrary_MeshQueryFunctions::GetMeshBoundingBox(MeshComponent->GetDynamicMesh());
+	return Box.IsValid ? Box.GetSize().Y : Radius * 2.f;
+}
+
+void ACarvableLog::CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth)
+{
+	const FVector Local = GetActorTransform().InverseTransformVectorNoScale(WorldSide);
+	const float SideAngle = FMath::RadiansToDegrees(FMath::Atan2(Local.Y, Local.Z));
+	const float LocalX = GetActorTransform().InverseTransformPosition(WorldPoint).X;
+	if (Depth > 0.5f && IsSpanFree(LocalX - Width * 0.5f, LocalX + Width * 0.5f))
+	{
+		CutProfile(LocalX, SideAngle, Width, Depth, false);
+	}
+}
+
 bool ACarvableLog::ComputeFloorPlacement(const AActor* Lower, const FVector& Aim, const FVector& Viewer, const ACarvableLog* Piece,
 	FTransform& OutTransform)
 {
@@ -1764,7 +1781,11 @@ bool ACarvableLog::ComputeFloorPlacement(const AActor* Lower, const FVector& Aim
 	{
 		return false;
 	}
-	const float Along = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis), -(HalfLength - 10.f), HalfLength - 10.f);
+	// Boards lie side by side: on a grid one board wide from the beam's end, so the next board touches the last.
+	const float BoardWidth = FMath::Max(4.f, Piece->GetWidth());
+	const float FromEnd = FMath::Clamp(FVector::DotProduct(Aim - Centre, Axis) + HalfLength, 0.f, HalfLength * 2.f - 1.f);
+	const float Along = FMath::Clamp((FMath::FloorToFloat(FromEnd / BoardWidth) + 0.5f) * BoardWidth - HalfLength,
+		-(HalfLength - BoardWidth * 0.5f), HalfLength - BoardWidth * 0.5f);
 	const FVector Cross = Centre + Axis * Along;
 	FVector Direction = FVector::CrossProduct(FVector::UpVector, FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal());
 	if (FVector::DotProduct(Direction, Cross - Viewer) < 0.f)

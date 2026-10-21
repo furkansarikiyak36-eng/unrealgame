@@ -270,7 +270,7 @@ void ALogShowcase::StationCutChain()
 	int32 Index = 0;
 	for (const FPiece& Piece : Pieces)
 	{
-		LayAt(Mesh(Piece.Length, Piece.Profile), O + R * (Index * 75.f - 400.f), FYaw, Piece.Name);
+		LayAt(Mesh(Piece.Length, Piece.Profile), O + R * (Index * 38.f - 220.f), FYaw, Piece.Name);
 		++Index;
 	}
 	EndStation();
@@ -394,9 +394,10 @@ void ALogShowcase::StationPlatform()
 	ACarvableLog* BeamB = OnPostTop(Mesh(300), P01, FYaw, TEXT("kiriş 2"), P(EPlace::Beam));
 	OnPostTop(Mesh(150), P00, FYaw, TEXT("payanda 1"), P(EPlace::Brace));
 	OnPostTop(Mesh(150), P01, FYaw, TEXT("payanda 2"), P(EPlace::Brace));
-	for (int32 Board = 0; Board < 4 && BeamA; ++Board)
+	for (int32 Board = 0; Board < 12 && BeamA; ++Board)
 	{
-		OnLog(Mesh(300, TEXT("Plank")), BeamA, -90.f + Board * 60.f, FYaw + 90.f, static_cast<uint8>(EHold::Lay), 0.f,
+		// Planks are 24 cm wide: one after another along the beam, each touching the last.
+		OnLog(Mesh(300, TEXT("Plank")), BeamA, -138.f + Board * 24.f, FYaw + 90.f, static_cast<uint8>(EHold::Lay), 0.f,
 			*FString::Printf(TEXT("döşeme tahtası %d"), Board + 1), P(EPlace::Floor));
 	}
 	// Ramp: a log from the ground up to the platform's front edge.

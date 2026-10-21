@@ -528,6 +528,8 @@ private:
 	void SettleStructure();
 	FCrossPlacement CrossPlacement;
 	TWeakObjectPtr<AActor> CrossLower;
+	/** A post going onto a lying log: the log, so a seat is cut into it when the post goes in. */
+	TWeakObjectPtr<ACarvableLog> StandBase;
 	/** The snap points of the face of a log being aimed at (module lines on that face), and the one chosen. */
 	TArray<FVector> SocketMarkers;
 	FVector SocketChosen = FVector::ZeroVector;

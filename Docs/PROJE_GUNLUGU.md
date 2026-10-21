@@ -1140,3 +1140,14 @@ Kullanıcı: "Play'de oynatılan şeyleri kaldır; tüm snap varyasyonlarında o
 - Haritanın kendi zemini: şablon zemini z=0'a alındı, `NoDiggableGround` etiketi (bu etiket olan haritada voksel zemin kurulmaz — `UExcavationTerrainChunkSubsystem::bGroundDisabledForWorld`) ve çarpışma profili `BlockAll` (şablondaki `BlockAllDynamic` WorldDynamic olduğu için yapı desteği ve zemin ışınları görmüyordu; direkler devriliyor, kirişler kurulamıyordu).
 - Pişirme sırasında eski pişmiş kopyalar Play dünyasından silinir (önce kopyaların üstüne kurup tabelaları iki katına çıkarıyordu).
 - Sonuç: 128/128 yerleştirme; haritada 143 kütük (25 asset), 11 araba parçası, 13 tabela. Editör görüntüsünde (Play'siz) istasyonlar ve kare kulübe görünüyor. Pişmiş kütükler statik: oyunda kesilip taşınmaz, üzerinde yürünür.
+
+### 2026-10-21 — Bitişik tahtalar, direk–kiriş geçmesi, çatı kirişi iki duvara (CC)
+Kullanıcı (pişmiş vitrine bakıp): "plankların aralıkları çok daha kısa olmalı; ShowcaseLog 62–64 ve 65 iç içe geçmiyor, tamamen ayrı gibi; 73–72–71 tamamen havada".
+- Teşhis: 62–65 = 2. kat direkleri ve kirişi: yalnız teğet değiyordu (direk tepesi 336, kiriş altı 336,5), geçme yoktu. 71–73 = çatı kirişleri: sabit 18° eğimle yüksek duvarın ~11 cm üstünden geçiyordu. Tahta aralıkları: yerde yanda kütük varken yan yön 75 cm ızgarasına yuvarlanıyordu (24 cm'lik tahtalar arasında 51 cm boşluk); kirişteki döşeme tahtaları ızgarasızdı.
+- Düzeltmeler (mekaniğin kendisinde):
+  - `ACarvableLog::GetWidth()` (parçanın gerçek eni: kütük 35, tahta 24) ve `CutSeat` (yatan kütüğe düz yuva).
+  - Kiriş direk tepelerine yuvayla oturur: `JointSeatDepth` = ince yarıçapın %40'ı kadar alçak konur, yerleşince altına her direk tepesi için yuva açılır. Yatan kütüğe dikilen direk de aynı derinlikte gömülür ve kütüğün üstüne yuva açılır.
+  - Döşeme tahtaları kirişin ucundan bir tahta eni ızgarasında: art arda konan tahtalar birbirine değer.
+  - Yerde paralel komşunun yanına konan parça ona değer (adım = iki enin yarısı toplamı); dik ya da 45° ise 75 cm ızgarası kalır.
+  - Çatı kirişi (eğik koyma, yatan kütükten): önündeki en yakın, daha yüksek paralel kütüğü (aynı uzaklıktakilerden en üsttekini) bulur ve eğimi iki kütüğe birden oturacak şekilde kendisi ayarlar.
+- Vitrin: kesim zinciri bitişik (38 cm arayla), platformda 12 bitişik tahta. Yeniden pişirildi: 136/136; çatı kirişleri 15°; editör görüntüleri: bitişik kesim zinciri, iki duvara oturan çatı kirişleri, kesintisiz döşeme ve yuvalı direk–kiriş.

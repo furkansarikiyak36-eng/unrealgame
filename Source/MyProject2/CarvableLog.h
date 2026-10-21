@@ -294,6 +294,13 @@ public:
 	/** Triangles in the current mesh; grows with every cut, used by the mechanics demo to check a cut landed. */
 	int32 GetTriangleCount() const;
 	float GetRadius() const { return Radius; }
+	/** Width across the axis (local Y) of the piece as it is now: 35 cm for a round log, 24 for a plank. */
+	float GetWidth() const;
+	/**
+	 * Cuts a flat seat Depth deep and Width wide across this lying log at WorldPoint, on the side facing WorldSide
+	 * (up for a post standing on it, down for the top of a post under it): two pieces joined into each other.
+	 */
+	void CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth);
 	float GetCenterX() const { return (MinX + MaxX) * 0.5f; }
 
 	float GetDiameter() const { return Radius * 2.f; }

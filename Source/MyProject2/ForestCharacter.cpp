@@ -1355,6 +1355,15 @@ namespace
 	}
 }
 
+namespace
+{
+	/** How deep two pieces that stand on each other are let into one another. */
+	float JointSeatDepth(float RadiusA, float RadiusB)
+	{
+		return 0.4f * FMath::Min(RadiusA, RadiusB);
+	}
+}
+
 void AForestCharacter::UpdateCarryPlacement()
 {
 	FHitResult Hit;
@@ -1366,6 +1375,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 {
 	CarryPlace = ECarryPlace::None;
 	CrossLower = nullptr;
+	StandBase = nullptr;
 	SocketMarkers.Reset();
 	bPlaceSupported = true;
 	ACarvableLog* Piece = GetTopCarried();
@@ -1438,7 +1448,8 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				}
 			}
 			const FQuat Rotation = FRotator(0.f, Direction.Rotation().Yaw, 0.f).Quaternion();
-			const FVector End(Top.X - Direction.X * PostRadius, Top.Y - Direction.Y * PostRadius, Top.Z + Piece->GetRadius() + 0.5f);
+			// Seated into the post tops (a seat is cut under it when it goes in), not just touching them.
+			const FVector End(Top.X - Direction.X * PostRadius, Top.Y - Direction.Y * PostRadius, Top.Z + Piece->GetRadius() - JointSeatDepth(PostRadius, Piece->GetRadius()));
 			PlaceTransform = FTransform(Rotation, End - Rotation.RotateVector(FVector(Piece->GetLocalBox().Min.X, 0.f, 0.f)));
 			CarryPlace = ECarryPlace::Beam;
 			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
@@ -1575,12 +1586,46 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 			if (bPlaceSlope)
 			{
-				ACarvableLog::ComputeSlopePlacement(Hit.ImpactPoint, Facing, SlopeAngle, Piece, PlaceTransform);
+				// A rafter: from the top of this log up to the nearest higher log ahead lying the same way (the other
+				// wall), at the angle that lays it on both. With none ahead, the chosen angle.
+				const FVector BaseDir = FVector(BaseAxis.X, BaseAxis.Y, 0.f).GetSafeNormal();
+				FVector Out = Facing - BaseDir * FVector::DotProduct(Facing, BaseDir);
+				Out = Out.GetSafeNormal();
+				const FVector Foot(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, BaseCentre.Z + BaseRadius);
+				float Angle = SlopeAngle;
+				float Best = TNumericLimits<float>::Max();
+				TArray<ACarvableLog*> Nearby;
+				FindLocalLogs(GetWorld(), Foot, Piece->GetLength(), Nearby);
+				for (const ACarvableLog* Other : Nearby)
+				{
+					FVector OC, OA;
+					float OR, OH;
+					if (!Other || Other == Base || Other == Piece || Other->IsCarried() || !ACarvableLog::GetLogAxis(Other, OC, OA, OR, OH)
+						|| FMath::Abs(OA.Z) > 0.3f || FMath::Abs(FVector::DotProduct(FVector(OA.X, OA.Y, 0.f).GetSafeNormal(), BaseDir)) < 0.95f)
+					{
+						continue;
+					}
+					const float Run = FVector::DotProduct(OC - Foot, Out);
+					const float Rise = OC.Z + OR - Foot.Z;
+					const float Along = FVector::DotProduct(Foot - OC, BaseDir);
+					if (Run < OR + Piece->GetRadius() || Rise < 5.f || FMath::Abs(Along) > OH || Run - Rise * 0.01f >= Best
+						|| FMath::Sqrt(Run * Run + Rise * Rise) > Piece->GetLength() - Piece->GetRadius())
+					{
+						continue;
+					}
+					// The nearest wall; of its courses (same run) the top one.
+					Best = Run - Rise * 0.01f;
+					Angle = FMath::RadiansToDegrees(FMath::Atan2(Rise, Run));
+				}
+				ACarvableLog::ComputeSlopePlacement(Foot, Out.IsNearlyZero() ? Facing : Out, Angle, Piece, PlaceTransform);
 				CarryPlace = ECarryPlace::Slope;
 			}
 			else
 			{
-				PlaceTransform = Piece->GetStandTransform(Hit.ImpactPoint, Facing.Rotation().Yaw);
+				// Let into the log a little (a seat is cut into it when the post goes in).
+				const FVector Foot(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, BaseCentre.Z + BaseRadius - JointSeatDepth(BaseRadius, Piece->GetRadius()));
+				PlaceTransform = Piece->GetStandTransform(Foot, Facing.Rotation().Yaw);
+				StandBase = const_cast<ACarvableLog*>(Base);
 				CarryPlace = ECarryPlace::Stand;
 			}
 			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
@@ -1821,7 +1866,19 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		const float MinX = Near->GetLocalBox().Min.X;
 		const float Module = ACarvableLog::ModuleLength;
 		Local.X = MinX + FMath::RoundToFloat((Local.X - MinX) / Module) * Module;
-		Local.Y = FMath::RoundToFloat(Local.Y / Module) * Module;
+		// Beside a parallel log the pieces touch (a plank next to a plank, a log next to a log); square or at 45 degrees
+		// to it the 75 cm grid holds.
+		const float Turn = FMath::Abs(FMath::FindDeltaAngleDegrees(NearYaw, Yaw));
+		if (FMath::Min(Turn, 180.f - Turn) < 5.f)
+		{
+			const float Step = (Near->GetWidth() + Piece->GetWidth()) * 0.5f + 0.5f;
+			const float Steps = FMath::Max(1.f, FMath::RoundToFloat(FMath::Abs(Local.Y) / Step));
+			Local.Y = FMath::Sign(Local.Y == 0.f ? 1.f : Local.Y) * Steps * Step;
+		}
+		else
+		{
+			Local.Y = FMath::RoundToFloat(Local.Y / Module) * Module;
+		}
 		Ground = FVector(NearFrame.TransformPosition(Local).X, NearFrame.TransformPosition(Local).Y, Ground.Z);
 	}
 	else
@@ -1850,8 +1907,17 @@ bool AForestCharacter::PlaceCarried()
 		SettleStructure();
 		break;
 	case ECarryPlace::Stand:
-		// A post stays exactly where it is put.
+		// A post stays exactly where it is put; on a lying log it is let into a seat cut in the log's top.
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		if (ACarvableLog* Base = StandBase.Get())
+		{
+			FVector C, A;
+			float R, H;
+			if (ACarvableLog::GetLogAxis(Base, C, A, R, H))
+			{
+				Base->CutSeat(Piece->GetActorLocation(), FVector::UpVector, Piece->GetRadius() * 2.f + 2.f, JointSeatDepth(R, Piece->GetRadius()) + 0.5f);
+			}
+		}
 		ACarvableLog::OnLogStoodUp.Broadcast(Piece);
 		ShowMessage(TEXT("Direk dikildi"));
 		SettleStructure();
@@ -1878,6 +1944,29 @@ bool AForestCharacter::PlaceCarried()
 		break;
 	case ECarryPlace::Beam:
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		{
+			// Seats under the beam for every post top it sits on, so beam and posts are let into each other.
+			FVector C, A;
+			float R, H;
+			ACarvableLog::GetLogAxis(Piece, C, A, R, H);
+			TArray<ACarvableLog*> Nearby;
+			FindLocalLogs(GetWorld(), C, H + 60.f, Nearby);
+			for (ACarvableLog* Post : Nearby)
+			{
+				FVector PC, PA;
+				float PR, PH;
+				if (!Post || Post == Piece || !Post->IsAnchored() || !ACarvableLog::GetLogAxis(Post, PC, PA, PR, PH) || FMath::Abs(PA.Z) < 0.95f)
+				{
+					continue;
+				}
+				const FVector Top = PC + PA * (PA.Z > 0.f ? PH : -PH);
+				const FVector OnAxis = FMath::ClosestPointOnSegment(Top, C - A * H, C + A * H);
+				if (FVector::Dist2D(Top, OnAxis) < R && Top.Z > OnAxis.Z - R - 1.f && Top.Z < OnAxis.Z)
+				{
+					Piece->CutSeat(Top, -FVector::UpVector, PR * 2.f + 2.f, Top.Z - (OnAxis.Z - R) + 0.5f);
+				}
+			}
+		}
 		ShowMessage(TEXT("Kiriş kondu"));
 		SettleStructure();
 		break;
