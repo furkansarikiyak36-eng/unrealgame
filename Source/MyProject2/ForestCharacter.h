@@ -543,6 +543,7 @@ private:
 	void UpdateCarryPlacement();
 	void UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit);
 	bool EvaluateSupportPreview(const ACarvableLog* Piece, const FTransform& Transform, bool bForce = false);
+	const FTransform& GetCarryPlacementTransform() const;
 	ACarvableLog* GetTopCarried() const;
 	bool PlaceCarried();
 
