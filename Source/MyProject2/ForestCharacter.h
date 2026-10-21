@@ -101,7 +101,7 @@ public:
 	bool CanPlaceAcross() const { return CarryPlace == ECarryPlace::Across; }
 
 	/** What a left click does with the carried piece where the player is looking. */
-	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load };
+	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack };
 	ECarryPlace GetCarryPlace() const { return CarryPlace; }
 	/** The piece would be held up where it is about to go (the structure graph says so); false: it would fall. */
 	bool IsPlaceSupported() const { return bPlaceSupported; }
@@ -131,6 +131,11 @@ public:
 	/** One shovel stroke at a ground point (as if aimed there): bFill dumps soil from the sack. Returns the message. */
 	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestShovel(FVector Point, FVector Normal, bool bFill);
 	UFUNCTION(BlueprintPure, Category = "Forest|Test") float TestLooseSoil() const { return LooseSoilM3; }
+	/**
+	 * Lays a raw log of LengthCm across the view 3 m ahead, then shoulders and places Courses more on it facing it (a wall),
+	 * and finally one more while looking along the wall (a corner). Returns what each placement chose and where it went.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Forest|Test") FString TestBuildWall(int32 LengthCm, int32 Courses);
 	static bool IsProfileTool(ECarveTool Tool)
 	{
 		return Tool == ECarveTool::NotchRound || Tool == ECarveTool::NotchFlat || Tool == ECarveTool::Dovetail;

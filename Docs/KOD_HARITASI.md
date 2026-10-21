@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (20 October 2026 18:14) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (21 October 2026 07:47) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -166,7 +166,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsLighterHeld() const` — F held: the lighter heats what is in sight (a piece of wood or a fire pit).
 - `void TakeEnemyHit(float Amount)` — An enemy hit on the player.
 - `float GetCarryLoad() const` — Shoulder load, 1 = full (one whole log).
-- `static bool IsProfileTool(ECarveTool Tool)` — One shovel stroke at a ground point (as if aimed there): bFill dumps soil from the sack. Returns the message.
+- `static bool IsProfileTool(ECarveTool Tool)` — Lays a raw log of LengthCm across the view 3 m ahead, then shoulders and places Courses more on it facing it (a wall), and finally one more while looking along the wall …
 - `static bool IsEndTool(ECarveTool Tool)` — Tools that work an end of the log.
 - `bool TestCarveHit(ACarvableLog* Log, ECarveTool Tool, const FVector& WorldPoint, const FVector& WorldNormal)` — For the mechanics test: one axe hit on a carvable log with Tool, as if aimed at WorldPoint on the face with WorldNormal, through the same aim and two-hit logic the …
 - `bool TestPickUp(ACarvableLog* Piece)` — For the mechanics test: E on a piece (true if it went onto the shoulder).
@@ -234,9 +234,9 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `void InitRawLog(int32 LengthCm, const FVector& Center, const FVector& Direction)` — A raw UnrealExport log (SM_RawLog_<length>, along X, pivot at the centre) lying on the ground. Trees leave these; hitting one splits it into two of half the length: 600 …
 - `static UStaticMesh* LoadRawLog(int32 LengthCm)` — SM_RawLog_<length>; for a length without its own mesh, the 150 cm one (InitRawLog then scales it).
 - `class ACarvableLog* ConvertToCarvable()` — Picking up a raw log: it becomes the building piece every assembly uses (ACarvableLog, same mesh and place, cut, notched, laid, stood and carried by its volume). This …
-- `void InitFromStaticRock(const UStaticMeshComponent* Source)` — A level-placed rock tagged "Breakable" (Megascans). Its size gives its stone tier: 3 large (100 cm or more), 2 medium (40 cm or more), 1 small. The pickaxe breaks large …
+- `void InitFromStaticRock(const UStaticMeshComponent* Source)` — A level-placed rock tagged "Breakable" (Megascans). Its size gives its stone tier: 3 large (100 cm or more), 2 medium (40 cm or more), 1 building stone. The pickaxe …
 - `void InitLooseStone(int32 Tier, UStaticMesh* StoneMesh, float Scale, const FVector& Impulse)` — A loose stone of Tier (1 small, 2 medium) thrown from where it is with Impulse; its physics stops after 4 s.
-- `bool CarveHit()` — One chisel strike. After CarveHitsNeeded strikes a medium stone becomes a flat wall stone, a small one a cobblestone (brown from stones of 20 cm or more, grey from …
+- `bool CarveHit()` — One chisel strike. After CarveHitsNeeded strikes a medium stone becomes a flat wall stone, a building stone a squared cobblestone (grey or brown) of its size, at least …
 - `static TArray<int32> RawLogsForHeight(float TreeHeightCm)` — Raw logs a felled tree leaves, longest first: 18 m or taller -> 600 + 300, 10 m or taller -> 600, else 300.
 - `static void PlayFellingSound(UWorld* World, const TCHAR* Name, const FVector& Location, float Volume = 1.f)` — Plays /Game/Audio/Felling/<Name> at Location with distance falloff (silent if the asset is missing).
 - `void InitLog(int32 InStage, const FVector& Center, const FVector& Direction)` — Lays a big log of the given stage (1 or 2) on the ground, centred at Center along Direction.

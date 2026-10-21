@@ -2,6 +2,7 @@
 
 #include "ScenarioSubsystem.h"
 #include "CarvableLog.h"
+#include "WorldCore/ExcavationTerrainChunkSubsystem.h"
 #include "FarmKit.h"
 #include "LooseResources.h"
 #include "RawMaterialNode.h"
@@ -18,6 +19,11 @@ namespace
 {
 	FVector GroundAt(UWorld* World, const FVector& Where)
 	{
+		// Diggable voxel ground: build it under this spot first, so things are placed on it and not under it.
+		if (UExcavationTerrainChunkSubsystem* Ground = World->GetSubsystem<UExcavationTerrainChunkSubsystem>())
+		{
+			Ground->EnsureGroundAt(FVector(Where.X, Where.Y, 0.f));
+		}
 		FHitResult Hit;
 		if (World->LineTraceSingleByObjectType(Hit, Where + FVector(0.f, 0.f, 2000.f), Where - FVector(0.f, 0.f, 2000.f), FCollisionObjectQueryParams(ECC_WorldStatic)))
 		{

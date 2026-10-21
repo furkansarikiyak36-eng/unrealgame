@@ -461,7 +461,8 @@ void AForestHUD::DrawHUD()
 		FString Label;
 		switch (Player->GetCarryPlace())
 		{
-		case AForestCharacter::ECarryPlace::Across: Label = TEXT("[Sol tık] Çaprazlama yerleştir  (eyer çentiği kendiliğinden açılır)"); break;
+		case AForestCharacter::ECarryPlace::Across: Label = TEXT("[Sol tık] Çaprazlama yerleştir (köşe, çentik kendiliğinden)   —  duvar sırası için duvara dönük bak"); break;
+		case AForestCharacter::ECarryPlace::Stack:  Label = TEXT("[Sol tık] Üstüne koy (duvar sırası)   —  köşe için kütük boyunca bak"); break;
 		case AForestCharacter::ECarryPlace::Stand:  Label = TEXT("[Sol tık] Dik koy (direk)   [R] yatır"); break;
 		case AForestCharacter::ECarryPlace::Lay:    Label = TEXT("[Sol tık] Yatır   [R] dik koy"); break;
 		case AForestCharacter::ECarryPlace::Beam:   Label = TEXT("[Sol tık] Kiriş koy (direğin üstüne)"); break;

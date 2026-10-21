@@ -677,6 +677,73 @@ FString AForestCharacter::ShovelStroke(const FVector& Point, const FVector& Norm
 	return FString::Printf(TEXT("Toprak döküldü −%.2f m³  (çuval %.2f / %.1f m³)"), Used, LooseSoilM3, MaxLooseSoilM3);
 }
 
+FString AForestCharacter::TestBuildWall(int32 LengthCm, int32 Courses)
+{
+	UStaticMesh* LogMesh = LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/UnrealExport/Meshes/SM_RawLog_%d.SM_RawLog_%d"), LengthCm, LengthCm));
+	if (!LogMesh)
+	{
+		LogMesh = AHarvestableActor::LoadRawLog(LengthCm);
+	}
+	if (!LogMesh)
+	{
+		return TEXT("no log mesh");
+	}
+	const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	FHitResult Ground;
+	const FVector Ahead = GetActorLocation() + Facing * 300.f;
+	GetWorld()->LineTraceSingleByChannel(Ground, Ahead + FVector(0, 0, 200.f), Ahead - FVector(0, 0, 500.f), ECC_Visibility);
+	ACarvableLog* Base = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+	if (!Base)
+	{
+		return TEXT("spawn failed");
+	}
+	Base->PlaceAt(Base->GetLayTransform(Ground.ImpactPoint, Facing.Rotation().Yaw + 90.f), true);
+	FString Report = FString::Printf(TEXT("base z=%.0f yaw=%.0f"), Base->GetActorLocation().Z, Base->GetActorRotation().Yaw);
+	ACarvableLog* Top = Base;
+	auto PlaceOn = [&](ACarvableLog* Lower, const FVector& Aim) -> ACarvableLog*
+	{
+		ACarvableLog* Piece = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+		if (!Piece || !StartCarry(Piece))
+		{
+			Report += TEXT(" | carry failed");
+			return nullptr;
+		}
+		FHitResult Hit;
+		Hit.HitObjectHandle = FActorInstanceHandle(Lower);
+		Hit.ImpactPoint = Aim;
+		Hit.ImpactNormal = FVector::UpVector;
+		UpdateCarryPlacementAt(Hit, true);
+		const ECarryPlace Chosen = CarryPlace;
+		const bool bSupported = bPlaceSupported;
+		PlaceCarried();
+		Report += FString::Printf(TEXT(" | %s z=%.0f yaw=%.0f dXY=%.0f sup=%d"),
+			Chosen == ECarryPlace::Stack ? TEXT("STACK") : Chosen == ECarryPlace::Across ? TEXT("ACROSS") : TEXT("OTHER"),
+			Piece->GetActorLocation().Z, Piece->GetActorRotation().Yaw,
+			FVector::Dist2D(Piece->GetActorLocation(), Lower->GetActorLocation()), bSupported ? 1 : 0);
+		return Piece;
+	};
+	for (int32 Course = 0; Course < Courses && Top; ++Course)
+	{
+		if (ACarvableLog* Next = PlaceOn(Top, Top->GetActorLocation() + FVector(0, 0, Top->GetRadius())))
+		{
+			Top = Next;
+		}
+	}
+	// A corner: turn to look along the wall and put one over its end.
+	if (Top)
+	{
+		const FRotator Saved = GetActorRotation();
+		SetActorRotation(FRotator(0.f, Top->GetActorRotation().Yaw, 0.f));
+		FVector C, A;
+		float R, H;
+		ACarvableLog::GetLogAxis(Top, C, A, R, H);
+		PlaceOn(Top, C + A * (H - 40.f) + FVector(0, 0, R));
+		SetActorRotation(Saved);
+	}
+	ShowMessage(Report);
+	return Report;
+}
+
 FString AForestCharacter::TestShovel(FVector Point, FVector Normal, bool bFill)
 {
 	const FString Result = ShovelStroke(Point, Normal, bFill);
@@ -950,6 +1017,39 @@ float AForestCharacter::GetCarryLoad() const
 	return Wood / ACarvableLog::GetShoulderCapacity();
 }
 
+namespace
+{
+	/**
+	 * A log laid along a lying log, on top of it: one course of a log wall. The upper log sits in a shallow groove
+	 * (a quarter of the thinner radius), straight above the lower one, its ends on the lower log's 75 cm module grid
+	 * and its middle over the lower log.
+	 */
+	bool ComputeStackPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper, FTransform& Out)
+	{
+		FVector Centre, Axis;
+		float LowerRadius, HalfLength;
+		if (!Lower || !Upper || Lower == Upper || Lower->IsCarried()
+			|| !ACarvableLog::GetLogAxis(Lower, Centre, Axis, LowerRadius, HalfLength) || FMath::Abs(Axis.Z) > 0.3f)
+		{
+			return false;
+		}
+		Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+		const float Module = ACarvableLog::ModuleLength;
+		const float Length = Upper->GetLength();
+		const FVector Start = Centre - Axis * HalfLength;
+		// Where along the lower log the player aims; the upper log's start goes on the nearest module line.
+		const float AimAlong = FVector::DotProduct(Aim - Start, Axis);
+		float UpperStart = FMath::RoundToFloat((AimAlong - Length * 0.5f) / Module) * Module;
+		UpperStart = FMath::Clamp(UpperStart, -Length * 0.5f, HalfLength * 2.f - Length * 0.5f);
+		const float Sink = 0.25f * FMath::Min(LowerRadius, Upper->GetRadius());
+		const FVector UpperCentre = Start + Axis * (UpperStart + Length * 0.5f)
+			+ FVector(0.f, 0.f, Centre.Z - Start.Z + LowerRadius + Upper->GetRadius() - Sink);
+		const FQuat Rotation = FRotator(0.f, Axis.Rotation().Yaw, 0.f).Quaternion();
+		Out = FTransform(Rotation, UpperCentre - Rotation.RotateVector(FVector(Upper->GetCenterX(), 0.f, 0.f)));
+		return true;
+	}
+}
+
 void AForestCharacter::UpdateCarryPlacement()
 {
 	FHitResult Hit;
@@ -1068,6 +1168,23 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
 		return;
 	}
+	// Onto a lying log, lying the same way as it: a wall course on top. The carried piece always lies across the
+	// view (as on the ground), so facing a wall stacks on it and looking along a log crosses it at a corner.
+	if (const ACarvableLog* LowerLog = Cast<ACarvableLog>(Lower); LowerLog && !bPlaceStanding && !bPlaceSlope)
+	{
+		FVector LowerCentre, LowerAxis;
+		float LowerRadius, LowerHalf;
+		const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+		const FVector AcrossView = FVector::CrossProduct(FVector::UpVector, Facing);
+		if (ACarvableLog::GetLogAxis(LowerLog, LowerCentre, LowerAxis, LowerRadius, LowerHalf) && FMath::Abs(LowerAxis.Z) < 0.3f
+			&& FMath::Abs(FVector::DotProduct(AcrossView, FVector(LowerAxis.X, LowerAxis.Y, 0.f).GetSafeNormal())) > 0.7071f
+			&& ComputeStackPlacement(LowerLog, Hit.ImpactPoint, Piece, PlaceTransform))
+		{
+			CarryPlace = ECarryPlace::Stack;
+			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+			return;
+		}
+	}
 	// Onto a lying log: square across it, notched (whichever mode is chosen, a post does not stand on a log).
 	if (Lower && (Lower->IsA<ACarvableLog>() || Lower->IsA<APickupItem>())
 		&& ACarvableLog::ComputeCrossPlacement(Lower, Hit.ImpactPoint, GetActorLocation(), Piece, CrossPlacement))
@@ -1151,6 +1268,11 @@ bool AForestCharacter::PlaceCarried()
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
 		ACarvableLog::OnLogStoodUp.Broadcast(Piece);
 		ShowMessage(TEXT("Direk dikildi"));
+		SettleStructure();
+		break;
+	case ECarryPlace::Stack:
+		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		ShowMessage(TEXT("Kütük alttakinin üstüne oturdu  —  duvar sırası"));
 		SettleStructure();
 		break;
 	case ECarryPlace::Beam:

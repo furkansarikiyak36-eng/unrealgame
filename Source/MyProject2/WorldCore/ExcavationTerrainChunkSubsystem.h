@@ -23,6 +23,8 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
     virtual void Tick(float DeltaTime) override;
+    /** Builds the ground round the player start before the game mode places anything on it. */
+    virtual void OnWorldBeginPlay(UWorld& InWorld) override;
     virtual TStatId GetStatId() const override;
     virtual bool IsTickable() const override;
 
@@ -55,6 +57,17 @@ public:
     float StreamingIntervalSeconds = 0.05f;
 
     /**
+     * When false (default) ground chunks stay once built: whatever lies on them (logs, stones, buildings) must not
+     * fall through when the player walks away. True frees far chunks (large maps; needs things there frozen).
+     */
+    UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Excavation|Streaming")
+    bool bUnloadDistantChunks = false;
+
+    /** Builds the ground under Location now if it is not there yet (things placed on the ground at world start). */
+    UFUNCTION(BlueprintCallable, Category = "Excavation|Streaming")
+    void EnsureGroundAt(const FVector& Location);
+
+    /**
      * Edits queue their chunks; each frame rebuilds queued chunks until this many ms are spent (at least one).
      * Rapid digging then rebuilds a chunk once instead of once per hit, and a hit never stalls a frame for long.
      */
@@ -76,6 +89,9 @@ protected:
     void HandleVolumeReset();
 
     void UpdateStreamedChunks();
+    /** Streams chunks round Center; bBuildNow builds each new chunk's mesh and collision at once (world start). */
+    void UpdateStreamedChunksAround(const FVector& Center, bool bBuildNow);
+    AExcavationTerrainChunkActor* SpawnManagedChunk(const FIntVector& Coordinate, bool bBuildNow);
     void RefreshLandscapeFallbackProvider();
     bool HasLiveRegisteredChunk(const FIntVector& Coordinate);
     void RemoveInvalidRegisteredActors();

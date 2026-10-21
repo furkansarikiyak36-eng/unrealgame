@@ -62,8 +62,9 @@ public:
 
 	/**
 	 * A level-placed rock tagged "Breakable" (Megascans). Its size gives its stone tier: 3 large (100 cm or more),
-	 * 2 medium (40 cm or more), 1 small. The pickaxe breaks large into three medium stones and medium into four small
-	 * ones, which scatter; small stones stay whole. See CarveHit for carving.
+	 * 2 medium (40 cm or more), 1 building stone. The pickaxe breaks large into three medium stones (50-75 cm) and
+	 * medium into three building stones (30-40 cm, the smallest piece: wall and paving size), which scatter; building
+	 * stones stay whole. See CarveHit for carving.
 	 */
 	void InitFromStaticRock(const UStaticMeshComponent* Source);
 
@@ -71,8 +72,8 @@ public:
 	void InitLooseStone(int32 Tier, UStaticMesh* StoneMesh, float Scale, const FVector& Impulse);
 
 	/**
-	 * One chisel strike. After CarveHitsNeeded strikes a medium stone becomes a flat wall stone, a small one a
-	 * cobblestone (brown from stones of 20 cm or more, grey from smaller ones). Returns true when it changed.
+	 * One chisel strike. After CarveHitsNeeded strikes a medium stone becomes a flat wall stone, a building stone a
+	 * squared cobblestone (grey or brown) of its size, at least 30 cm. Returns true when it changed.
 	 */
 	bool CarveHit();
 	bool IsCarvable() const { return HarvestType == EHarvestType::Rock && (StoneTier == 1 || StoneTier == 2); }

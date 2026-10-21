@@ -526,6 +526,9 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
     LastMeshMs = static_cast<float>((TimeMeshed - TimeSampled) * 1000.0);
     LastTriangleCount = CandidateMesh.TriangleCount();
 
+    // The first build (during BeginPlay) cooks collision at once so nothing falls through new ground; later rebuilds
+    // after digging cook in the background.
+    DynamicMeshComponent->bUseAsyncCooking = HasActorBegunPlay();
     DynamicMeshComponent->SetMesh(MoveTemp(CandidateMesh));
     if (DynamicMeshComponent->GetMesh() && DynamicMeshComponent->GetMesh()->TriangleCount() > 0)
     {

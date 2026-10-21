@@ -85,6 +85,17 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 				{
 					continue;
 				}
+				if (Edge.Kind == EWoodConnectionKind::Stacked)
+				{
+					// A bed: the beam lies on the holder over their whole common stretch.
+					const FVector BeamAxis = (Beam.B - Beam.A).GetSafeNormal();
+					const double H0 = FVector::DotProduct((*Holder)->A - Beam.A, BeamAxis);
+					const double H1 = FVector::DotProduct((*Holder)->B - Beam.A, BeamAxis);
+					const double BeamLength = Beam.Length();
+					At.Add(static_cast<float>(FMath::Clamp(FMath::Min(H0, H1), 0.0, BeamLength)));
+					At.Add(static_cast<float>(FMath::Clamp(FMath::Max(H0, H1), 0.0, BeamLength)));
+					continue;
+				}
 				double S = 0.0, T = 0.0;
 				WoodStructure::Geo::ClosestSegSeg(Beam.A, Beam.B, (*Holder)->A, (*Holder)->B, S, T);
 				At.Add(static_cast<float>(S * Beam.Length()));

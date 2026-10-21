@@ -9,6 +9,7 @@
 #include "LandscapeProxy.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "UObject/UObjectIterator.h"
 
@@ -142,7 +143,8 @@ void UExcavationTerrainChunkSubsystem::Tick(float DeltaTime)
     }
 
     StreamingAccumulatorSeconds += FMath::Max(0.0f, DeltaTime);
-    if (StreamingAccumulatorSeconds < FMath::Max(0.01f, StreamingIntervalSeconds))
+    // The very first update runs at once: loose logs and stones in the level would otherwise fall through.
+    if (!ManagedChunkActors.IsEmpty() && StreamingAccumulatorSeconds < FMath::Max(0.01f, StreamingIntervalSeconds))
     {
         return;
     }
@@ -302,21 +304,51 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
     }
 }
 
+void UExcavationTerrainChunkSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+    Super::OnWorldBeginPlay(InWorld);
+    if (!bEnableAutomaticStreaming || !InWorld.IsGameWorld())
+    {
+        return;
+    }
+    // The base terrain source first, then the ground round the player start, built now: the game mode snaps
+    // its starting items to the ground right after this, before any actor's BeginPlay.
+    LandscapeDiscoveryAccumulatorSeconds = 0.0f;
+    bDidInitialLandscapeDiscovery = true;
+    RefreshLandscapeFallbackProvider();
+    FVector Center = FVector::ZeroVector;
+    for (TActorIterator<APlayerStart> It(&InWorld); It; ++It)
+    {
+        Center = It->GetActorLocation();
+        break;
+    }
+    UpdateStreamedChunksAround(Center, true);
+}
+
 void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
+{
+    UWorld* World = GetWorld();
+    APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
+    APawn* Pawn = Controller ? Controller->GetPawn() : nullptr;
+    if (Pawn)
+    {
+        UpdateStreamedChunksAround(Pawn->GetActorLocation(), false);
+    }
+}
+
+void UExcavationTerrainChunkSubsystem::UpdateStreamedChunksAround(const FVector& Center, bool bBuildNow)
 {
     UWorld* World = GetWorld();
     UExcavationVolumeSubsystem* Excavation =
         World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
-    APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
-    APawn* Pawn = Controller ? Controller->GetPawn() : nullptr;
-    if (!World || !Excavation || !Pawn)
+    if (!World || !Excavation)
     {
         return;
     }
 
     FIntVector PlayerCell;
     FIntVector PlayerChunk;
-    if (!Excavation->TryWorldToCell(Pawn->GetActorLocation(), PlayerCell)
+    if (!Excavation->TryWorldToCell(Center, PlayerCell)
         || !Excavation->TryGetChunkCoordinateForCell(PlayerCell, PlayerChunk))
     {
         return;
@@ -363,7 +395,7 @@ void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
     for (auto It = ManagedChunkActors.CreateIterator(); It; ++It)
     {
         AExcavationTerrainChunkActor* Actor = It.Value().Get();
-        if (!Actor || !DesiredChunks.Contains(It.Key()))
+        if (!Actor || (bUnloadDistantChunks && !DesiredChunks.Contains(It.Key())))
         {
             It.RemoveCurrent();
             if (Actor)
@@ -390,13 +422,15 @@ void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
         return A.Z < B.Z;
     });
 
+    const bool bInitialLoad = ManagedChunkActors.IsEmpty();
     int32 SpawnedThisTick = 0;
     const int32 SpawnBudget = FMath::Clamp(MaxChunksSpawnedPerTick, 1, 16);
     for (const FIntVector& Coordinate : OrderedDesiredChunks)
     {
         // The player's own column is never held back by the budget: without it the player falls through.
         const bool bUnderPlayer = Coordinate.X == PlayerChunk.X && Coordinate.Y == PlayerChunk.Y;
-        if (SpawnedThisTick >= SpawnBudget && !bUnderPlayer)
+        // On the first update (nothing streamed yet) the whole ground goes in at once, before physics drops anything.
+        if (SpawnedThisTick >= SpawnBudget && !bUnderPlayer && !bInitialLoad && !bBuildNow)
         {
             break;
         }
@@ -406,28 +440,74 @@ void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
             continue;
         }
 
-        UClass* ChunkClass = TerrainChunkActorClass.Get();
-        if (!ChunkClass)
-        {
-            ChunkClass = AExcavationTerrainChunkActor::StaticClass();
-        }
-
-        AExcavationTerrainChunkActor* Actor = World->SpawnActorDeferred<AExcavationTerrainChunkActor>(
-            ChunkClass,
-            FTransform::Identity,
-            nullptr,
-            nullptr,
-            ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-        if (!Actor)
+        if (!SpawnManagedChunk(Coordinate, bBuildNow))
         {
             continue;
         }
-
-        // Assign the coordinate before BeginPlay so the actor never builds its default (0,0,0) chunk.
-        Actor->ChunkCoordinate = Coordinate;
-        Actor->FinishSpawning(FTransform::Identity);
-        ManagedChunkActors.Add(Coordinate, Actor);
         ++SpawnedThisTick;
+    }
+}
+
+AExcavationTerrainChunkActor* UExcavationTerrainChunkSubsystem::SpawnManagedChunk(const FIntVector& Coordinate, bool bBuildNow)
+{
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return nullptr;
+    }
+    UClass* ChunkClass = TerrainChunkActorClass.Get();
+    if (!ChunkClass)
+    {
+        ChunkClass = AExcavationTerrainChunkActor::StaticClass();
+    }
+    AExcavationTerrainChunkActor* Actor = World->SpawnActorDeferred<AExcavationTerrainChunkActor>(
+        ChunkClass,
+        FTransform::Identity,
+        nullptr,
+        nullptr,
+        ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+    if (!Actor)
+    {
+        return nullptr;
+    }
+    // Assign the coordinate before BeginPlay so the actor never builds its default (0,0,0) chunk.
+    Actor->ChunkCoordinate = Coordinate;
+    Actor->FinishSpawning(FTransform::Identity);
+    if (bBuildNow && !Actor->HasActorBegunPlay())
+    {
+        Actor->RebuildTerrainChunk();
+    }
+    ManagedChunkActors.Add(Coordinate, Actor);
+    return Actor;
+}
+
+void UExcavationTerrainChunkSubsystem::EnsureGroundAt(const FVector& Location)
+{
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Excavation = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!Excavation || !bEnableAutomaticStreaming || !World->IsGameWorld())
+    {
+        return;
+    }
+    if (!bDidInitialLandscapeDiscovery)
+    {
+        bDidInitialLandscapeDiscovery = true;
+        RefreshLandscapeFallbackProvider();
+    }
+    FIntVector Cell;
+    FIntVector Chunk;
+    if (!Excavation->TryWorldToCell(Location, Cell) || !Excavation->TryGetChunkCoordinateForCell(Cell, Chunk))
+    {
+        return;
+    }
+    // The chunk holding the point and the one below it: a surface on a chunk boundary is built by the lower one.
+    for (int32 ZOffset = -1; ZOffset <= 0; ++ZOffset)
+    {
+        const FIntVector Coordinate(Chunk.X, Chunk.Y, Chunk.Z + ZOffset);
+        if (!ManagedChunkActors.Contains(Coordinate) && !HasLiveRegisteredChunk(Coordinate))
+        {
+            SpawnManagedChunk(Coordinate, true);
+        }
     }
 }
 

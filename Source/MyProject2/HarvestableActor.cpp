@@ -186,9 +186,10 @@ void AHarvestableActor::BreakStone()
 	const FBoxSphereBounds Bounds = Mesh->Bounds;
 	PlayFellingSound(World, TEXT("SW_RockBreak"), Bounds.Origin);
 
-	// Large -> three medium stones, medium -> four small ones, thrown outwards and up.
+	// Large -> three medium stones, medium -> three building stones, thrown outwards and up. Building stones are the
+	// smallest pieces (a cobblestone or a wall course stone, 30-40 cm), never pebbles.
 	const int32 PieceTier = StoneTier - 1;
-	const int32 Count = StoneTier >= 3 ? 3 : 4;
+	const int32 Count = 3;
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		const float Angle = 2.f * PI * Index / Count + FMath::FRand() * 0.6f;
@@ -198,9 +199,9 @@ void AHarvestableActor::BreakStone()
 		{
 			continue;
 		}
-		// Medium pieces 45-70 cm, small ones 15-30 cm.
-		const float Target = PieceTier >= 2 ? FMath::FRandRange(45.f, 70.f) : FMath::FRandRange(15.f, 30.f);
-		const float Scale = FMath::Clamp(Target / FMath::Max(1.f, LargestSide(PieceMesh)), 0.3f, 3.f);
+		// Medium pieces 50-75 cm, building stones 30-40 cm.
+		const float Target = PieceTier >= 2 ? FMath::FRandRange(50.f, 75.f) : FMath::FRandRange(30.f, 40.f);
+		const float Scale = FMath::Clamp(Target / FMath::Max(1.f, LargestSide(PieceMesh)), 0.3f, 4.f);
 		const FVector Location = Bounds.Origin + Out * Bounds.BoxExtent.GetMax() * 0.45f + FVector(0.f, 0.f, Bounds.BoxExtent.Z * 0.3f);
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -228,7 +229,8 @@ bool AHarvestableActor::CarveHit()
 		return false;
 	}
 
-	// Medium stone -> a flat wall stone about its size; small one -> a cobblestone (brown from 20 cm, else grey).
+	// Medium stone -> a flat wall stone about its size; a building stone -> a squared cobblestone (grey or brown) of
+	// its size, at least 30 cm: these go into walls and paving, so they stay big.
 	const float Size = LargestSide(Mesh->GetStaticMesh()) * GetActorScale3D().GetMax();
 	UStaticMesh* Carved = nullptr;
 	float Scale = 1.f;
@@ -237,15 +239,10 @@ bool AHarvestableActor::CarveHit()
 		Carved = PickStoneMesh(WallStoneMeshes);
 		Scale = FMath::Clamp(Size * 1.1f / FMath::Max(1.f, LargestSide(Carved)), 0.35f, 1.f);
 	}
-	else if (Size >= 20.f)
-	{
-		Carved = PickStoneMesh(BrownCobbleMeshes);
-		Scale = FMath::Clamp(Size / FMath::Max(1.f, LargestSide(Carved)), 0.7f, 1.3f);
-	}
 	else
 	{
-		Carved = PickStoneMesh(GrayCobbleMeshes);
-		Scale = FMath::Clamp(Size / FMath::Max(1.f, LargestSide(Carved)), 0.8f, 1.5f);
+		Carved = FMath::RandBool() ? PickStoneMesh(GrayCobbleMeshes) : PickStoneMesh(BrownCobbleMeshes);
+		Scale = FMath::Clamp(FMath::Max(Size, 30.f) / FMath::Max(1.f, LargestSide(Carved)), 1.f, 4.f);
 	}
 	if (!Carved)
 	{
