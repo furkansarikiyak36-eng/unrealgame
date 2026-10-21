@@ -6,6 +6,10 @@
 #include "Engine/EngineTypes.h"
 #include "Engine/HitResult.h"
 
+class AActor;
+class UPhysicalMaterial;
+class UPrimitiveComponent;
+
 /**
  * Global world-hit acquisition, physical analysis and classification.
  *
