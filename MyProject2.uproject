@@ -1,139 +1,139 @@
 {
-  "FileVersion": 3,
-  "EngineAssociation": "5.8",
-  "Category": "",
-  "Description": "",
-  "Modules": [
-    {
-      "Name": "MyProject2",
-      "Type": "Runtime",
-      "LoadingPhase": "Default"
-    }
-  ],
-  "Plugins": [
-    {
-      "Name": "WorldSnap",
-      "Enabled": true
-    },
-    {
-      "Name": "ModelingToolsEditorMode",
-      "Enabled": true,
-      "TargetAllowList": [
-        "Editor"
-      ]
-    },
-    {
-      "Name": "CableComponent",
-      "Enabled": true
-    },
-    {
-      "Name": "GeometryScripting",
-      "Enabled": true
-    },
-    {
-      "Name": "PythonScriptPlugin",
-      "Enabled": true
-    },
-    {
-      "Name": "EditorScriptingUtilities",
-      "Enabled": true
-    },
-    {
-      "Name": "ModelContextProtocol",
-      "Enabled": true
-    },
-    {
-      "Name": "MCPClientToolset",
-      "Enabled": true
-    },
-    {
-      "Name": "AllToolsets",
-      "Enabled": true
-    },
-    {
-      "Name": "AnimationAssistantToolset",
-      "Enabled": true
-    },
-    {
-      "Name": "AIModuleToolset",
-      "Enabled": true
-    },
-    {
-      "Name": "ExampleCustomDataInterface",
-      "Enabled": true
-    },
-    {
-      "Name": "MIDIDevice",
-      "Enabled": true
-    },
-    {
-      "Name": "PythonAutomationTest",
-      "Enabled": true
-    },
-    {
-      "Name": "PCGPythonInterop",
-      "Enabled": true
-    },
-    {
-      "Name": "PythonFoundationPackages",
-      "Enabled": true
-    },
-    {
-      "Name": "PythonMLPackages",
-      "Enabled": true
-    },
-    {
-      "Name": "PCGGeometryScriptInterop",
-      "Enabled": true
-    },
-    {
-      "Name": "Avalanche",
-      "Enabled": true,
-      "SupportedTargetPlatforms": [
-        "Win64",
-        "Linux",
-        "Mac"
-      ]
-    },
-    {
-      "Name": "CQTestEnhancedInput",
-      "Enabled": true
-    },
-    {
-      "Name": "NiagaraMRQ",
-      "Enabled": true
-    },
-    {
-      "Name": "NiagaraNanite",
-      "Enabled": true
-    },
-    {
-      "Name": "NiagaraUIRenderer",
-      "Enabled": true
-    },
-    {
-      "Name": "NiagaraFluids",
-      "Enabled": true
-    },
-    {
-      "Name": "WaterAdvanced",
-      "Enabled": true
-    },
-    {
-      "Name": "PCGNiagaraInterop",
-      "Enabled": true
-    },
-    {
-      "Name": "ClonerEffector",
-      "Enabled": true
-    },
-    {
-      "Name": "CascadeToNiagaraConverter",
-      "Enabled": true
-    },
-    {
-      "Name": "ProceduralVegetationEditor",
-      "Enabled": true
-    }
-  ]
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "MyProject2",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "WorldSnap",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "CableComponent",
+			"Enabled": true
+		},
+		{
+			"Name": "GeometryScripting",
+			"Enabled": true
+		},
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": true
+		},
+		{
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelContextProtocol",
+			"Enabled": true
+		},
+		{
+			"Name": "MCPClientToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "AllToolsets",
+			"Enabled": true
+		},
+		{
+			"Name": "AnimationAssistantToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "AIModuleToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "ExampleCustomDataInterface",
+			"Enabled": true
+		},
+		{
+			"Name": "MIDIDevice",
+			"Enabled": true
+		},
+		{
+			"Name": "PythonAutomationTest",
+			"Enabled": true
+		},
+		{
+			"Name": "PCGPythonInterop",
+			"Enabled": true
+		},
+		{
+			"Name": "PythonFoundationPackages",
+			"Enabled": true
+		},
+		{
+			"Name": "PythonMLPackages",
+			"Enabled": true
+		},
+		{
+			"Name": "PCGGeometryScriptInterop",
+			"Enabled": true
+		},
+		{
+			"Name": "Avalanche",
+			"Enabled": true,
+			"SupportedTargetPlatforms": [
+				"Win64",
+				"Linux",
+				"Mac"
+			]
+		},
+		{
+			"Name": "CQTestEnhancedInput",
+			"Enabled": true
+		},
+		{
+			"Name": "NiagaraMRQ",
+			"Enabled": true
+		},
+		{
+			"Name": "NiagaraNanite",
+			"Enabled": true
+		},
+		{
+			"Name": "NiagaraUIRenderer",
+			"Enabled": true
+		},
+		{
+			"Name": "NiagaraFluids",
+			"Enabled": true
+		},
+		{
+			"Name": "WaterAdvanced",
+			"Enabled": true
+		},
+		{
+			"Name": "PCGNiagaraInterop",
+			"Enabled": true
+		},
+		{
+			"Name": "ClonerEffector",
+			"Enabled": true
+		},
+		{
+			"Name": "CascadeToNiagaraConverter",
+			"Enabled": true
+		},
+		{
+			"Name": "ProceduralVegetationEditor",
+			"Enabled": true
+		}
+	]
 }
