@@ -12,6 +12,10 @@
 	],
 	"Plugins": [
 		{
+			"Name": "WorldSnap",
+			"Enabled": true
+		},
+		{
 			"Name": "ModelingToolsEditorMode",
 			"Enabled": true,
 			"TargetAllowList": [
