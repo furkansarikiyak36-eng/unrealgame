@@ -484,7 +484,7 @@ void AForestCharacter::DrawPreviewLines()
 	if (const ACarvableLog* Piece = GetTopCarried(); Piece && CarryPlace != ECarryPlace::None)
 	{
 		// Only a base line where the piece will lie (along its underside) with short end marks; a crossing notches by itself.
-		const FTransform& Where = (CarryPlace == ECarryPlace::Across || CarryPlace == ECarryPlace::Diagonal || CarryPlace == ECarryPlace::Corner) ? CrossPlacement.Upper : PlaceTransform;
+		const FTransform& Where = GetCarryPlacementTransform();
 		const FBox Box = Piece->GetLocalBox();
 		const FLinearColor Color = bPlaceSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
 		const FVector A = Where.TransformPosition(FVector(Box.Min.X, 0.f, Box.Min.Z + 1.f));
@@ -1374,6 +1374,13 @@ namespace
 	}
 }
 
+const FTransform& AForestCharacter::GetCarryPlacementTransform() const
+{
+	return CarryPlace == ECarryPlace::Across || CarryPlace == ECarryPlace::Corner || CarryPlace == ECarryPlace::Diagonal
+		? CrossPlacement.Upper
+		: PlaceTransform;
+}
+
 bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const FTransform& Transform, bool bForce)
 {
 	if (!GetWorld() || !Piece) return false;
@@ -1923,7 +1930,7 @@ bool AForestCharacter::PlaceCarried()
 		|| CarryPlace == ECarryPlace::Diagonal || CarryPlace == ECarryPlace::Slope;
 	if (bNeedsSupportCheck)
 	{
-		const FTransform& FinalTransform = bCrossTransform ? CrossPlacement.Upper : PlaceTransform;
+		const FTransform& FinalTransform = GetCarryPlacementTransform();
 		if (!EvaluateSupportPreview(Piece, FinalTransform, true))
 		{
 			ShowMessage(TEXT("Bu bağlantı yapısal olarak desteklenmiyor."));
