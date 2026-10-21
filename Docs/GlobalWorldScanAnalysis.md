@@ -2,7 +2,7 @@
 
 Branch: `feature/global-world-scan-six-methods-v01`
 
-This layer provides six complementary ways to acquire world information. The methods share one namespace and result contracts; they are not all executed every frame. The caller or future scan manager chooses the smallest query set needed for the current task.
+This layer provides six complementary ways to acquire world information. The methods share one namespace and result contracts; they are not all executed every frame. Callers can use the individual query functions or `WorldScanSystem::ExecuteScanPlan` to dispatch a selective set of queries and collect one `FWorldScanBundle`.
 
 ## Six methods
 
@@ -13,7 +13,7 @@ This layer provides six complementary ways to acquire world information. The met
 5. **Bounds / Mesh Geometry** — `AnalyzeBounds`: inexpensive actor/component bounds, dimensions, approximate sphere radius and orientation. This deliberately does **not** walk every mesh vertex/triangle.
 6. **Physics State Query** — `QueryPhysicsState`: current velocity, angular velocity, rigid-body simulation/awake state and a best-effort current state classification.
 
-## Shared analysis pipeline
+## Selective scan plan\n\n`FWorldScanRequest` enables/disables each method explicitly. `ExecuteScanPlan` runs only enabled methods, records which were attempted, and gathers results into `FWorldScanBundle`. A successful raycast can supply the default target actor/component for bounds and physics queries; callers may override that target. The overlap and surface queries use the explicit `QueryCenter`. The function's return value means the plan was dispatched against a valid world; it does not guarantee a collision hit.\n\n## Shared analysis pipeline
 
 `Trace` and `AnalyzeHit` retain the existing single-hit path and object classification. The other methods expose raw or summarized results that downstream systems can combine into a task-specific analysis. Example: a build placement can use overlap + shape trace + surface sampling; a carried-log preview can use raycast + bounds + physics.
 
