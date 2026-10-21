@@ -199,6 +199,11 @@ void StructureLink::MarkChanged()
 	++StructureVersion;
 }
 
+int32 StructureLink::Version()
+{
+	return StructureVersion;
+}
+
 FString StructureLink::NameOf(EWoodFeatureKind Kind)
 {
 	switch (Kind)

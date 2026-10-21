@@ -102,6 +102,19 @@ public:
 
 	/** What a left click does with the carried piece where the player is looking. */
 	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack, Diagonal, Corner, Socket };
+
+	/** One snapshot shared by the ghost preview, support validation and placement commit. */
+	struct FLogPlacementResult
+	{
+		ECarryPlace Mode = ECarryPlace::None;
+		FTransform Transform;
+		TWeakObjectPtr<AActor> TargetActor;
+		FName SnapPointId = NAME_None;
+		bool bValid = false;
+		bool bSupported = false;
+		FString InvalidReason;
+	};
+	FLogPlacementResult GetLogPlacementResult() const;
 	ECarryPlace GetCarryPlace() const { return CarryPlace; }
 	/** Socket placement: what it does, e.g. "yan yana (ön yüz)". */
 	const FString& GetSocketLabel() const { return SocketLabel; }
@@ -523,6 +536,16 @@ private:
 	/** Admin [9]: the clock three hours on. */
 	void DebugSkipTime();
 	bool bPlaceSupported = true;
+	/** Support preview is throttled; placement commit always forces a fresh structural check. */
+	bool bSupportPreviewCacheValid = false;
+	bool bCachedSupportPreview = false;
+	double LastSupportPreviewEvaluation = -1000.0;
+	TWeakObjectPtr<ACarvableLog> CachedSupportPreviewPiece;
+	TWeakObjectPtr<AActor> CachedSupportPreviewTarget;
+	ECarryPlace CachedSupportPreviewMode = ECarryPlace::None;
+	FName CachedSupportPreviewSnapPointId = NAME_None;
+	int32 CachedSupportPreviewStructureVersion = INDEX_NONE;
+	FTransform CachedSupportPreviewTransform;
 	TWeakObjectPtr<AActor> PlaceTarget;
 	/** Re-checks the structure after a piece went in or came out; says how many pieces fell. */
 	void SettleStructure();
@@ -532,12 +555,15 @@ private:
 	TWeakObjectPtr<ACarvableLog> StandBase;
 	/** The snap points of the face of a log being aimed at (module lines on that face), and the one chosen. */
 	TArray<FVector> SocketMarkers;
+	FName SelectedSnapPointId = NAME_None;
 	FVector SocketChosen = FVector::ZeroVector;
 	FVector SocketNormal = FVector::UpVector;
 	FString SocketLabel;
 	FTransform PlaceTransform;
 	void UpdateCarryPlacement();
 	void UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit);
+	bool EvaluateSupportPreview(const ACarvableLog* Piece, const FTransform& Transform, bool bForce = false);
+	const FTransform& GetCarryPlacementTransform() const;
 	ACarvableLog* GetTopCarried() const;
 	bool PlaceCarried();
 
