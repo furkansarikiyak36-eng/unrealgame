@@ -8,7 +8,7 @@
 #include "StonePhaseA_Mining/StoneActor.h"
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
-#include "Engine/LandscapeProxy.h"
+#include "LandscapeProxy.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 
 namespace
