@@ -1120,3 +1120,15 @@ Plan (kullanıcının getirdiği analiz): sorun açı eksikliği değil, yapıy�
 - Vitrin kulübesi: 12/12 köşe geçmesi; konumlar: boyuna duvarlar R=0 ve R=225, enine duvarlar F=±112 → 2,25 × 2,25 m kare oda; sıra başına +18 cm (36/54/72/90/108). Görüntüde dört duvarlı, köşeleri geçmeli kulübe. Toplam 111/111.
 - Codex'in paralel, commit edilmemiş işi korundu ve birlikte gönderildi: yakındaki kütüğü hedefleme (aim-assist), yığında taban eksenini izleme (±45 için), `FindLocalLogs`, kullanılmayan `ComputeWallCornerPlacement` (iki duvar varken köşe). Codex'in derlemesi `FindLocalLogs` için `Engine/OverlapResult.h` eksikliğiyle derlenmiyordu; eklendi.
 - Açık: Codex'in yığın taban ekseni araması her karede tüm kütükleri tarıyor (adım 2'de yerel aramaya taşınmalı); adım 3–5.
+
+### 2026-10-21 — Her kütüğün altı yüzünde snap noktaları (alt, üst, ön, arka, iki uç) (CC)
+Kullanıcı: "asıl soruna çözüm bulamamışsın; her log snap noktası olmalı: alt-üst-ön-arka ve iki uç".
+- `ForestCharacter.cpp` içinde `FLogSockets`: yatan bir kütüğün yüzü, isabet normalinden kütüğün kendi çerçevesinde (eksen, yatay yan, yukarı) bulunur: üst, alt, ön, arka, uç A, uç B. Uzun yüzlerde her 75 cm modül çizgisinde, uçlarda birer snap noktası. Bakılan nokta en yakın çizgiye oturur.
+- Yeni `ECarryPlace::Socket` (üst yüz dışındakiler; üst yüz duvar kurallarıyla kalır: üst üste, köşe geçmesi, çapraz, döşeme). Yön her yerdeki gibi bakışa göre 0 / 45 / 90:
+  - ön/arka: 0 = yan yana yapışık (aynı zeminde, uçlar 75 cm ızgarasında), 90 = ucu yanına dayalı T, 45 = yandan 45°;
+  - uçlar: 0 = uca uç uzatma, 90 = uca dik T, 45 = uçtan 45°;
+  - alt: altına paralel kütük;
+  - dik koyma modunda: alt = destek direği (tepesi kütüğün altına değer), yan = yanına direk, uç = ucuna direk.
+- Önizleme: taşırken bakılan yüzün snap noktaları beyaz küçük artı, seçilen yeşil ve büyük. HUD "[Sol tık] yan yana (ön yüz) — bakışını çevirerek 0 / 45 / 90"; mesaj "Kütük kondu: …".
+- Vitrin 12. istasyon: 6/6 (ön yan yana: merkezler arası 35 cm; arka T: merkez 92,5 = 17,5 + 75; arka 45°; uç uzatma: merkez 225 = 150 + 75; uca dik T; yanına direk). Toplam 118/118.
+- Not: snap işaretleri yalnız taşırken görünür (ekran görüntüsünde yok); oyunda denenmeli.

@@ -80,6 +80,7 @@ private:
 	void StationFurniture();
 	void StationHauling();
 	void StationModuleOpening();
+	void StationFaceSockets();
 
 	FVector StationSignSpot;
 	FString StationTitle;

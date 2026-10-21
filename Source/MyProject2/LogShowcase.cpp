@@ -238,6 +238,7 @@ FString ALogShowcase::BuildAll()
 	StationFurniture();
 	StationHauling();
 	StationModuleOpening();
+	StationFaceSockets();
 
 	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
 	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
@@ -556,5 +557,54 @@ void ALogShowcase::StationModuleOpening()
 	Report += FString::Printf(TEXT("    %s düşen 75 cm kütük: %d (beklenen 4)\n"), bFour ? TEXT("OK ") : TEXT("XX "), Offcuts);
 	bFour ? ++Placed : ++Failed;
 	StationNotes += FString::Printf(TEXT("\n%d adet 75 cm kütük düştü"), Offcuts);
+	EndStation();
+}
+
+
+// 12. Snap points on every face of a log: front, back and both ends (the top is the wall station's), each at a 75 cm
+// line, with the piece parallel, square or at 45 degrees as the view turns.
+void ALogShowcase::StationFaceSockets()
+{
+	BeginStation(11, TEXT("Yüz snap noktaları: ön, arka, iki uç (her 75 cm'de)"));
+	ACarvableLog* Base = LayAt(Mesh(300), O, FYaw + 90.f, TEXT("hedef kütük"));
+	FVector C, A;
+	float Radius, Half;
+	if (!Base || !ACarvableLog::GetLogAxis(Base, C, A, Radius, Half))
+	{
+		EndStation();
+		return;
+	}
+	A = FVector(A.X, A.Y, 0.f).GetSafeNormal();
+	const FVector Side = FVector::CrossProduct(FVector::UpVector, A);
+	const float AxisYaw = A.Rotation().Yaw;
+	struct FCase { const TCHAR* Name; FVector Normal; float Along; float PieceAngle; uint8 Hold; int32 Length; };
+	// PieceAngle: the carried piece's direction relative to the target's axis (the view is 90 degrees off it).
+	const FCase Cases[] = {
+		{ TEXT("ön yüz, yan yana"),        Side,  -75.f,   0.f, static_cast<uint8>(EHold::Lay),   300 },
+		{ TEXT("arka yüz, dik (T)"),      -Side,    0.f,  90.f, static_cast<uint8>(EHold::Lay),   150 },
+		{ TEXT("arka yüz, 45°"),          -Side,   75.f,  45.f, static_cast<uint8>(EHold::Lay),   150 },
+		{ TEXT("uç B, uca uç uzatma"),     A,       0.f,   0.f, static_cast<uint8>(EHold::Lay),   150 },
+		{ TEXT("uç A, ucuna dik (T)"),    -A,       0.f,  90.f, static_cast<uint8>(EHold::Lay),   150 },
+		{ TEXT("ön yüz, yanına direk"),    Side,   75.f,   0.f, static_cast<uint8>(EHold::Stand), 150 },
+	};
+	for (const FCase& Case : Cases)
+	{
+		const bool bEnd = FMath::Abs(FVector::DotProduct(Case.Normal, A)) > 0.7f;
+		const FVector Aim = bEnd ? C + Case.Normal * Half : C + A * Case.Along + Case.Normal * Radius;
+		const float ViewYaw = AxisYaw + Case.PieceAngle - 90.f;
+		const FVector View = FRotator(0.f, ViewYaw, 0.f).Vector();
+		Player->SetActorLocation(Aim + Case.Normal * 200.f + FVector(0.f, 0.f, 80.f), false, nullptr, ETeleportType::TeleportPhysics);
+		ACarvableLog* Piece = Spawn(Mesh(Case.Length));
+		const uint8 Got = Piece ? P(Player->PlaceForShowcase(Piece, Base, Aim, Case.Normal, ViewYaw, static_cast<EHold>(Case.Hold))) : P(EPlace::None);
+		Note(Case.Name, Got, P(EPlace::Socket));
+		if (Piece && Got == P(EPlace::Socket))
+		{
+			Report += FString::Printf(TEXT("      %s  açı %.0f°  merkez F=%.0f R=%.0f z=%.0f\n"), *Player->GetSocketLabel(),
+				FMath::Fmod(FMath::Abs(FRotator::NormalizeAxis(Piece->GetActorRotation().Yaw - AxisYaw)), 180.f),
+				FVector::DotProduct(Piece->GetActorLocation() - O, F), FVector::DotProduct(Piece->GetActorLocation() - O, R),
+				Piece->GetActorLocation().Z - O.Z);
+		}
+		(void)View;
+	}
 	EndStation();
 }

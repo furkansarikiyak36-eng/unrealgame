@@ -463,6 +463,7 @@ void AForestHUD::DrawHUD()
 		{
 		case AForestCharacter::ECarryPlace::Across: Label = TEXT("[Sol tık] Çaprazlama yerleştir (köşe, çentik kendiliğinden)   —  duvar sırası için duvara dönük bak"); break;
 		case AForestCharacter::ECarryPlace::Diagonal: Label = FString::Printf(TEXT("[Sol tık] %+.0f° çaprazlama koy   —  bakışını çevirerek 0 / 45 / 90"), Player->GetDiagonalAngle()); break;
+		case AForestCharacter::ECarryPlace::Socket: Label = FString::Printf(TEXT("[Sol tık] %s   —  bakışını çevirerek 0 / 45 / 90"), *Player->GetSocketLabel()); break;
 		case AForestCharacter::ECarryPlace::Corner: Label = TEXT("[Sol tık] Köşe geçmesi (uçlar birbirine oturur)"); break;
 		case AForestCharacter::ECarryPlace::Stack:  Label = TEXT("[Sol tık] Üstüne koy (duvar sırası)   —  köşe için kütük boyunca bak"); break;
 		case AForestCharacter::ECarryPlace::Stand:  Label = TEXT("[Sol tık] Dik koy (direk)   [R] yatır"); break;

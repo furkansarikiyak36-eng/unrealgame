@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (21 October 2026 15:18) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (21 October 2026 15:30) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -165,6 +165,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `static float GetCarveDepthFraction(int32 Index)` — Round / flat notch depth as a share of the log's thickness: 1/6, 1/3, 1/2.
 - `bool IsCarveSpotValid() const` — The log in sight still has a place for the selected tool.
 - `bool CanPlaceAcross() const` — E would lay the carried log across the log in sight.
+- `const FString& GetSocketLabel() const` — Socket placement: what it does, e.g. "yan yana (ön yüz)".
 - `float GetDiagonalAngle() const` — Diagonal placement: its angle to the log below, +45 or -45.
 - `bool IsPlaceSupported() const` — The piece would be held up where it is about to go (the structure graph says so); false: it would fall.
 - `bool IsPlacingStanding() const` — R while carrying: lay pieces down or stand them up as posts.
@@ -595,4 +596,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-203 / 507 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+203 / 508 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

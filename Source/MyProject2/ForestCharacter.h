@@ -101,8 +101,10 @@ public:
 	bool CanPlaceAcross() const { return CarryPlace == ECarryPlace::Across; }
 
 	/** What a left click does with the carried piece where the player is looking. */
-	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack, Diagonal, Corner };
+	enum class ECarryPlace : uint8 { None, Across, Lay, Stand, Beam, Brace, Floor, Fuel, Repair, Slope, Load, Stack, Diagonal, Corner, Socket };
 	ECarryPlace GetCarryPlace() const { return CarryPlace; }
+	/** Socket placement: what it does, e.g. "yan yana (ön yüz)". */
+	const FString& GetSocketLabel() const { return SocketLabel; }
 	/** Diagonal placement: its angle to the log below, +45 or -45. */
 	float GetDiagonalAngle() const { return DiagonalAngle; }
 	/** The piece would be held up where it is about to go (the structure graph says so); false: it would fall. */
@@ -526,6 +528,11 @@ private:
 	void SettleStructure();
 	FCrossPlacement CrossPlacement;
 	TWeakObjectPtr<AActor> CrossLower;
+	/** The snap points of the face of a log being aimed at (module lines on that face), and the one chosen. */
+	TArray<FVector> SocketMarkers;
+	FVector SocketChosen = FVector::ZeroVector;
+	FVector SocketNormal = FVector::UpVector;
+	FString SocketLabel;
 	FTransform PlaceTransform;
 	void UpdateCarryPlacement();
 	void UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit);
