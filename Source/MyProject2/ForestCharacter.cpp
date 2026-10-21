@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestCharacter.h"
+#include "LogSnapSystem.h"
 #include "Algo/Sort.h"
 #include "Wood/WoodStructureGeometry.h"
 #include "Engine/OverlapResult.h"
@@ -1277,38 +1278,40 @@ namespace
 
 		bool Init(const ACarvableLog* Log, const FVector& Point, const FVector& Normal)
 		{
-			if (!Log || !ACarvableLog::GetLogAxis(Log, Centre, Axis, Radius, Half) || FMath::Abs(Axis.Z) > 0.3f)
+			TArray<LogSnapSystem::FPoint> Points;
+			if (!Log || !LogSnapSystem::BuildPoints(Log, Points)
+				|| !ACarvableLog::GetLogAxis(Log, Centre, Axis, Radius, Half) || FMath::Abs(Axis.Z) > 0.3f)
 			{
 				return false;
 			}
 			Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
-			Side = FVector::CrossProduct(FVector::UpVector, Axis);
+			Side = FVector::CrossProduct(FVector::UpVector, Axis).GetSafeNormal();
+
+			LogSnapSystem::FQuery Query;
+			Query.HitPoint = Point;
+			Query.HitNormal = Normal;
+			Query.MaxAlongAxisError = ACarvableLog::ModuleLength * 0.6f;
+			LogSnapSystem::FPoint Selected;
+			if (!LogSnapSystem::Resolve(Points, Query, Selected))
+			{
+				return false;
+			}
+			switch (Selected.Face)
+			{
+			case LogSnapSystem::EFace::Top: Face = ELogFace::Top; break;
+			case LogSnapSystem::EFace::Bottom: Face = ELogFace::Bottom; break;
+			case LogSnapSystem::EFace::Front: Face = ELogFace::Front; break;
+			case LogSnapSystem::EFace::Back: Face = ELogFace::Back; break;
+			case LogSnapSystem::EFace::EndA: Face = ELogFace::EndA; break;
+			case LogSnapSystem::EFace::EndB: Face = ELogFace::EndB; break;
+			}
+			Along = Selected.AlongAxis;
 			TArray<float> Local;
 			Log->GetModuleLines(Local);
 			const float CentreX = Log->GetActorTransform().InverseTransformPosition(Centre).X;
 			for (const float Line : Local)
 			{
 				Lines.Add(Line - CentreX);
-			}
-			const float HitAlong = FVector::DotProduct(Point - Centre, Axis);
-			const float NormalAlong = FVector::DotProduct(Normal, Axis);
-			if (FMath::Abs(NormalAlong) > 0.7f && Half - FMath::Abs(HitAlong) < Radius)
-			{
-				Face = NormalAlong > 0.f ? ELogFace::EndB : ELogFace::EndA;
-				Along = NormalAlong > 0.f ? Half : -Half;
-				return true;
-			}
-			Face = Normal.Z > 0.5f ? ELogFace::Top : Normal.Z < -0.5f ? ELogFace::Bottom
-				: (FVector::DotProduct(Normal, Side) >= 0.f ? ELogFace::Front : ELogFace::Back);
-			Along = HitAlong;
-			float Best = TNumericLimits<float>::Max();
-			for (const float Line : Lines)
-			{
-				if (FMath::Abs(Line) < Half - 1.f && FMath::Abs(Line - HitAlong) < Best)
-				{
-					Best = FMath::Abs(Line - HitAlong);
-					Along = Line;
-				}
 			}
 			return true;
 		}
@@ -1366,6 +1369,24 @@ namespace
 	}
 }
 
+bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const FTransform& Transform, bool bForce)
+{
+	if (!GetWorld() || !Piece) return false;
+	const double Now = GetWorld()->GetTimeSeconds();
+	// The graph rebuild performs world-wide geometry checks and ground traces. Preview is capped at 10 Hz.
+	// The commit path passes bForce=true and always checks the exact final transform.
+	if (!bForce && bSupportPreviewCacheValid && Now - LastSupportPreviewEvaluation < 0.1)
+	{
+		return bCachedSupportPreview;
+	}
+	bCachedSupportPreview = StructureLink::WouldBeSupported(GetWorld(), Piece, Transform);
+	CachedSupportPreviewTransform = Transform;
+	CachedSupportPreviewPiece = const_cast<ACarvableLog*>(Piece);
+	LastSupportPreviewEvaluation = Now;
+	bSupportPreviewCacheValid = true;
+	return bCachedSupportPreview;
+}
+
 void AForestCharacter::UpdateCarryPlacement()
 {
 	FHitResult Hit;
@@ -1418,7 +1439,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			if (ACarvableLog::ComputeBracePlacement(Post, Piece, PlaceTransform))
 			{
 				CarryPlace = ECarryPlace::Brace;
-				bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+				bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 			}
 			return;
 		}
@@ -1428,11 +1449,13 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 			FVector Direction = Forward;
 			float Farthest = 0.f;
-			for (TActorIterator<ACarvableLog> It(GetWorld()); It; ++It)
+			TArray<ACarvableLog*> NearbyPosts;
+			FindLocalLogs(GetWorld(), Top, Piece->GetLength() + PostRadius + 100.f, NearbyPosts);
+			for (ACarvableLog* Candidate : NearbyPosts)
 			{
 				FVector OtherCentre, OtherAxis;
 				float OtherRadius, OtherHalf;
-				if (*It == Post || !It->IsAnchored() || !ACarvableLog::GetLogAxis(*It, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
+				if (Candidate == Post || !Candidate->IsAnchored() || !ACarvableLog::GetLogAxis(Candidate, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
 					|| FMath::Abs(OtherAxis.Z) < 0.95f)
 				{
 					continue;
@@ -1440,7 +1463,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				const FVector OtherTop = OtherCentre + OtherAxis * (OtherAxis.Z > 0.f ? OtherHalf : -OtherHalf);
 				const FVector Flat(OtherTop.X - Top.X, OtherTop.Y - Top.Y, 0.f);
 				const float Distance = Flat.Size();
-				// Same height (the grid cuts posts the same length), the far post fully under the beam, ahead of the player.
+				if (Distance < KINDA_SMALL_NUMBER) continue;
 				if (FMath::Abs(OtherTop.Z - Top.Z) <= 5.f && Distance > PostRadius + OtherRadius
 					&& Distance <= Piece->GetLength() - PostRadius - OtherRadius && Distance > Farthest
 					&& FVector::DotProduct(Flat / Distance, Forward) > 0.85f)
@@ -1454,7 +1477,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			const FVector End(Top.X - Direction.X * PostRadius, Top.Y - Direction.Y * PostRadius, Top.Z + Piece->GetRadius() - JointSeatDepth(PostRadius, Piece->GetRadius()));
 			PlaceTransform = FTransform(Rotation, End - Rotation.RotateVector(FVector(Piece->GetLocalBox().Min.X, 0.f, 0.f)));
 			CarryPlace = ECarryPlace::Beam;
-			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+			bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 			return;
 		}
 	}
@@ -1571,7 +1594,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				{
 					SocketLabel = FString::Printf(TEXT("%s (%s yüz)"), *What, FaceName(Sockets.Face));
 					CarryPlace = ECarryPlace::Socket;
-					bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+					bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 					return;
 				}
 			}
@@ -1630,14 +1653,14 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				StandBase = const_cast<ACarvableLog*>(Base);
 				CarryPlace = ECarryPlace::Stand;
 			}
-			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+			bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 			return;
 		}
 	}
 	if (Lower && Lower->IsA<ACarvableLog>() && ACarvableLog::ComputeFloorPlacement(Lower, Hit.ImpactPoint, GetActorLocation(), Piece, PlaceTransform))
 	{
 		CarryPlace = ECarryPlace::Floor;
-		bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+		bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 		return;
 	}
 	// Onto a lying log. The carried piece lies across the view (as on the ground); its angle to the log under it is
@@ -1675,9 +1698,10 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				float BestSupportScore = TNumericLimits<float>::Max();
 				float BestSupportYaw = LowerYaw;
 
-				for (TActorIterator<ACarvableLog> It(GetWorld()); It; ++It)
+				TArray<ACarvableLog*> LocalSupportCandidates;
+				FindLocalLogs(GetWorld(), CurrentCentre, CurrentHalf + CurrentRadius + 2.f * ACarvableLog::ModuleLength, LocalSupportCandidates);
+				for (const ACarvableLog* Candidate : LocalSupportCandidates)
 				{
-					const ACarvableLog* Candidate = *It;
 					FVector CandidateCentre, CandidateAxis;
 					float CandidateRadius, CandidateHalf;
 					if (Candidate == CurrentCourse || Candidate->IsCarried()
@@ -1686,24 +1710,15 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 					{
 						continue;
 					}
-
 					const float VerticalGap = CurrentBottom - (CandidateCentre.Z + CandidateRadius);
-					if (FMath::Abs(VerticalGap) > 18.f)
-					{
-						continue;
-					}
-
+					if (FMath::Abs(VerticalGap) > 18.f) continue;
 					const FVector CandidateStart = CandidateCentre - CandidateAxis * CandidateHalf;
 					const FVector CandidateEnd = CandidateCentre + CandidateAxis * CandidateHalf;
 					FVector OnCandidate = FMath::ClosestPointOnSegment(CurrentCentre, CandidateStart, CandidateEnd);
 					FVector OnCurrent = FMath::ClosestPointOnSegment(OnCandidate, CurrentStart, CurrentEnd);
 					OnCandidate = FMath::ClosestPointOnSegment(OnCurrent, CandidateStart, CandidateEnd);
 					const float AxisGap = FVector::Dist2D(OnCurrent, OnCandidate);
-					if (AxisGap > CurrentRadius + CandidateRadius + 12.f)
-					{
-						continue;
-					}
-
+					if (AxisGap > CurrentRadius + CandidateRadius + 12.f) continue;
 					const float Score = FMath::Abs(VerticalGap) + AxisGap * 0.1f;
 					if (Score < BestSupportScore)
 					{
@@ -1747,7 +1762,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 					{
 						CrossLower = LowerLog;
 						CarryPlace = ECarryPlace::Corner;
-						bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
+						bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
 						return;
 					}
 				}
@@ -1767,7 +1782,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 					if (ComputeStackPlacement(LowerLog, Hit.ImpactPoint, Piece, PlaceTransform))
 					{
 						CarryPlace = ECarryPlace::Stack;
-						bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+						bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 						return;
 					}
 				}
@@ -1777,7 +1792,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 					{
 						CrossLower = LowerLog;
 						CarryPlace = ECarryPlace::Across;
-						bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
+						bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
 						return;
 					}
 				}
@@ -1791,7 +1806,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 					if (ActualDelta > 90.f) ActualDelta -= 180.f;
 					else if (ActualDelta < -90.f) ActualDelta += 180.f;
 					DiagonalAngle = ActualDelta;
-					bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
+					bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
 					return;
 				}
 			}
@@ -1803,7 +1818,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	{
 		CrossLower = Lower;
 		CarryPlace = ECarryPlace::Across;
-		bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
+		bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
 		return;
 	}
 	// On the ground (anything flat enough): lying across the view, or standing up as a post.
@@ -1821,7 +1836,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		if (ACarvableLog::ComputeSlopePlacement(Hit.ImpactPoint, Forward, SlopeAngle, Piece, PlaceTransform))
 		{
 			CarryPlace = ECarryPlace::Slope;
-			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+			bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 		}
 		return;
 	}
@@ -1899,6 +1914,21 @@ bool AForestCharacter::PlaceCarried()
 	{
 		ShowMessage(TEXT("Buraya konmaz  —  yere ya da yerdeki bir kütüğe bak"));
 		return false;
+	}
+	const bool bCrossTransform = CarryPlace == ECarryPlace::Across || CarryPlace == ECarryPlace::Corner || CarryPlace == ECarryPlace::Diagonal;
+	const bool bNeedsSupportCheck = CarryPlace == ECarryPlace::Brace || CarryPlace == ECarryPlace::Beam
+		|| CarryPlace == ECarryPlace::Socket || CarryPlace == ECarryPlace::Stand || CarryPlace == ECarryPlace::Floor
+		|| CarryPlace == ECarryPlace::Corner || CarryPlace == ECarryPlace::Stack || CarryPlace == ECarryPlace::Across
+		|| CarryPlace == ECarryPlace::Diagonal || CarryPlace == ECarryPlace::Slope;
+	if (bNeedsSupportCheck)
+	{
+		const FTransform& FinalTransform = bCrossTransform ? CrossPlacement.Upper : PlaceTransform;
+		if (!EvaluateSupportPreview(Piece, FinalTransform, true))
+		{
+			ShowMessage(TEXT("Bu bağlantı yapısal olarak desteklenmiyor."));
+			return false;
+		}
+		bPlaceSupported = true;
 	}
 	CarriedLogs.Pop();
 	switch (CarryPlace)
