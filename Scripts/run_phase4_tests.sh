@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build MyProject2 and run all phase-1, phase-2 and phase-3 world automation tests.
+# Build MyProject2 and run all phase-1 through phase-4 world automation tests.
 # Intended for Windows Git Bash / MSYS with Unreal Engine 5.8 installed.
 #
 #   bash Scripts/run_phase4_tests.sh
@@ -78,6 +78,7 @@ EXPECTED_TESTS=(
   "MyProject2.World.VoxelMesher.InvalidSampleRejected"
   "MyProject2.World.VoxelDensity.SnapshotRevisionAndGrid"
   "MyProject2.World.VoxelInteraction.EditRollbackAndDirtyChunks"
+  "MyProject2.World.VoxelInteraction.EditFootprintCannotCrossStaticRegion"
   "MyProject2.World.VoxelInteraction.UnknownAndInvalidEditsFailClosed"
   "MyProject2.World.VoxelInteraction.PlacementRejectsStaleRevision"
 )
