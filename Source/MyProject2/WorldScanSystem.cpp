@@ -43,7 +43,8 @@ bool WorldScanSystem::Trace(
 	FScanResult& OutResult,
 	ECollisionChannel Channel,
 	bool bTraceComplex,
-	const TArray<const UPrimitiveComponent*>* ComponentsToIgnore)
+	const TArray<const UPrimitiveComponent*>* ComponentsToIgnore,
+	bool bReturnPhysicalMaterial)
 {
 	OutResult = FScanResult{};
 	OutResult.TraceStart = Start;
@@ -56,7 +57,7 @@ bool WorldScanSystem::Trace(
 	}
 
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WorldScanSystemTrace), bTraceComplex);
-	Params.bReturnPhysicalMaterial = true;
+	Params.bReturnPhysicalMaterial = bReturnPhysicalMaterial;
 	Params.bFindInitialOverlaps = false;
 	if (ActorToIgnore)
 	{
