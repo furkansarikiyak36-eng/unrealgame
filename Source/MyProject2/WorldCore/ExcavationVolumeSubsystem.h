@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "ExcavationTypes.h"
+#include "WorldSystemContracts.h"
 #include "ExcavationVolumeSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
@@ -20,7 +21,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnExcavationVolumeReset);
  * second copy of excavation density.
  */
 UCLASS()
-class MYPROJECT2_API UExcavationVolumeSubsystem : public UWorldSubsystem
+class MYPROJECT2_API UExcavationVolumeSubsystem : public UWorldSubsystem, public IVoxelDensitySource
 {
     GENERATED_BODY()
 
@@ -54,6 +55,21 @@ public:
     /** Sparse delta wins; otherwise active provider, fallback provider, then configured scalar fallback. */
     UFUNCTION(BlueprintPure, Category = "Excavation")
     bool TrySampleDensityAtWorld(const FVector& WorldPositionCm, float& OutDensity) const;
+
+    /** Samples the unmodified terrain baseline without applying sparse excavation overrides. */
+    UFUNCTION(BlueprintPure, Category = "Excavation")
+    bool TrySampleBaseDensityAtWorld(const FVector& WorldPositionCm, float& OutDensity) const;
+
+    /** Configure the density grid before the first edit. Existing overrides must already match. */
+    bool ConfigureGridForRuntimeProfile(float InCellSizeCm, int32 InCellsPerChunkAxis, FString& OutError);
+
+    virtual bool SampleBaseDensityAtWorld(const FVector& PositionCm, float& OutDensity) const override;
+    virtual bool SampleDensityAtWorld(const FVector& PositionCm, float& OutDensity) const override;
+    virtual bool BuildChunkSnapshot(
+        const FIntVector& ChunkCoordinate,
+        FWorldDensityChunkSnapshot& OutSnapshot) const override;
+
+    uint64 GetDensityRevision() const { return DensityRevision; }
 
     /** Samples the base provider only (ignores excavation density overrides) for exposed-surface material selection. */
     UFUNCTION(BlueprintPure, Category = "Excavation|Materials")
@@ -136,6 +152,9 @@ protected:
         FExcavationEditRecord& OutRecord);
 
     TMap<FIntVector, TSet<FIntVector>> CellsByChunk;
+
+    /** Changes after edits/import so consumers can discard out-of-date mesh work. */
+    uint64 DensityRevision = 1;
 
     UPROPERTY(Transient)
     TObjectPtr<UObject> BaseDensitySourceObject;
