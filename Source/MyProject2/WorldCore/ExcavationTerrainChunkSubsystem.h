@@ -44,6 +44,9 @@ public:
     /** Coalesces rebuild requests; mesh publication and collision updates are drained under profile budgets. */
     void QueueChunkRebuild(const FIntVector& Coordinate);
 
+    /** True only when this actor is registered and its chunk has no pending/in-flight/failed mesh work. */
+    bool IsChunkMeshCurrent(const AExcavationTerrainChunkActor* Actor) const;
+
     bool IsRuntimeReady() const { return bRuntimeReady; }
     FString GetRuntimeSetupError() const { return RuntimeSetupError; }
     const FWorldRuntimeProfileValues& GetRuntimeSettings() const { return RuntimeSettings; }
