@@ -87,6 +87,7 @@ Added automation test names:
 - `MyProject2.World.Classification.RegionTagPolicy`
 - `MyProject2.World.Classification.ManualOverrideGrid`
 - `MyProject2.World.Scan.DemandDrivenQueries`
+- `MyProject2.World.Scan.CoreClassificationRules`
 
 The phase runner also verifies these Phase 1 names:
 
@@ -100,7 +101,7 @@ Run on Windows Git Bash with Unreal Engine 5.8 installed, editor closed:
 bash Scripts/run_phase2_tests.sh
 ```
 
-A green source-level review is not a substitute for UBT/UHT or running Unreal Automation. The PR should remain draft until the build and all six tests pass.
+A green source-level review is not a substitute for UBT/UHT or running Unreal Automation. The PR should remain draft until the build and all seven tests pass.
 
 ## Explicitly not in this phase
 
