@@ -185,7 +185,8 @@ namespace WorldScanSystem
 	/** Method 1: line trace. */
 	MYPROJECT2_API bool Trace(UWorld* World, const FVector& Start, const FVector& End,
 		const AActor* ActorToIgnore, FScanResult& OutResult,
-		ECollisionChannel Channel = ECC_Visibility, bool bTraceComplex = true);
+		ECollisionChannel Channel = ECC_Visibility, bool bTraceComplex = true,
+		const TArray<const UPrimitiveComponent*>* ComponentsToIgnore = nullptr);
 
 	/** Method 2: swept sphere/box/capsule. Multi-hit is optional to avoid accidental result explosions. */
 	MYPROJECT2_API bool ShapeTrace(UWorld* World, const FVector& Start, const FVector& End,
