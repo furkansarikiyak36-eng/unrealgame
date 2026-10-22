@@ -48,3 +48,10 @@ bool UWorldRuntimeProfileSettings::ApplyTo(UExcavationVolumeSubsystem* Volume) c
     Volume->DefaultBaseDensity = 0.0f;
     return true;
 }
+
+int32 UWorldRuntimeProfileSettings::GetMaxDensitySamplesPerTick() const
+{
+    return ActiveProfile == EWorldRuntimeProfile::HighEnd
+        ? FMath::Max(256, HighEndMaxDensitySamplesPerTick)
+        : FMath::Max(256, LowMidMaxDensitySamplesPerTick);
+}
