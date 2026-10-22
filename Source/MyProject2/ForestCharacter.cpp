@@ -2390,6 +2390,43 @@ bool AForestCharacter::ComputeBuildTransform(FTransform& OutTransform, const UIn
 	const FBox LocalBox = ScaledBox(PieceMesh, SelectedBuildItem);
 	const FVector Size = LocalBox.GetSize();
 
+	// Use the shared revision-aware placement candidate for voxel terrain. The normal
+	// forest snap/grid logic remains unchanged for logs, stones, walls and other actors.
+	if (UWorldVoxelInteractionSubsystem::IsVoxelSurfaceHit(Hit))
+	{
+		UWorldVoxelInteractionSubsystem* VoxelInteraction =
+			GetWorld() ? GetWorld()->GetSubsystem<UWorldVoxelInteractionSubsystem>() : nullptr;
+		if (!VoxelInteraction)
+		{
+			return false;
+		}
+
+		FWorldPlacementQuery PlacementQuery;
+		PlacementQuery.HitPointCm = Hit.ImpactPoint;
+		PlacementQuery.HitNormal = Hit.ImpactNormal;
+		PlacementQuery.DesiredAxis = GetControlRotation().Vector();
+		PlacementQuery.PieceHalfExtentCm = LocalBox.GetExtent().ComponentMax(FVector(1.0f));
+		PlacementQuery.RequiredGroup = FName(TEXT("VoxelSurface"));
+		PlacementQuery.MaxSnapDistanceCm = FMath::Max(50.0f, BuildDistance);
+
+		FWorldPlacementResult Placement;
+		if (!VoxelInteraction->BuildPlacementPreview(PlacementQuery, this, Placement)
+			|| !Placement.bValid)
+		{
+			return false;
+		}
+
+		const FQuat Rotation = Placement.Transform.GetRotation();
+		const FVector ActorLocation =
+			Placement.Transform.GetLocation() - Rotation.RotateVector(LocalBox.GetCenter());
+		OutTransform = FTransform(Rotation, ActorLocation, PieceScale);
+		if (OutSnappedTo)
+		{
+			*OutSnappedTo = nullptr;
+		}
+		return true;
+	}
+
 	// Looking at a placed piece of the same kind (free placed or part of a planned wall): stack onto it.
 	const UInstancedStaticMeshComponent* Pieces = Cast<UInstancedStaticMeshComponent>(Hit.GetComponent());
 	const AActor* PiecesOwner = Pieces ? Pieces->GetOwner() : nullptr;
