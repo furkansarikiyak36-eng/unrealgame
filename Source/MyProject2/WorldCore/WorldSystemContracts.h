@@ -80,7 +80,7 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
     bool Validate(FString& OutError) const
     {
         OutError.Reset();
-        if (!Bounds.IsValid()
+        if (!Bounds.IsValid
             || !WorldSystemContractValidation::IsFiniteVector(Bounds.Min)
             || !WorldSystemContractValidation::IsFiniteVector(Bounds.Max))
         {
