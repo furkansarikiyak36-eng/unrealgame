@@ -80,9 +80,11 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
     bool Validate(FString& OutError) const
     {
         OutError.Reset();
-        if (!Bounds.IsValid())
+        if (!Bounds.IsValid()
+            || !WorldSystemContractValidation::IsFiniteVector(Bounds.Min)
+            || !WorldSystemContractValidation::IsFiniteVector(Bounds.Max))
         {
-            OutError = TEXT("Classification bounds must be valid.");
+            OutError = TEXT("Classification bounds must be valid and finite.");
             return false;
         }
         if (!WorldSystemContractValidation::IsPositiveVector(RegionSizeCm))
@@ -319,6 +321,24 @@ struct MYPROJECT2_API FWorldScanQuery
     ECollisionChannel Channel = ECC_Visibility;
     bool bTraceComplex = false;
     bool bReturnPhysicalMaterial = false;
+
+    bool Validate(FString& OutError) const
+    {
+        OutError.Reset();
+        if (!IsValid(World))
+        {
+            OutError = TEXT("World scan query requires a valid UWorld.");
+            return false;
+        }
+        if (!WorldSystemContractValidation::IsFiniteVector(StartCm)
+            || !WorldSystemContractValidation::IsFiniteVector(EndCm)
+            || StartCm.Equals(EndCm, KINDA_SMALL_NUMBER))
+        {
+            OutError = TEXT("World scan start/end must be finite and define a non-zero segment.");
+            return false;
+        }
+        return true;
+    }
 };
 
 struct MYPROJECT2_API FWorldScanHit
@@ -438,11 +458,13 @@ struct MYPROJECT2_API FWorldOverlapRequest
                 OutError = TEXT("Box overlap requires finite positive half-extents.");
                 return false;
             }
+            const float RotationSizeSquared = Rotation.SizeSquared();
             if (!FMath::IsFinite(Rotation.X) || !FMath::IsFinite(Rotation.Y)
                 || !FMath::IsFinite(Rotation.Z) || !FMath::IsFinite(Rotation.W)
-                || Rotation.SizeSquared() <= SMALL_NUMBER)
+                || !FMath::IsFinite(RotationSizeSquared)
+                || !FMath::IsNearlyEqual(RotationSizeSquared, 1.0f, 0.01f))
             {
-                OutError = TEXT("Box overlap rotation must be finite and non-zero.");
+                OutError = TEXT("Box overlap rotation must be finite and normalized.");
                 return false;
             }
             break;
