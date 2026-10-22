@@ -142,6 +142,7 @@ public:
 protected:
     float LockedCellSizeCm = 0.0f;
     int32 LockedCellsPerChunkAxis = 0;
+    bool bRuntimeGridLocked = false;
     bool IsGridConfigurationCompatible() const;
     bool ApplyBoundedEdit(
         const FVector& MinBoundsCm,
