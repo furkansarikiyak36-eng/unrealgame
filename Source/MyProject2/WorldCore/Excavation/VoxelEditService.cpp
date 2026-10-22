@@ -170,35 +170,27 @@ bool UVoxelEditService::ValidateEditableShape(EExcavationShapeType ShapeType, FV
     return true;
 }
 
-bool UVoxelEditService::CarveSphere(FVector CenterCm, float RadiusCm, FExcavationEditRecord& OutRecord, FString& OutFailure)
+bool UVoxelEditService::CarveSphere(FVector CenterCm, float RadiusCm,
+    FExcavationEditRecord& OutRecord, FString& OutFailure)
 {
     OutRecord = FExcavationEditRecord();
     OutFailure.Reset();
-    if (!FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
+    if (!FMath::IsFinite(CenterCm.X) || !FMath::IsFinite(CenterCm.Y) || !FMath::IsFinite(CenterCm.Z)
+        || !FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
     {
-        OutFailure = TEXT("Radius must be positive and finite.");
+        OutFailure = TEXT("Sphere centre/radius is invalid.");
         return false;
     }
 
-    const FVector R(RadiusCm, RadiusCm, RadiusCm);
-    const FVector Probes[] = {
-        CenterCm, CenterCm + FVector(RadiusCm,0,0), CenterCm - FVector(RadiusCm,0,0),
-        CenterCm + FVector(0,RadiusCm,0), CenterCm - FVector(0,RadiusCm,0),
-        CenterCm + FVector(0,0,RadiusCm), CenterCm - FVector(0,0,RadiusCm)
-    };
-    for (const FVector& Probe : Probes)
+    if (!ValidateEditableShape(EExcavationShapeType::Sphere, CenterCm, FVector::ZeroVector,
+        FVector::ZeroVector, RadiusCm, OutFailure))
     {
-        if (!IsEditablePoint(Probe, OutFailure)) return false;
-    }
-
-    ULandscapeBuilderSubsystem* Builder = nullptr;
-    UExcavationVolumeSubsystem* Volume = nullptr;
-    if (!EnsureServices(Builder, Volume))
-    {
-        OutFailure = TEXT("Voxel subsystem unavailable.");
         return false;
     }
-    if (!Volume->ApplySphereEdit(CenterCm, RadiusCm, EExcavationEditType::Carve, OutRecord))
+
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Volume = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!Volume || !Volume->ApplySphereEdit(CenterCm, RadiusCm, EExcavationEditType::Carve, OutRecord))
     {
         OutFailure = TEXT("Voxel edit rejected by grid limits or transaction validation.");
         return false;
@@ -206,31 +198,28 @@ bool UVoxelEditService::CarveSphere(FVector CenterCm, float RadiusCm, FExcavatio
     return true;
 }
 
-bool UVoxelEditService::CarveCapsule(FVector StartCm, FVector EndCm, float RadiusCm, FExcavationEditRecord& OutRecord, FString& OutFailure)
+bool UVoxelEditService::CarveCapsule(FVector StartCm, FVector EndCm, float RadiusCm,
+    FExcavationEditRecord& OutRecord, FString& OutFailure)
 {
     OutRecord = FExcavationEditRecord();
     OutFailure.Reset();
-    if (!FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
+    if (!FMath::IsFinite(StartCm.X) || !FMath::IsFinite(StartCm.Y) || !FMath::IsFinite(StartCm.Z)
+        || !FMath::IsFinite(EndCm.X) || !FMath::IsFinite(EndCm.Y) || !FMath::IsFinite(EndCm.Z)
+        || !FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
     {
-        OutFailure = TEXT("Radius must be positive and finite.");
+        OutFailure = TEXT("Capsule endpoints/radius are invalid.");
         return false;
     }
-    const FVector Mid = (StartCm + EndCm) * 0.5f;
-    const FVector R(RadiusCm, RadiusCm, RadiusCm);
-    const FVector Probes[] = {
-        StartCm, EndCm, Mid,
-        Mid + FVector(RadiusCm,0,0), Mid - FVector(RadiusCm,0,0),
-        Mid + FVector(0,RadiusCm,0), Mid - FVector(0,RadiusCm,0),
-        Mid + FVector(0,0,RadiusCm), Mid - FVector(0,0,RadiusCm)
-    };
-    for (const FVector& Probe : Probes)
+
+    if (!ValidateEditableShape(EExcavationShapeType::Capsule, StartCm, EndCm,
+        FVector::ZeroVector, RadiusCm, OutFailure))
     {
-        if (!IsEditablePoint(Probe, OutFailure)) return false;
+        return false;
     }
 
-    ULandscapeBuilderSubsystem* Builder = nullptr;
-    UExcavationVolumeSubsystem* Volume = nullptr;
-    if (!EnsureServices(Builder, Volume) || !Volume->ApplyCapsuleEdit(StartCm, EndCm, RadiusCm, EExcavationEditType::Carve, OutRecord))
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Volume = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!Volume || !Volume->ApplyCapsuleEdit(StartCm, EndCm, RadiusCm, EExcavationEditType::Carve, OutRecord))
     {
         OutFailure = TEXT("Voxel capsule edit failed validation or exceeded its cell budget.");
         return false;
@@ -238,34 +227,30 @@ bool UVoxelEditService::CarveCapsule(FVector StartCm, FVector EndCm, float Radiu
     return true;
 }
 
-bool UVoxelEditService::CarveBox(FVector MinCm, FVector MaxCm, FExcavationEditRecord& OutRecord, FString& OutFailure)
+bool UVoxelEditService::CarveBox(FVector MinCm, FVector MaxCm,
+    FExcavationEditRecord& OutRecord, FString& OutFailure)
 {
     OutRecord = FExcavationEditRecord();
     OutFailure.Reset();
-    if (MaxCm.X <= MinCm.X || MaxCm.Y <= MinCm.Y || MaxCm.Z <= MinCm.Z)
+    if (!FMath::IsFinite(MinCm.X) || !FMath::IsFinite(MinCm.Y) || !FMath::IsFinite(MinCm.Z)
+        || !FMath::IsFinite(MaxCm.X) || !FMath::IsFinite(MaxCm.Y) || !FMath::IsFinite(MaxCm.Z)
+        || MaxCm.X <= MinCm.X || MaxCm.Y <= MinCm.Y || MaxCm.Z <= MinCm.Z)
     {
-        OutFailure = TEXT("Box bounds must have positive volume.");
+        OutFailure = TEXT("Box bounds must be finite and have positive volume.");
         return false;
     }
 
-    for (int32 X = 0; X < 3; ++X)
+    const FVector Extent = (MaxCm - MinCm) * 0.5f;
+    const FVector Center = MinCm + Extent;
+    if (!ValidateEditableShape(EExcavationShapeType::Box, Center, FVector::ZeroVector,
+        Extent, 0.0f, OutFailure))
     {
-        for (int32 Y = 0; Y < 3; ++Y)
-        {
-            for (int32 Z = 0; Z < 3; ++Z)
-            {
-                const FVector P(
-                    FMath::Lerp(MinCm.X, MaxCm.X, X * 0.5f),
-                    FMath::Lerp(MinCm.Y, MaxCm.Y, Y * 0.5f),
-                    FMath::Lerp(MinCm.Z, MaxCm.Z, Z * 0.5f));
-                if (!IsEditablePoint(P, OutFailure)) return false;
-            }
-        }
+        return false;
     }
 
-    ULandscapeBuilderSubsystem* Builder = nullptr;
-    UExcavationVolumeSubsystem* Volume = nullptr;
-    if (!EnsureServices(Builder, Volume) || !Volume->ApplyBoxEdit(MinCm, MaxCm, EExcavationEditType::Carve, OutRecord))
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Volume = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!Volume || !Volume->ApplyBoxEdit(MinCm, MaxCm, EExcavationEditType::Carve, OutRecord))
     {
         OutFailure = TEXT("Voxel box edit failed validation or exceeded its cell budget.");
         return false;
@@ -273,18 +258,27 @@ bool UVoxelEditService::CarveBox(FVector MinCm, FVector MaxCm, FExcavationEditRe
     return true;
 }
 
-bool UVoxelEditService::FillSphere(FVector CenterCm, float RadiusCm, FExcavationEditRecord& OutRecord, FString& OutFailure)
+bool UVoxelEditService::FillSphere(FVector CenterCm, float RadiusCm,
+    FExcavationEditRecord& OutRecord, FString& OutFailure)
 {
     OutRecord = FExcavationEditRecord();
     OutFailure.Reset();
-    ULandscapeBuilderSubsystem* Builder = nullptr;
-    UExcavationVolumeSubsystem* Volume = nullptr;
-    if (!EnsureServices(Builder, Volume))
+    if (!FMath::IsFinite(CenterCm.X) || !FMath::IsFinite(CenterCm.Y) || !FMath::IsFinite(CenterCm.Z)
+        || !FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
     {
-        OutFailure = TEXT("Voxel subsystem unavailable.");
+        OutFailure = TEXT("Sphere centre/radius is invalid.");
         return false;
     }
-    if (!Volume->ApplySphereEdit(CenterCm, RadiusCm, EExcavationEditType::Fill, OutRecord))
+
+    if (!ValidateEditableShape(EExcavationShapeType::Sphere, CenterCm, FVector::ZeroVector,
+        FVector::ZeroVector, RadiusCm, OutFailure))
+    {
+        return false;
+    }
+
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Volume = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!Volume || !Volume->ApplySphereEdit(CenterCm, RadiusCm, EExcavationEditType::Fill, OutRecord))
     {
         OutFailure = TEXT("Voxel fill failed validation or exceeded its cell budget.");
         return false;
