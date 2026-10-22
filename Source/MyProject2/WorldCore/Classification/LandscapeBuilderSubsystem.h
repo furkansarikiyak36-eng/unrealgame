@@ -32,6 +32,7 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "World|Landscape Builder")
     int32 GetRegionCount() const { return Regions.Num(); }
+    bool HasBuiltSnapshot() const { return bSnapshotBuilt; }
 
     UFUNCTION(BlueprintPure, Category = "World|Landscape Builder")
     bool IsVoxelEditableAtWorld(FVector WorldPositionCm) const;
@@ -59,6 +60,7 @@ private:
     };
 
     TArray<FRegion> Regions;
+    bool bSnapshotBuilt = false;
 
     void AddActorRegion(AActor* Actor, const FBox& Bounds, EWorldTerrainMode Mode,
         int32 Priority, bool bExplicit, FName SourceLabel);
