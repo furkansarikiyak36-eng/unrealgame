@@ -8,6 +8,7 @@
 class UExcavationTerrainChunkSubsystem;
 class UExcavationVolumeSubsystem;
 class UMaterialInterface;
+struct FWorldVoxelMeshData;
 
 USTRUCT(BlueprintType)
 struct MYPROJECT2_API FExcavationTerrainMaterialLayer
