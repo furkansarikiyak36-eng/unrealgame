@@ -17,6 +17,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Base Surface")
     float SurfaceHeightCm = 0.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Base Surface", meta = (ClampMin = "1.0"))
+    float DensityTransitionWidthCm = 25.0f;
+
     virtual float SampleBaseDensityAtWorld_Implementation(const FVector& WorldPositionCm) const override;
     virtual int32 SampleBaseMaterialIdAtWorld_Implementation(const FVector& WorldPositionCm) const override;
 };
