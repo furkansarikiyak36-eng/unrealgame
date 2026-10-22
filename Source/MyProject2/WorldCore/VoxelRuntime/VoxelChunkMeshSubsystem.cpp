@@ -7,6 +7,7 @@
 #include "WorldCore/VoxelRuntime/WorldRuntimeProfile.h"
 #include "ProceduralVoxelChunkActor.h"
 #include "Engine/Engine.h"
+#include "WorldCore/Events/WorldMechanicEventSubsystem.h"
 
 namespace
 {
@@ -503,4 +504,24 @@ void UVoxelChunkMeshSubsystem::PublishCompleted(FCompletedMesh&& Mesh)
     const UWorldRuntimeProfileSettings& Profile = UWorldRuntimeProfileSettings::Get();
     Actor->ApplySurface(Mesh.Vertices, Mesh.Triangles, Mesh.Normals,
         Profile.bGenerateCollision, Profile.bUseAsyncCollision);
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+        {
+            FWorldMechanicEvent Event;
+            Event.Type = EWorldMechanicEventType::TerrainMeshPublished;
+            Event.PositionCm = Mesh.WorldOrigin;
+            if (UExcavationVolumeSubsystem* Volume = World->GetSubsystem<UExcavationVolumeSubsystem>())
+            {
+                const float ChunkWorldSize = Volume->CellSizeCm * Volume->CellsPerChunkAxis;
+                Event.ExtentCm = FVector(ChunkWorldSize * 0.5f);
+            }
+            Event.ScalarValue = static_cast<float>(Mesh.Vertices.Num());
+            Event.SecondaryValue = static_cast<float>(Mesh.Triangles.Num() / 3);
+            Event.SourceTag = TEXT("ProceduralVoxelChunk");
+            Event.SourceActor = Actor;
+            Events->EnqueueEvent(MoveTemp(Event));
+        }
+    }
 }
