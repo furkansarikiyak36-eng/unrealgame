@@ -1,102 +1,135 @@
 # Faz 3 — LOW_MID Smooth Voxel Density, Mesh ve Collision
 
 **Branch:** `feature/phase-03-lowmid-smooth-voxel`  
-**Base:** Faz 2 scan/classification  
-**Engine target:** Unreal Engine 5.8  
-**Durum:** Kod taslağı ve statik kaynak kontrolleri yapıldı. UBT/UHT, Automation, Editor/PIE ve gerçek Landscape testleri bu oturumda çalıştırılmadı.
+**Base:** `feature/phase-02-scan-classification-lowmid`  
+**Engine hedefi:** Unreal Engine 5.8  
+**Durum:** Uygulama kodu ve statik tutarlılık kontrolleri hazır. UBT/UHT derlemesi, Automation testleri ve Editor/PIE doğrulaması henüz çalıştırılmadı; PR bu yüzden taslak kalmalı.
 
-## 1. Bu fazın sonucu
+## 1. Faz 3'ün sonucu
 
-Faz 3, önceki dalda var olan sparse excavation çekirdeğini tekrar kullanıp Faz 1/2 sözleşmelerinin arkasına adapte eder. Density'nin tek sahibi `UExcavationVolumeSubsystem` olarak kalır. Render/collision aktörü kendi içinde kalıcı ikinci bir density kopyası tutmaz.
+Faz 3, daha önce ayrı bir dalda hazırlanmış sparse excavation çekirdeğini Faz 1/2 sözleşmelerine bağlar. Density'nin tek sahibi `UExcavationVolumeSubsystem` olarak kalır; renderer kendi içinde kalıcı ikinci bir kazı verisi tutmaz.
 
 Veri akışı:
 
 ```text
 Landscape heightfield veya flat fallback
         ↓
-Base density sample (0 = empty, 1 = solid)
+Base density (0 = empty, 1 = solid)
         ↓
 Sparse excavation override
         ↓
-Versioned FWorldDensityChunkSnapshot (+ 1-cell border)
+Revision taşıyan FWorldDensityChunkSnapshot (+ 1-cell border)
         ↓
-CPU Marching Tetrahedra → vertices / normals / UV / triangle materials
+Game thread: snapshot örneklemesi
         ↓
-UExcavationTerrainChunkActor → UDynamicMeshComponent
+Worker pool: CPU Marching Tetrahedra → vertex / normal / UV / triangle material ID
         ↓
-Collision regeneration + navigation refresh
+Game thread: revision kontrolü ve Dynamic Mesh yayını
+        ↓
+Frame bütçesi içinde collision + navigation güncellemesi
 ```
 
-## 2. Eklenen ve değiştirilen kod
+## 2. Eklenen/değiştirilen kaynaklar
 
 | Dosya | Sorumluluk |
 |---|---|
-| `WorldCore/ExcavationVolumeSubsystem.h/.cpp` | `IVoxelDensitySource` implementasyonu, profile göre grid konfigürasyonu, base+override density, revision numarası, density/material ID içeren chunk snapshot |
-| `WorldCore/WorldVoxelMesher.h/.cpp` | CPU-only Marching Tetrahedra, iso-level 0.5, edge vertex cache, gradient tabanlı smooth normals, UV, triangle material IDs, output triangle hard cap ve topology validation |
-| `WorldCore/ExcavationTerrainChunkActor.h/.cpp` | Chunk world transform, snapshot-to-mesh conversion, Dynamic Mesh overlay'leri, material slot mapping, stale-revision rejection, collision ve navigation update |
-| `WorldCore/ExcavationTerrainChunkSubsystem.h/.cpp` | LOW_MID/HIGH_END profilini alma, density grid ile eşleme, profile lock, dirty chunk queue, kare başına yayın/collision bütçesi, yakın chunk önceliği ve aktif chunk sınırı |
-| `WorldCore/ExcavationLandscapeDensitySource.h/.cpp` | Landscape height sample cache'i, fiziksel materyal→material ID cache'i ve keskin binary sınır yerine continuous density ramp |
-| `WorldCore/ExcavationFlatBaseDensitySource.h/.cpp` | Test/prototip düz yüzeyi için aynı smooth density ramp |
-| `Tests/WorldVoxelMesherTests.cpp` | Düz iso-surface, normal yönü, edge vertex paylaşımı, geçersiz density/material buffer testleri |
-| `Tests/ExcavationDensitySnapshotTests.cpp` | Snapshot boyutu/border, material ID sayısı, revision, sparse carve ve grid'i sonradan değiştirmeyi reddetme testi |
-| `Scripts/run_phase3_tests.sh` | Faz 1–3 test adlarını bekleyen UE 5.8 build + automation test runner |
+| `WorldCore/ExcavationVolumeSubsystem.h/.cpp` | `IVoxelDensitySource` implementasyonu, LOW_MID grid konfigürasyonu, base + sparse override örnekleme, revision, bordered density/material snapshot |
+| `WorldCore/WorldSystemContracts.h` | Density snapshot'ına source revision ve material-sample alanlarının eklenmesi |
+| `WorldCore/WorldVoxelMesher.h/.cpp` | Saf CPU Marching Tetrahedra, shared edge/node cache, gradient normals, UV, material ID, hard triangle cap ve topology validation |
+| `WorldCore/ExcavationTerrainChunkActor.h/.cpp` | CPU mesh sonucunu Dynamic Mesh'e çevirme, source revision kontrolü, material slot eşleme, collision ve navigation update |
+| `WorldCore/ExcavationTerrainChunkSubsystem.h/.cpp` | Runtime profile ile grid'i eşleme, dirty/full-refresh kuyruğu, worker-job yönetimi, tamamlanan mesh sonuçlarını yayın bütçesine alma, chunk streaming/aktif chunk sınırı |
+| `WorldCore/ExcavationLandscapeDensitySource.h/.cpp` | Landscape heightfield density ramp'i, XY yükseklik cache'i ve fiziksel material→material ID cache'i |
+| `WorldCore/ExcavationFlatBaseDensitySource.h/.cpp` | Test/prototip düz yüzeyi için continuous density ramp'i |
+| `Tests/WorldVoxelMesherTests.cpp` | Düz yüzey, shared vertex, exact ISO düğümleri ve geçersiz buffer testleri |
+| `Tests/ExcavationDensitySnapshotTests.cpp` | Bordered snapshot boyutu, carve sonrası revision/density ve grid'i değiştirmeyi reddetme |
+| `Scripts/run_phase3_tests.sh` | Faz 1, 2 ve 3 test adlarını zorunlu tutan UE 5.8 build + Automation runner |
 
-Eski dalda bulunan renderer'ın her üçgen için yeni üç vertex üretmesi yerine aynı density kenarındaki yüzey vertex'leri ortak kullanılıyor. Bu, tekrar eden vertex ve overlay verisini azaltır. Gerçek performans kazancı henüz benchmark edilmedi.
+## 3. Density grid ve snapshot
 
-## 3. Grid ve profile kuralları
+- LOW_MID başlangıç profili: `25 cm` örnek aralığı, `32` hücre/eksen, `8 m` chunk.
+- Normalized density: `0` boşluk, `1` katı, `0.5` ISO-surface.
+- Bir chunk snapshot'ı eksen başına `Cells + 1 + 2*BorderCells` örnek taşır. Bir hücrelik border ile LOW_MID örnek boyutu `35³` olur.
+- Snapshot hem density hem temel yüzey material ID örneklerini, ayrıca source revision'ı taşır. Storage, sayısal aralıklar ve metadata meshing öncesinde kontrol edilir.
+- Edit, rollback, import ve base density kaynağı değişimi revision'ı ilerletir. Snapshot sonunda revision tekrar kontrol edilir; mesh sonucu da yayınlanmadan önce güncel revision'a karşı doğrulanır. Eski bir worker sonucu mevcut mesh'in yerini alamaz.
+- Var olan sparse override'lar farklı hücre ölçüsü/axis grid'inde saklanmışsa runtime bu koordinatları sessizce yeniden yorumlamaz; başlangıcı reddeder. Runtime profile oturum açılırken kilitlenir.
+- LOW_MID ayarına geçmeden önce mevcut sparse data kullanımı varsa grid eşleşmesi ayrıca doğrulanmalıdır.
 
-- LOW_MID başlangıç grid'i: `25 cm` örnek aralığı, `32` hücre/eksen, `8 m` chunk.
-- HIGH_END tanımı: `12.5 cm` örnek aralığı, `64` hücre/eksen, `8 m` chunk. Faz 3 kodu bu profile göre ayar alabilir; HIGH_END performans kabulü veya benchmark sonucu değildir.
-- Bir chunk snapshot'ı her eksende `Cells + 1 + 2*BorderCells` sample tutar. Border bir hücre olduğu için LOW_MID snapshot boyutu `35³`; renderer içteki hücreleri işler ve dış örnekleri gradient/normaller için kullanır.
-- Density revision, edit/import/rollback/base-provider değişiminde ilerler. Snapshot örnekleme sırasında revision değişirse snapshot reddedilir. Mesher sonucu da yayınlanmadan önce güncel revision ile eşleştirilir.
-- Sparse override içeren kaydedilmiş hücreler varken profile grid'i farklıysa subsystem, hücre koordinatlarını sessizce yeniden yorumlamak yerine başlangıcı reddeder. Profil oturum sırasında kilitlenir; snapshot import da kilitli profil ile farklı hücre boyutu/ekseni getiremez.
-- Landscape height/material sorguları XY kolon anahtarıyla sınırlı bir cache kullanır. Cache sınırına gelince sıfırlanır; sınırsız büyümez.
+## 4. Smooth mesh üretimi
 
-## 4. Smooth density ve mesh
+`FWorldMarchingTetrahedraMesher`, her hücre küpünü deterministik altı tetrahedron olarak işler. Çıktı chunk-local santimetre koordinatlarında vertex, normal, metre ölçekli planar UV ve üçgen başına material ID içerir.
 
-Base density 0–1 aralığında normalize edilir. Iso-surface değeri 0.5'tir. Landscape/flat prototype kaynakları için geçiş alanı yaklaşık bir voxel aralığı genişliğinde continuous ramp olarak hesaplanır; düz binary eşik doğrudan kullanılıp yüzey basamaklandırılmaz.
+Mesher:
+- density 0.5 eşik yüzeyini kenar boyunca interpolasyonla çıkarır;
+- aynı voxel edge ve tam ISO-level grid node kesişimini yeniden kullanır;
+- density gradient'inden smooth normal çıkarır; sıfır gradient için sonlu fallback normal üretir;
+- üçgen yönünü katı taraftan boşluğa doğru hizalar;
+- hatalı density/material storage ve geçersiz indeksleri reddeder;
+- üçgen/attribute buffer tutarlılığını ve çıktı üçgen limitini denetler.
 
-Marching Tetrahedra her cube'u deterministik altı tetrahedra olarak işler. Edge cache aynı sample-edge kesişimini yeniden kullanır; density gradient'inden smooth normal çıkarılır ve sıfır gradient için solid→empty yönüyle fallback yapılır. Üçgen winding'i dışarıya, boşluk tarafına doğru yönlendirilir. Density, material ID ya da mesh indeksleri geçersizse mesh yayınlanmaz.
+Mesher hard cap'i chunk başına 1.000.000 üçgendir; chunk actor'ın varsayılan kabul limiti 200.000 üçgendir. Gerçek vertex/triangle sayıları veya performans kazancı için henüz Unreal benchmark'ı yapılmadı.
 
-Landscape source şu an heightfield yüksekliği ve fiziksel material mapping kullanır. Bu, Landscape'ın boyanmış weightmap katmanlarını okuduğu ya da Unreal Landscape verisini yazarak değiştirdiği anlamına gelmez.
+Landscape ve flat fallback kaynakları keskin binary yükseklik eşiği yerine yaklaşık bir örnek aralığı genişliğinde continuous density ramp'i üretir. Böylece yükseklik iso yüzeyi örnek hücre merkezlerine kilitlenmez. Landscape entegrasyonu loaded heightfield ve physical-material mapping kullanır; painted Landscape weightmap katmanlarını okumaz veya Landscape verisini değiştirmez.
 
-## 5. Collision ve çalışma bütçesi
+## 5. Worker meshing, yayın ve collision bütçesi
 
-- Chunk actor, doğrulanmış CPU mesh sonucunu `UDynamicMeshComponent` içine aktarır.
-- Üçgen varsa collision `QueryAndPhysics` olur ve collision update çağrılır; boş mesh'te collision kapalıdır.
-- Her density edit, etkilenen chunk'ları dirty queue'ya ekler; aynı koordinat kuyruğa ikinci kez eklenmez. Kuyruk taşarsa tek tek kayıtları sessizce kaybetmek yerine full refresh işareti konur.
-- Her frame işlenecek chunk sayısı `min(MaxChunksPublishedPerFrame, MaxCollisionUpdatesPerFrame)` ile sınırlandırılır. Otomatik streaming yakın chunk'lara öncelik verir ve seçili profilin `MaxActiveEditableChunks` sınırını uygular.
-- `bAllowAsyncCollision` Dynamic Mesh collision cooking seçeneğine aktarılır.
-- **CPU meshing şu an kuyruk işleyicisi içinde senkron çalışır**; `MaxMeshJobsInFlight` / background meshing worker'ları henüz uygulanmış değildir. Frame budget aynı frame'de kaç chunk işlendiğini sınırlar ama tek chunk rebuild'inin game-thread süresini sınırlamaz. Gerçek Low–Mid kabulünden önce profili UE 5.8'de ölçüp spike varsa CPU meshing'i worker task'ına taşıma işi gerekir.
+Density snapshot'ı game thread'de örneklenir; çünkü Landscape/base-density provider UObjects kullanabilir. Sadece immutable sample/material array'lerini alan saf CPU mesher worker pool'a gider. Worker tarafında UObject veya component değiştirilmez.
 
-## 6. Otomasyon testleri
+Tamamlanan sonuç game thread'e geri gelir ve şu kapılardan geçer:
+1. chunk koordinatı ve mesh topology kontrolü;
+2. snapshot source revision kontrolü;
+3. material slot mapping;
+4. Dynamic Mesh'e atomik yayın;
+5. collision ve navigation güncellemesi.
+
+LOW_MID başlangıç değerleri:
+- `MaxMeshJobsInFlight = 1`;
+- `MaxQueuedMeshJobs = 8`;
+- frame başına en fazla bir mesh yayını ve bir collision güncellemesi;
+- `MaxActiveEditableChunks = 32`;
+- async collision cooking kapalı.
+
+Dirty queue tekrar eden chunk isteklerini birleştirir. Kuyruk taşarsa tüm active kayıtları tek seferde kuyruğa boşaltmak yerine incremental full-refresh cursor kullanılır; kuyruğa ve tamamlanmış worker sonuçlarına profil limitleri uygulanır. Otomatik streaming yakın chunk'ları önceliklendirir. Sistem, profile göre async collision cooking ayarını da component'e aktarır.
+
+Bu değerler başlangıç politikasıdır; hedef düşük/orta donanım üzerinde henüz ölçülmemiştir. HIGH_END profili ve kabul performans testi bu fazın onay kapsamına girmez.
+
+## 6. Otomasyon kapsamı
 
 Yeni test adları:
+- `MyProject2.World.VoxelMesher.HorizontalPlane` — ISO yüksekliği, üçgen üretimi, vertex paylaşımı, normal yönü ve material ID buffer'ı.
+- `MyProject2.World.VoxelMesher.ExactIsoNodesStayConnected` — density örneklerinin tam 0.5 olduğu durumda vertex paylaşımı/topoloji.
+- `MyProject2.World.VoxelMesher.InvalidSampleRejected` — bozuk density/material storage'ın reddedilmesi.
+- `MyProject2.World.VoxelDensity.SnapshotRevisionAndGrid` — snapshot border/örnek sayısı, sparse carve sonrası revision/density ve farklı profile grid'i uygulamayı reddetme.
 
-- `MyProject2.World.VoxelMesher.HorizontalPlane`
-- `MyProject2.World.VoxelMesher.InvalidSampleRejected`
-- `MyProject2.World.VoxelDensity.SnapshotRevisionAndGrid` (revision, material buffer, profile grid ve farklı grid taşıyan save import reddi)
+Runner ayrıca Faz 1/2'deki yedi mevcut dünya testini de arar; toplam **11 test adı** beklenir.
 
-Test runner aşağıdaki Faz 1/2 testlerini de ister; toplam 10 test adı kontrol edilir.
-
-Windows Git Bash ve UE 5.8 kurulu ortamda, Unreal Editor kapalıyken:
+Windows Git Bash/MSYS ve Unreal Engine 5.8 kurulu ortamda, Unreal Editor kapalıyken:
 
 ```bash
 bash Scripts/run_phase3_tests.sh
+# Motor başka dizindeyse:
+UE_ENGINE_ROOT="/d/UE/UE_5.8/Engine" bash Scripts/run_phase3_tests.sh
 ```
 
-Derleme, UHT ve Automation testleri bu ortamda çalıştırılmadı. PR taslak kalmalı ve bu testler geçmeden faz motor-doğrulamalı olarak kabul edilmemeli.
+Runner önce `MyProject2Editor` Development build yapar, sonra `Automation RunTests MyProject2.World` çalıştırır. Bu işlem bu oturumda çalıştırılmadı.
 
-## 7. Faz 3'te yapılmayanlar
+## 7. Faz 3 kapanmadan önce zorunlu doğrulamalar
 
-- Oyuncu input'undan kazı işlemini başlatan uçtan uca Scan→Edit→mesh akışı (Faz 4).
-- Worker-thread/background mesh jobs; mesher saf CPU kodu fakat şu an çağrı senkron.
-- Dedicated collision update scheduler / tamamlanma callback'li async cooking ölçümü.
-- Oyuna özgü stratified 3D materyal katmanlarının density-depth fonksiyonu. Mevcut material IDs Landscape physical-material mapping'e dayanır.
-- Editor içi Landscape Builder overlay/weightmap painter.
-- Tahkimat, destek/çökme, survival ve kalıcı kayıt uçtan uca akışı.
-- Low–Mid/High-End cihaz benchmark'ı.
+- UE 5.8 UBT/UHT build ve runner'ın aradığı 11 Automation testinin başarıyla geçmesi.
+- Editor'de flat fallback ve gerçek Landscape yüzeyini inceleme.
+- PIE'da chunk sınırını kesen carve/fill testi; iki komşu chunk'ın yeniden üretilmesi.
+- Güncellenen mesh collision'ının karakteri engellediğinin kontrolü.
+- Density değişirken eski worker sonucunun yayımlanmadığının ve full-refresh/dirty queue'nun sonunda güncel geometriye ulaştığının kontrolü.
+- Phase 2 scan'in `World.Object.VoxelSurface` işaretli terrain'i bulması; kazma yetkisinin yalnızca Phase 2 capability kuralları izin verdiğinde verilmesi.
+- Map/world teardown sırasında bekleyen worker işi, Landscape cache'i ve collision log'larının incelenmesi.
+- Düşük/orta hedef donanımda CPU zamanı, worker kuyruğu, collision cook, bellek ve üçgen sayısı benchmark'ı.
 
-## 8. Sonraki kapı
+## 8. Bu fazda yapılmayanlar
 
-Önce `Scripts/run_phase3_tests.sh` UE 5.8 altında başarılı çalışmalı. Ardından Editor/PIE üzerinde en az şu kontrol yapılmalı: flat fallback yüzeyi, gerçek Landscape proxy yüzeyi, komşu chunk seam'i, carve edit sonrası görünür mesh ve collision, rollback/import sonrası revision + rebuild ve streaming aktif chunk sınırı. Bu kapılar geçilmeden Faz 4'e geçişte oyun içi kazı akışının çalıştığı varsayılmamalı.
+- Input'tan başlayan uçtan uca Scan → edit → mesh oyun kazısı akışı (Faz 4).
+- LOD/adaptive resolution ve GPU meshing.
+- Stratified material katmanlarını 3D derinlik fonksiyonundan hesaplama; şimdiki material ID kaynağı Landscape physical-material mapping'dir.
+- Painted Landscape weightmap okuma/yazma.
+- Destek/tahkimat, hasar/çökme, survival ve kayıt sisteminin uçtan uca entegrasyonu.
+- HIGH_END kabulü ve cihaz benchmark'ı.
+
+**Kapanış ölçütü:** Kaynak değişiklikleri ve statik kontroller hazır; motor içinde doğrulanmadığından Faz 3 henüz “testlerden geçti” veya “tamamıyla doğrulandı” sayılmaz. Runner ve Editor/PIE kapıları geçtikten sonra Faz 4'e geçilmelidir.
