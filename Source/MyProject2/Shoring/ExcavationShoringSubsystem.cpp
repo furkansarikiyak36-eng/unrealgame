@@ -4,6 +4,7 @@
 #include "Shoring/PlaceableShoringPiece.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "WorldCore/Events/WorldMechanicEventSubsystem.h"
 
 void UExcavationShoringSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -102,6 +103,21 @@ void UExcavationShoringSubsystem::InvalidateNearBounds(const FBox& Bounds)
         {
             Piece->MarkSupportDirty();
             ++LastInvalidatedPieceCount;
+        }
+    }
+
+    if (LastInvalidatedPieceCount > 0)
+    {
+        if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+        {
+            FWorldMechanicEvent Event;
+            Event.Type = EWorldMechanicEventType::ShoringSupportInvalidated;
+            Event.PositionCm = Bounds.GetCenter();
+            Event.ExtentCm = Bounds.GetExtent();
+            Event.ScalarValue = static_cast<float>(LastInvalidatedPieceCount);
+            Event.SourceTag = TEXT("ExcavationShoringSubsystem");
+            Event.bHighPriority = true;
+            Events->EnqueueEvent(MoveTemp(Event));
         }
     }
 }
