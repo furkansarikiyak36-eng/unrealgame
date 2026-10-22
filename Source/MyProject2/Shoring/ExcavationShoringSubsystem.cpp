@@ -855,7 +855,6 @@ bool UExcavationShoringSubsystem::BuildSupportNodes(
         return false;
     }
 
-    const uint64 CurrentRevision = Volume->GetDensityRevision();
     OutNodes.Reserve(PieceIds->Num());
     for (const FGuid& PieceId : *PieceIds)
     {
@@ -877,8 +876,10 @@ bool UExcavationShoringSubsystem::BuildSupportNodes(
         Node.HealthFraction = Piece->GetHealthFraction();
         Node.DesignLoad = Piece->GetDesignLoad();
         Node.bIsCollapsed = Piece->HasCollapsed();
-        Node.bAnchorCurrent = Anchor.Kind != EShoringAnchorKind::VoxelSurface
-            || Anchor.SourceDensityRevision == CurrentRevision;
+        // Terrain edits invalidate only plans whose anchor chunks were marked dirty.
+        // A global density revision increment alone must not stale unrelated supports.
+        Node.bAnchorCurrent = Piece->GetPieceState() != EShoringPieceState::NeedsRevalidation
+            && Piece->GetPieceState() != EShoringPieceState::Invalid;
     }
     return true;
 }
