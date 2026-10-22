@@ -25,6 +25,8 @@ class AHaulCart;
 class AFireStone;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
+class USurvivalExcavationAdapter;
+class UUndergroundExposureComponent;
 class UCableComponent;
 class ULineBatchComponent;
 struct FWorldPlacementQuery;
@@ -254,6 +256,12 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USurvivalComponent> Survival;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USurvivalExcavationAdapter> SurvivalExcavation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UUndergroundExposureComponent> UndergroundExposure;
 
 	/** Heavy actions cost stamina (GDD 6.1). */
 	UPROPERTY(EditAnywhere, Category = "Forest")
