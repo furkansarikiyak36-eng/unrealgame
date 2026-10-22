@@ -85,7 +85,8 @@ bool FWorldRuntimeProfileSubsystemLockTest::RunTest(const FString& Parameters)
             .CreateNavigation(false)
             .CreateAISystem(false)
             .ShouldSimulatePhysics(false)
-            .SetTransactional(false));
+            .SetTransactional(false),
+        false);
 
     UWorldRuntimeProfileDataAsset* Asset = NewObject<UWorldRuntimeProfileDataAsset>(GetTransientPackage());
     UWorldRuntimeProfileSubsystem* Runtime = TestWorld->GetSubsystem<UWorldRuntimeProfileSubsystem>();
