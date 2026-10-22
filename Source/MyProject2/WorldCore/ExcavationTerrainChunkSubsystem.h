@@ -103,10 +103,13 @@ protected:
     TSet<FIntVector> DirtyChunkQueue;
     TSet<FIntVector> InFlightMeshJobs;
     TMap<FIntVector, FQueuedVoxelMeshResult> CompletedMeshResults;
+    TArray<FIntVector> FullRefreshCoordinates;
+    int32 FullRefreshCursor = 0;
     FWorldRuntimeProfileValues RuntimeSettings;
     FString RuntimeSetupError;
     bool bRuntimeReady = false;
     bool bFullRefreshPending = false;
+    bool bFullRefreshListReady = false;
     float StreamingAccumulatorSeconds = 0.0f;
     float LandscapeDiscoveryAccumulatorSeconds = 0.0f;
     float LandscapeDiscoveryIntervalSeconds = 1.0f;
