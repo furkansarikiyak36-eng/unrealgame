@@ -414,6 +414,14 @@ bool UExcavationVolumeSubsystem::BuildChunkSnapshot(
         return false;
     }
 
+    // Even though snapshot capture runs on the game thread, keep this contract
+    // explicit so future provider/task changes cannot return mixed-revision data.
+    if (Candidate.SourceRevision != DensityRevision)
+    {
+        OutSnapshot = FWorldDensityChunkSnapshot{};
+        return false;
+    }
+
     OutSnapshot = MoveTemp(Candidate);
     return OutSnapshot.HasValidSampleStorage();
 }
