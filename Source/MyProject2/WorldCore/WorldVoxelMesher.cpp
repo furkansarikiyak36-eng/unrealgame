@@ -28,8 +28,8 @@ namespace
 
     struct FSurfaceVertex
     {
-        FVector3d Position = FVector3d::Zero();
-        FVector3d Normal = FVector3d::Zero();
+        FVector3d Position = FVector3d(0.0, 0.0, 0.0);
+        FVector3d Normal = FVector3d(0.0, 0.0, 0.0);
     };
 
     FSurfaceVertex InterpolateSurfaceVertex(
@@ -174,8 +174,8 @@ namespace
         int32 EmptyNodes[4];
         int32 SolidCount = 0;
         int32 EmptyCount = 0;
-        FVector3d SolidCentroid = FVector3d::Zero();
-        FVector3d EmptyCentroid = FVector3d::Zero();
+        FVector3d SolidCentroid = FVector3d(0.0, 0.0, 0.0);
+        FVector3d EmptyCentroid = FVector3d(0.0, 0.0, 0.0);
 
         for (int32 I = 0; I < 4; ++I)
         {
