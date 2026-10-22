@@ -118,7 +118,7 @@ bool FWorldVoxelInteractionEditRollbackTest::RunTest(const FString& Parameters)
     FWorldVoxelEditResult Result;
     TestTrue(TEXT("Authorized sphere carve should commit"), Interaction->ApplyEdit(Request, Result));
     TestTrue(TEXT("Successful edit returns a successful result"), Result.bSucceeded);
-    TestEqual(TEXT("Result preserves the request transaction ID"), Result.OperationId, Request.OperationId);
+    TestTrue(TEXT("Result preserves the request transaction ID"), Result.OperationId == Request.OperationId);
     TestTrue(TEXT("Changed cells should be reported"), Result.ModifiedSampleCount > 0);
     TestTrue(TEXT("Changed edit should advance the density revision"), Excavation->GetDensityRevision() > RevisionBefore);
     TestTrue(TEXT("Dirty chunks should be returned"), Result.DirtyChunks.Chunks.Num() > 0);
@@ -132,7 +132,7 @@ bool FWorldVoxelInteractionEditRollbackTest::RunTest(const FString& Parameters)
     FWorldVoxelEditResult RollbackResult;
     TestTrue(TEXT("Latest unconflicted edit should roll back"), Interaction->RollbackEdit(Request.OperationId, RollbackResult));
     TestTrue(TEXT("Rollback returns a successful transaction result"), RollbackResult.bSucceeded);
-    TestEqual(TEXT("Rollback reports the same request transaction ID"), RollbackResult.OperationId, Request.OperationId);
+    TestTrue(TEXT("Rollback reports the same request transaction ID"), RollbackResult.OperationId == Request.OperationId);
     TestTrue(TEXT("Rollback removes this edit's sparse overrides"), Excavation->GetOverrideCellCount() < OverridesAfterEdit);
     TestTrue(TEXT("Rollback also reports dirty chunks"), RollbackResult.DirtyChunks.Chunks.Num() > 0);
 
