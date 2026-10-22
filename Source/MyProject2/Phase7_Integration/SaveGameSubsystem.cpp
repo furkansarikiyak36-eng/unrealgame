@@ -71,7 +71,7 @@ namespace
                 || !FMath::IsFinite(Data.CurrentLength) || Data.CurrentLength <= 0.0f
                 || Data.CurrentLength > 100000.0f
                 || Data.State > static_cast<uint8>(ELogState::Destroyed)
-                || Data.Shape > static_cast<uint8>(EWoodShape::Destroyed))
+                || Data.Shape > static_cast<uint8>(EWoodShape::Firewood))
             {
                 OutError = TEXT("A saved log record contains invalid transform, health, length, state or shape.");
                 for (ALogActor* Staged : OutStaged) if (IsValid(Staged)) Staged->Destroy();
