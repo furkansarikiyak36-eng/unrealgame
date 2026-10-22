@@ -43,6 +43,7 @@ bool UExcavationLandscapeDensitySource::SetLandscapeProxies(const TArray<ALandsc
     {
         LandscapeProxies = MoveTemp(Candidate);
         SurfaceHeightCache.Reset();
+        MaterialIdCache.Reset();
     }
     return bChanged;
 }
@@ -92,6 +93,7 @@ bool UExcavationLandscapeDensitySource::SetMaterialMappings(
     if (bChanged)
     {
         MaterialMappings = MoveTemp(Candidate);
+        MaterialIdCache.Reset();
     }
     return bChanged;
 }
@@ -211,6 +213,28 @@ int32 UExcavationLandscapeDensitySource::SampleBaseMaterialIdAtWorld_Implementat
         return -1;
     }
 
+    float SurfaceHeightCm = 0.0f;
+    if (!TryGetSurfaceHeight(WorldPositionCm.X, WorldPositionCm.Y, SurfaceHeightCm))
+    {
+        return 0;
+    }
+
+    const double KeyX = FMath::RoundToDouble(WorldPositionCm.X);
+    const double KeyY = FMath::RoundToDouble(WorldPositionCm.Y);
+    if (KeyX < TNumericLimits<int32>::Lowest() || KeyX > TNumericLimits<int32>::Max()
+        || KeyY < TNumericLimits<int32>::Lowest() || KeyY > TNumericLimits<int32>::Max())
+    {
+        return 0;
+    }
+
+    const FIntPoint Key(static_cast<int32>(KeyX), static_cast<int32>(KeyY));
+    if (const int32* Cached = MaterialIdCache.Find(Key))
+    {
+        return *Cached;
+    }
+
+    int32 ResultMaterialId = 0;
+    const FVector SurfacePosition(WorldPositionCm.X, WorldPositionCm.Y, SurfaceHeightCm);
     for (const TWeakObjectPtr<ALandscapeProxy>& WeakProxy : LandscapeProxies)
     {
         const ALandscapeProxy* Proxy = WeakProxy.Get();
@@ -219,29 +243,28 @@ int32 UExcavationLandscapeDensitySource::SampleBaseMaterialIdAtWorld_Implementat
             continue;
         }
 
-        float SurfaceHeightCm = 0.0f;
-        if (!TryGetSurfaceHeight(WorldPositionCm.X, WorldPositionCm.Y, SurfaceHeightCm))
-        {
-            continue;
-        }
-
         const UPhysicalMaterial* PhysicalMaterial =
-            Proxy->GetPhysicalMaterialAtLocation(WorldPositionCm, EHeightfieldSource::Simple);
+            Proxy->GetPhysicalMaterialAtLocation(SurfacePosition, EHeightfieldSource::Simple);
         if (!IsValid(PhysicalMaterial))
         {
-            return 0;
+            break;
         }
 
         for (const FExcavationLandscapeMaterialMapping& Mapping : MaterialMappings)
         {
             if (Mapping.PhysicalMaterial == PhysicalMaterial)
             {
-                return Mapping.MaterialId;
+                ResultMaterialId = Mapping.MaterialId;
+                break;
             }
         }
-
-        return 0;
+        break;
     }
 
-    return 0;
+    if (MaterialIdCache.Num() >= 262144)
+    {
+        MaterialIdCache.Reset();
+    }
+    MaterialIdCache.Add(Key, ResultMaterialId);
+    return ResultMaterialId;
 }
