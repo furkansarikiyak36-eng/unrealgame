@@ -86,6 +86,9 @@ EXPECTED_TESTS=(
   "MyProject2.World.Shoring.InvalidDimensionsAndBudgetFailClosed"
   "MyProject2.World.Shoring.CommitRejectsStaleDensityRevision"
   "MyProject2.World.Shoring.PreviewMoveRevalidateAndRemovePiece"
+  "MyProject2.World.Shoring.SupportLoadThresholdsAreDeterministic"
+  "MyProject2.World.Shoring.SupportLossPropagatesAndCyclesFailClosed"
+  "MyProject2.World.Shoring.DamageRepairAndFailedSupportReplacement"
 )
 for test_name in "${EXPECTED_TESTS[@]}"; do
   grep -Fq "$test_name" "$SAVED_LOG" || {

@@ -46,7 +46,7 @@ namespace
         First.Transform = FTransform(FRotator::ZeroRotator, FVector(200.0f, 0.0f, 0.0f));
         First.HalfExtentsCm = FVector(10.0f);
         First.SupportAnchor.AnchorId = FGuid::NewGuid();
-        First.SupportAnchor.Kind = EShoringAnchorKind::PieceSocket;
+        First.SupportAnchor.Kind = EShoringAnchorKind::Ground;
         First.SupportAnchor.PositionCm = First.Transform.GetLocation();
         First.SupportAnchor.Normal = FVector::UpVector;
         First.SupportAnchor.SourceDensityRevision = DensityRevision;
@@ -298,6 +298,189 @@ bool FShoringPreviewMoveRevalidateRemoveTest::RunTest(const FString& Parameters)
         Shoring->RevalidatePlan(Plan.PlanId, Error));
     TestTrue(TEXT("The remaining committed plan can be removed"), Shoring->RemovePlan(Plan.PlanId, Error));
     TestNull(TEXT("The second piece is also removed"), Shoring->FindPiece(SecondId));
+
+    World->DestroyWorld(false);
+    return true;
+}
+
+
+
+#include "Shoring/ShoringSupportResolver.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FShoringSupportLoadThresholdsTest,
+    "MyProject2.World.Shoring.SupportLoadThresholdsAreDeterministic",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FShoringSupportLoadThresholdsTest::RunTest(const FString& Parameters)
+{
+    FShoringSupportNode Root;
+    Root.PieceId = FGuid::NewGuid();
+    Root.Kind = EShoringPieceKind::Upright;
+    Root.AnchorKind = EShoringAnchorKind::Ground;
+    Root.DesignLoad = 1.0f;
+
+    FShoringSupportNode Child;
+    Child.PieceId = FGuid::NewGuid();
+    Child.Kind = EShoringPieceKind::Strut;
+    Child.AnchorKind = EShoringAnchorKind::PieceSocket;
+    Child.PrimarySupportPieceId = Root.PieceId;
+    Child.ConnectedPieceIds.Add(Root.PieceId);
+    Child.DesignLoad = 2.0f;
+    Root.ConnectedPieceIds.Add(Child.PieceId);
+
+    TArray<FShoringSupportNode> Nodes{Root, Child};
+    TArray<FShoringSupportAssessment> FirstPass;
+    TArray<FShoringSupportAssessment> SecondPass;
+    FString Error;
+    TestTrue(TEXT("Valid rooted graph should evaluate"), FShoringSupportResolver::Evaluate(Nodes, FirstPass, Error));
+    TestTrue(TEXT("Repeated evaluation should remain valid"), FShoringSupportResolver::Evaluate(Nodes, SecondPass, Error));
+    TestEqual(TEXT("One assessment is returned per piece"), FirstPass.Num(), 2);
+    if (FirstPass.Num() != 2 || SecondPass.Num() != 2)
+    {
+        return false;
+    }
+    TestEqual(TEXT("High applied load marks the strut overloaded"),
+        static_cast<uint8>(FirstPass[1].Condition), static_cast<uint8>(EShoringSupportCondition::Overloaded));
+    TestTrue(TEXT("Repeated input yields the same utilization"),
+        FMath::IsNearlyEqual(FirstPass[1].Utilization, SecondPass[1].Utilization, KINDA_SMALL_NUMBER));
+
+    Nodes[1].DesignLoad = 1.5f;
+    TestTrue(TEXT("Adjusted load should still evaluate"), FShoringSupportResolver::Evaluate(Nodes, FirstPass, Error));
+    TestEqual(TEXT("Intermediate load produces a warning"),
+        static_cast<uint8>(FirstPass[1].Condition), static_cast<uint8>(EShoringSupportCondition::Warning));
+
+    Nodes[1].DesignLoad = 1.0f;
+    TestTrue(TEXT("Low load should evaluate"), FShoringSupportResolver::Evaluate(Nodes, FirstPass, Error));
+    TestEqual(TEXT("Low load is stable"),
+        static_cast<uint8>(FirstPass[1].Condition), static_cast<uint8>(EShoringSupportCondition::Stable));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FShoringSupportLossAndCycleTest,
+    "MyProject2.World.Shoring.SupportLossPropagatesAndCyclesFailClosed",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FShoringSupportLossAndCycleTest::RunTest(const FString& Parameters)
+{
+    FShoringSupportNode Root;
+    Root.PieceId = FGuid::NewGuid();
+    Root.Kind = EShoringPieceKind::Upright;
+    Root.AnchorKind = EShoringAnchorKind::Ground;
+
+    FShoringSupportNode Middle;
+    Middle.PieceId = FGuid::NewGuid();
+    Middle.Kind = EShoringPieceKind::Lagging;
+    Middle.AnchorKind = EShoringAnchorKind::PieceSocket;
+    Middle.PrimarySupportPieceId = Root.PieceId;
+    Middle.ConnectedPieceIds.Add(Root.PieceId);
+
+    FShoringSupportNode Tip;
+    Tip.PieceId = FGuid::NewGuid();
+    Tip.Kind = EShoringPieceKind::Lagging;
+    Tip.AnchorKind = EShoringAnchorKind::PieceSocket;
+    Tip.PrimarySupportPieceId = Middle.PieceId;
+    Tip.ConnectedPieceIds.Add(Middle.PieceId);
+
+    Root.ConnectedPieceIds.Add(Middle.PieceId);
+    Middle.ConnectedPieceIds.Add(Tip.PieceId);
+    TArray<FShoringSupportNode> Nodes{Root, Middle, Tip};
+    TArray<FShoringSupportAssessment> Assessments;
+    FString Error;
+
+    Nodes[0].HealthFraction = 0.0f;
+    TestTrue(TEXT("Failed root graph should still return deterministic assessments"),
+        FShoringSupportResolver::Evaluate(Nodes, Assessments, Error));
+    TestEqual(TEXT("Root reports failed"),
+        static_cast<uint8>(Assessments[0].Condition), static_cast<uint8>(EShoringSupportCondition::Failed));
+    TestEqual(TEXT("Direct dependent reports unsupported"),
+        static_cast<uint8>(Assessments[1].Condition), static_cast<uint8>(EShoringSupportCondition::Unsupported));
+    TestEqual(TEXT("Support loss propagates to the downstream dependent"),
+        static_cast<uint8>(Assessments[2].Condition), static_cast<uint8>(EShoringSupportCondition::Unsupported));
+
+    Nodes[0].HealthFraction = 1.0f;
+    Nodes[0].AnchorKind = EShoringAnchorKind::PieceSocket;
+    Nodes[0].PrimarySupportPieceId = Nodes[2].PieceId;
+    Nodes[0].ConnectedPieceIds.Add(Nodes[2].PieceId);
+    Nodes[2].ConnectedPieceIds.Add(Nodes[0].PieceId);
+    TestTrue(TEXT("A reciprocal cycle still produces assessments"),
+        FShoringSupportResolver::Evaluate(Nodes, Assessments, Error));
+    for (const FShoringSupportAssessment& Assessment : Assessments)
+    {
+        TestEqual(TEXT("A graph cycle with no grounded root fails closed"),
+            static_cast<uint8>(Assessment.Condition), static_cast<uint8>(EShoringSupportCondition::Unsupported));
+    }
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FShoringDamageRepairReplacementTest,
+    "MyProject2.World.Shoring.DamageRepairAndFailedSupportReplacement",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FShoringDamageRepairReplacementTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateShoringTestWorld(TEXT("ShoringDamageReplaceWorld"));
+    if (!TestNotNull(TEXT("Test world should be created"), World))
+    {
+        return false;
+    }
+
+    UExcavationVolumeSubsystem* Volume = World->GetSubsystem<UExcavationVolumeSubsystem>();
+    UExcavationShoringSubsystem* Shoring = World->GetSubsystem<UExcavationShoringSubsystem>();
+    if (!TestNotNull(TEXT("Density owner should be created"), Volume)
+        || !TestNotNull(TEXT("Shoring subsystem should be created"), Shoring))
+    {
+        World->DestroyWorld(false);
+        return false;
+    }
+
+    FShoringLayoutPlan Plan;
+    FString Error;
+    TestTrue(TEXT("Rooted shoring fixture should be valid"),
+        BuildSocketOnlyPlan(Volume->GetDensityRevision(), Plan, Error));
+    TArray<APlaceableShoringPiece*> Preview;
+    TestTrue(TEXT("Fixture preview should be created"), Shoring->PreviewPlan(Plan, Preview, Error));
+    TArray<APlaceableShoringPiece*> Pieces;
+    TestTrue(TEXT("Fixture plan should commit"), Shoring->CommitPlan(Plan, Pieces, Error));
+    if (Pieces.Num() != 2)
+    {
+        World->DestroyWorld(false);
+        return false;
+    }
+
+    const FGuid RootId = Pieces[0]->GetPieceId();
+    const FGuid ChildId = Pieces[1]->GetPieceId();
+    FShoringSupportAssessment Assessment;
+    TestTrue(TEXT("Damage should be accepted for a healthy support"),
+        Shoring->ApplyDamageToPiece(RootId, 45.0f, EShoringDamageCause::Impact, Assessment, Error));
+    TestTrue(TEXT("Damage lowers support health"), Shoring->FindPiece(RootId)->GetHealth() < 100.0f);
+    TestTrue(TEXT("Non-failed damaged members can be repaired"), Shoring->RepairPiece(RootId, 45.0f, Error));
+    TestTrue(TEXT("Repair restores health"), FMath::IsNearlyEqual(Shoring->FindPiece(RootId)->GetHealth(), 100.0f));
+
+    TestTrue(TEXT("Lethal damage should be accepted"),
+        Shoring->ApplyDamageToPiece(RootId, 100.0f, EShoringDamageCause::Impact, Assessment, Error));
+    TestEqual(TEXT("Depleted member becomes failed"),
+        static_cast<uint8>(Shoring->FindPiece(RootId)->GetPieceState()),
+        static_cast<uint8>(EShoringPieceState::Failed));
+    TestEqual(TEXT("Dependent support is invalidated and begins collapse"),
+        static_cast<uint8>(Shoring->FindPiece(ChildId)->GetPieceState()),
+        static_cast<uint8>(EShoringPieceState::Unsupported));
+
+    APlaceableShoringPiece* Replacement = nullptr;
+    TestTrue(TEXT("Failed member can be replaced with a new GUID"),
+        Shoring->ReplaceFailedPiece(RootId, Replacement, Error));
+    TestNotNull(TEXT("Replacement actor is returned"), Replacement);
+    if (Replacement)
+    {
+        TestTrue(TEXT("Replacement GUID differs from failed member"), Replacement->GetPieceId() != RootId);
+        TestTrue(TEXT("Replacement starts with full durability"),
+            FMath::IsNearlyEqual(Replacement->GetHealth(), 100.0f));
+        TestEqual(TEXT("Revalidated downstream member returns to active"),
+            static_cast<uint8>(Shoring->FindPiece(ChildId)->GetPieceState()),
+            static_cast<uint8>(EShoringPieceState::Active));
+    }
 
     World->DestroyWorld(false);
     return true;

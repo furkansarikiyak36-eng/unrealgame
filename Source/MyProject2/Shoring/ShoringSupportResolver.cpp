@@ -121,6 +121,51 @@ bool FShoringSupportResolver::Evaluate(
         }
     }
 
+    // Every supported piece must have a finite path to a grounded or voxel-anchored
+    // root. Cycles of mutually connected pieces cannot support themselves.
+    for (int32 StartIndex = 0; StartIndex < Nodes.Num(); ++StartIndex)
+    {
+        if (bFailed[StartIndex] || bUnsupported[StartIndex])
+        {
+            continue;
+        }
+
+        TSet<int32> Visited;
+        int32 Cursor = StartIndex;
+        bool bFoundRoot = false;
+        for (int32 Step = 0; Step <= Nodes.Num(); ++Step)
+        {
+            if (bFailed[Cursor] || bUnsupported[Cursor])
+            {
+                break;
+            }
+            const FShoringSupportNode& Current = Nodes[Cursor];
+            if (Current.AnchorKind != EShoringAnchorKind::PieceSocket)
+            {
+                bFoundRoot = Current.bAnchorCurrent;
+                break;
+            }
+            if (Visited.Contains(Cursor))
+            {
+                break;
+            }
+            Visited.Add(Cursor);
+            const int32* ParentIndex = IndexById.Find(Current.PrimarySupportPieceId);
+            if (!ParentIndex)
+            {
+                break;
+            }
+            Cursor = *ParentIndex;
+        }
+
+        if (!bFoundRoot)
+        {
+            bUnsupported[StartIndex] = true;
+            OutAssessments[StartIndex].Condition = EShoringSupportCondition::Unsupported;
+            OutAssessments[StartIndex].Reason = TEXT("Support dependency has no valid grounded/voxel root or contains a cycle.");
+        }
+    }
+
     // Support loss propagates only along explicit primary-anchor dependencies.
     for (int32 Pass = 0; Pass < Nodes.Num(); ++Pass)
     {

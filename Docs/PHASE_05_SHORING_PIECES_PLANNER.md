@@ -64,12 +64,28 @@ bash Scripts/run_phase5_tests.sh
 UE_ENGINE_ROOT="/d/UE/UE_5.8/Engine" bash Scripts/run_phase5_tests.sh
 \`\`\`
 
-Runner, 16 mevcut Faz 1–4 testine ek olarak dört Faz 5 test adı arar (toplam 20). Build veya test başarısız olursa PR taslak kalmalıdır.
+Runner, 16 mevcut Faz 1–4 testine ek olarak dört Faz 5 test adı arar (toplam 23). Build veya test başarısız olursa PR taslak kalmalıdır.
 
 ## Faz 5 kapanış ölçütleri
 
-1. UE 5.8 Development Editor build ve 20/20 Automation testinin başarılı olması.
+1. UE 5.8 Development Editor build ve 23/23 Automation testinin başarılı olması.
 2. PIE'da gerçek kazılmış hendekte duvar ankrajı, merdiven/platform konumu ve çakışmaların görsel kontrolü.
 3. Bir dikme/kaplama/payanda taşındığında ya da silindiğinde bağlantı GUID'leri ve \`NeedsRevalidation/Invalid\` state geçişlerinin kontrolü.
 4. Voxel duvarı kazıldığında yalnızca ilgili tahkimat planlarının invalidation aldığının ve yeniden doğrulama sonrası state'in doğru olduğunun doğrulanması.
 5. Unreal Insights ile 100+ tahkimat parçasında commit/revalidation maliyetlerinin ölçülmesi.
+
+## Faz 6 ek kapsamı — destek, hasar ve çöküş
+
+- \`FShoringSupportResolver\` saf veriyle çalışır: GUID grafiği, anchor türü, bağlantıların çift yönlülüğü, parça durability oranı ve planner'ın belirlediği soyut tasarım yükünü değerlendirir.
+- Her socket zincirinin zemine veya voxel yüzeyine giden bir kökü olmalı. Karşılıklı fakat kendi kendini taşıyan döngüler geçerli destek sayılmaz.
+- Nominal kapasite ve yük oranları yalnızca gameplay tuning birimleridir; gerçek mühendislik/geoteknik ölçüleri değildir.
+- \`ApplyDamageToPiece\`, \`RepairPiece\` ve \`ReplaceFailedPiece\` API'leri eklendi. Sağlam olmayan parça başarısız olduğunda primary-anchor bağımlıları \`Unsupported\` olur ve çöküş durumuna geçerek fizik simülasyonuna alınır.
+- Başarısız destek GUID ile değiştirildiğinde bağımlı parçaların bağlantıları yeni GUID'ye güncellenir; plan tekrar değerlendirilir.
+- Herhangi bir destek grafiği/ankraj değişiminde durum tekrar değerlendirilmeden destek geçerli sayılmaz.
+
+### Faz 6 kapanış ölçütleri
+
+1. UE 5.8 Development Editor build ve test runner'ında beklenen 23/23 testin gerçek çalışmada başarılı olması.
+2. Hasar → tamir → ölümcül hasar → destek kaybı → parça değişimi akışının PIE doğrulaması.
+3. Döngüsel socket ağı ve eksik bağlantıların destekli kabul edilmediği kontrolü.
+4. Unreal Insights ile 100+ elemanlı grafikte değerlendirme ve çöküş işleme maliyetinin ölçülmesi.
