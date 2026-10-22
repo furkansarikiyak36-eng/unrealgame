@@ -69,9 +69,9 @@ namespace
         }
 
         const FVector Size = Bounds.GetSize();
-        const double CountX = FMath::CeilToDouble(static_cast<double>(Size.X) / CellSizeCm) + 2.0;
-        const double CountY = FMath::CeilToDouble(static_cast<double>(Size.Y) / CellSizeCm) + 2.0;
-        const double CountZ = FMath::CeilToDouble(static_cast<double>(Size.Z) / CellSizeCm) + 2.0;
+        const double CountX = static_cast<double>(FMath::CeilToInt64(static_cast<double>(Size.X) / CellSizeCm)) + 2.0;
+        const double CountY = static_cast<double>(FMath::CeilToInt64(static_cast<double>(Size.Y) / CellSizeCm)) + 2.0;
+        const double CountZ = static_cast<double>(FMath::CeilToInt64(static_cast<double>(Size.Z) / CellSizeCm)) + 2.0;
         if (!FMath::IsFinite(CountX) || !FMath::IsFinite(CountY) || !FMath::IsFinite(CountZ)
             || CountX < 1.0 || CountY < 1.0 || CountZ < 1.0
             || CountX > MaxSamples || CountY > MaxSamples || CountZ > MaxSamples)
@@ -124,7 +124,7 @@ bool UWorldVoxelInteractionSubsystem::IsCurrentVoxelSurfaceActor(
         return false;
     }
 
-    const UWorld* World = GetWorld();
+    UWorld* World = GetWorld();
     const UExcavationVolumeSubsystem* Excavation =
         World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
     const AExcavationTerrainChunkActor* Chunk = Cast<AExcavationTerrainChunkActor>(Actor);
@@ -222,7 +222,7 @@ bool UWorldVoxelInteractionSubsystem::ValidateVoxelSurfaceHit(
 
     constexpr float RecheckDistanceCm = 40.0f;
     FWorldScanQuery Query;
-    Query.World = const_cast<UWorld*>(World);
+    Query.World = World;
     Query.StartCm = Hit.ImpactPoint + Normal * RecheckDistanceCm;
     Query.EndCm = Hit.ImpactPoint - Normal * RecheckDistanceCm;
     Query.ActorToIgnore = ActorToIgnore;
@@ -365,14 +365,15 @@ bool UWorldVoxelInteractionSubsystem::ApplyAuthorizedEdit(
 
     FWorldRegionClassification Region;
     const bool bHasRegion = Classification->QueryClassification(Request.CenterCm, Region);
-    if (bHasRegion && Region.Kind != EWorldRegionKind::EditableVoxel)
+    const bool bHasKnownRegion = bHasRegion && Region.Kind != EWorldRegionKind::Unknown;
+    if (bHasKnownRegion && Region.Kind != EWorldRegionKind::EditableVoxel)
     {
-        OutResult.Error = TEXT("Edit denied: the center lies in static, transition, water or unknown classified terrain.");
+        OutResult.Error = TEXT("Edit denied: the center lies in static, transition or water classified terrain.");
         return false;
     }
-    if (!bHasRegion && !bHasCurrentScanAuthorization)
+    if (!bHasKnownRegion && !bHasCurrentScanAuthorization)
     {
-        OutResult.Error = TEXT("Edit denied: no current scanner authorization and no built EditableVoxel classification.");
+        OutResult.Error = TEXT("Edit denied: no current scanner authorization and no known EditableVoxel classification.");
         return false;
     }
 
