@@ -63,7 +63,7 @@ void UExcavationShoringSubsystem::HandleVolumeReset()
     {
         for (TActorIterator<APlaceableShoringPiece> It(World); It; ++It)
         {
-            if (IsValid(*It) && (*It)->bHasVoxelAnchor)
+            if (IsValid(*It) && ((*It)->bHasVoxelAnchor || !(*It)->RequiredAnchorIds.IsEmpty()))
             {
                 (*It)->MarkSupportDirty();
                 ++LastInvalidatedPieceCount;
@@ -78,11 +78,26 @@ void UExcavationShoringSubsystem::InvalidateNearBounds(const FBox& Bounds)
     if (!World || !Bounds.IsValid) return;
 
     LastInvalidatedPieceCount = 0;
+    TSet<FName> InvalidatedAnchors;
+    TArray<APlaceableShoringPiece*> Pieces;
     for (TActorIterator<APlaceableShoringPiece> It(World); It; ++It)
     {
         APlaceableShoringPiece* Piece = *It;
-        if (!IsValid(Piece) || !Piece->bHasVoxelAnchor) continue;
-        if (Bounds.IsInsideOrOn(Piece->SupportAnchorWorldCm))
+        if (!IsValid(Piece)) continue;
+        Pieces.Add(Piece);
+        if (Piece->bHasVoxelAnchor && Bounds.IsInsideOrOn(Piece->SupportAnchorWorldCm))
+        {
+            InvalidatedAnchors.Add(Piece->AnchorId);
+            Piece->MarkSupportDirty();
+            ++LastInvalidatedPieceCount;
+        }
+    }
+    for (APlaceableShoringPiece* Piece : Pieces)
+    {
+        if (!IsValid(Piece) || Piece->bHasVoxelAnchor) continue;
+        const bool bDependsOnInvalidatedAnchor = Piece->RequiredAnchorIds.ContainsByPredicate(
+            [&InvalidatedAnchors](FName Required) { return InvalidatedAnchors.Contains(Required); });
+        if (bDependsOnInvalidatedAnchor)
         {
             Piece->MarkSupportDirty();
             ++LastInvalidatedPieceCount;
@@ -92,16 +107,26 @@ void UExcavationShoringSubsystem::InvalidateNearBounds(const FBox& Bounds)
 
 int32 UExcavationShoringSubsystem::RevalidateAllVoxelAnchors()
 {
-    int32 ValidCount = 0;
-    if (UWorld* World = GetWorld())
+    UWorld* World = GetWorld();
+    if (!World) return 0;
+
+    // Anchors are validated in passes so a board/strut can find posts validated in the prior pass.
+    const int32 MaxPasses = 4;
+    for (int32 Pass = 0; Pass < MaxPasses; ++Pass)
     {
         for (TActorIterator<APlaceableShoringPiece> It(World); It; ++It)
         {
-            if (IsValid(*It) && (*It)->bHasVoxelAnchor && (*It)->RevalidateVoxelAnchor())
+            if (IsValid(*It) && ((*It)->bHasVoxelAnchor || !(*It)->RequiredAnchorIds.IsEmpty()))
             {
-                ++ValidCount;
+                (*It)->RevalidateVoxelAnchor();
             }
         }
+    }
+
+    int32 ValidCount = 0;
+    for (TActorIterator<APlaceableShoringPiece> It(World); It; ++It)
+    {
+        if (IsValid(*It) && (*It)->bValidatedPlacement) ++ValidCount;
     }
     return ValidCount;
 }
