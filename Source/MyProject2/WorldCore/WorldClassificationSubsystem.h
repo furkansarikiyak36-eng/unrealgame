@@ -19,7 +19,7 @@ struct FWorldManualRegionOverride
  * World-local, deterministic coarse classification map.
  *
  * Classification order:
- * manual AABB override > component landscape-layer marker > actor/component region tag
+ * manual AABB override > actor/component landscape-layer marker > actor/component region tag
  * > bounded center-surface probe > Unknown.
  *
  * Landscape-layer markers are explicit component/actor tags in this phase. This
