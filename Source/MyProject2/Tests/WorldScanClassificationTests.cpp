@@ -160,6 +160,22 @@ bool FWorldClassificationManualOverrideGridTest::RunTest(const FString& Paramete
     TestEqual(TEXT("The fourth cell should remain static geometry"),
         static_cast<uint8>(Region.Kind), static_cast<uint8>(EWorldRegionKind::StaticGeometry));
 
+    FWorldClassificationBuildRequest InvalidRequest = Request;
+    InvalidRequest.Bounds = FBox(FVector(100, 0, 0), FVector(0, 800, 800));
+    TestFalse(TEXT("Reversed classification bounds should be rejected"),
+        Classifier->BuildClassification(InvalidRequest, Result));
+    InvalidRequest = Request;
+    InvalidRequest.MaxRegions = 3;
+    TestFalse(TEXT("Classification grids larger than MaxRegions should be rejected"),
+        Classifier->BuildClassification(InvalidRequest, Result));
+    TestTrue(TEXT("A rejected rebuild should not destroy the previous valid cache"),
+        Classifier->QueryClassification(FVector(400, 400, 400), Region));
+    TestEqual(TEXT("Previous cached classification should survive rejected rebuild"),
+        static_cast<uint8>(Region.Kind), static_cast<uint8>(EWorldRegionKind::EditableVoxel));
+
+    TestFalse(TEXT("A query outside built bounds should fail"),
+        Classifier->QueryClassification(FVector(4000, 400, 400), Region));
+
     TestTrue(TEXT("Manual override can be removed"), Classifier->RemoveManualOverride(FName(TEXT("EditFull"))));
     TestFalse(TEXT("Mutating overrides should invalidate the built map"),
         Classifier->QueryClassification(FVector(400, 400, 400), Region));
