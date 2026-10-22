@@ -31,6 +31,9 @@ public:
     FWorldClassificationResult QueryModeAtWorld(FVector WorldPositionCm) const;
 
     UFUNCTION(BlueprintPure, Category = "World|Landscape Builder")
+    int32 GetRegionCount() const { return Regions.Num(); }
+
+    UFUNCTION(BlueprintPure, Category = "World|Landscape Builder")
     bool IsVoxelEditableAtWorld(FVector WorldPositionCm) const;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World|Landscape Builder")
