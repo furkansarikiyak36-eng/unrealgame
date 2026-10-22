@@ -257,6 +257,7 @@ void UVoxelChunkMeshSubsystem::HandleVolumeChanged(const FExcavationEditRecord& 
 
 void UVoxelChunkMeshSubsystem::HandleVolumeReset()
 {
+    TSet<FIntVector> ChangedChunks;
     if (UWorld* World = GetWorld())
     {
         if (UExcavationVolumeSubsystem* Volume = World->GetSubsystem<UExcavationVolumeSubsystem>())
@@ -269,15 +270,28 @@ void UVoxelChunkMeshSubsystem::HandleVolumeReset()
                     FIntVector Chunk;
                     if (Volume->TryGetChunkCoordinateForCell(Row.Cell, Chunk))
                     {
-                        QueueChunk(Chunk);
+                        ChangedChunks.Add(Chunk);
                     }
                 }
             }
         }
     }
+
     for (const TPair<FIntVector, TObjectPtr<AProceduralVoxelChunkActor>>& Pair : ChunkActors)
     {
-        QueueChunk(Pair.Key);
+        ChangedChunks.Add(Pair.Key);
+    }
+
+    // Chunk borders share sampled surface values. Rebuild neighbors on reset/load so
+    // a saved edit at a seam cannot leave an old adjacent mesh behind.
+    for (const FIntVector& Chunk : ChangedChunks)
+    {
+        for (int32 X = -1; X <= 1; ++X)
+        for (int32 Y = -1; Y <= 1; ++Y)
+        for (int32 Z = -1; Z <= 1; ++Z)
+        {
+            QueueChunk(Chunk + FIntVector(X, Y, Z));
+        }
     }
 }
 
