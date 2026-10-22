@@ -76,6 +76,8 @@ A marker that only partially covers a region creates `Transition`; equal-priorit
 - `SampleSurface`: returns `true` when at least one requested downward sample hit a surface. The result reports hit points/normals, min/max Z and maximum slope angle.
 - `AnalyzeActor`: returns bounds/dimensions, actor origin, and a physics velocity/awake snapshot where a primitive component is available.
 
+Runtime voxel mesh actors/components should use `World.Object.VoxelSurface`; this marker lets the scanner distinguish the actual generated terrain surface from an unrelated prop that happens to occupy the same coarse region. Landscape surfaces can also be identified by `ALandscapeProxy` or explicit region/layer tags.
+
 Capabilities begin with the shared `WorldScanSystem` object/physics analysis and are constrained by the region map. Classified `EditableVoxel` surfaces are support/snap candidates even if their runtime mesh component is movable; final placement support validation remains a later responsibility. `World.Capability.NoSupport`, `NoSnap`, and `NoDig` are opt-outs. **Digging is opt-in**: a hit must both be inside an `EditableVoxel` region and carry `World.Capability.Dig`; a region label by itself does not authorize destructive interaction. An `Unknown` region does not erase the known object capabilities of logs/rocks, but it never authorizes digging. Moving/falling physics targets are not considered safe supports.
 
 ## Tests
