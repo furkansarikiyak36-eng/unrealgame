@@ -315,6 +315,114 @@ bool UWorldVoxelInteractionSubsystem::DigFromView(
     return true;
 }
 
+bool UWorldVoxelInteractionSubsystem::ValidateEditableBounds(
+    const FBox& EditBounds,
+    const UWorldClassificationSubsystem* Classification,
+    FString& OutError) const
+{
+    OutError.Reset();
+    if (!Classification || !EditBounds.IsValid
+        || !WorldSystemContractValidation::IsFiniteVector(EditBounds.Min)
+        || !WorldSystemContractValidation::IsFiniteVector(EditBounds.Max))
+    {
+        OutError = TEXT("Edit bounds or classification source are invalid.");
+        return false;
+    }
+
+    // Before a coarse map is built, only an explicitly scanner-authorized dig can
+    // reach this point; the scanner already checked the hit actor/component tags.
+    if (!Classification->HasBuiltClassification())
+    {
+        return true;
+    }
+
+    const FBox MapBounds = Classification->GetCachedBuildBounds();
+    const FVector RegionSizeCm = Classification->GetCachedRegionSizeCm();
+    const FIntVector GridDimensions = Classification->GetCachedGridDimensions();
+    if (!MapBounds.IsValid
+        || !WorldSystemContractValidation::IsPositiveVector(RegionSizeCm)
+        || GridDimensions.X < 1 || GridDimensions.Y < 1 || GridDimensions.Z < 1)
+    {
+        OutError = TEXT("Built classification map has invalid grid metadata.");
+        return false;
+    }
+
+    // A partially classified edit is rejected rather than clipping the shape or
+    // silently writing density into unknown/static cells.
+    constexpr double BoundsToleranceCm = 0.01;
+    if (EditBounds.Min.X < MapBounds.Min.X - BoundsToleranceCm
+        || EditBounds.Min.Y < MapBounds.Min.Y - BoundsToleranceCm
+        || EditBounds.Min.Z < MapBounds.Min.Z - BoundsToleranceCm
+        || EditBounds.Max.X > MapBounds.Max.X + BoundsToleranceCm
+        || EditBounds.Max.Y > MapBounds.Max.Y + BoundsToleranceCm
+        || EditBounds.Max.Z > MapBounds.Max.Z + BoundsToleranceCm)
+    {
+        OutError = TEXT("Edit denied: the complete edit shape must fit inside the built classification bounds.");
+        return false;
+    }
+
+    const auto ToCell = [](double Value, double Origin, double Step, int32 Count, bool bUpper)
+    {
+        const double Raw = std::floor((Value - Origin) / Step);
+        const int64 Index = static_cast<int64>(Raw);
+        // A box ending exactly on the outer map bound belongs to the last cell.
+        return static_cast<int32>(FMath::Clamp<int64>(
+            bUpper && Index == Count ? static_cast<int64>(Count) - 1 : Index,
+            0,
+            static_cast<int64>(Count) - 1));
+    };
+
+    const int32 MinX = ToCell(EditBounds.Min.X, MapBounds.Min.X, RegionSizeCm.X, GridDimensions.X, false);
+    const int32 MinY = ToCell(EditBounds.Min.Y, MapBounds.Min.Y, RegionSizeCm.Y, GridDimensions.Y, false);
+    const int32 MinZ = ToCell(EditBounds.Min.Z, MapBounds.Min.Z, RegionSizeCm.Z, GridDimensions.Z, false);
+    const int32 MaxX = ToCell(EditBounds.Max.X, MapBounds.Min.X, RegionSizeCm.X, GridDimensions.X, true);
+    const int32 MaxY = ToCell(EditBounds.Max.Y, MapBounds.Min.Y, RegionSizeCm.Y, GridDimensions.Y, true);
+    const int32 MaxZ = ToCell(EditBounds.Max.Z, MapBounds.Min.Z, RegionSizeCm.Z, GridDimensions.Z, true);
+
+    const int64 CountX = static_cast<int64>(MaxX) - MinX + 1;
+    const int64 CountY = static_cast<int64>(MaxY) - MinY + 1;
+    const int64 CountZ = static_cast<int64>(MaxZ) - MinZ + 1;
+    constexpr int64 MaxClassificationCellsPerEdit = 4096;
+    if (CountX <= 0 || CountY <= 0 || CountZ <= 0
+        || CountX > MaxClassificationCellsPerEdit
+        || CountY > MaxClassificationCellsPerEdit / CountX
+        || CountZ > MaxClassificationCellsPerEdit / (CountX * CountY))
+    {
+        OutError = TEXT("Edit denied: the shape overlaps too many coarse classification cells.");
+        return false;
+    }
+
+    for (int32 Z = MinZ; Z <= MaxZ; ++Z)
+    {
+        for (int32 Y = MinY; Y <= MaxY; ++Y)
+        {
+            for (int32 X = MinX; X <= MaxX; ++X)
+            {
+                const FVector CellMin(
+                    MapBounds.Min.X + static_cast<double>(X) * RegionSizeCm.X,
+                    MapBounds.Min.Y + static_cast<double>(Y) * RegionSizeCm.Y,
+                    MapBounds.Min.Z + static_cast<double>(Z) * RegionSizeCm.Z);
+                const FVector CellMax(
+                    FMath::Min(CellMin.X + RegionSizeCm.X, MapBounds.Max.X),
+                    FMath::Min(CellMin.Y + RegionSizeCm.Y, MapBounds.Max.Y),
+                    FMath::Min(CellMin.Z + RegionSizeCm.Z, MapBounds.Max.Z));
+                const FVector CellCenter = (CellMin + CellMax) * 0.5;
+
+                FWorldRegionClassification Region;
+                if (!Classification->QueryClassification(CellCenter, Region)
+                    || Region.Kind != EWorldRegionKind::EditableVoxel)
+                {
+                    OutError = FString::Printf(
+                        TEXT("Edit denied: its footprint overlaps a non-editable or unknown classification cell (%d,%d,%d)."),
+                        X, Y, Z);
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 bool UWorldVoxelInteractionSubsystem::ApplyEdit(
     const FWorldVoxelEditRequest& Request,
     FWorldVoxelEditResult& OutResult)
@@ -377,6 +485,11 @@ bool UWorldVoxelInteractionSubsystem::ApplyAuthorizedEdit(
     }
 
     const FBox EditBounds = GetEditBounds(Request);
+    if (!ValidateEditableBounds(EditBounds, Classification, OutResult.Error))
+    {
+        return false;
+    }
+
     const UWorldRuntimeProfileSubsystem* Profile = World->GetSubsystem<UWorldRuntimeProfileSubsystem>();
     const int32 ProfileMaxSamples = Profile
         ? FMath::Clamp(Profile->GetActiveSettings().MaxDensitySamplesPerEdit, 1, 50000000)
