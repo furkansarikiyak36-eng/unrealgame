@@ -4,6 +4,7 @@
 
 #include "WorldCore/WorldRuntimeProfile.h"
 #include "WorldCore/WorldRuntimeProfileSubsystem.h"
+#include "WorldCore/WorldSystemContracts.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -110,6 +111,73 @@ bool FWorldRuntimeProfileSubsystemLockTest::RunTest(const FString& Parameters)
         TEXT("Rejected reconfiguration must not change the active profile"),
         static_cast<uint8>(Runtime->GetActiveProfile()),
         static_cast<uint8>(EWorldRuntimeProfile::HighEnd));
+
+    return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FWorldSystemContractsValidationTest,
+    "MyProject2.World.Contracts.ValidateRequestsAndBuffers",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldSystemContractsValidationTest::RunTest(const FString& Parameters)
+{
+    FString Error;
+
+    FWorldVoxelEditRequest Edit;
+    TestTrue(TEXT("Default sphere edit request should be valid"), Edit.Validate(Error));
+    Edit.RadiusCm = 0.0f;
+    TestFalse(TEXT("Sphere edit with zero radius should be rejected"), Edit.Validate(Error));
+    TestFalse(TEXT("Invalid sphere edit should provide a reason"), Error.IsEmpty());
+
+    Edit = FWorldVoxelEditRequest();
+    Edit.Shape = EWorldVoxelEditShape::Box;
+    Edit.HalfExtentCm = FVector(50.0f, -1.0f, 50.0f);
+    TestFalse(TEXT("Box edit with a negative half-extent should be rejected"), Edit.Validate(Error));
+
+    FWorldSurfaceSampleRequest Surface;
+    TestTrue(TEXT("Default surface sample request should be valid"), Surface.Validate(Error));
+    Surface.SamplesX = 6;
+    Surface.SamplesY = 6;
+    Surface.MaxSamples = 25;
+    TestFalse(TEXT("Surface sample grid larger than MaxSamples should be rejected"), Surface.Validate(Error));
+
+    FWorldShapeTraceRequest ShapeTrace;
+    TestTrue(TEXT("Default sphere trace request should be valid"), ShapeTrace.Validate(Error));
+    ShapeTrace.Shape = EWorldShapeTraceKind::Capsule;
+    ShapeTrace.RadiusCm = 30.0f;
+    ShapeTrace.HalfHeightCm = 20.0f;
+    TestFalse(TEXT("Capsule half-height smaller than radius should be rejected"), ShapeTrace.Validate(Error));
+
+    FWorldDensityChunkSnapshot Snapshot;
+    Snapshot.CellsPerChunkAxis = 2;
+    Snapshot.BorderCells = 1;
+    Snapshot.SampleSpacingCm = 25.0f;
+    TestEqual(
+        TEXT("Density snapshot count includes boundary planes and border samples"),
+        Snapshot.GetExpectedDensitySampleCount(),
+        static_cast<int64>(125));
+    Snapshot.DensitySamples.SetNum(125);
+    TestTrue(TEXT("Density snapshot with exact sample storage should validate"), Snapshot.HasValidSampleStorage());
+    Snapshot.DensitySamples.SetNum(124);
+    TestFalse(TEXT("Density snapshot with truncated sample storage should be rejected"), Snapshot.HasValidSampleStorage());
+
+    FWorldVoxelMeshData Mesh;
+    Mesh.Vertices = { FVector(0, 0, 0), FVector(1, 0, 0), FVector(0, 1, 0) };
+    Mesh.Normals = { FVector::UpVector, FVector::UpVector, FVector::UpVector };
+    Mesh.UV0 = { FVector2D(0, 0), FVector2D(1, 0), FVector2D(0, 1) };
+    Mesh.TriangleIndices = { 0, 1, 2 };
+    Mesh.TriangleMaterialIds = { 0 };
+    TestTrue(TEXT("Well-formed triangle mesh data should validate"), Mesh.IsTopologyValid());
+
+    Mesh.TriangleIndices[2] = 3;
+    TestFalse(TEXT("Mesh indices beyond the vertex array should be rejected"), Mesh.IsTopologyValid());
+    Mesh.TriangleIndices[2] = 2;
+    Mesh.TriangleMaterialIds.Reset();
+    Mesh.TriangleMaterialIds.Add(0);
+    Mesh.TriangleMaterialIds.Add(1);
+    TestFalse(TEXT("Material IDs must be empty or supplied once per triangle"), Mesh.IsTopologyValid());
 
     return true;
 }
