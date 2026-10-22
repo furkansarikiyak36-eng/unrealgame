@@ -17,9 +17,6 @@
 namespace
 {
     const FName VoxelSurfaceTag(TEXT("World.Object.VoxelSurface"));
-    const FName EditableVoxelTag(TEXT("World.Region.EditableVoxel"));
-    const FName DigCapabilityTag(TEXT("World.Capability.Dig"));
-    const FName NoDigCapabilityTag(TEXT("World.Capability.NoDig"));
 
     bool HasActorOrComponentTag(
         const AActor* Actor,
@@ -307,10 +304,13 @@ bool UWorldVoxelInteractionSubsystem::DigFromView(
     Request.TargetDensity = 0.0f;
     Request.MaxSamples = 100000;
 
-    if (const UWorldRuntimeProfileSubsystem* Profile =
-        GetWorld()->GetSubsystem<UWorldRuntimeProfileSubsystem>())
+    if (UWorld* World = GetWorld())
     {
-        Request.MaxSamples = Profile->GetActiveSettings().MaxDensitySamplesPerEdit;
+        if (const UWorldRuntimeProfileSubsystem* Profile =
+            World->GetSubsystem<UWorldRuntimeProfileSubsystem>())
+        {
+            Request.MaxSamples = Profile->GetActiveSettings().MaxDensitySamplesPerEdit;
+        }
     }
 
     if (!ApplyAuthorizedEdit(Request, OutResult, /*bHasCurrentScanAuthorization*/ true))
