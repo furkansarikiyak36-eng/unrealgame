@@ -758,11 +758,17 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
         }
 
         FString PublishError;
-        if (!TargetActor->PublishVoxelMeshData(Result.Mesh, PublishError)
-            && !PublishError.Contains(TEXT("stale voxel mesh")))
+        if (!TargetActor->PublishVoxelMeshData(Result.Mesh, PublishError))
         {
-            UE_LOG(LogTemp, Warning, TEXT("Voxel mesh publication failed for chunk (%d,%d,%d): %s"),
-                Coordinate.X, Coordinate.Y, Coordinate.Z, *PublishError);
+            // Never leave an old collider authoritative after a current-revision publish
+            // failure. A stale revision is re-queued by PublishVoxelMeshData; any other
+            // failure remains safely non-interactive until a later rebuild request.
+            TargetActor->InvalidateVoxelMesh();
+            if (!PublishError.Contains(TEXT("stale voxel mesh")))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Voxel mesh publication failed for chunk (%d,%d,%d): %s"),
+                    Coordinate.X, Coordinate.Y, Coordinate.Z, *PublishError);
+            }
         }
         ++PublishedThisTick;
     }
