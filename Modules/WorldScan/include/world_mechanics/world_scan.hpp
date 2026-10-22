@@ -1,10 +1,13 @@
 #pragma once
 #include "world_mechanics/core.hpp"
 #include "world_mechanics/runtime_profile.hpp"
+#include <algorithm>
+#include <cmath>
+#include <vector>
 
 namespace wm {
 struct RayRequest { Vec3 origin{}, direction{1,0,0}; double maxDistanceM{5}; std::vector<Id> ignored; };
-struct ShapeSweepRequest { Aabb bounds{}; Vec3 start{}, end{}; double maxDistanceM{5}; };
+struct ShapeSweepRequest { Aabb bounds{}; Vec3 start{}, end{}; double maxDistanceM{5}; std::uint32_t maxResults{64}; };
 struct OverlapRequest { Aabb bounds{}; std::uint32_t maxResults{32}; };
 struct RawHit { bool hit{false}; Id targetId{0}; Vec3 point{}, normal{}; double distanceM{0}; Revision sourceRevision{0}; };
 struct SurfaceSample { Vec3 point{}, normal{}; double slopeDegrees{0}; bool valid{false}; };
@@ -30,6 +33,7 @@ class WorldScan {
  public:
   WorldScan(const IWorldQueryProvider& provider, RuntimeProfile profile)
     : provider_(provider), profile_(profile) {}
+
   Result<RawHit> Ray(const RayRequest& request) const {
     if(!profile_.Validate()) return Result<RawHit>::Failure(ErrorCode::InvalidArgument,"invalid runtime profile");
     if(!request.origin.IsFinite()||!request.direction.IsFinite()||
@@ -40,27 +44,68 @@ class WorldScan {
     RayRequest normalized=request; normalized.direction=Normalize(request.direction);
     auto result=provider_.Raycast(normalized);
     if(!result) return result;
-    if(result.value.hit && (!result.value.point.IsFinite()||!result.value.normal.IsFinite()||
-       !std::isfinite(result.value.distanceM)||result.value.distanceM<0||
-       result.value.distanceM>request.maxDistanceM+1e-6))
-      return Result<RawHit>::Failure(ErrorCode::CorruptData,"provider returned invalid hit");
+    if(result.value.hit && (!ValidHit(result.value)||result.value.distanceM>request.maxDistanceM+1e-6))
+      return Result<RawHit>::Failure(ErrorCode::CorruptData,"provider returned invalid/out-of-range hit");
     if(result.value.hit && std::find(request.ignored.begin(),request.ignored.end(),result.value.targetId)!=request.ignored.end())
       return Result<RawHit>::Success(RawHit{});
     return result;
   }
+
+  Result<std::vector<RawHit>> ShapeSweep(const ShapeSweepRequest& request) const {
+    if(!profile_.Validate()||!request.bounds.IsValid()||!request.start.IsFinite()||!request.end.IsFinite()||
+       !std::isfinite(request.maxDistanceM)||request.maxDistanceM<=0||request.maxResults==0)
+      return Result<std::vector<RawHit>>::Failure(ErrorCode::InvalidArgument,"invalid shape sweep request");
+    if(Length(request.end-request.start)>request.maxDistanceM+1e-6)
+      return Result<std::vector<RawHit>>::Failure(ErrorCode::OutOfRange,"shape sweep path exceeds requested distance budget");
+    auto result=provider_.ShapeSweep(request); if(!result) return result;
+    for(const auto& hit:result.value)
+      if(hit.hit&&(!ValidHit(hit)||hit.distanceM>request.maxDistanceM+1e-6))
+        return Result<std::vector<RawHit>>::Failure(ErrorCode::CorruptData,"shape sweep provider returned an invalid hit");
+    result.value.erase(std::remove_if(result.value.begin(),result.value.end(),[](const RawHit& h){return !h.hit;}),result.value.end());
+    std::stable_sort(result.value.begin(),result.value.end(),[](const RawHit& a,const RawHit& b){
+      if(std::abs(a.distanceM-b.distanceM)>1e-9) return a.distanceM<b.distanceM;
+      return a.targetId<b.targetId;
+    });
+    if(result.value.size()>request.maxResults) result.value.resize(request.maxResults);
+    return result;
+  }
+
   Result<std::vector<RawHit>> Overlap(const OverlapRequest& request) const {
     if(!request.bounds.IsValid()||request.maxResults==0)
       return Result<std::vector<RawHit>>::Failure(ErrorCode::InvalidArgument,"invalid overlap request");
     auto result=provider_.Overlap(request); if(!result) return result;
-    if(result.value.size()>request.maxResults)
-      result.value.resize(request.maxResults);
-    for(const auto& hit:result.value) {
-      if(hit.hit && (!hit.point.IsFinite()||!hit.normal.IsFinite()||!std::isfinite(hit.distanceM)))
+    for(const auto& hit:result.value)
+      if(hit.hit&&!ValidHit(hit))
         return Result<std::vector<RawHit>>::Failure(ErrorCode::CorruptData,"invalid overlap hit");
-    }
+    result.value.erase(std::remove_if(result.value.begin(),result.value.end(),[](const RawHit& h){return !h.hit;}),result.value.end());
+    std::stable_sort(result.value.begin(),result.value.end(),[](const RawHit& a,const RawHit& b){
+      if(std::abs(a.distanceM-b.distanceM)>1e-9) return a.distanceM<b.distanceM;
+      return a.targetId<b.targetId;
+    });
+    if(result.value.size()>request.maxResults) result.value.resize(request.maxResults);
+    return result;
+  }
+
+  Result<std::vector<SurfaceSample>> SampleSurface(const Aabb& bounds,std::uint32_t samplesPerAxis) const {
+    if(!profile_.Validate()||!bounds.IsValid()||samplesPerAxis<2||
+       samplesPerAxis>profile_.maxSurfaceSamplesPerAxis)
+      return Result<std::vector<SurfaceSample>>::Failure(ErrorCode::InvalidArgument,"invalid surface sample request/profile budget");
+    const std::uint64_t requested=static_cast<std::uint64_t>(samplesPerAxis)*samplesPerAxis;
+    if(requested>profile_.maxSurfaceSamplesPerAxis*profile_.maxSurfaceSamplesPerAxis)
+      return Result<std::vector<SurfaceSample>>::Failure(ErrorCode::BudgetExceeded,"surface sample count exceeds profile budget");
+    auto result=provider_.SampleSurface(bounds,samplesPerAxis); if(!result) return result;
+    if(result.value.size()>requested)
+      return Result<std::vector<SurfaceSample>>::Failure(ErrorCode::BudgetExceeded,"provider exceeded requested sample count");
+    for(const auto& sample:result.value)
+      if(!sample.point.IsFinite()||!sample.normal.IsFinite()||!std::isfinite(sample.slopeDegrees)||
+         sample.slopeDegrees<0||sample.slopeDegrees>90)
+        return Result<std::vector<SurfaceSample>>::Failure(ErrorCode::CorruptData,"provider returned invalid surface sample");
     return result;
   }
  private:
+  static bool ValidHit(const RawHit& h) {
+    return h.targetId!=0&&h.point.IsFinite()&&h.normal.IsFinite()&&std::isfinite(h.distanceM)&&h.distanceM>=0;
+  }
   const IWorldQueryProvider& provider_;
   RuntimeProfile profile_;
 };

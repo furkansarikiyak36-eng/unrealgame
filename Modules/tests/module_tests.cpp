@@ -2,6 +2,8 @@
 #include "world_mechanics/runtime_profile.hpp"
 #include "world_mechanics/world_scan.hpp"
 #include "world_mechanics/world_classification.hpp"
+#include "world_mechanics/classification_map.hpp"
+#include "world_mechanics/cpu_surface_mesher.hpp"
 #include "world_mechanics/terrain_voxel.hpp"
 #include "world_mechanics/revision_gate.hpp"
 #include "world_mechanics/placement_snap.hpp"
@@ -22,6 +24,15 @@ class FakeQuery final : public wm::IWorldQueryProvider {
   wm::Result<wm::RawHit> Raycast(const wm::RayRequest& r) const override {
     lastDirection=r.direction;
     return wm::Result<wm::RawHit>::Success({true,42,{1,0,0},{0,0,1},1.0,3});
+  }
+  wm::Result<std::vector<wm::RawHit>> ShapeSweep(const wm::ShapeSweepRequest&) const override {
+    return wm::Result<std::vector<wm::RawHit>>::Success({
+      {true,43,{2,0,0},{0,0,1},2.0,4},
+      {true,42,{1,0,0},{0,0,1},1.0,3}
+    });
+  }
+  wm::Result<std::vector<wm::SurfaceSample>> SampleSurface(const wm::Aabb&,std::uint32_t) const override {
+    return wm::Result<std::vector<wm::SurfaceSample>>::Success({{{0,0,0},{0,0,1},0.0,true}});
   }
   mutable wm::Vec3 lastDirection{};
 };
@@ -64,6 +75,50 @@ bool TestScanAndClassification() {
   auto c=wm::RegionClassifier::Classify(evidence,8);
   CHECK(c.kind==wm::RegionKind::StaticGeometry); CHECK(!c.canDig); CHECK(c.mapRevision==8);
   CHECK(wm::RegionClassifier::Classify({},1).kind==wm::RegionKind::Unknown);
+  return true;
+}
+bool TestClassificationMapAndQueryBudgets() {
+  FakeQuery provider; wm::WorldScan scan(provider,wm::RuntimeProfile::LowMid());
+  wm::ShapeSweepRequest sweep; sweep.bounds={{-1,-1,-1},{1,1,1}}; sweep.start={0,0,0}; sweep.end={1,0,0};
+  sweep.maxDistanceM=2; sweep.maxResults=1;
+  auto hits=scan.ShapeSweep(sweep); CHECK(hits); CHECK(hits.value.size()==1); CHECK(hits.value.front().targetId==42);
+  auto samples=scan.SampleSurface({{-1,-1,-1},{1,1,1}},3); CHECK(samples); CHECK(samples.value.size()==1);
+  auto tooMany=scan.SampleSurface({{-1,-1,-1},{1,1,1}},6); CHECK(!tooMany);
+
+  wm::ClassificationMap map({0,0,0},8.0);
+  CHECK(map.SetCellEvidence({0,0,0},{{wm::RegionKind::EditableVoxel,wm::EvidenceSource::ExistingCell,false,10,"editable cell"}}));
+  const auto before=map.GetRevision();
+  auto editable=map.ClassifyAt({1,1,1}); CHECK(editable); CHECK(editable.value.canDig);
+  wm::ManualRegionOverride deny; deny.overrideId=1; deny.bounds={{-1,-1,-1},{2,2,2}};
+  deny.evidence={wm::RegionKind::StaticGeometry,wm::EvidenceSource::ManualOverride,true,1,"explicit denial"};
+  CHECK(map.AddOverride(deny));
+  auto blocked=map.ClassifyAt({1,1,1}); CHECK(blocked); CHECK(blocked.value.kind==wm::RegionKind::StaticGeometry); CHECK(!blocked.value.canDig);
+  const auto beforeBadRebuild=map.GetRevision();
+  auto badRebuild=map.RebuildCells({{{0,0,0},{{wm::RegionKind::Unknown,wm::EvidenceSource::ExistingCell,false,0,"unknown"}}},
+                                    {{0,0,0},{{wm::RegionKind::Water,wm::EvidenceSource::ExistingCell,false,0,"duplicate"}}}});
+  CHECK(!badRebuild&&badRebuild.error==wm::ErrorCode::Conflict); CHECK(map.GetRevision()==beforeBadRebuild);
+  CHECK(map.RemoveOverride(1));
+  auto afterRemove=map.ClassifyAt({1,1,1}); CHECK(afterRemove); CHECK(afterRemove.value.canDig);
+  CHECK(map.GetRevision()>before);
+  return true;
+}
+bool TestCpuMesherAndRevisionGate() {
+  wm::DensityGridSnapshot snapshot; snapshot.origin={0,0,0}; snapshot.spacingM=1;
+  snapshot.sizeX=3; snapshot.sizeY=3; snapshot.sizeZ=3; snapshot.sourceRevision=4; snapshot.profileFingerprint=17;
+  snapshot.density.reserve(27); snapshot.materialIds.reserve(27);
+  for(std::uint32_t z=0;z<3;++z) for(std::uint32_t y=0;y<3;++y) for(std::uint32_t x=0;x<3;++x) {
+    snapshot.density.push_back(static_cast<double>(z)/2.0);
+    snapshot.materialIds.push_back(z==0?1:2);
+  }
+  wm::MesherSettings settings; settings.isoLevel=0.6; settings.maxTriangles=1000;
+  auto mesh=wm::CpuSurfaceMesher::Build(snapshot,settings);
+  CHECK(mesh); CHECK(!mesh.value.indices.empty()); CHECK(mesh.value.indices.size()%3==0);
+  CHECK(mesh.value.triangleMaterialIds.size()==mesh.value.indices.size()/3);
+  CHECK(mesh.value.Validate(settings.maxTriangles));
+  CHECK(wm::DerivedRevisionGate::MayPublish({{},4,17},4,17));
+  CHECK(!wm::DerivedRevisionGate::MayPublish({{},3,17},4,17));
+  wm::DensityGridSnapshot invalid=snapshot; invalid.density.pop_back();
+  CHECK(!wm::CpuSurfaceMesher::Build(invalid,settings));
   return true;
 }
 bool TestTerrainEditRollbackAndSnapshot() {
@@ -157,6 +212,8 @@ int main() {
   const Test tests[]={
     {"profiles/coordinates",TestProfilesAndCoordinates},
     {"scan/classification",TestScanAndClassification},
+    {"classification map/query budgets",TestClassificationMapAndQueryBudgets},
+    {"CPU mesher/revision gate",TestCpuMesherAndRevisionGate},
     {"terrain edit/rollback/snapshot",TestTerrainEditRollbackAndSnapshot},
     {"snap/excavation",TestSnapAndExcavation},
     {"shoring planner",TestShoringPlanner},

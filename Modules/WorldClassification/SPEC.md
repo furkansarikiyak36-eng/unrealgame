@@ -41,5 +41,5 @@ Output: class, capabilities, evidence source/confidence, map revision and reject
 ## Tests
 Precedence, deny-over-allow, AABB boundaries, region-cell edges, rebuild revision, Unknown fallback, transition policy and budgeted dirty updates.
 
-## Status\nA deterministic evidence-priority classifier exists in portable C++. Region-grid storage, AABB override registry, Landscape Builder and incremental dirty-region updates remain unimplemented. Tests have not yet been executed.\n
-Specified; full Landscape/actor/physical-material integration is not validated.
+## Status
+A deterministic evidence-priority classifier and versioned region map with batch cell rebuild/AABB overrides exist in portable C++. Landscape Builder sampling/provider and incremental dirty-region rebuild remain unimplemented; new test execution is pending.

@@ -3,6 +3,8 @@ project(WorldMechanicsModules VERSION 0.1.0 LANGUAGES CXX)
 
 option(WM_BUILD_TESTS "Build portable mechanics tests" ON)
 add_library(world_mechanics
+  WorldClassification/src/classification_map.cpp
+  MeshCollision/src/cpu_surface_mesher.cpp
   TerrainVoxel/src/terrain_voxel.cpp
   Excavation/src/excavation.cpp
   Shoring/src/shoring.cpp
