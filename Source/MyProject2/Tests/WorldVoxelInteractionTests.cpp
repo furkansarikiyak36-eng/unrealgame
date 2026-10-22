@@ -110,7 +110,7 @@ bool FWorldVoxelInteractionEditRollbackTest::RunTest(const FString& Parameters)
     Request.OperationId = FGuid::NewGuid();
     Request.Shape = EWorldVoxelEditShape::Sphere;
     Request.Operation = EWorldVoxelEditOperation::Carve;
-    Request.CenterCm = FVector(100.0f, 100.0f, 100.0f);
+    Request.CenterCm = FVector(100.0f, 100.0f, -100.0f);
     Request.RadiusCm = 50.0f;
     Request.TargetDensity = 0.0f;
     Request.MaxSamples = 1000;
