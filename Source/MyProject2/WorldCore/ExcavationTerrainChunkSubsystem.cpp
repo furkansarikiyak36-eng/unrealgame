@@ -541,6 +541,39 @@ void UExcavationTerrainChunkSubsystem::QueueChunkRebuild(const FIntVector& Coord
     DirtyChunkQueue.Add(Coordinate);
 }
 
+bool UExcavationTerrainChunkSubsystem::IsChunkMeshCurrent(
+    const AExcavationTerrainChunkActor* Actor) const
+{
+    if (!bRuntimeReady || !IsValid(Actor) || Actor->GetPublishedDensityRevision() == 0
+        || Actor->GetWorld() != GetWorld() || bFullRefreshPending)
+    {
+        return false;
+    }
+
+    const FIntVector Coordinate = Actor->GetChunkCoordinate();
+    if (DirtyChunkQueue.Contains(Coordinate)
+        || InFlightMeshJobs.Contains(Coordinate)
+        || CompletedMeshResults.Contains(Coordinate))
+    {
+        return false;
+    }
+
+    const TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>* Bucket = RegisteredChunks.Find(Coordinate);
+    if (!Bucket)
+    {
+        return false;
+    }
+
+    for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : *Bucket)
+    {
+        if (Entry.Get() == Actor)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 void UExcavationTerrainChunkSubsystem::CompleteMeshJob(
     const FIntVector& Coordinate,
     FQueuedVoxelMeshResult&& Result)
