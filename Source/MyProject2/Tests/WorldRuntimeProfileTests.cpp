@@ -126,10 +126,12 @@ bool FWorldSystemContractsValidationTest::RunTest(const FString& Parameters)
     FString Error;
 
     FWorldVoxelEditRequest Edit;
-    TestTrue(TEXT("Default sphere edit request should be valid"), Edit.Validate(Error));
+    TestFalse(TEXT("Unconfigured sphere edit with zero radius should be rejected"), Edit.Validate(Error));
+    TestFalse(TEXT("Invalid sphere edit should provide a reason"), Error.IsEmpty());
+    Edit.RadiusCm = 50.0f;
+    TestTrue(TEXT("Sphere edit with a positive radius should be valid"), Edit.Validate(Error));
     Edit.RadiusCm = 0.0f;
     TestFalse(TEXT("Sphere edit with zero radius should be rejected"), Edit.Validate(Error));
-    TestFalse(TEXT("Invalid sphere edit should provide a reason"), Error.IsEmpty());
 
     Edit = FWorldVoxelEditRequest();
     Edit.Shape = EWorldVoxelEditShape::Box;
