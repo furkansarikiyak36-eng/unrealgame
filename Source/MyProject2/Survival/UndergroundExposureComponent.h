@@ -103,6 +103,7 @@ public:
 
 	/** State-only restore: does not advance time or apply catch-up damage. */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Exposure")
+	bool ValidateSnapshot(const FSurvivalExposureSnapshot& Snapshot, FString& OutError) const;
 	bool RestoreSnapshot(const FSurvivalExposureSnapshot& Snapshot, FString& OutError);
 
 	void RecordExertionHeat(float TemperatureRiseC);
