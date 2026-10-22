@@ -10,6 +10,7 @@
 
 class AActor;
 class UPrimitiveComponent;
+class UWorldClassificationSubsystem;
 
 /**
  * Connects the Phase 2 scanner to the authoritative Phase 3 density/edit owner.
@@ -99,6 +100,11 @@ private:
         const FTransform& Transform,
         const FVector& PieceHalfExtentCm,
         const AActor* ActorToIgnore) const;
+
+    bool ValidateEditableBounds(
+        const FBox& EditBounds,
+        const UWorldClassificationSubsystem* Classification,
+        FString& OutError) const;
 
     bool IsCurrentVoxelSurfaceActor(const AActor* Actor, FString& OutError) const;
 
