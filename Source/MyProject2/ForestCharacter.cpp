@@ -44,6 +44,7 @@
 #include "WorldCore/ExcavationVolumeSubsystem.h"
 #include "WorldCore/Excavation/VoxelEditService.h"
 #include "WorldCore/ExcavationTerrainChunkActor.h"
+#include "WorldCore/VoxelRuntime/ProceduralVoxelChunkActor.h"
 #include "CableComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -3164,7 +3165,7 @@ void AForestCharacter::PerformHit()
 	if (CurrentTool == EForestTool::Shovel)
 	{
 		// Ground: the voxel terrain, or any flat static surface standing in for it.
-		if (Hit.GetActor() && (Hit.GetActor()->IsA<AExcavationTerrainChunkActor>() || Hit.ImpactNormal.Z > 0.3f))
+		if (Hit.GetActor() && (Hit.GetActor()->IsA<AExcavationTerrainChunkActor>() || Hit.GetActor()->IsA<AProceduralVoxelChunkActor>() || Hit.ImpactNormal.Z > 0.3f))
 		{
 			ShowMessage(ShovelStroke(Hit.ImpactPoint, Hit.ImpactNormal, false));
 		}
