@@ -726,6 +726,20 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
 
                 if (bInsideShape)
                 {
+                    float ResolvedBefore = 0.0f;
+                    if (!TrySampleDensityAtWorld(CellCenter, ResolvedBefore) || !IsValidDensity(ResolvedBefore))
+                    {
+                        return false;
+                    }
+
+                    // Avoid storing deltas in already-empty/full cells. Besides reducing
+                    // sparse-save size, this keeps "dig in air" from creating fake edits.
+                    if (FMath::IsNearlyEqual(ResolvedBefore, TargetDensity, 0.0001f))
+                    {
+                        if (Z == MaxCell.Z) break;
+                        continue;
+                    }
+
                     const FExcavationCellOverride* Existing = CellOverrides.Find(Cell);
                     FExcavationCellChange Change;
                     Change.Cell = Cell;
