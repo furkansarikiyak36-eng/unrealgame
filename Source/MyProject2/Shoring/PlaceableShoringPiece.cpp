@@ -2,6 +2,9 @@
 
 #include "Components/StaticMeshComponent.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "WorldCore/ExcavationVolumeSubsystem.h"
 
 APlaceableShoringPiece::APlaceableShoringPiece()
 {
@@ -34,7 +37,19 @@ void APlaceableShoringPiece::InitializeFromCandidate(const FShoringPlacementCand
         FMath::Max(0.01f, DimensionsCm.X / 100.0f),
         FMath::Max(0.01f, DimensionsCm.Y / 100.0f),
         FMath::Max(0.01f, DimensionsCm.Z / 100.0f)));
-    bValidatedPlacement = Candidate.bPlanValid;
+    bHasVoxelAnchor = Candidate.bHasVoxelAnchor;
+    SupportAnchorWorldCm = Candidate.SupportAnchorWorldCm;
+    SupportNormal = Candidate.SupportNormal.GetSafeNormal();
+    RequiredAnchorIds = Candidate.RequiredAnchorIds;
+    bSupportRecheckRequired = true;
+    bValidatedPlacement = false;
+    if (UWorld* World = GetWorld())
+    {
+        if (UExcavationVolumeSubsystem* Volume = World->GetSubsystem<UExcavationVolumeSubsystem>())
+        {
+            Volume->TryWorldToCell(SupportAnchorWorldCm, ApproximateAnchorCell);
+        }
+    }
     if (Candidate.PieceType == EShoringPieceType::Upright
         || Candidate.PieceType == EShoringPieceType::WallBoard
         || Candidate.PieceType == EShoringPieceType::Strut)
@@ -44,19 +59,26 @@ void APlaceableShoringPiece::InitializeFromCandidate(const FShoringPlacementCand
 }
 
 void APlaceableShoringPiece::InitializeFromSavedState(EShoringPieceType InType, FGuid InGuid,
-    FName InAnchorId, const FTransform& InTransform, FVector InDimensionsCm, float InHealth)
+    FName InAnchorId, const FTransform& InTransform, FVector InDimensionsCm, float InHealth,
+    bool bInHasVoxelAnchor, FVector InSupportAnchorWorldCm, FVector InSupportNormal,
+    const TArray<FName>& InRequiredAnchorIds)
 {
     PieceType = InType;
     PieceGuid = InGuid.IsValid() ? InGuid : FGuid::NewGuid();
     AnchorId = InAnchorId;
     DimensionsCm = InDimensionsCm;
     StructuralHealth = FMath::Clamp(InHealth, 0.0f, 100.0f);
+    bHasVoxelAnchor = bInHasVoxelAnchor;
+    SupportAnchorWorldCm = InSupportAnchorWorldCm;
+    SupportNormal = InSupportNormal.GetSafeNormal();
+    RequiredAnchorIds = InRequiredAnchorIds;
+    bSupportRecheckRequired = true;
     SetActorTransform(InTransform);
     SetActorScale3D(FVector(
         FMath::Max(0.01f, DimensionsCm.X / 100.0f),
         FMath::Max(0.01f, DimensionsCm.Y / 100.0f),
         FMath::Max(0.01f, DimensionsCm.Z / 100.0f)));
-    bValidatedPlacement = true;
+    bValidatedPlacement = false;
 }
 
 void APlaceableShoringPiece::ApplyStructuralDamage(float Amount)
@@ -71,4 +93,73 @@ void APlaceableShoringPiece::ApplyStructuralDamage(float Amount)
         PieceMesh->SetCollisionEnabled(ECollisionEnabled::PhysicsOnly);
         PieceMesh->SetSimulatePhysics(true);
     }
+}
+
+
+void APlaceableShoringPiece::MarkSupportDirty()
+{
+    bValidatedPlacement = false;
+    bSupportRecheckRequired = true;
+    Tags.AddUnique(TEXT("World.State.SupportNeedsRecheck"));
+    Tags.Remove(TEXT("World.State.SupportValidated"));
+}
+
+bool APlaceableShoringPiece::RevalidateVoxelAnchor()
+{
+    UWorld* World = GetWorld();
+    if (!World || StructuralHealth <= 0.0f)
+    {
+        MarkSupportDirty();
+        return false;
+    }
+
+    for (const FName RequiredAnchor : RequiredAnchorIds)
+    {
+        bool bFoundValidAnchor = false;
+        for (TActorIterator<APlaceableShoringPiece> It(World); It; ++It)
+        {
+            APlaceableShoringPiece* Other = *It;
+            if (IsValid(Other) && Other != this && Other->AnchorId == RequiredAnchor
+                && Other->IsStructurallyIntact() && Other->bValidatedPlacement)
+            {
+                bFoundValidAnchor = true;
+                break;
+            }
+        }
+        if (!bFoundValidAnchor)
+        {
+            MarkSupportDirty();
+            return false;
+        }
+    }
+
+    if (bHasVoxelAnchor)
+    {
+        UExcavationVolumeSubsystem* Volume = World->GetSubsystem<UExcavationVolumeSubsystem>();
+        if (!Volume)
+        {
+            MarkSupportDirty();
+            return false;
+        }
+        const float ProbeDepth = FMath::Max(2.0f, Volume->CellSizeCm * 1.5f);
+        const FVector ProbePoint = SupportAnchorWorldCm - SupportNormal.GetSafeNormal() * ProbeDepth;
+        float Density = 0.0f;
+        if (!Volume->TrySampleDensityAtWorld(ProbePoint, Density) || Density < 0.5f)
+        {
+            MarkSupportDirty();
+            return false;
+        }
+    }
+    else if (RequiredAnchorIds.IsEmpty())
+    {
+        // An unattached strut/platform has no voxel anchor or connected support.
+        MarkSupportDirty();
+        return false;
+    }
+
+    bValidatedPlacement = true;
+    bSupportRecheckRequired = false;
+    Tags.Remove(TEXT("World.State.SupportNeedsRecheck"));
+    Tags.AddUnique(TEXT("World.State.SupportValidated"));
+    return true;
 }
