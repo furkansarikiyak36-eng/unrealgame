@@ -560,14 +560,17 @@ bool UExcavationVolumeSubsystem::ExportSnapshot(FExcavationVolumeSnapshot& OutSn
     return true;
 }
 
-bool UExcavationVolumeSubsystem::ImportSnapshot(
+bool UExcavationVolumeSubsystem::ValidateImportSnapshot(
     const FExcavationVolumeSnapshot& Snapshot,
-    bool bReplaceExistingState)
+    bool bReplaceExistingState,
+    FString& OutError) const
 {
+    OutError.Reset();
     if (Snapshot.SchemaVersion != 1
         || !FMath::IsFinite(Snapshot.CellSizeCm)
         || Snapshot.CellSizeCm < 1.0f
         || Snapshot.CellsPerChunkAxis < 4
+        || Snapshot.CellsPerChunkAxis > 64
         || !IsValidDensity(Snapshot.DefaultBaseDensity)
         || MaxSnapshotOverrideCells <= 0
         || Snapshot.Overrides.Num() > MaxSnapshotOverrideCells
@@ -575,6 +578,30 @@ bool UExcavationVolumeSubsystem::ImportSnapshot(
             && (!FMath::IsNearlyEqual(Snapshot.CellSizeCm, LockedCellSizeCm, 0.001f)
                 || Snapshot.CellsPerChunkAxis != LockedCellsPerChunkAxis))
         || (!bReplaceExistingState && CellOverrides.Num() > 0))
+    {
+        OutError = TEXT("Voxel snapshot schema, grid, density, row budget or replacement policy is invalid.");
+        return false;
+    }
+    TSet<FIntVector> SeenCells;
+    SeenCells.Reserve(Snapshot.Overrides.Num());
+    for (const FExcavationCellSnapshot& Row : Snapshot.Overrides)
+    {
+        if (!IsValidDensity(Row.Density) || SeenCells.Contains(Row.Cell))
+        {
+            OutError = TEXT("Voxel snapshot contains an invalid density or duplicate cell coordinate.");
+            return false;
+        }
+        SeenCells.Add(Row.Cell);
+    }
+    return true;
+}
+
+bool UExcavationVolumeSubsystem::ImportSnapshot(
+    const FExcavationVolumeSnapshot& Snapshot,
+    bool bReplaceExistingState)
+{
+    FString ValidationError;
+    if (!ValidateImportSnapshot(Snapshot, bReplaceExistingState, ValidationError))
     {
         return false;
     }

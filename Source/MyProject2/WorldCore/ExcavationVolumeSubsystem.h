@@ -95,6 +95,7 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Excavation|Persistence")
     bool ExportSnapshot(FExcavationVolumeSnapshot& OutSnapshot) const;
+    bool ValidateImportSnapshot(const FExcavationVolumeSnapshot& Snapshot, bool bReplaceExistingState, FString& OutError) const;
 
     UFUNCTION(BlueprintCallable, Category = "Excavation|Persistence")
     bool ImportSnapshot(const FExcavationVolumeSnapshot& Snapshot, bool bReplaceExistingState = false);
