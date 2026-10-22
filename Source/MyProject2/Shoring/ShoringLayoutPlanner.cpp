@@ -205,7 +205,7 @@ bool FShoringLayoutPlanner::BuildPlan(
                         FirstUpright);
                     const FGuid PieceId = Piece.PieceId;
                     PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
-            OutPlan.Pieces.Add(MoveTemp(Piece));
+                    OutPlan.Pieces.Add(MoveTemp(Piece));
                     AddConnection(OutPlan, PieceIndexById, PieceId, FirstUpright);
                     AddConnection(OutPlan, PieceIndexById, PieceId, SecondUpright);
                 }
@@ -269,6 +269,7 @@ bool FShoringLayoutPlanner::BuildPlan(
             Request.SourceDensityRevision,
             NegativeSideUprights[MidStation]);
         const FGuid PieceId = Piece.PieceId;
+        PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
         OutPlan.Pieces.Add(MoveTemp(Piece));
         AddConnection(OutPlan, PieceIndexById, PieceId, NegativeSideUprights[MidStation]);
         AddConnection(OutPlan, PieceIndexById, PieceId, PositiveSideUprights[MidStation]);
@@ -292,6 +293,7 @@ bool FShoringLayoutPlanner::BuildPlan(
             Request.SourceDensityRevision,
             PositiveSideUprights[0]);
         const FGuid PieceId = Piece.PieceId;
+        PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
         OutPlan.Pieces.Add(MoveTemp(Piece));
         AddConnection(OutPlan, PieceIndexById, PieceId, PositiveSideUprights[0]);
     }
