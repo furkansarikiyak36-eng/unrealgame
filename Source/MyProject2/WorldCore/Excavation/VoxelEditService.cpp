@@ -25,28 +25,6 @@ bool UVoxelEditService::EnsureServices(ULandscapeBuilderSubsystem*& OutBuilder, 
     return true;
 }
 
-bool UVoxelEditService::EnsureServices(ULandscapeBuilderSubsystem*& OutBuilder, UExcavationVolumeSubsystem*& OutVolume)
-{
-    OutBuilder = nullptr;
-    OutVolume = nullptr;
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return false;
-    }
-    OutBuilder = World->GetSubsystem<ULandscapeBuilderSubsystem>();
-    OutVolume = World->GetSubsystem<UExcavationVolumeSubsystem>();
-    if (!OutBuilder || !OutVolume)
-    {
-        return false;
-    }
-    if (!OutBuilder->HasBuiltSnapshot())
-    {
-        OutBuilder->BuildClassificationSnapshot();
-    }
-    return true;
-}
-
 bool UVoxelEditService::ValidateEditableShape(EExcavationShapeType ShapeType, FVector CenterCm,
     FVector EndCm, FVector HalfExtentCm, float RadiusCm, FString& OutFailure)
 {
