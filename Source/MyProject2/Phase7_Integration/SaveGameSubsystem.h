@@ -69,7 +69,7 @@ public:
     bool LoadWorld(const FString& SlotName);
 
     UFUNCTION(BlueprintPure, Category = "Save")
-    const FString& GetLastOperationError() const { return LastOperationError; }
+    FString GetLastOperationError() const { return LastOperationError; }
 
     UPROPERTY()
     TArray<FLogSaveData> CachedLogs;

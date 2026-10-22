@@ -329,6 +329,11 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
             OutError = TEXT("Save contains a player state, but this world has no AForestCharacter.");
             return false;
         }
+        if (!Player->CanSaveWorldState(Error))
+        {
+            OutError = FString::Printf(TEXT("Load blocked by transient carried state: %s"), *Error);
+            return false;
+        }
         if (!IsFiniteTransform(Save->PlayerTransform) || !IsFiniteTransform(Save->RespawnTransform)
             || !Save->Survival.Validate(Error)
             || !AForestCharacter::ValidateInventorySaveData(Save->InventoryItemIds, Save->InventoryCounts, Error))
