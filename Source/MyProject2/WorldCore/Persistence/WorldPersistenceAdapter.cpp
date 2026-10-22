@@ -126,6 +126,33 @@ bool UWorldPersistenceAdapter::LoadWorldFromSlot(const FString& SlotName, int32 
         }
     }
 
+    APawn* PlayerToRestore = nullptr;
+    USurvivalComponent* SurvivalToRestore = nullptr;
+    if (SaveObject->bHasPlayerTransform)
+    {
+        PlayerToRestore = UGameplayStatics::GetPlayerPawn(World, 0);
+        if (!PlayerToRestore)
+        {
+            OutFailure = TEXT("The save contains a player transform but no player pawn exists in this world.");
+            return false;
+        }
+    }
+    if (SaveObject->bHasSurvivalState)
+    {
+        if (!SaveObject->bHasPlayerTransform || !PlayerToRestore
+            || !USurvivalComponent::IsValidStateSnapshot(SaveObject->SurvivalState))
+        {
+            OutFailure = TEXT("Saved survival state is invalid or has no matching player.");
+            return false;
+        }
+        SurvivalToRestore = PlayerToRestore->FindComponentByClass<USurvivalComponent>();
+        if (!SurvivalToRestore)
+        {
+            OutFailure = TEXT("The saved player has no USurvivalComponent.");
+            return false;
+        }
+    }
+
     FExcavationVolumeSnapshot PreviousSnapshot;
     if (!Volume->ExportSnapshot(PreviousSnapshot))
     {
@@ -161,7 +188,22 @@ bool UWorldPersistenceAdapter::LoadWorldFromSlot(const FString& SlotName, int32 
         NewPieces.Add(Piece);
     }
 
-    // Only replace the previous shoring actors after every replacement has spawned.
+    // Apply already-validated player state before replacing old actors. ImportState
+    // validates before mutation, and a failure can still roll the terrain/actors back.
+    if (SaveObject->bHasSurvivalState && SurvivalToRestore
+        && !SurvivalToRestore->ImportState(SaveObject->SurvivalState))
+    {
+        for (APlaceableShoringPiece* NewPiece : NewPieces) if (IsValid(NewPiece)) NewPiece->Destroy();
+        Volume->ImportSnapshot(PreviousSnapshot, true);
+        OutFailure = TEXT("Survival state import failed; terrain and staged shoring were rolled back.");
+        return false;
+    }
+    if (SaveObject->bHasPlayerTransform && PlayerToRestore)
+    {
+        PlayerToRestore->SetActorTransform(SaveObject->PlayerTransform, false, nullptr, ETeleportType::TeleportPhysics);
+    }
+
+    // Only replace the previous shoring actors after all replacement records and player state passed.
     TArray<APlaceableShoringPiece*> OldPieces;
     for (TActorIterator<APlaceableShoringPiece> It(World); It; ++It)
     {
@@ -179,25 +221,6 @@ bool UWorldPersistenceAdapter::LoadWorldFromSlot(const FString& SlotName, int32 
     if (UExcavationShoringSubsystem* Shoring = World->GetSubsystem<UExcavationShoringSubsystem>())
     {
         Shoring->RevalidateAllVoxelAnchors();
-    }
-
-    if (SaveObject->bHasPlayerTransform)
-    {
-        if (APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0))
-        {
-            Player->SetActorTransform(SaveObject->PlayerTransform, false, nullptr, ETeleportType::TeleportPhysics);
-            if (SaveObject->bHasSurvivalState)
-            {
-                if (USurvivalComponent* Survival = Player->FindComponentByClass<USurvivalComponent>())
-                {
-                    if (!Survival->ImportState(SaveObject->SurvivalState))
-                    {
-                        OutFailure = TEXT("Survival state failed validation after world restore.");
-                        return false;
-                    }
-                }
-            }
-        }
     }
 
     if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
