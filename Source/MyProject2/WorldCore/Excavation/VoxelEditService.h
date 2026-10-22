@@ -24,6 +24,7 @@ public:
     bool FillSphere(FVector CenterCm, float RadiusCm, FExcavationEditRecord& OutRecord, FString& OutFailure);
 
 private:
-    bool IsEditablePoint(FVector PointCm, FString& OutFailure);
+    bool ValidateEditableShape(EExcavationShapeType ShapeType, FVector CenterCm, FVector EndCm,
+        FVector HalfExtentCm, float RadiusCm, FString& OutFailure);
     bool EnsureServices(class ULandscapeBuilderSubsystem*& OutBuilder, class UExcavationVolumeSubsystem*& OutVolume);
 };
