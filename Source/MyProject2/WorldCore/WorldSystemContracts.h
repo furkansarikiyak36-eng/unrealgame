@@ -111,15 +111,27 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
             OutError = TEXT("MaxRegions must be in [1, 1000000].");
             return false;
         }
-        const double CountX = FMath::CeilToDouble(static_cast<double>(BoundsSize.X) / RegionSizeCm.X);
-        const double CountY = FMath::CeilToDouble(static_cast<double>(BoundsSize.Y) / RegionSizeCm.Y);
-        const double CountZ = FMath::CeilToDouble(static_cast<double>(BoundsSize.Z) / RegionSizeCm.Z);
-        if (!FMath::IsFinite(CountX) || !FMath::IsFinite(CountY) || !FMath::IsFinite(CountZ)
-            || CountX < 1.0 || CountY < 1.0 || CountZ < 1.0
-            || CountX > MaxRegions || CountY > MaxRegions || CountZ > MaxRegions
-            || (CountX * CountY * CountZ) > MaxRegions)
+        const double RatioX = static_cast<double>(BoundsSize.X) / RegionSizeCm.X;
+        const double RatioY = static_cast<double>(BoundsSize.Y) / RegionSizeCm.Y;
+        const double RatioZ = static_cast<double>(BoundsSize.Z) / RegionSizeCm.Z;
+        if (!FMath::IsFinite(RatioX) || !FMath::IsFinite(RatioY) || !FMath::IsFinite(RatioZ)
+            || RatioX <= 0.0 || RatioY <= 0.0 || RatioZ <= 0.0
+            || RatioX > MaxRegions || RatioY > MaxRegions || RatioZ > MaxRegions)
         {
             OutError = TEXT("Classification region grid exceeds MaxRegions or overflows numeric limits.");
+            return false;
+        }
+        const auto SafeCeil = [](double Ratio) -> int64
+        {
+            const int64 Truncated = static_cast<int64>(Ratio);
+            return Truncated + (static_cast<double>(Truncated) < Ratio ? 1 : 0);
+        };
+        const int64 CountX = SafeCeil(RatioX);
+        const int64 CountY = SafeCeil(RatioY);
+        const int64 CountZ = SafeCeil(RatioZ);
+        if ((CountX * CountY * CountZ) > MaxRegions)
+        {
+            OutError = TEXT("Classification region grid exceeds MaxRegions.");
             return false;
         }
         if (MaxGeometrySamples < 0 || MaxGeometrySamples > 50000)
