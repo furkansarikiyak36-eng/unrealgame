@@ -18,7 +18,7 @@ bool UVoxelEditService::EnsureServices(ULandscapeBuilderSubsystem*& OutBuilder, 
     {
         return false;
     }
-    if (OutBuilder->GetRegionCount() == 0)
+    if (!OutBuilder->HasBuiltSnapshot())
     {
         OutBuilder->BuildClassificationSnapshot();
     }
