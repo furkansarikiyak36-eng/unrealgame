@@ -39,6 +39,7 @@
 #include "MechanicsDemo.h"
 #include "StructureManager.h"
 #include "SurvivalComponent.h"
+#include "Survival/ExcavationSurvivalAdapterComponent.h"
 #include "WorldPhaseW1_Chunk/ChunkManager.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
 #include "WorldCore/ExcavationTerrainChunkActor.h"
@@ -108,6 +109,7 @@ AForestCharacter::AForestCharacter()
 	GetCharacterMovement()->AirControl = 0.3f;
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
+    ExcavationSurvivalAdapter = CreateDefaultSubobject<UExcavationSurvivalAdapterComponent>(TEXT("ExcavationSurvivalAdapter"));
 	WorldChunks = CreateDefaultSubobject<UChunkManager>(TEXT("WorldChunks"));
 	WorldChunks->ActivationRadius = 256.f; // metres: 4 chunks (64 m) each way
 	CoreInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("CoreInventory"));
