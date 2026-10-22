@@ -409,10 +409,15 @@ bool UExcavationShoringSubsystem::ValidateSurfaceAnchor(
     bool bRequireSameRevision,
     float MaxDeviationCm,
     FVector& OutResolvedPositionCm,
-    FString& OutError) const
+    FString& OutError,
+    bool* bOutTransientFailure) const
 {
     OutResolvedPositionCm = FVector::ZeroVector;
     OutError.Reset();
+    if (bOutTransientFailure)
+    {
+        *bOutTransientFailure = false;
+    }
 
     if (Anchor.Kind != EShoringAnchorKind::VoxelSurface || !Anchor.IsFinite()
         || !FMath::IsFinite(MaxDeviationCm) || MaxDeviationCm <= 0.0f)
@@ -467,6 +472,12 @@ bool UExcavationShoringSubsystem::ValidateSurfaceAnchor(
     FString SurfaceError;
     if (!Interaction->ValidateVoxelSurfaceHit(ScanHit.Hit, nullptr, SurfaceError))
     {
+        if (bOutTransientFailure
+            && (SurfaceError.Contains(TEXT("being rebuilt"), ESearchCase::IgnoreCase)
+                || SurfaceError.Contains(TEXT("no longer matches the current scan"), ESearchCase::IgnoreCase)))
+        {
+            *bOutTransientFailure = true;
+        }
         OutError = FString::Printf(TEXT("Voxel surface is not current: %s"), *SurfaceError);
         return false;
     }
@@ -744,6 +755,7 @@ bool UExcavationShoringSubsystem::RemovePlan(const FGuid& PlanId, FString& OutEr
 bool UExcavationShoringSubsystem::RevalidatePlan(const FGuid& PlanId, FString& OutError)
 {
     OutError.Reset();
+    bool bHasTransientAnchorFailure = false;
     const TArray<FGuid>* PieceIds = PlanToPieces.Find(PlanId);
     const UExcavationVolumeSubsystem* Volume =
         GetWorld() ? GetWorld()->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
@@ -768,17 +780,28 @@ bool UExcavationShoringSubsystem::RevalidatePlan(const FGuid& PlanId, FString& O
         {
             FVector ResolvedPoint = FVector::ZeroVector;
             FString AnchorError;
+            bool bTransientAnchorFailure = false;
             if (!ValidateSurfaceAnchor(
                     Anchor,
                     CurrentRevision,
                     false,
                     RevalidationAnchorDeviationCm,
                     ResolvedPoint,
-                    AnchorError))
+                    AnchorError,
+                    &bTransientAnchorFailure))
             {
-                // Surface loss is a support failure, not a silent plan-wide reset.
-                // Mark this member unsupported and let the GUID dependency graph cascade it.
-                Piece->SetPieceState(EShoringPieceState::Unsupported);
+                if (bTransientAnchorFailure)
+                {
+                    // The old collision may still be visible while its replacement is pending.
+                    // Fail closed, but do not convert a transient publication gap into collapse.
+                    Piece->SetPieceState(EShoringPieceState::NeedsRevalidation);
+                    bHasTransientAnchorFailure = true;
+                }
+                else
+                {
+                    // A confirmed surface loss invalidates this member and cascades via its GUID links.
+                    Piece->SetPieceState(EShoringPieceState::Unsupported);
+                }
                 continue;
             }
             FShoringSupportAnchor UpdatedAnchor = Anchor;
@@ -799,12 +822,37 @@ bool UExcavationShoringSubsystem::RevalidatePlan(const FGuid& PlanId, FString& O
     if (Volume->GetDensityRevision() != CurrentRevision)
     {
         OutError = TEXT("Voxel density changed during shoring revalidation; retry against the new revision.");
-        SetPlanState(PlanId, EShoringPieceState::NeedsRevalidation);
+        for (const FGuid& PieceId : *PieceIds)
+        {
+            if (APlaceableShoringPiece* Piece = FindPiece(PieceId))
+            {
+                if (!Piece->HasCollapsed() && Piece->GetHealth() > KINDA_SMALL_NUMBER)
+                {
+                    Piece->SetPieceState(EShoringPieceState::NeedsRevalidation);
+                }
+            }
+        }
+        return false;
+    }
+
+    if (bHasTransientAnchorFailure)
+    {
+        OutError = TEXT("At least one voxel anchor is waiting for current mesh/collision publication; retry revalidation.");
+        for (const FGuid& PieceId : *PieceIds)
+        {
+            if (APlaceableShoringPiece* Piece = FindPiece(PieceId))
+            {
+                if (!Piece->HasCollapsed() && Piece->GetHealth() > KINDA_SMALL_NUMBER)
+                {
+                    Piece->SetPieceState(EShoringPieceState::NeedsRevalidation);
+                }
+            }
+        }
         return false;
     }
 
     TArray<FShoringSupportAssessment> Assessments;
-    if (!EvaluateAndApplyPlanSupport(PlanId, Assessments, OutError))
+    if (!EvaluateAndApplyPlanSupport(PlanId, Assessments, OutError, true))
     {
         SetPlanState(PlanId, EShoringPieceState::NeedsRevalidation);
         return false;
@@ -842,7 +890,8 @@ bool UExcavationShoringSubsystem::GetPlanSupportAssessment(
 bool UExcavationShoringSubsystem::BuildSupportNodes(
     const FGuid& PlanId,
     TArray<FShoringSupportNode>& OutNodes,
-    FString& OutError) const
+    FString& OutError,
+    bool bAnchorsWereRevalidated) const
 {
     OutNodes.Reset();
     OutError.Reset();
@@ -878,8 +927,9 @@ bool UExcavationShoringSubsystem::BuildSupportNodes(
         Node.bIsCollapsed = Piece->HasCollapsed();
         // Terrain edits invalidate only plans whose anchor chunks were marked dirty.
         // A global density revision increment alone must not stale unrelated supports.
-        Node.bAnchorCurrent = Piece->GetPieceState() != EShoringPieceState::NeedsRevalidation
-            && Piece->GetPieceState() != EShoringPieceState::Invalid;
+        Node.bAnchorCurrent = bAnchorsWereRevalidated
+            || (Piece->GetPieceState() != EShoringPieceState::NeedsRevalidation
+                && Piece->GetPieceState() != EShoringPieceState::Invalid);
     }
     return true;
 }
@@ -887,10 +937,11 @@ bool UExcavationShoringSubsystem::BuildSupportNodes(
 bool UExcavationShoringSubsystem::EvaluateAndApplyPlanSupport(
     const FGuid& PlanId,
     TArray<FShoringSupportAssessment>& OutAssessments,
-    FString& OutError)
+    FString& OutError,
+    bool bAnchorsWereRevalidated)
 {
     TArray<FShoringSupportNode> Nodes;
-    if (!BuildSupportNodes(PlanId, Nodes, OutError)
+    if (!BuildSupportNodes(PlanId, Nodes, OutError, bAnchorsWereRevalidated)
         || !FShoringSupportResolver::Evaluate(Nodes, OutAssessments, OutError))
     {
         return false;
