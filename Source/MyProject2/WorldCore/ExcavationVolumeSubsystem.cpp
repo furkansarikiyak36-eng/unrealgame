@@ -420,6 +420,18 @@ bool UExcavationVolumeSubsystem::ImportSnapshot(
     }
 
     OnVolumeReset.Broadcast();
+    if (UWorld* World = GetWorld())
+    {
+        if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+        {
+            FWorldMechanicEvent Event;
+            Event.Type = EWorldMechanicEventType::VoxelWorldReset;
+            Event.ScalarValue = static_cast<float>(Snapshot.Overrides.Num());
+            Event.SourceTag = TEXT("ExcavationVolumeSubsystem");
+            Event.bHighPriority = true;
+            Events->EnqueueEvent(MoveTemp(Event));
+        }
+    }
     return true;
 }
 
@@ -780,6 +792,30 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
     CandidateRecord.bCommitted = true;
     OutRecord = MoveTemp(CandidateRecord);
     OnVolumeChanged.Broadcast(OutRecord, false);
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+        {
+            FBox ChangedBounds(ForceInit);
+            for (const FExcavationCellChange& Change : OutRecord.Changes)
+            {
+                ChangedBounds += CellToWorldCenter(Change.Cell);
+            }
+            FWorldMechanicEvent Event;
+            Event.Type = EWorldMechanicEventType::VoxelEditCommitted;
+            Event.OperationId = OutRecord.OperationId;
+            Event.SourceTag = EditType == EExcavationEditType::Carve ? FName(TEXT("Carve")) : FName(TEXT("Fill"));
+            Event.ScalarValue = static_cast<float>(OutRecord.Changes.Num());
+            if (ChangedBounds.IsValid)
+            {
+                Event.PositionCm = ChangedBounds.GetCenter();
+                Event.ExtentCm = ChangedBounds.GetExtent() + FVector(CellSizeCm * 0.5f);
+            }
+            Event.bHighPriority = true;
+            Events->EnqueueEvent(MoveTemp(Event));
+        }
+    }
     return true;
 }
 
@@ -855,5 +891,29 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
     }
 
     OnVolumeChanged.Broadcast(Record, true);
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+        {
+            FBox ChangedBounds(ForceInit);
+            for (const FExcavationCellChange& Change : Record.Changes)
+            {
+                ChangedBounds += CellToWorldCenter(Change.Cell);
+            }
+            FWorldMechanicEvent Event;
+            Event.Type = EWorldMechanicEventType::VoxelEditRolledBack;
+            Event.OperationId = Record.OperationId;
+            Event.SourceTag = TEXT("ExcavationVolumeSubsystem");
+            Event.ScalarValue = static_cast<float>(Record.Changes.Num());
+            if (ChangedBounds.IsValid)
+            {
+                Event.PositionCm = ChangedBounds.GetCenter();
+                Event.ExtentCm = ChangedBounds.GetExtent() + FVector(CellSizeCm * 0.5f);
+            }
+            Event.bHighPriority = true;
+            Events->EnqueueEvent(MoveTemp(Event));
+        }
+    }
     return true;
 }
