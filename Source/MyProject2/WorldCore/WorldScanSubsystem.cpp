@@ -8,11 +8,10 @@
 #include "LandscapeProxy.h"
 #include "WorldCore/WorldClassificationSubsystem.h"
 #include "WorldCore/WorldRuntimeProfileSubsystem.h"
+#include "WorldScanSystem.h"
 
 namespace
 {
-    constexpr float MovingSpeedThresholdCmPerSec = 5.0f;
-
     bool HasActorOrComponentTag(
         const AActor* Actor,
         const UPrimitiveComponent* Component,
@@ -39,43 +38,11 @@ namespace
             {
                 return false;
             }
-            return Component->GetPhysicsLinearVelocity().SizeSquared()
-                > FMath::Square(MovingSpeedThresholdCmPerSec);
+            return Component->GetPhysicsLinearVelocity().SizeSquared() > FMath::Square(5.0f)
+                || Component->GetPhysicsAngularVelocityInRadians().SizeSquared() > FMath::Square(0.05f);
         }
 
-        return Actor && Actor->GetVelocity().SizeSquared()
-            > FMath::Square(MovingSpeedThresholdCmPerSec);
-    }
-
-    FCollisionShape MakeQueryShape(const FWorldShapeTraceRequest& Request)
-    {
-        switch (Request.Shape)
-        {
-        case EWorldShapeTraceKind::Box:
-            return FCollisionShape::MakeBox(Request.HalfExtentCm);
-        case EWorldShapeTraceKind::Capsule:
-            return FCollisionShape::MakeCapsule(Request.RadiusCm, Request.HalfHeightCm);
-        case EWorldShapeTraceKind::Sphere:
-        default:
-            return FCollisionShape::MakeSphere(Request.RadiusCm);
-        }
-    }
-
-    FCollisionShape MakeOverlapShape(const FWorldOverlapRequest& Request)
-    {
-        switch (Request.Shape)
-        {
-        case EWorldOverlapShape::OrientedBox:
-            return FCollisionShape::MakeBox(Request.HalfExtentCm);
-        case EWorldOverlapShape::Sphere:
-        default:
-            return FCollisionShape::MakeSphere(Request.RadiusCm);
-        }
-    }
-
-    bool IsFiniteFloat(float Value)
-    {
-        return FMath::IsFinite(Value);
+        return Actor && Actor->GetVelocity().SizeSquared() > FMath::Square(5.0f);
     }
 }
 
@@ -106,6 +73,9 @@ bool UWorldScanSubsystem::ResolveRegionKind(
         }
     }
 
+    // If the coarse map is unavailable/not built, use a conservative deterministic
+    // marker policy: landscape-layer tags outrank general region tags, but conflicting
+    // tags at the same priority resolve to Transition instead of accidentally granting digging.
     TArray<FName> Tags;
     if (Actor)
     {
@@ -120,16 +90,38 @@ bool UWorldScanSubsystem::ResolveRegionKind(
         return A.ToString() < B.ToString();
     });
 
+    int32 BestPriority = INDEX_NONE;
+    bool bConflict = false;
+    EWorldRegionKind BestKind = EWorldRegionKind::Unknown;
     for (const FName Tag : Tags)
     {
-        EWorldClassificationSource Source;
-        if (UWorldClassificationSubsystem::TryClassifyRegionTag(Tag, OutKind, Source))
+        EWorldRegionKind CandidateKind = EWorldRegionKind::Unknown;
+        EWorldClassificationSource CandidateSource = EWorldClassificationSource::DefaultUnknown;
+        if (!UWorldClassificationSubsystem::TryClassifyRegionTag(Tag, CandidateKind, CandidateSource))
         {
-            return true;
+            continue;
+        }
+
+        const int32 CandidatePriority = CandidateSource == EWorldClassificationSource::LandscapeLayer ? 80 : 60;
+        if (CandidatePriority > BestPriority)
+        {
+            BestPriority = CandidatePriority;
+            BestKind = CandidateKind;
+            bConflict = false;
+        }
+        else if (CandidatePriority == BestPriority && CandidateKind != BestKind)
+        {
+            bConflict = true;
         }
     }
 
-    // Conservative fallback: an unmarked static landscape/mesh is not editable.
+    if (BestPriority != INDEX_NONE)
+    {
+        OutKind = bConflict ? EWorldRegionKind::Transition : BestKind;
+        return true;
+    }
+
+    // Do not assume unmarked terrain is editable. It must have a buildable-world marker.
     if (Actor && Cast<ALandscapeProxy>(Actor))
     {
         OutKind = EWorldRegionKind::StaticGeometry;
@@ -143,110 +135,36 @@ bool UWorldScanSubsystem::ResolveRegionKind(
     return false;
 }
 
-void UWorldScanSubsystem::ResolveCapabilities(
+void UWorldScanSubsystem::ApplyRegionSafety(
     const AActor* Actor,
     const UPrimitiveComponent* Component,
     EWorldRegionKind RegionKind,
     FWorldScanHit& OutHit) const
 {
-    OutHit.bCanDig = RegionKind == EWorldRegionKind::EditableVoxel;
+    // The shared scan core can infer actor capabilities, but editable terrain is
+    // the only source of excavation permission.
+    OutHit.bCanDig = RegionKind == EWorldRegionKind::EditableVoxel
+        && !HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.NoDig"));
 
-    switch (RegionKind)
+    if (RegionKind == EWorldRegionKind::Water || RegionKind == EWorldRegionKind::Unknown)
     {
-    case EWorldRegionKind::EditableVoxel:
-    case EWorldRegionKind::StaticGeometry:
-        OutHit.bCanSupport = true;
-        break;
-    case EWorldRegionKind::Transition:
-        // Transition boundaries block digging but can be physical support if static.
-        OutHit.bCanSupport = Component
-            && Component->Mobility == EComponentMobility::Static
-            && !(Component->IsSimulatingPhysics());
-        break;
-    case EWorldRegionKind::Water:
-    case EWorldRegionKind::Unknown:
-    default:
         OutHit.bCanSupport = false;
-        break;
+    }
+    if (RegionKind == EWorldRegionKind::Transition)
+    {
+        OutHit.bCanDig = false;
+        // A transition cell is not safe to use as the authority for support.
+        OutHit.bCanSupport = false;
     }
 
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Object.Tree")))
+    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.NoSupport")))
     {
-        OutHit.bCanHarvest = true;
-        OutHit.bCanCarry = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Object.Log")))
-    {
-        OutHit.bCanSupport = true;
-        OutHit.bCanSnap = true;
-        OutHit.bCanHarvest = true;
-        OutHit.bCanCarry = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Object.Rock")))
-    {
-        OutHit.bCanSupport = true;
-        OutHit.bCanHarvest = true;
-        OutHit.bCanCarry = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Object.Stone")))
-    {
-        OutHit.bCanSupport = true;
-        OutHit.bCanSnap = true;
-        OutHit.bCanHarvest = true;
-        OutHit.bCanCarry = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Object.Ground")))
-    {
-        OutHit.bCanSupport = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Object.Structure")))
-    {
-        OutHit.bCanSupport = true;
-        OutHit.bCanSnap = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Object.RawResource")))
-    {
-        OutHit.bCanHarvest = true;
-        OutHit.bCanInteract = true;
-    }
-
-    // Capability overrides are deliberate opt-outs for destructive/unsafe defaults,
-    // or explicit opt-ins for interactions with otherwise unknown tagged actors.
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.Harvest")))
-    {
-        OutHit.bCanHarvest = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.Carry")))
-    {
-        OutHit.bCanCarry = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.Interact")))
-    {
-        OutHit.bCanInteract = true;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.Snap")))
-    {
-        OutHit.bCanSnap = true;
+        OutHit.bCanSupport = false;
     }
     if (HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.NoSnap")))
     {
         OutHit.bCanSnap = false;
     }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.NoSupport")))
-    {
-        OutHit.bCanSupport = false;
-    }
-    if (HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.NoDig")))
-    {
-        OutHit.bCanDig = false;
-    }
-
-    // A classification override must never allow digging in an explicitly static region.
-    if (RegionKind != EWorldRegionKind::EditableVoxel)
-    {
-        OutHit.bCanDig = false;
-    }
-
     if (IsActorOrComponentUnstable(Actor, Component))
     {
         OutHit.bCanSupport = false;
@@ -262,35 +180,45 @@ bool UWorldScanSubsystem::Trace(const FWorldScanQuery& Query, FWorldScanHit& Out
         return false;
     }
 
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(WorldScanContractTrace), Query.bTraceComplex);
-    Params.bReturnPhysicalMaterial = Query.bReturnPhysicalMaterial;
-    Params.bFindInitialOverlaps = false;
-    if (Query.ActorToIgnore)
+    WorldScanSystem::FScanResult LegacyScan;
+    if (!WorldScanSystem::Trace(
+        Query.World,
+        Query.StartCm,
+        Query.EndCm,
+        Query.ActorToIgnore,
+        LegacyScan,
+        Query.Channel,
+        Query.bTraceComplex,
+        &Query.ComponentsToIgnore))
     {
-        Params.AddIgnoredActor(Query.ActorToIgnore);
-    }
-    for (const UPrimitiveComponent* Component : Query.ComponentsToIgnore)
-    {
-        if (IsValid(Component))
-        {
-            Params.AddIgnoredComponent(Component);
-        }
+        return false;
     }
 
-    FHitResult Hit;
-    const bool bHit = Query.World->LineTraceSingleByChannel(
-        Hit, Query.StartCm, Query.EndCm, Query.Channel, Params);
-    if (!bHit || !Hit.bBlockingHit || !Hit.GetActor())
+    WorldScanSystem::FWorldAnalysis Analysis;
+    if (!WorldScanSystem::AnalyzeHit(LegacyScan, Analysis))
     {
         return false;
     }
 
     OutHit.bHit = true;
-    OutHit.Hit = Hit;
-    OutHit.ObjectClass = Hit.GetActor()->GetClass()->GetFName();
+    OutHit.Hit = LegacyScan.Hit;
+    OutHit.ObjectClass = LegacyScan.Hit.GetActor()->GetClass()->GetFName();
+    OutHit.bCanSupport = Analysis.HasCapability(WorldScanSystem::ECapability::CanSupport);
+    OutHit.bCanSnap = Analysis.HasCapability(WorldScanSystem::ECapability::CanSnap);
+    OutHit.bCanHarvest = Analysis.HasCapability(WorldScanSystem::ECapability::CanHarvest);
+    OutHit.bCanCarry = Analysis.HasCapability(WorldScanSystem::ECapability::CanCarry);
+    OutHit.bCanInteract = Analysis.HasCapability(WorldScanSystem::ECapability::CanInteract);
 
-    ResolveRegionKind(Hit.GetActor(), Hit.GetComponent(), Hit.ImpactPoint, OutHit.RegionKind);
-    ResolveCapabilities(Hit.GetActor(), Hit.GetComponent(), OutHit.RegionKind, OutHit);
+    ResolveRegionKind(
+        LegacyScan.Hit.GetActor(),
+        LegacyScan.Hit.GetComponent(),
+        LegacyScan.Hit.ImpactPoint,
+        OutHit.RegionKind);
+    ApplyRegionSafety(
+        LegacyScan.Hit.GetActor(),
+        LegacyScan.Hit.GetComponent(),
+        OutHit.RegionKind,
+        OutHit);
     return true;
 }
 
@@ -303,34 +231,37 @@ bool UWorldScanSubsystem::ShapeTrace(
 {
     OutResult = FWorldShapeTraceResult{};
     FString Error;
-    if (!IsWorldCompatible(World) || !Request.Validate(Error))
+    if (!IsWorldCompatible(World) || !Request.Validate(Error)
+        || FVector::DistSquared(Request.StartCm, Request.EndCm) <= FMath::Square(KINDA_SMALL_NUMBER))
     {
         return false;
     }
 
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(WorldScanContractShapeTrace), false);
-    Params.bFindInitialOverlaps = false;
-    if (ActorToIgnore)
+    WorldScanSystem::FShapeTraceRequest LegacyRequest;
+    switch (Request.Shape)
     {
-        Params.AddIgnoredActor(ActorToIgnore);
+    case EWorldShapeTraceKind::Sphere:
+        LegacyRequest.Type = WorldScanSystem::EShapeTraceType::Sphere;
+        break;
+    case EWorldShapeTraceKind::Box:
+        LegacyRequest.Type = WorldScanSystem::EShapeTraceType::Box;
+        break;
+    case EWorldShapeTraceKind::Capsule:
+        LegacyRequest.Type = WorldScanSystem::EShapeTraceType::Capsule;
+        break;
+    default:
+        return false;
     }
+    LegacyRequest.RadiusCm = Request.RadiusCm;
+    LegacyRequest.HalfExtentCm = Request.HalfExtentCm;
+    LegacyRequest.HalfHeightCm = Request.HalfHeightCm;
 
-    const FCollisionShape Shape = MakeQueryShape(Request);
-    if (Request.bMultiHit)
-    {
-        World->SweepMultiByChannel(
-            OutResult.Hits, Request.StartCm, Request.EndCm, FQuat::Identity, Channel, Shape, Params);
-    }
-    else
-    {
-        FHitResult Hit;
-        if (World->SweepSingleByChannel(
-            Hit, Request.StartCm, Request.EndCm, FQuat::Identity, Channel, Shape, Params))
-        {
-            OutResult.Hits.Add(MoveTemp(Hit));
-        }
-    }
-
+    WorldScanSystem::FShapeScanResult LegacyResult;
+    // The legacy helper's bool means "hit"; the provider's bool means "valid query ran".
+    WorldScanSystem::ShapeTrace(
+        World, Request.StartCm, Request.EndCm, LegacyRequest, ActorToIgnore,
+        LegacyResult, Channel, false, Request.bMultiHit);
+    OutResult.Hits = MoveTemp(LegacyResult.Hits);
     OutResult.bSucceeded = true;
     return true;
 }
@@ -349,17 +280,23 @@ bool UWorldScanSubsystem::QueryOverlaps(
         return false;
     }
 
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(WorldScanContractOverlap), false);
-    Params.bFindInitialOverlaps = true;
-    if (ActorToIgnore)
+    WorldScanSystem::FOverlapScanResult LegacyResult;
+    switch (Request.Shape)
     {
-        Params.AddIgnoredActor(ActorToIgnore);
+    case EWorldOverlapShape::Sphere:
+        WorldScanSystem::OverlapSphere(
+            World, Request.CenterCm, Request.RadiusCm, ActorToIgnore, LegacyResult, Channel);
+        break;
+    case EWorldOverlapShape::OrientedBox:
+        WorldScanSystem::OverlapBox(
+            World, Request.CenterCm, Request.HalfExtentCm, Request.Rotation,
+            ActorToIgnore, LegacyResult, Channel);
+        break;
+    default:
+        return false;
     }
 
-    const FCollisionShape Shape = MakeOverlapShape(Request);
-    World->OverlapMultiByChannel(
-        OutResult.Overlaps, Request.CenterCm, Request.Rotation, Channel, Shape, Params);
-
+    OutResult.Overlaps = MoveTemp(LegacyResult.Overlaps);
     OutResult.bSucceeded = true;
     return true;
 }
@@ -395,58 +332,29 @@ bool UWorldScanSubsystem::SampleSurface(
         return false;
     }
 
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(WorldScanContractSurfaceSamples), false);
-    Params.bFindInitialOverlaps = false;
-    if (ActorToIgnore)
-    {
-        Params.AddIgnoredActor(ActorToIgnore);
-    }
+    WorldScanSystem::FGeometrySampleSettings LegacyRequest;
+    LegacyRequest.HalfExtentCm = Request.HalfExtentCm;
+    LegacyRequest.SamplesX = Request.SamplesX;
+    LegacyRequest.SamplesY = Request.SamplesY;
+    LegacyRequest.TraceUpCm = Request.TraceUpCm;
+    LegacyRequest.TraceDownCm = Request.TraceDownCm;
+    LegacyRequest.Channel = ECC_Visibility;
+    LegacyRequest.bTraceComplex = false;
 
-    float MinHeight = TNumericLimits<float>::Max();
-    float MaxHeight = TNumericLimits<float>::Lowest();
-    float MaxSlope = 0.0f;
-
-    for (int32 Y = 0; Y < Request.SamplesY; ++Y)
-    {
-        const float YAlpha = Request.SamplesY == 1 ? 0.5f : static_cast<float>(Y) / (Request.SamplesY - 1);
-        const float YOffset = FMath::Lerp(-Request.HalfExtentCm.Y, Request.HalfExtentCm.Y, YAlpha);
-        for (int32 X = 0; X < Request.SamplesX; ++X)
-        {
-            const float XAlpha = Request.SamplesX == 1 ? 0.5f : static_cast<float>(X) / (Request.SamplesX - 1);
-            const float XOffset = FMath::Lerp(-Request.HalfExtentCm.X, Request.HalfExtentCm.X, XAlpha);
-            const FVector SampleCenter = Request.CenterCm + FVector(XOffset, YOffset, 0.0f);
-            const FVector Start(SampleCenter.X, SampleCenter.Y, Request.CenterCm.Z + Request.TraceUpCm);
-            const FVector End(SampleCenter.X, SampleCenter.Y, Request.CenterCm.Z - Request.TraceDownCm);
-
-            FHitResult Hit;
-            if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params)
-                || !Hit.bBlockingHit)
-            {
-                continue;
-            }
-
-            const FVector Normal = Hit.ImpactNormal.GetSafeNormal();
-            const float Slope = FMath::RadiansToDegrees(
-                FMath::Acos(FMath::Clamp(FVector::DotProduct(Normal, FVector::UpVector), -1.0f, 1.0f)));
-            OutResult.Points.Add(Hit.ImpactPoint);
-            OutResult.Normals.Add(Normal);
-            MinHeight = FMath::Min(MinHeight, Hit.ImpactPoint.Z);
-            MaxHeight = FMath::Max(MaxHeight, Hit.ImpactPoint.Z);
-            MaxSlope = FMath::Max(MaxSlope, Slope);
-        }
-    }
-
-    OutResult.bSucceeded = !OutResult.Points.IsEmpty();
-    if (!OutResult.bSucceeded)
+    WorldScanSystem::FGeometrySampleResult LegacyResult;
+    if (!WorldScanSystem::SampleSurface(World, Request.CenterCm, LegacyRequest, ActorToIgnore, LegacyResult))
     {
         OutResult.Error = TEXT("No surface hit was returned by the requested sample grid.");
         return false;
     }
 
-    OutResult.MinHeightCm = MinHeight;
-    OutResult.MaxHeightCm = MaxHeight;
-    OutResult.MaxSlopeDegrees = MaxSlope;
-    return true;
+    OutResult.Points = MoveTemp(LegacyResult.SamplePoints);
+    OutResult.Normals = MoveTemp(LegacyResult.SampleNormals);
+    OutResult.MinHeightCm = LegacyResult.MinHeightCm;
+    OutResult.MaxHeightCm = LegacyResult.MaxHeightCm;
+    OutResult.MaxSlopeDegrees = LegacyResult.MaxSlopeDegrees;
+    OutResult.bSucceeded = LegacyResult.bValid;
+    return OutResult.bSucceeded;
 }
 
 bool UWorldScanSubsystem::AnalyzeActor(const AActor* Actor, FWorldActorSnapshot& OutSnapshot) const
@@ -456,23 +364,6 @@ bool UWorldScanSubsystem::AnalyzeActor(const AActor* Actor, FWorldActorSnapshot&
     {
         return false;
     }
-
-    FVector Origin = FVector::ZeroVector;
-    FVector Extent = FVector::ZeroVector;
-    Actor->GetActorBounds(false, Origin, Extent, true);
-    const FBox Bounds(Origin - Extent, Origin + Extent);
-    if (!Bounds.IsValid
-        || !WorldSystemContractValidation::IsFiniteVector(Origin)
-        || !WorldSystemContractValidation::IsFiniteVector(Extent))
-    {
-        return false;
-    }
-
-    OutSnapshot.bValid = true;
-    OutSnapshot.Bounds = Bounds;
-    OutSnapshot.OriginCm = Origin;
-    OutSnapshot.DimensionsCm = Extent * 2.0f;
-    OutSnapshot.LinearVelocityCmPerSec = Actor->GetVelocity();
 
     const UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Actor->GetRootComponent());
     if (!Primitive)
@@ -486,16 +377,22 @@ bool UWorldScanSubsystem::AnalyzeActor(const AActor* Actor, FWorldActorSnapshot&
         Primitive = Components.IsEmpty() ? nullptr : Components[0];
     }
 
-    if (Primitive)
+    WorldScanSystem::FBoundsAnalysis Bounds;
+    if (!WorldScanSystem::AnalyzeBounds(Actor, Primitive, Bounds))
     {
-        OutSnapshot.bSimulatingPhysics = Primitive->IsSimulatingPhysics();
-        OutSnapshot.bRigidBodyAwake = Primitive->IsAnyRigidBodyAwake();
-        if (OutSnapshot.bSimulatingPhysics)
-        {
-            OutSnapshot.LinearVelocityCmPerSec = Primitive->GetPhysicsLinearVelocity();
-            OutSnapshot.AngularVelocityRadiansPerSec = Primitive->GetPhysicsAngularVelocityInRadians();
-        }
+        return false;
     }
 
+    WorldScanSystem::FPhysicsStateAnalysis Physics;
+    WorldScanSystem::QueryPhysicsState(Actor, Primitive, Physics);
+
+    OutSnapshot.bValid = true;
+    OutSnapshot.Bounds = Bounds.Bounds;
+    OutSnapshot.OriginCm = Bounds.Origin;
+    OutSnapshot.DimensionsCm = Bounds.Dimensions;
+    OutSnapshot.LinearVelocityCmPerSec = Physics.LinearVelocityCmPerSec;
+    OutSnapshot.AngularVelocityRadiansPerSec = Physics.AngularVelocityRadiansPerSec;
+    OutSnapshot.bSimulatingPhysics = Physics.bSimulatingPhysics;
+    OutSnapshot.bRigidBodyAwake = Physics.bRigidBodyAwake;
     return true;
 }
