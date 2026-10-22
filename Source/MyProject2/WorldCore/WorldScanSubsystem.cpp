@@ -147,6 +147,18 @@ void UWorldScanSubsystem::ApplyRegionSafety(
         && HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.Dig"))
         && !HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.NoDig"));
 
+    // A classified terrain surface is a physical support candidate even if its
+    // runtime mesh component is Movable. Stable placement/snap solvers still run later.
+    if (RegionKind == EWorldRegionKind::EditableVoxel)
+    {
+        OutHit.bCanSupport = true;
+        OutHit.bCanSnap = true;
+    }
+    else if (RegionKind == EWorldRegionKind::StaticGeometry)
+    {
+        OutHit.bCanSupport = true;
+    }
+
     if (RegionKind == EWorldRegionKind::Water || RegionKind == EWorldRegionKind::Unknown)
     {
         OutHit.bCanSupport = false;
