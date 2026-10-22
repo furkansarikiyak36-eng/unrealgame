@@ -27,6 +27,8 @@ class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UCableComponent;
 class ULineBatchComponent;
+struct FWorldPlacementQuery;
+struct FWorldPlacementResult;
 
 /**
  * First person survival character: chop trees, break rocks, pick up drops,
@@ -181,7 +183,11 @@ private:
 	bool TraceFromView(float Distance, FHitResult& OutHit, bool bIgnorePlans = false) const;
 	void UpdateFocus();
 	void UpdateBuildPreview();
-	bool ComputeBuildTransform(FTransform& OutTransform, const UInstancedStaticMeshComponent** OutSnappedTo = nullptr) const;
+	bool ComputeBuildTransform(
+		FTransform& OutTransform,
+		const UInstancedStaticMeshComponent** OutSnappedTo = nullptr,
+		FWorldPlacementQuery* OutVoxelQuery = nullptr,
+		FWorldPlacementResult* OutVoxelPlacement = nullptr) const;
 	bool IsPlacementFree(const FTransform& Transform, const UInstancedStaticMeshComponent* SnappedTo = nullptr) const;
 	void PlaceSelected();
 	void SelectBuildItem(EForestItem Item);

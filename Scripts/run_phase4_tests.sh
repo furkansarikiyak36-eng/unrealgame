@@ -81,6 +81,7 @@ EXPECTED_TESTS=(
   "MyProject2.World.VoxelInteraction.EditFootprintCannotCrossStaticRegion"
   "MyProject2.World.VoxelInteraction.UnknownAndInvalidEditsFailClosed"
   "MyProject2.World.VoxelInteraction.PlacementRejectsStaleRevision"
+  "MyProject2.World.VoxelInteraction.CommitRejectsStalePreview"
 )
 for test_name in "${EXPECTED_TESTS[@]}"; do
   grep -Fq "$test_name" "$SAVED_LOG" || {

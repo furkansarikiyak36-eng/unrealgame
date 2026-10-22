@@ -267,15 +267,21 @@ bool UWorldVoxelInteractionSubsystem::DigFromView(
         return false;
     }
 
-    if (ScanHit.RegionKind != EWorldRegionKind::EditableVoxel || !ScanHit.bCanDig)
+    // The public interaction API is voxel-only too; editable tags on an ordinary actor
+    // must never authorize edits to the separate authoritative density field.
+    if (!IsVoxelSurfaceHit(ScanHit.Hit))
     {
-        OutError = TEXT("Dig denied: the current scanner hit lacks EditableVoxel classification or World.Capability.Dig permission.");
+        OutError = TEXT("Dig denied: the current target is not a generated voxel surface.");
+        return false;
+    }
+    if (!IsCurrentVoxelSurfaceActor(ScanHit.Hit.GetActor(), OutError))
+    {
         return false;
     }
 
-    if (IsVoxelSurfaceHit(ScanHit.Hit)
-        && !IsCurrentVoxelSurfaceActor(ScanHit.Hit.GetActor(), OutError))
+    if (ScanHit.RegionKind != EWorldRegionKind::EditableVoxel || !ScanHit.bCanDig)
     {
+        OutError = TEXT("Dig denied: the current scanner hit lacks EditableVoxel classification or World.Capability.Dig permission.");
         return false;
     }
 

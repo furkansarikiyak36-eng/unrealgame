@@ -250,4 +250,49 @@ bool FWorldVoxelInteractionPlacementRevisionTest::RunTest(const FString& Paramet
     return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FWorldVoxelInteractionCommitStalePreviewTest,
+    "MyProject2.World.VoxelInteraction.CommitRejectsStalePreview",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldVoxelInteractionCommitStalePreviewTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = CreateVoxelInteractionTestWorld(TEXT("VoxelInteractionStaleCommitWorld"));
+    if (!TestNotNull(TEXT("Test world should be created"), World))
+    {
+        return false;
+    }
+
+    UWorldVoxelInteractionSubsystem* Interaction =
+        World->GetSubsystem<UWorldVoxelInteractionSubsystem>();
+    UExcavationVolumeSubsystem* Excavation =
+        World->GetSubsystem<UExcavationVolumeSubsystem>();
+    if (!TestNotNull(TEXT("Voxel interaction subsystem should be created"), Interaction)
+        || !TestNotNull(TEXT("Authoritative density subsystem should be created"), Excavation))
+    {
+        World->DestroyWorld(false);
+        return false;
+    }
+
+    FWorldPlacementQuery Query;
+    FWorldPlacementResult StalePreview;
+    StalePreview.bValid = true;
+    StalePreview.Failure = EWorldPlacementFailure::None;
+    StalePreview.ValidatedWorldRevision = Excavation->GetDensityRevision() + 1;
+
+    FWorldPlacementResult CommitResult;
+    TestFalse(
+        TEXT("Commit must reject a preview whose density revision is no longer current"),
+        Interaction->ValidatePlacementCommit(Query, StalePreview, nullptr, CommitResult));
+    TestFalse(TEXT("Rejected commit must not produce a valid placement"), CommitResult.bValid);
+    TestEqual(
+        TEXT("Stale preview maps to the stale-surface failure"),
+        static_cast<uint8>(CommitResult.Failure),
+        static_cast<uint8>(EWorldPlacementFailure::StaleSurface));
+
+    World->DestroyWorld(false);
+    return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

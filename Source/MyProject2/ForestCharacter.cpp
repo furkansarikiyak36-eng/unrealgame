@@ -2358,8 +2358,21 @@ void AForestCharacter::UpdateBuildPreview()
 	}
 }
 
-bool AForestCharacter::ComputeBuildTransform(FTransform& OutTransform, const UInstancedStaticMeshComponent** OutSnappedTo) const
+bool AForestCharacter::ComputeBuildTransform(
+	FTransform& OutTransform,
+	const UInstancedStaticMeshComponent** OutSnappedTo,
+	FWorldPlacementQuery* OutVoxelQuery,
+	FWorldPlacementResult* OutVoxelPlacement) const
 {
+	if (OutVoxelQuery)
+	{
+		*OutVoxelQuery = FWorldPlacementQuery{};
+	}
+	if (OutVoxelPlacement)
+	{
+		*OutVoxelPlacement = FWorldPlacementResult{};
+	}
+
 	const UStaticMesh* PieceMesh = BuildPreview->GetStaticMesh();
 	if (!PieceMesh || !Structures)
 	{
@@ -2414,6 +2427,17 @@ bool AForestCharacter::ComputeBuildTransform(FTransform& OutTransform, const UIn
 			|| !Placement.bValid)
 		{
 			return false;
+		}
+
+		// Preserve the exact preview contract so PlaceSelected can revalidate it immediately
+		// before any actor is spawned or inventory is consumed.
+		if (OutVoxelQuery)
+		{
+			*OutVoxelQuery = PlacementQuery;
+		}
+		if (OutVoxelPlacement)
+		{
+			*OutVoxelPlacement = Placement;
 		}
 
 		const FQuat Rotation = Placement.Transform.GetRotation();
@@ -2615,11 +2639,34 @@ void AForestCharacter::PlaceSelected()
 	}
 	FTransform Transform;
 	const UInstancedStaticMeshComponent* SnappedTo = nullptr;
-	if (!ComputeBuildTransform(Transform, &SnappedTo) || !IsPlacementFree(Transform, SnappedTo))
+	FWorldPlacementQuery VoxelPlacementQuery;
+	FWorldPlacementResult VoxelPreview;
+	if (!ComputeBuildTransform(Transform, &SnappedTo, &VoxelPlacementQuery, &VoxelPreview)
+		|| !IsPlacementFree(Transform, SnappedTo))
 	{
 		ShowMessage(TEXT("Buraya yerleştirilemez"));
 		return;
 	}
+
+	// Preview and commit are separate authority checks. Density may have changed since
+	// the preview was prepared; fail closed before spawning actors or consuming resources.
+	if (VoxelPreview.bValid)
+	{
+		UWorldVoxelInteractionSubsystem* VoxelInteraction =
+			GetWorld() ? GetWorld()->GetSubsystem<UWorldVoxelInteractionSubsystem>() : nullptr;
+		FWorldPlacementResult CommitResult;
+		if (!VoxelInteraction
+			|| !VoxelInteraction->ValidatePlacementCommit(
+				VoxelPlacementQuery, VoxelPreview, this, CommitResult)
+			|| !CommitResult.bValid)
+		{
+			ShowMessage(CommitResult.Message.IsEmpty()
+				? TEXT("Voxel yüzeyi değişti; yerleştirme iptal edildi.")
+				: CommitResult.Message);
+			return;
+		}
+	}
+
 	if (SelectedBuildItem == EForestItem::StoneBlock)
 	{
 		FActorSpawnParameters SpawnParams;

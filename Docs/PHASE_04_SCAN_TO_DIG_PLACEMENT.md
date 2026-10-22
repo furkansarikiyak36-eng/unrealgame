@@ -67,7 +67,7 @@ UWorldVoxelInteractionSubsystem, IPlacementSurfaceProvider sözleşmesini de uyg
 - BuildPlacementPreview: anchor'a göre transform üretir, source revision'ı kaydeder ve yerel oriented-box overlap kontrolü yapar.
 - ValidatePlacementCommit: aynı query'yi mevcut revision altında tekrar değerlendirir; hedef, transform veya revision önizlemeden değişmişse commit reddedilir. Kullanıcıya dönük placer, bu doğrulama geçmeden actor spawn etmemeli veya kaynak tüketmemelidir.
 
-Mevcut AForestCharacter build sistemi hâlâ kendi 25 cm grid placement davranışını kullanır; voxel surface üzerine yerleştirme öncesinde ValidateVoxelSurfaceHit ile güncel surface/revision doğrular ve mevcut collision overlap testini korur. Bu, mevcut taş/kütük/door/window actor üretimini yeni genel snap API'sine zorla taşımadan güvenli bir ilk vertical slice sağlar.
+Mevcut AForestCharacter build sistemi hâlâ kendi 25 cm grid placement davranışını kullanır; voxel surface üzerine yerleştirmede güncel surface/revision doğrular ve mevcut collision overlap testini korur. ComputeBuildTransform, voxel query/preview çiftini PlaceSelected'a taşır; PlaceSelected, actor spawn veya envanter tüketiminden hemen önce ValidatePlacementCommit çağırarak revision, hedef ve transform'u yeniden doğrular. Bu, mevcut taş/kütük/door/window actor üretimini yeni genel snap API'sine zorla taşımadan güvenli bir ilk vertical slice sağlar.
 
 Bir placement invalid/stale olduğunda PlaceSelected mevcut akışta transform/overlap doğrulaması başarısız olduğu için actor spawn ve envanter azaltma aşamasına geçmez. Voxel collision, yerleştirme footprint'inin yüzey içine girmesini denetlemek üzere overlap sorgusunda tutulur.
 
@@ -87,8 +87,9 @@ Bir placement invalid/stale olduğunda PlaceSelected mevcut akışta transform/o
 - MyProject2.World.VoxelInteraction.EditFootprintCannotCrossStaticRegion
 - MyProject2.World.VoxelInteraction.UnknownAndInvalidEditsFailClosed
 - MyProject2.World.VoxelInteraction.PlacementRejectsStaleRevision
+- MyProject2.World.VoxelInteraction.CommitRejectsStalePreview
 
-Runner, ayrıca Faz 1, 2 ve 3'ün 11 mevcut test adını arar; toplam **15 test adı** beklenir.
+Runner, ayrıca Faz 1, 2 ve 3'ün 11 mevcut test adını arar; toplam **16 test adı** beklenir.
 
 Windows Git Bash/MSYS, Unreal Engine 5.8 kurulu ve Unreal Editor kapalıyken:
 
