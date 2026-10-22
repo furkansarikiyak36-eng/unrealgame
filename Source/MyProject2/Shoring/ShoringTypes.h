@@ -285,6 +285,12 @@ struct MYPROJECT2_API FShoringLayoutPlan
                 OutError = TEXT("Plan contains a piece with a mismatched plan ID or a duplicate piece GUID.");
                 return false;
             }
+            if (Pieces[Index].SupportAnchor.Kind == EShoringAnchorKind::PieceSocket
+                && !Pieces[Index].ConnectedPieceIds.Contains(Pieces[Index].SupportAnchor.ConnectedPieceId))
+            {
+                OutError = TEXT("Piece-socket anchor must also be represented by its explicit connection list.");
+                return false;
+            }
             IndexById.Add(Pieces[Index].PieceId, Index);
         }
 
