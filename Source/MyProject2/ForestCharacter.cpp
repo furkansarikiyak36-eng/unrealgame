@@ -1919,6 +1919,86 @@ int32 AForestCharacter::AddItem(EForestItem Item, int32 Count)
 	return Added;
 }
 
+
+void AForestCharacter::ExportInventorySaveData(TArray<uint8>& OutItemIds, TArray<int32>& OutCounts) const
+{
+	OutItemIds.Reset();
+	OutCounts.Reset();
+	for (const EForestItem Item : ForestItems::GetAllItems())
+	{
+		const int32* Count = Inventory.Find(Item);
+		if (Count && *Count > 0)
+		{
+			OutItemIds.Add(static_cast<uint8>(Item));
+			OutCounts.Add(*Count);
+		}
+	}
+}
+
+bool AForestCharacter::ValidateInventorySaveData(
+	const TArray<uint8>& ItemIds,
+	const TArray<int32>& Counts,
+	FString& OutError)
+{
+	OutError.Reset();
+	if (ItemIds.Num() != Counts.Num() || ItemIds.Num() > InventorySlots)
+	{
+		OutError = TEXT("Inventory snapshot has inconsistent arrays or too many item rows.");
+		return false;
+	}
+	const TArray<EForestItem> ValidItems = ForestItems::GetAllItems();
+	TSet<EForestItem> Seen;
+	int32 UsedSlots = 0;
+	for (int32 Index = 0; Index < ItemIds.Num(); ++Index)
+	{
+		const EForestItem Item = static_cast<EForestItem>(ItemIds[Index]);
+		const int32 Count = Counts[Index];
+		if (!ValidItems.Contains(Item) || Item == EForestItem::None
+			|| Count <= 0 || Count > 100000 || Seen.Contains(Item))
+		{
+			OutError = TEXT("Inventory snapshot contains an invalid, duplicate or empty item row.");
+			return false;
+		}
+		Seen.Add(Item);
+		UsedSlots += SlotsFor(Count, StackSize);
+		if (UsedSlots > InventorySlots)
+		{
+			OutError = TEXT("Inventory snapshot exceeds the backpack slot limit.");
+			return false;
+		}
+	}
+	return true;
+}
+
+bool AForestCharacter::ImportInventorySaveData(
+	const TArray<uint8>& ItemIds,
+	const TArray<int32>& Counts,
+	FString& OutError)
+{
+	if (!ValidateInventorySaveData(ItemIds, Counts, OutError))
+	{
+		return false;
+	}
+	TMap<EForestItem, int32> Candidate;
+	for (int32 Index = 0; Index < ItemIds.Num(); ++Index)
+	{
+		Candidate.Add(static_cast<EForestItem>(ItemIds[Index]), Counts[Index]);
+	}
+	Inventory = MoveTemp(Candidate);
+	return true;
+}
+
+bool AForestCharacter::CanSaveWorldState(FString& OutError) const
+{
+	OutError.Reset();
+	if (CarriedItem != EForestItem::None || RopedLog.IsValid())
+	{
+		OutError = TEXT("Release carried or rope-dragged physical pieces before saving; that actor state is not yet in the unified save schema.");
+		return false;
+	}
+	return true;
+}
+
 void AForestCharacter::GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutSlots) const
 {
 	OutSlots.Reset();

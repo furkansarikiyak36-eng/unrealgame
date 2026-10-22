@@ -60,6 +60,14 @@ public:
 	bool IsAdminMode() const { return bAdminMode; }
 	EForestTool GetCurrentTool() const { return CurrentTool; }
 	const USurvivalComponent* GetSurvival() const { return Survival; }
+	USurvivalComponent* GetSurvivalMutable() const { return Survival; }
+	UUndergroundExposureComponent* GetExposureMutable() const { return UndergroundExposure; }
+	const FTransform& GetRespawnTransformForSave() const { return RespawnTransform; }
+	void SetRespawnTransformForSave(const FTransform& Transform) { RespawnTransform = Transform; }
+	void ExportInventorySaveData(TArray<uint8>& OutItemIds, TArray<int32>& OutCounts) const;
+	static bool ValidateInventorySaveData(const TArray<uint8>& ItemIds, const TArray<int32>& Counts, FString& OutError);
+	bool ImportInventorySaveData(const TArray<uint8>& ItemIds, const TArray<int32>& Counts, FString& OutError);
+	bool CanSaveWorldState(FString& OutError) const;
 	/** The log in the player's hands (None when empty; TrunkLog while a trunk is dragged by rope). */
 	EForestItem GetCarriedItem() const { return CarriedItem; }
 	int32 GetCarriedCount() const { return CarriedItem == EForestItem::Log ? CarriedLogs.Num() : (CarriedItem != EForestItem::None ? 1 : 0); }
