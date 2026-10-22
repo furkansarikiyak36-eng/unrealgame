@@ -67,6 +67,9 @@ void UExcavationTerrainChunkSubsystem::Initialize(FSubsystemCollectionBase& Coll
         return;
     }
 
+    Excavation->MaxCellsPerEdit = FMath::Clamp(
+        RuntimeSettings.MaxDensitySamplesPerEdit, 1, 50000000);
+
     FlatFallbackDensitySource = NewObject<UExcavationFlatBaseDensitySource>(this);
     FlatFallbackDensitySource->SurfaceHeightCm = 0.0f;
     FlatFallbackDensitySource->DensityTransitionWidthCm = RuntimeSettings.VoxelSampleSpacingCm;
