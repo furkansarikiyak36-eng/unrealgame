@@ -31,5 +31,5 @@ These are interfaces over common value types, not Unreal dependencies.
 ## Tests
 Invalid floating values, coordinate conversion round-trip tolerance, ID uniqueness, stale-revision distinguishability, deterministic error codes and serialization field validation.
 
-## Status
+## Status\nPortable base types now exist in `include/world_mechanics/core.hpp` (IDs, vectors, AABB, typed results/errors and floor division). Broader ID generation/serialization policies are still specified only. Compilation and test execution are pending.\n
 Specified. Portable source implementation, compiler configuration and passing tests have not yet been added.

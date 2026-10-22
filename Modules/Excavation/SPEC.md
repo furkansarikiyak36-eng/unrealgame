@@ -35,4 +35,4 @@ TerrainChanged, ExcavationCommitted, ExcavationRejected, DirtyChunksQueued and A
 Every precondition, duplicate op, no-op, dig/fill, rollback, stale scan/map/density revision, denied region, budget cap, dirty-chunk event and derived-publish failure.
 
 ## Status
-Specified; engine input/animation and collision-driven end-to-end flow remain unverified.
+A portable orchestration prototype validates hit/target/range, classification revision and EditableVoxel permission before asking TerrainVoxel to commit a density edit. A complete tool/capability model, event bus, resource transaction and mesh-publish lifecycle remain incomplete.

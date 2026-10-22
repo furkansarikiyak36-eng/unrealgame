@@ -35,4 +35,4 @@ This is a deterministic gameplay approximation, not certified structural or geot
 Duplicate IDs, dangling edge, cycle policy, stable evaluation order, capacity boundary, missing capacity, damage threshold, repair cap, node removal, cascading support loss and collapse latch.
 
 ## Status
-Specified; Unreal Chaos/physics consequences and broad structure-system equivalence require verification.
+A portable prototype provides node/edge validation, DAG ordering, support-state assessment, damage/repair and collapse latching. Advanced distributed load accounting, replacement compatibility and physics/event adapters remain incomplete; tests are pending.

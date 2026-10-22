@@ -26,4 +26,4 @@ Accumulated thermal stress, wetness, darkness exposure, water exposure and recov
 Effort cost by operation, rejected-action refund, time-step clamp, freshness, missing-data policy, accumulation/recovery, depth/water transitions and save/restore.
 
 ## Status
-Specified; environmental provider and character adapter are not verified end-to-end.
+A portable prototype calculates configurable action effort costs and bounded temperature/wetness/darkness/water exposure from environment samples. Canonical player-stat adapters, full survival response/threshold policy and executed tests remain incomplete.

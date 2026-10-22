@@ -33,5 +33,5 @@ WorldScan uses query budgets; WorldClassification uses region-cell sizing; Terra
 ## Tests
 Default values, invalid enums, queue bounds, profile switch before/after initialization and mismatch rejection on restore.
 
-## Status
+## Status\nA portable header now implements LOW_MID/HIGH_END defaults, validation and session grid lock. These are prototype defaults, not measured performance guarantees. Compile/test evidence is pending.\n
 Specified; no portable RuntimeProfiles implementation is claimed here.

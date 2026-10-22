@@ -39,4 +39,4 @@ Same inputs/revisions produce deterministic plan. Normal mode requires explicit 
 Station endpoints/spacing, max count, narrow/wide/deep bounds, missing surfaces, stale revisions, invalid links, collision issues, partial spawn rollback, remove and repair/replace lifecycle.
 
 ## Status
-Specified; physical fit/actor lifecycle in UE remains to be verified.
+A portable deterministic trench-layout proposer exists for upright, cross-strut and wall-board candidates with spacing and piece-count bounds. Surface anchoring, coverage analysis, actor lifecycle, carry/remove/repair and structural-link adapters remain incomplete.

@@ -34,4 +34,4 @@ Mesh is derived from density. If mesh/collision update fails, density remains au
 Plane/corner cases, shared edges, exact iso value, index validity, material IDs, triangle cap, stale job rejection, queue saturation, border samples, neighbor seam refresh and render/collision revision mismatch.
 
 ## Status
-Specified; Unreal Dynamic Mesh, physics and navigation publishing require UE 5.8 execution.
+Only a portable derived-revision gate exists so far. Full Marching Tetrahedra mesh generation, topology buffers, bounded worker queue and render/collision/navigation publishing are not implemented in this module tree. Test execution is pending.

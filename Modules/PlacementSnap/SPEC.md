@@ -26,4 +26,4 @@ Preview and commit share the same functions. A plausible ghost is not proof that
 Normal alignment, axis tolerance, max distance, stable tie-break, 20 cm grid, revision invalidation, full-volume overlap, forbidden region, preview/commit parity and partial-commit rollback.
 
 ## Status
-Specified; Unreal trace/overlap/ghost adapters remain unverified.
+A portable candidate filter/ranker and commit-time source-revision check exist. Piece-specific candidate providers, full collision-volume adapters and spawn/inventory rollback orchestration remain incomplete. Tests have not yet been executed.

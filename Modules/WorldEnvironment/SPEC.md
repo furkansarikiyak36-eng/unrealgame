@@ -21,4 +21,4 @@ Existing fire/material/weather modules supply heat and ambient inputs through ad
 Missing/stale channels, bounded finite inputs, source revision, region boundary, stable repeated samples, chunk unload/reload and authoritative environment round-trip.
 
 ## Status
-Specified; existing global environment/chunk modules are integration sources, not proof of excavation-water coupling.
+A portable timestamped EnvironmentSample DTO validates optional channels, finite values and range constraints. Weather/water/soil/light providers, time progression, and persistence of global environmental state are not implemented in this module tree.

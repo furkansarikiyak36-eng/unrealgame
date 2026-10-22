@@ -37,5 +37,5 @@ Export sorted/deterministic sparse records plus grid/profile/base-source identit
 ## Tests
 Negative chunk coordinates, base fallback, dig/fill inverse where applicable, shape bounds, one-cell border, deterministic export, stale revision, duplicate operation, rollback and seam invalidation.
 
-## Status
+## Status\nA portable prototype exists for sparse overrides, base-density fallback, bounded sphere/box/vertical-capsule edits, operation IDs, revision checks, rollback receipts and deterministic snapshot import/export. Material/falloff policy and broad stress coverage remain incomplete; test execution is pending.\n
 Specified. Existing Unreal draft has density/snapshot APIs, but this is not yet an extracted portable implementation.

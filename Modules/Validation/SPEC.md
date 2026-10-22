@@ -31,3 +31,7 @@ Own the evidence process and cross-module scenarios, not gameplay mechanics.
 
 ## Gates
 Specified → Implemented → Unit-tested → Cross-module-verified → Unreal-adapted → Unreal-verified. Every transition requires evidence; a blocked gate is reported rather than skipped.
+
+
+## Status
+Seven portable test groups and CMake/CTest/CI configuration are present; they remain unverified until a real run passes. Broader property/stress testing and UE 5.8 gates remain.

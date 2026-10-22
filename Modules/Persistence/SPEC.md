@@ -48,3 +48,7 @@ Existing Phase 8/9 Unreal save code is a reference candidate. UE 5.8 build/Autom
 
 ## Tests
 Round-trip, wrong map, unknown schema, v2 migration, duplicate IDs, bad refs, oversized snapshot, staged-spawn failure, rollback, restored-support revalidation and stone-state validation.
+
+
+## Status
+A portable participant interface and staged restore coordinator exist, but actual snapshot codecs, module participants, durable store, schema migration and whole-world restore remain unimplemented.
