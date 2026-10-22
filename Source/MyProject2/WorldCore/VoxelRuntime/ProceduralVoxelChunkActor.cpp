@@ -15,13 +15,14 @@ AProceduralVoxelChunkActor::AProceduralVoxelChunkActor()
 }
 
 void AProceduralVoxelChunkActor::ApplySurface(const TArray<FVector>& Vertices,
-    const TArray<int32>& Triangles, const TArray<FVector>& Normals, bool bCreateCollision)
+    const TArray<int32>& Triangles, const TArray<FVector>& Normals, bool bCreateCollision, bool bUseAsyncCollision)
 {
     if (!VoxelMesh)
     {
         return;
     }
 
+    VoxelMesh->bUseAsyncCooking = bCreateCollision && bUseAsyncCollision;
     VoxelMesh->ClearAllMeshSections();
     if (Vertices.IsEmpty() || Triangles.IsEmpty())
     {
