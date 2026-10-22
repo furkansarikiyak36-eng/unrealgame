@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "WorldCore/ExcavationTypes.h"
 #include "WorldCore/WorldSystemContracts.h"
 #include "WorldVoxelInteractionSubsystem.generated.h"
 
