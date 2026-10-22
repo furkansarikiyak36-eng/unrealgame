@@ -9,6 +9,176 @@
 
 ---
 
+## Mekanik kataloğu — kısa grup özeti
+
+Bu bölüm raporun hızlı başvuru tablosudur. Durum etiketleri, mekanik fikrinin tamamlandığını değil repo içindeki mevcut kanıt düzeyini gösterir.
+
+| Grup | Kısa öz rapor | Ana bağımlılık |
+|---|---|---|
+| A. Dünya tarama ve sınıflandırma | Dünyayı algılar; hangi alanın voxel, statik veya belirsiz olduğunu belirler. | World Scanner, Analyzer, Landscape Builder |
+| B. Smooth voxel arazi | Kazı verisini değiştirir; yüzey ve collision'ı günceller. | Sparse density, chunk, mesher, collision |
+| C. Yerleştirme ve snap | Nesneyi geçerli yüzey/bağlantı noktasına oturtur. | Scan sonucu, snap provider, overlap |
+| D. Kazı tahkimatı | Dikme, kaplama ve payandaları kazılmış hacme yerleştirir; destek kaybını izler. | Voxel yüzeyi, shoring planner, yapı grafiği |
+| E. Yapı ve hasar | Yapı desteğini, hasarı, onarımı ve çöküşü yönetir. | Structure graph, material state, fizik |
+| F. Hayatta kalma ve çevre | Açlık, susuzluk, dayanıklılık, sıcaklık, ıslanma ve su etkilerini yönetir. | Survival, zaman/hava, world state |
+| G. Kaynak, envanter ve üretim | Fiziksel kaynakları toplama, taşıma, işleme ve üretime aktarır. | Fiziksel aktörler, envanter, crafting |
+| H. Ateş ve savunma | Yanma, ısı, tuzak ve düşman baskısını yönetir. | Fire state, trap, raid, structure damage |
+| I. Tarım ve hayvanlar | Bitki ve hayvan üretimini günlük dünya döngüsüne bağlar. | Crop/animal state, yem, stok, toprak |
+| J. Keşif ve kayıt | Keşif bulgularını ve dünya değişikliklerini saklar. | Journal, persistence, chunk/actor state |
+| K. Test ve performans | Mekanikleri doğrular; frame, mesh, collision ve kayıt maliyetlerini ölçer. | Otomasyon, UE 5.8, Unreal Insights |
+
+### A. Dünya tarama ve sınıflandırma
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Raycast | Kameranın/isteğin gördüğü ilk uygun çarpışma hedefini bulur. | Scan taslak PR |
+| Shape Trace | Küre, kutu veya kapsül hacmini bir yol boyunca tarar. | Scan taslak PR |
+| Overlap Query | Bir alan içindeki çarpışan bileşenleri toplar. | Scan taslak PR |
+| Yüzey örnekleme | Küçük bir grid ile yükseklik, normal ve eğim değişimini ölçer. | Scan taslak PR |
+| Bounds / fizik sorgusu | Nesne sınırlarını ve anlık fizik durumunu alır. | Scan taslak PR |
+| Hit Analyzer / Classification | Hedefi tür, yüzey, hareket ve yetenek adaylarına ayırır. | Scan taslak PR |
+| Landscape Builder | Mevcut dünyayı analiz eder, sınıflandırma haritası çıkarır. | Yeni iş; uygulanacak |
+| Voxel/statik ayrımı | Kazılabilir zemin, sabit kaya/dağ, geçiş ve belirsiz alanları ayırır. | Yeni tasarım |
+
+**Grup özeti:** Scan dünyayı sorgular; Landscape Builder ise sorgu ve kaynak verilerinden bölgesel karar üretir. Her ikisi de bütün dünyayı her karede taramamalıdır.
+
+### B. Smooth voxel arazi
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Sparse 3D density/delta | Değişen kazı hücrelerini temel arazi verisinden ayrı saklar. | Başlangıç veri çekirdeği taslak dalda |
+| Kazı/doldurma işlemleri | Sphere, capsule veya box hacmini değiştirir. | Başlangıç API'si taslak dalda |
+| Chunk yönetimi | Dünya hücrelerini bölgelere ayırır; etkilenen alanları bulur. | Kısmen mevcut |
+| Smooth mesh üretimi | Yoğunluk verisinden yumuşak üçgen yüzey oluşturur. | Tamamlanması gerekiyor |
+| Collision yenileme | Yeni yüzeyin fiziksel çarpışmasını günceller. | Tamamlanması gerekiyor |
+| Chunk sınırı dikişi | Komşu chunk'larda delik, kopuk normal ve çarpışma boşluğu oluşmasını önler. | Tamamlanması ve test edilmesi gerekiyor |
+| Kazı kalıcılığı | Density delta/snapshot'ı kaydeder ve yükler. | Veri sözleşmesi var; uçtan uca entegrasyon eksik |
+
+**Grup özeti:** Voxel çekirdeği kazının veri otoritesidir. Mesh, collision ve save/load aynı kazı sonucunu göstermeden sistem tamamlanmış sayılamaz.
+
+### C. Yerleştirme ve snap
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Snap point üretimi | Kütük/tahta gibi parçalar için izin verilen bağlantı noktalarını üretir. | Kütük snap taslak PR |
+| Snap resolver | En yakın uyumlu adayı normal, mesafe ve eksen kurallarıyla seçer. | Taslak PR |
+| Ghost preview | Yerleştirilecek transformu ve geçersizlik nedenini gösterir. | Var olan placement akışı; entegrasyon doğrulanmalı |
+| Overlap kontrolü | Parçanın dolu hacimle çakışıp çakışmadığını kontrol eder. | Yerel sorgu yaklaşımı taslakta |
+| Commit doğrulama | Onay anında çakışma ve destek koşullarını yeniden kontrol eder. | Tasarım/PR; UE 5.8 testi gerekiyor |
+| 20 cm plank ızgarası | Tahta için düzenli snap noktaları sağlar. | Yeni provider olarak eklenmeli |
+
+**Grup özeti:** Scan hedefi bulur; Snap nokta seçer; Placement çakışma ve destek kurallarını doğrulayıp nesneyi yerleştirir.
+
+### D. Kazı ve tahkimat
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Kazı hacmi | Voxel zeminde kuyu, hendek, tünel veya oda açar. | Veri çekirdeği var; gerçek mesh/collision hattı eksik |
+| Tahkimat planner'ı | Kazı ölçülerine göre dikme, kaplama ve payanda yerleşimini planlar. | Yeni tasarım |
+| Dikey dikme | Kaplama ve payanda bağlantıları için ana dikey taşıyıcı parça. | Yerleştirilebilir actor olarak yapılacak |
+| Kaplama tahtası | Kazılmış yan yüzeyi örten ayrı fiziksel parça. | Yerleştirilebilir actor olarak yapılacak |
+| Yatay payanda | Karşılıklı destekler arasında bağlantı oluşturur. | Yerleştirilebilir actor olarak yapılacak |
+| Yüzeye anchor/snap | Tahkimat parçasını voxel yüzeyi ve diğer parçalara hizalar. | Scan/Snap entegrasyonu gerektirir |
+| Eksik parça raporu | Planlanan tahkimatta eksik veya geçersiz bağlantıları gösterir. | Yeni tasarım |
+| Kazı sonrası revalidation | Voxel değişince komşu tahkimatı yeniden kontrol eder. | Yeni entegrasyon |
+
+**Grup özeti:** Tahkimat voxel mesh'i değildir. Fiziksel aktörlerden oluşur; kazı yüzeyi değişince yerleşim ve destek geçerliliği tekrar değerlendirilir.
+
+### E. Yapı, destek ve hasar
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Yapı grafiği | Kütük/parçalar arasındaki temas ve destek ilişkilerini belirler. | Ana dalda temel kod mevcut |
+| Kiriş/direk/payanda | Yapı geometrisini kurar ve yük yolları oluşturur. | Kısmen mevcut; yeni tahkimat tipleri ayrı |
+| Hasar ve gevşeme | Hasar arttıkça bağlantı veya taşıma kabiliyetini düşürür. | Ana dalda temel kütük kuralları mevcut |
+| Onarım/değişim | Hasarlı parçayı onarır veya değiştirir. | Kütük sistemi için temel mevcut |
+| Destek kaybı/çökme | Kritik bağlantı kaybında bağlı parçaları yeniden değerlendirir. | Temel sistem mevcut; tahkimata bağlanmalı |
+| Malzeme dayanımı | Ahşap/taş gibi malzemelerin hasar ve çevresel tepkisini belirler. | Kısmi kod; sistemler arası entegrasyon doğrulanmalı |
+
+**Grup özeti:** Tahkimat yerleşimiyle yapı grafiği aynı bağlantı kimliklerini veya aynı deterministik temas kurallarını kullanmalıdır; yoksa görselde bağlı görünen parçalar simülasyonda bağlı olmayabilir.
+
+### F. Hayatta kalma ve çevre
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Sağlık/açlık/susuzluk | Oyuncunun temel hayatta kalma kaynaklarını izler. | Survival kodu mevcut; uçtan uca doğrulanmalı |
+| Dayanıklılık | Kazı, ağır taşıma ve inşa sırasında tüketilir. | Temel stamina var; işlere göre maliyet ayarlanmalı |
+| Sıcaklık/ıslanma | Hava, bölge ve ıslaklıkla oyuncunun ısı durumunu değiştirir. | Genişletilmiş dalda kod parçaları mevcut |
+| Barınak/ateş ısısı | Çatı ve ateş ortam sıcaklığını etkiler. | Temel kurallar var; entegrasyon testi gerekir |
+| Yeraltı erişimi | Merdiven, halat, platform ve giriş/çıkış yolları sağlar. | Kısmen tasarım/önceki mekanik kodları |
+| Su girişi/birikmesi | Açılmış hacimde su ve nem etkilerini yönetir. | World state var; voxel hacmiyle entegrasyon eksik |
+| Karanlık/ışık | Yeraltında meşale ve görünürlük ihtiyacını doğurur. | Tasarlanacak/oyun içi doğrulama gerekir |
+| Hava kalitesi/oksijen | Opsiyonel yeraltı maruziyeti mekaniğidir. | Sonraki faz; ilk prototip zorunluluğu değil |
+
+**Grup özeti:** İlk survival entegrasyonu stamina, sıcaklık/ıslanma, ışık, su ve kaçış yolu üzerine kurulur. Oksijen/gaz gibi ek simülasyonlar temel kazı döngüsü doğrulandıktan sonra eklenir.
+
+### G. Kaynak, envanter ve üretim
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Ağaç/kaya toplama | Dünyadaki ham kaynağı fiziksel kaynaklara dönüştürür. | Ana dalda temel kod mevcut |
+| Kütük kesme/oyma | Standart modül noktalarından kütük ve yapı parçaları üretir. | Ana dalda mevcut |
+| Fiziksel taşıma | Büyük kütük ve taşları hacim/kullanıma göre taşır. | Temel kütük akışı mevcut |
+| Envanter | Küçük/stack edilebilir öğeleri ve hızlı erişimi yönetir. | Kod mevcut; fiziksel kaynak köprüsü eksik |
+| Crafting | Kaynak tüketerek parça/alet üretir. | Kod mevcut; ana oynanışa entegrasyon doğrulanmalı |
+| Üretim/iş istasyonu | Hammaddeyi işlenmiş kaynak ve bileşene dönüştürür. | Modüller var; tam oynanış bağlantısı eksik |
+| Kaynak muhasebesi | Başarısız yerleştirme/üretimde kaynak kaybını önler. | Uçtan uca işlem sözleşmeleri gerekli |
+
+**Grup özeti:** Fiziksel kütük/taş gibi nesneler ile genel envanter öğeleri tek bir sistemmiş gibi ele alınmamalı. Transfer, üretim ve kayıt aynı miktar korunumu kurallarını kullanmalıdır.
+
+### H. Ateş, savunma ve düşmanlar
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Kamp ateşi/yakıt | Odun hacmine göre yanma süresi ve ısı üretir. | Ana dalda temel kod mevcut |
+| Ahşap yanması | Tutuşma, yanma, kömürleşme ve yakına yayılım. | Ana dalda temel kod mevcut |
+| Tuzak | Temas/trigger ile oyuncu veya düşmana etki uygular. | Genişletilmiş dalda taslak |
+| Kazık/çit savunması | Geçişi sınırlar ve düşmana zarar verebilir. | Kısmi kod/taslak |
+| Raid yönetimi | Düşman saldırısı, hedef seçimi ve dalga planını yönetir. | Temel davranış var; spawn/navigation entegrasyonu eksik |
+| Yapıya saldırı | Düşman hasarını yapı parçasına aktarır. | Bazı sınıflar için var; tüm ana aktörlere adaptör gerekir |
+
+**Grup özeti:** Yangın ve temel raid kodu ile yeni tuzak/defans taslakları aynı hasar ve yapı durumu sözleşmesine bağlanmalıdır.
+
+### I. Tarım ve hayvanlar
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Tarla/tohum | Ekim alanı açar ve büyümeyi yönetir. | Genişletilmiş dalda kod mevcut |
+| Bitki büyümesi/hasat | Zamanla ürün ve tohum üretir. | Kod mevcut; stok bağlantısı doğrulanmalı |
+| Hayvan günlük döngüsü | Hayvanın sağlık, büyüme ve ürün durumunu günceller. | Genişletilmiş dalda kod mevcut |
+| Yem tüketimi | Hayvan stoğundan kaynak tüketir. | Birden fazla stok sistemi bulunduğundan entegrasyon kontrolü gerekir |
+| Hayvansal ürünler | Türüne göre yumurta, süt, yün, et/deri gibi ürünler sağlar. | Kısmi kod; E2E doğrulama gerekli |
+| Gübre/toprak | Hayvan ve tarım kaynaklarını toprak besinlerine bağlar. | Modüller var; bilanço testi gerekli |
+
+**Grup özeti:** Hasat, yem, hayvan ürünü ve gübre aynı canonical stok ve günlük simülasyon akışına bağlanmalı; ayrı bileşenlerin birbirini gerçekten çağırdığı test edilmelidir.
+
+### J. Keşif ve kayıt
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Keşif/notlar | Dünyadaki notları bulur ve günlüğe kaydeder. | Genişletilmiş dalda kod var |
+| Dünya zamanı/hava | Gün, gece ve hava durumunu dünya state'inde tutar. | Kod mevcut; sistem entegrasyonu doğrulanmalı |
+| Chunk persistence | Hücre ve dünya verilerini saklar. | Temel kayıt altyapısı var |
+| Voxel persistence | Kazı delta/snapshot'ını yeniden yükler. | Başlangıç sözleşmesi var; runtime geometriye bağlanmalı |
+| Fiziksel aktör kaydı | Kütük, taş, tahkimat, hasar ve bağlantı durumunu korur. | Tam kapsama ve E2E test gerekli |
+| Güvenli yükleme sırası | Önce terrain/collision, sonra aktör/anchor ve sistem state'ini kurar. | Yeni entegrasyon kuralı |
+
+**Grup özeti:** Hücre state'ini kaydetmek fiziksel dünyayı kaydetmekle aynı şey değildir. Voxel, tahkimat ve bağlantılar tek yükleme senaryosunda doğrulanmalıdır.
+
+### K. Test ve performans
+
+| Mekanik | Kısa açıklama | Durum |
+|---|---|---|
+| Mekanik demo/test | Temel oyun döngüsünü otomatik veya rehberli yürütür. | Ana dalda mevcut |
+| Scan/Snap testleri | Aday seçimi, normal uyumu ve deterministik sonucu kontrol eder. | PR taslaklarında test tanımı var |
+| Kazı kabul testleri | Kuyu, tünel, oda, seam, rollback ve reload senaryoları. | Planlandı; UE içinde doğrulanmalı |
+| CPU/frametime profili | Scan, mesh, collision ve worst-frame maliyetini ayırır. | Ölçüm yapılmalı |
+| Test raporu/kanıt | Build, otomasyon, log ve ekran kaydını saklar. | Bazı altyapı var; yeni alanlara genişletilmeli |
+
+**Grup özeti:** Kaynak kodu veya test tanımı tek başına çalıştığını kanıtlamaz. Her yeni mekanik için UE 5.8 build, otomasyon ve gereken yerde Editor/PIE doğrulaması gerekir.
+
+---
+
 ## 1. Karar özeti
 
 Sistem dört ayrı otoriteden oluşur:
