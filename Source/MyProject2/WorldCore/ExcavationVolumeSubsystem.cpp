@@ -462,7 +462,11 @@ bool UExcavationVolumeSubsystem::RegisterBaseDensitySource(UObject* Source)
         return false;
     }
 
-    BaseDensitySourceObject = Source;
+    if (BaseDensitySourceObject != Source)
+    {
+        BaseDensitySourceObject = Source;
+        NotifyBaseDensityChanged();
+    }
     return true;
 }
 
@@ -474,7 +478,11 @@ bool UExcavationVolumeSubsystem::RegisterFallbackBaseDensitySource(UObject* Sour
         return false;
     }
 
-    FallbackBaseDensitySourceObject = Source;
+    if (FallbackBaseDensitySourceObject != Source)
+    {
+        FallbackBaseDensitySourceObject = Source;
+        NotifyBaseDensityChanged();
+    }
     return true;
 }
 
@@ -482,7 +490,11 @@ void UExcavationVolumeSubsystem::UnregisterFallbackBaseDensitySource(UObject* So
 {
     if (Source == nullptr || FallbackBaseDensitySourceObject == Source)
     {
-        FallbackBaseDensitySourceObject = nullptr;
+        if (FallbackBaseDensitySourceObject != nullptr)
+        {
+            FallbackBaseDensitySourceObject = nullptr;
+            NotifyBaseDensityChanged();
+        }
     }
 }
 
@@ -490,7 +502,11 @@ void UExcavationVolumeSubsystem::UnregisterBaseDensitySource(UObject* Source)
 {
     if (Source == nullptr || BaseDensitySourceObject == Source)
     {
-        BaseDensitySourceObject = nullptr;
+        if (BaseDensitySourceObject != nullptr)
+        {
+            BaseDensitySourceObject = nullptr;
+            NotifyBaseDensityChanged();
+        }
     }
 }
 
