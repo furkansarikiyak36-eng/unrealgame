@@ -13,7 +13,7 @@
 | MeshCollision | CPU surface mesher, mesh validation, stale-revision gate and bounded dirty-chunk queue; async scheduling and engine publisher remain | Full CPU mesher, mesh buffers/topology, bounded job queue, render/collision/nav adapters |
 | PlacementSnap | Candidate filtering/ranking and commit revision check | Piece-specific providers, full collision adapter, placement/resource transaction |
 | Excavation | Classification-authorized orchestration over density edit transaction | Capability/tool contracts, full event bus, integration tests |
-| Shoring | Deterministic trench support-piece layout proposal | Surface anchoring/coverage solver, actor lifecycle, repair/carry/remove adapters |
+| Shoring | Deterministic trench layout proposal plus logical assembly lifecycle (validate/install/revalidate/damage/repair/remove) | Surface anchoring/coverage solver, actor lifecycle, repair/carry/remove adapters |
 | StructuralIntegrity | Deterministic DAG support assessment, damage, repair, collapse latch | More complete load distribution, replace/link lifecycle and stress tests |
 | WorldEnvironment | Timestamped optional environment sample contract | Water/soil/weather providers and persistence ownership |
 | Survival | Bounded exposure update and action effort costs | Canonical character-stat adapter and broader exposure rules |

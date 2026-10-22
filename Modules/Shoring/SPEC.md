@@ -39,4 +39,4 @@ Same inputs/revisions produce deterministic plan. Normal mode requires explicit 
 Station endpoints/spacing, max count, narrow/wide/deep bounds, missing surfaces, stale revisions, invalid links, collision issues, partial spawn rollback, remove and repair/replace lifecycle.
 
 ## Status
-A portable deterministic trench-layout proposer exists for upright, cross-strut and wall-board candidates with spacing and piece-count bounds. Surface anchoring, coverage analysis, actor lifecycle, carry/remove/repair and structural-link adapters remain incomplete.
+Portable trench planner and a shoring-piece lifecycle model exist: proposed/validated/installed/needs-revalidation, source-revision invalidation, damage, repair and removal. Physical actor spawn, actual surface anchors/coverage, collision validation and persistence adapter remain engine/provider work. Expanded CI run pending.

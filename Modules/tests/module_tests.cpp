@@ -215,6 +215,23 @@ bool TestShoringPlanner() {
   g.widthM=2; g.depthM=2; g.stationSpacingM=1.5; g.boardHeightM=0.5; g.maxPieces=1000;
   auto p=wm::ShoringPlanner::Build(g,9); CHECK(p); CHECK(p.value.complete);
   CHECK(p.value.pieces.size()==47); CHECK(p.value.stationSpacingUsedM<=1.5+1e-9);
+  wm::ShoringAssembly assembly;
+  CHECK(assembly.RegisterPlan(p.value,100,50));
+  auto proposed=assembly.GetPlan(20); CHECK(proposed); CHECK(proposed.value.state==wm::ShoringPlanState::Proposed);
+  CHECK(assembly.ValidatePlan(20,9,true));
+  CHECK(assembly.InstallPlan(20,9));
+  auto firstPiece=assembly.GetPiece(100); CHECK(firstPiece); CHECK(firstPiece.value.state==wm::ShoringPieceState::Installed);
+  assembly.NotifyTerrainRevision(10);
+  auto dirtyPlan=assembly.GetPlan(20); CHECK(dirtyPlan); CHECK(dirtyPlan.value.state==wm::ShoringPlanState::NeedsRevalidation);
+  auto dirtyPiece=assembly.GetPiece(100); CHECK(dirtyPiece); CHECK(dirtyPiece.value.state==wm::ShoringPieceState::NeedsRevalidation);
+  CHECK(assembly.RevalidatePlan(20,10,true));
+  CHECK(assembly.DamagePiece(100,20));
+  auto damaged=assembly.GetPiece(100); CHECK(damaged); CHECK(damaged.value.state==wm::ShoringPieceState::Damaged); CHECK(damaged.value.health==30);
+  CHECK(assembly.RepairPiece(100,20));
+  auto repaired=assembly.GetPiece(100); CHECK(repaired); CHECK(repaired.value.state==wm::ShoringPieceState::Installed);
+  CHECK(assembly.RemovePiece(100));
+  auto invalidated=assembly.GetPlan(20); CHECK(invalidated); CHECK(invalidated.value.state==wm::ShoringPlanState::NeedsRevalidation);
+  CHECK(!assembly.RevalidatePlan(20,10,true));
   g.maxPieces=10; auto tooMany=wm::ShoringPlanner::Build(g,9); CHECK(!tooMany&&tooMany.error==wm::ErrorCode::BudgetExceeded);
   return true;
 }
