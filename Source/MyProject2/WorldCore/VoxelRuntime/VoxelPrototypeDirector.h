@@ -49,6 +49,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Voxel Prototype|Shoring")
     void ClearLastTrenchPlan();
 
+    UFUNCTION(BlueprintCallable, Category = "Voxel Prototype|Persistence")
+    bool SavePrototypeWorld(const FString& SlotName, FString& OutFailure);
+
+    UFUNCTION(BlueprintCallable, Category = "Voxel Prototype|Persistence")
+    bool LoadPrototypeWorld(const FString& SlotName, FString& OutFailure);
+
     UFUNCTION(BlueprintPure, Category = "Voxel Prototype|Shoring")
     int32 GetLastTrenchPlanPieceCount() const { return LastTrenchPlan.Num(); }
 
