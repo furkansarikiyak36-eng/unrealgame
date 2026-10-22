@@ -1152,6 +1152,140 @@ bool UExcavationShoringSubsystem::ReplaceFailedPiece(
     return true;
 }
 
+bool UExcavationShoringSubsystem::ExportSnapshot(FShoringWorldSnapshot& OutSnapshot, FString& OutError) const
+{
+    OutSnapshot = FShoringWorldSnapshot();
+    OutError.Reset();
+    if (PiecesById.Num() > 4096)
+    {
+        OutError = TEXT("Shoring world exceeds the 4096-piece save budget.");
+        return false;
+    }
+
+    FShoringWorldSnapshot Candidate;
+    Candidate.Pieces.Reserve(PiecesById.Num());
+    for (const TPair<FGuid, TWeakObjectPtr<APlaceableShoringPiece>>& Pair : PiecesById)
+    {
+        APlaceableShoringPiece* Piece = Pair.Value.Get();
+        if (!IsValid(Piece) || Piece->GetPieceState() == EShoringPieceState::Removed
+            || Piece->GetPieceState() == EShoringPieceState::Planned)
+        {
+            continue;
+        }
+        FShoringPieceSaveData Record;
+        Piece->ExportSaveData(Record);
+        Candidate.Pieces.Add(Record);
+    }
+    Candidate.Pieces.Sort([](const FShoringPieceSaveData& A, const FShoringPieceSaveData& B)
+    {
+        return A.Spec.PieceId.ToString() < B.Spec.PieceId.ToString();
+    });
+    if (!Candidate.Validate(OutError))
+    {
+        return false;
+    }
+    OutSnapshot = MoveTemp(Candidate);
+    return true;
+}
+
+bool UExcavationShoringSubsystem::ValidateSnapshot(const FShoringWorldSnapshot& Snapshot, FString& OutError) const
+{
+    OutError.Reset();
+    if (!Snapshot.Validate(OutError))
+    {
+        return false;
+    }
+    if (Snapshot.Pieces.Num() > 4096)
+    {
+        OutError = TEXT("Shoring snapshot is above the runtime restore budget.");
+        return false;
+    }
+    return true;
+}
+
+bool UExcavationShoringSubsystem::ImportSnapshot(
+    const FShoringWorldSnapshot& Snapshot,
+    FString& OutError,
+    TSubclassOf<APlaceableShoringPiece> PieceClass)
+{
+    OutError.Reset();
+    if (!ValidateSnapshot(Snapshot, OutError))
+    {
+        return false;
+    }
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        OutError = TEXT("Cannot restore shoring without a world.");
+        return false;
+    }
+    if (!PieceClass)
+    {
+        PieceClass = APlaceableShoringPiece::StaticClass();
+    }
+
+    // Spawn and validate the full replacement set first. Existing shoring stays intact on failure.
+    TArray<APlaceableShoringPiece*> StagedPieces;
+    StagedPieces.Reserve(Snapshot.Pieces.Num());
+    for (const FShoringPieceSaveData& Record : Snapshot.Pieces)
+    {
+        FActorSpawnParameters SpawnParameters;
+        SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        APlaceableShoringPiece* Staged = World->SpawnActor<APlaceableShoringPiece>(
+            PieceClass, Record.Spec.Transform, SpawnParameters);
+        if (!IsValid(Staged))
+        {
+            OutError = TEXT("Failed to stage a shoring actor during world restore.");
+            for (APlaceableShoringPiece* Existing : StagedPieces)
+            {
+                if (IsValid(Existing)) Existing->Destroy();
+            }
+            return false;
+        }
+        FString PieceError;
+        if (!Staged->InitializeFromSaveData(Record, PieceError))
+        {
+            Staged->Destroy();
+            OutError = FString::Printf(TEXT("Failed to initialize a staged shoring actor: %s"), *PieceError);
+            for (APlaceableShoringPiece* Existing : StagedPieces)
+            {
+                if (IsValid(Existing)) Existing->Destroy();
+            }
+            return false;
+        }
+        StagedPieces.Add(Staged);
+    }
+
+    TArray<FGuid> ExistingIds;
+    PiecesById.GetKeys(ExistingIds);
+    for (const FGuid& ExistingId : ExistingIds)
+    {
+        if (APlaceableShoringPiece* Existing = FindPiece(ExistingId))
+        {
+            Existing->Destroy();
+        }
+    }
+    PiecesById.Reset();
+    PlanToPieces.Reset();
+    CommittedPlanIds.Reset();
+    TArray<FGuid> PreviewPlanIds;
+    PreviewPiecesByPlan.GetKeys(PreviewPlanIds);
+    for (const FGuid& PreviewPlanId : PreviewPlanIds)
+    {
+        ClearPreview(PreviewPlanId);
+    }
+
+    for (APlaceableShoringPiece* Piece : StagedPieces)
+    {
+        const FGuid PieceId = Piece->GetPieceId();
+        const FGuid PlanId = Piece->GetPlanId();
+        PiecesById.Add(PieceId, Piece);
+        PlanToPieces.FindOrAdd(PlanId).Add(PieceId);
+        CommittedPlanIds.Add(PlanId);
+    }
+    return true;
+}
+
 APlaceableShoringPiece* UExcavationShoringSubsystem::FindPiece(const FGuid& PieceId) const
 {
     const TWeakObjectPtr<APlaceableShoringPiece>* Found = PiecesById.Find(PieceId);

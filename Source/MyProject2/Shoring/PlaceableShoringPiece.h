@@ -23,6 +23,8 @@ public:
     APlaceableShoringPiece();
 
     bool InitializeFromSpec(const FShoringPieceSpec& Spec, bool bAsPreview);
+    bool InitializeFromSaveData(const FShoringPieceSaveData& SaveData, FString& OutError);
+    void ExportSaveData(FShoringPieceSaveData& OutSaveData) const;
 
     UFUNCTION(BlueprintPure, Category = "Shoring")
     FGuid GetPieceId() const { return PieceId; }
