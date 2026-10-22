@@ -51,6 +51,9 @@ public:
     /** Publishes immutable CPU mesh output on the game thread and refreshes collision. */
     bool PublishVoxelMeshData(const FWorldVoxelMeshData& MeshData, FString& OutError);
 
+    /** Fail-safe: clears geometry/collision after an unrecoverable current-revision mesh failure. */
+    void InvalidateVoxelMesh();
+
     UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Excavation|Terrain")
     FIntVector ChunkCoordinate = FIntVector::ZeroValue;
 
