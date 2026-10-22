@@ -2,6 +2,9 @@
 
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "LandscapeProxy.h"
+#include "WorldCore/VoxelRuntime/ProceduralVoxelChunkActor.h"
+#include "WorldCore/Events/WorldMechanicEventSubsystem.h"
 #include "CollisionQueryParams.h"
 #include "CollisionShape.h"
 #include "Shoring/PlaceableShoringPiece.h"
@@ -177,15 +180,18 @@ bool UShoringLayoutPlannerSubsystem::CommitPlan(const TArray<FShoringPlacementCa
 
         const FVector HalfExtent = Candidate.DimensionsCm * 0.46f;
         TArray<FOverlapResult> Overlaps;
-        const bool bOverlaps = World->OverlapMultiByChannel(Overlaps, Candidate.Transform.GetLocation(),
+        World->OverlapMultiByChannel(Overlaps, Candidate.Transform.GetLocation(),
             Candidate.Transform.GetRotation(), ECC_WorldDynamic,
             FCollisionShape::MakeBox(HalfExtent), Params);
 
         for (const FOverlapResult& Overlap : Overlaps)
         {
-            if (Overlap.GetActor() && !Overlap.GetActor()->IsA<APlaceableShoringPiece>())
+            AActor* OverlapActor = Overlap.GetActor();
+            if (OverlapActor && !OverlapActor->IsA<APlaceableShoringPiece>()
+                && !OverlapActor->IsA<ALandscapeProxy>()
+                && !OverlapActor->IsA<AProceduralVoxelChunkActor>())
             {
-                OutFailure = FString::Printf(TEXT("Placement blocked by dynamic actor %s."), *Overlap.GetActor()->GetName());
+                OutFailure = FString::Printf(TEXT("Placement blocked by actor %s."), *OverlapActor->GetName());
                 for (APlaceableShoringPiece* Piece : Spawned) if (IsValid(Piece)) Piece->Destroy();
                 return false;
             }
@@ -217,5 +223,16 @@ bool UShoringLayoutPlannerSubsystem::CommitPlan(const TArray<FShoringPlacementCa
     }
 
     OutSpawnedPieces = MoveTemp(Spawned);
+    if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+    {
+        FWorldMechanicEvent Event;
+        Event.Type = EWorldMechanicEventType::ShoringPlanCommitted;
+        Event.ScalarValue = static_cast<float>(OutSpawnedPieces.Num());
+        Event.PositionCm = (Candidates[0].Transform.GetLocation()
+            + Candidates.Last().Transform.GetLocation()) * 0.5f;
+        Event.SourceTag = TEXT("ShoringLayoutPlanner");
+        Event.bHighPriority = true;
+        Events->EnqueueEvent(MoveTemp(Event));
+    }
     return true;
 }
