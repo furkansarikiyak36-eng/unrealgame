@@ -7,11 +7,15 @@
 #include "Shoring/ShoringTypes.h"
 #include "SurvivalComponent.h"
 #include "Survival/UndergroundExposureComponent.h"
+#include "StoneCore/StoneTypes.h"
+#include "Core/StructuralMaterialTypes.h"
 #include "SaveGameSubsystem.generated.h"
 
 class ALogActor;
 class ULogDefinition;
 class AForestCharacter;
+class AStoneActor;
+class UStoneDefinition;
 
 USTRUCT(BlueprintType)
 struct FLogSaveData
@@ -24,6 +28,20 @@ struct FLogSaveData
     UPROPERTY(SaveGame) float Health = 100.0f;
     UPROPERTY(SaveGame) float CurrentLength = 65.0f;
     UPROPERTY(SaveGame) uint8 Shape = 0;
+};
+
+USTRUCT(BlueprintType)
+struct FStoneSaveData
+{
+    GENERATED_BODY()
+    UPROPERTY(SaveGame) FTransform Transform = FTransform::Identity;
+    UPROPERTY(SaveGame) TObjectPtr<UStoneDefinition> Definition = nullptr;
+    UPROPERTY(SaveGame) TSubclassOf<AStoneActor> ActorClass;
+    UPROPERTY(SaveGame) float Health = 100.0f;
+    UPROPERTY(SaveGame) uint8 State = 0;
+    UPROPERTY(SaveGame) uint8 Shape = 0;
+    UPROPERTY(SaveGame) FVector Dimensions = FVector(30.0f, 20.0f, 20.0f);
+    bool Validate(FString& OutError) const;
 };
 
 UCLASS()
@@ -43,10 +61,11 @@ class MYPROJECT2_API UWorldSaveGame : public ULogSaveGame
 {
     GENERATED_BODY()
 public:
-    UPROPERTY(SaveGame) int32 SaveSchemaVersion = 2;
+    UPROPERTY(SaveGame) int32 SaveSchemaVersion = 3;
     UPROPERTY(SaveGame) FName MapPackageName = NAME_None;
     UPROPERTY(SaveGame) FExcavationVolumeSnapshot Excavation;
     UPROPERTY(SaveGame) FShoringWorldSnapshot Shoring;
+    UPROPERTY(SaveGame) TArray<FStoneSaveData> Stones;
     UPROPERTY(SaveGame) bool bHasPlayerState = false;
     UPROPERTY(SaveGame) FTransform PlayerTransform = FTransform::Identity;
     UPROPERTY(SaveGame) FTransform RespawnTransform = FTransform::Identity;

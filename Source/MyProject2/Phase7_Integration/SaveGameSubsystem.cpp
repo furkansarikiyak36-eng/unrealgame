@@ -1,6 +1,8 @@
 #include "Phase7_Integration/SaveGameSubsystem.h"
 
 #include "Phase1_Physical/LogActor.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneDefinition.h"
 #include "Core/LogDefinition.h"
 #include "ForestCharacter.h"
 #include "SurvivalComponent.h"
@@ -119,6 +121,74 @@ namespace
             if (IsValid(Actor)) Actor->Destroy();
         }
     }
+
+    void CaptureStoneActors(UWorld* World, TArray<FStoneSaveData>& OutStones, FString& OutError)
+    {
+        OutStones.Reset(); OutError.Reset();
+        for (TActorIterator<AStoneActor> It(World); It; ++It)
+        {
+            AStoneActor* Stone = *It;
+            if (!IsValid(Stone)) continue;
+            const EStructuralNodeState State = Stone->GetStructuralState_Implementation();
+            if (State == EStructuralNodeState::Carried || State == EStructuralNodeState::Dragging
+                || State == EStructuralNodeState::Fractured || State == EStructuralNodeState::Destroyed)
+            { OutError = TEXT("World save blocked: carried, dragged or fractured stones need a dedicated actor-state adapter."); OutStones.Reset(); return; }
+            UStoneDefinition* Definition = Stone->GetDefinition();
+            if (!Definition) { OutError = TEXT("World save blocked: a stone actor has no persistent definition."); OutStones.Reset(); return; }
+            FStoneSaveData Data;
+            Data.Transform = Stone->GetActorTransform(); Data.Definition = Stone->GetBaseDefinition(); Data.ActorClass = Stone->GetClass();
+            Data.Health = Stone->GetHealth(); Data.State = static_cast<uint8>(State);
+            Data.Shape = static_cast<uint8>(Definition->Shape); Data.Dimensions = Definition->Dimensions;
+            if (!Data.Validate(OutError)) { OutStones.Reset(); return; }
+            OutStones.Add(Data);
+            if (OutStones.Num() > 100000) { OutError = TEXT("Stone actor count exceeds save budget."); OutStones.Reset(); return; }
+        }
+    }
+
+    bool StageStoneActors(UWorld* World, const TArray<FStoneSaveData>& Rows, TArray<AStoneActor*>& OutStaged, FString& OutError)
+    {
+        OutStaged.Reset(); OutError.Reset();
+        if (Rows.Num() > 100000) { OutError = TEXT("Saved stone actor count is above the restore limit."); return false; }
+        OutStaged.Reserve(Rows.Num());
+        for (const FStoneSaveData& Data : Rows)
+        {
+            if (!Data.Validate(OutError)) { for (AStoneActor* A : OutStaged) if (IsValid(A)) A->Destroy(); OutStaged.Reset(); return false; }
+            TSubclassOf<AStoneActor> SpawnClass = Data.ActorClass;
+            if (!SpawnClass) SpawnClass = AStoneActor::StaticClass();
+            FActorSpawnParameters Params; Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+            AStoneActor* Stone = World->SpawnActor<AStoneActor>(SpawnClass, Data.Transform, Params);
+            if (!IsValid(Stone)) { OutError = TEXT("Failed to stage a stone actor; existing stones remain untouched."); for (AStoneActor* A : OutStaged) if (IsValid(A)) A->Destroy(); OutStaged.Reset(); return false; }
+            Stone->InitializeFromDefinition(Data.Definition);
+            Stone->SetActorTransform(Data.Transform);
+            if (!Stone->RestorePersistentState(Data.Health, static_cast<EStructuralNodeState>(Data.State), static_cast<EStoneShape>(Data.Shape), Data.Dimensions, OutError))
+            { Stone->Destroy(); for (AStoneActor* A : OutStaged) if (IsValid(A)) A->Destroy(); OutStaged.Reset(); return false; }
+            OutStaged.Add(Stone);
+        }
+        return true;
+    }
+
+    void DestroyStoneActors(const TArray<AStoneActor*>& Actors)
+    { for (AStoneActor* Actor : Actors) if (IsValid(Actor)) Actor->Destroy(); }
+}
+
+bool FStoneSaveData::Validate(FString& OutError) const
+{
+    OutError.Reset();
+    const FVector L = Transform.GetLocation(), S = Transform.GetScale3D();
+    const FQuat Q = Transform.GetRotation();
+    const bool bTransformOk = FMath::IsFinite(L.X) && FMath::IsFinite(L.Y) && FMath::IsFinite(L.Z)
+        && FMath::IsFinite(S.X) && FMath::IsFinite(S.Y) && FMath::IsFinite(S.Z) && S.X > 0 && S.Y > 0 && S.Z > 0
+        && FMath::IsFinite(Q.X) && FMath::IsFinite(Q.Y) && FMath::IsFinite(Q.Z) && FMath::IsFinite(Q.W)
+        && FMath::IsNearlyEqual(Q.SizeSquared(), 1.0, 0.01);
+    if (!bTransformOk || !IsValid(Definition) || !ActorClass || !FMath::IsFinite(Health) || Health <= 0.0f
+        || Health > FMath::Max(1.0f, Definition ? Definition->CompressiveStrength * 0.5f : 1.0f)
+        || !FMath::IsFinite(Dimensions.X) || !FMath::IsFinite(Dimensions.Y) || !FMath::IsFinite(Dimensions.Z)
+        || Dimensions.X <= 0 || Dimensions.Y <= 0 || Dimensions.Z <= 0 || Shape > static_cast<uint8>(EStoneShape::Keystone))
+    { OutError = TEXT("Stone save record has invalid transform, definition, class, health, dimensions or shape."); return false; }
+    const EStructuralNodeState Parsed = static_cast<EStructuralNodeState>(State);
+    if (Parsed != EStructuralNodeState::Loose && Parsed != EStructuralNodeState::Installed && Parsed != EStructuralNodeState::Falling)
+    { OutError = TEXT("Stone save record contains a transient or terminal structural state."); return false; }
+    return true;
 }
 
 bool USaveGameSubsystem::SaveWorld(const FString& SlotName)
@@ -145,11 +215,13 @@ bool USaveGameSubsystem::SaveWorld(const FString& SlotName)
         LastOperationError = TEXT("Could not allocate the versioned world save object.");
         return false;
     }
-    Save->SaveSchemaVersion = 2;
+    Save->SaveSchemaVersion = 3;
     Save->MapPackageName = FName(*World->GetMapName());
     CaptureLogActors(World, Save->Logs);
 
     FString Error;
+    CaptureStoneActors(World, Save->Stones, Error);
+    if (!Error.IsEmpty()) { LastOperationError = FString::Printf(TEXT("Could not capture stone actors: %s"), *Error); return false; }
     if (!Volume->ExportSnapshot(Save->Excavation))
     {
         LastOperationError = TEXT("Could not export voxel density snapshot (grid or snapshot budget invalid).");
@@ -282,7 +354,7 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
         OutError = TEXT("Complete save or world is invalid.");
         return false;
     }
-    if (Save->SaveSchemaVersion != 2)
+    if (Save->SaveSchemaVersion != 2 && Save->SaveSchemaVersion != 3)
     {
         OutError = TEXT("Unsupported complete-world save schema version.");
         return false;
@@ -311,6 +383,12 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
     {
         OutError = FString::Printf(TEXT("Shoring snapshot validation failed: %s"), *Error);
         return false;
+    }
+    if (Save->SaveSchemaVersion >= 3)
+    {
+        if (Save->Stones.Num() > 100000) { OutError = TEXT("Stone snapshot exceeds the actor restore limit."); return false; }
+        for (const FStoneSaveData& Record : Save->Stones)
+            if (!Record.Validate(Error)) { OutError = FString::Printf(TEXT("Stone snapshot validation failed: %s"), *Error); return false; }
     }
 
     AForestCharacter* Player = nullptr;
@@ -381,15 +459,16 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
     }
 
     TArray<ALogActor*> StagedLogs;
-    if (!StageLogs(World, LogClass, Save->Logs, StagedLogs, OutError))
-    {
-        return false;
-    }
+    if (!StageLogs(World, LogClass, Save->Logs, StagedLogs, OutError)) return false;
+    TArray<AStoneActor*> StagedStones;
+    if (Save->SaveSchemaVersion >= 3 && !StageStoneActors(World, Save->Stones, StagedStones, OutError))
+    { DestroyActors(StagedLogs); return false; }
 
     if (!Volume->ImportSnapshot(Save->Excavation, true))
     {
         DestroyActors(StagedLogs);
-        OutError = TEXT("Voxel snapshot import failed; no shoring/player/log replacements were committed.");
+        DestroyStoneActors(StagedStones);
+        OutError = TEXT("Voxel snapshot import failed; no shoring/player/log/stone replacements were committed.");
         return false;
     }
 
@@ -397,6 +476,7 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
     {
         Volume->ImportSnapshot(OldVoxel, true);
         DestroyActors(StagedLogs);
+        DestroyStoneActors(StagedStones);
         OutError = FString::Printf(TEXT("Shoring restore failed; voxel snapshot was rolled back. %s"), *OutError);
         return false;
     }
@@ -427,6 +507,7 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
             Shoring->ImportSnapshot(OldShoring, Error);
             Volume->ImportSnapshot(OldVoxel, true);
             DestroyActors(StagedLogs);
+            DestroyStoneActors(StagedStones);
             OutError = TEXT("Player state restore failed; voxel/shoring/player state was rolled back.");
             return false;
         }
@@ -438,6 +519,14 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
         if (IsValid(*It) && !StagedLogs.Contains(*It)) OldLogs.Add(*It);
     }
     for (ALogActor* Old : OldLogs) Old->Destroy();
+
+    if (Save->SaveSchemaVersion >= 3)
+    {
+        TArray<AStoneActor*> OldStones;
+        for (TActorIterator<AStoneActor> It(World); It; ++It)
+            if (IsValid(*It) && !StagedStones.Contains(*It)) OldStones.Add(*It);
+        for (AStoneActor* Old : OldStones) Old->Destroy();
+    }
 
     CachedLogs = Save->Logs;
     return true;

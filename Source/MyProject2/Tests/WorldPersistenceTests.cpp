@@ -6,6 +6,8 @@
 #include "Shoring/ShoringTypes.h"
 #include "SurvivalComponent.h"
 #include "Phase7_Integration/SaveGameSubsystem.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneDefinition.h"
 #include "Engine/World.h"
 #include "Misc/AutomationTest.h"
 
@@ -145,6 +147,31 @@ bool FWorldPersistencePlayerSnapshotValidationTest::RunTest(const FString& Param
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FWorldPersistenceStoneRecordValidationTest,
+    "MyProject2.World.Persistence.StoneRecordsValidatePersistentStates",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldPersistenceStoneRecordValidationTest::RunTest(const FString& Parameters)
+{
+    FStoneSaveData Record;
+    Record.Definition = NewObject<UStoneDefinition>();
+    Record.ActorClass = AStoneActor::StaticClass();
+    Record.Transform = FTransform::Identity;
+    Record.Health = 100.0f;
+    Record.State = static_cast<uint8>(EStructuralNodeState::Loose);
+    Record.Shape = static_cast<uint8>(EStoneShape::Building);
+    Record.Dimensions = FVector(30.0f, 20.0f, 20.0f);
+    FString Error;
+    TestTrue(TEXT("Valid loose stone record passes validation"), Record.Validate(Error));
+    Record.State = static_cast<uint8>(EStructuralNodeState::Carried);
+    TestFalse(TEXT("Transient carried stones are rejected"), Record.Validate(Error));
+    Record.State = static_cast<uint8>(EStructuralNodeState::Installed);
+    Record.Health = 0.0f;
+    TestFalse(TEXT("Zero-health stone records are rejected"), Record.Validate(Error));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWorldPersistenceVersionedSaveCompatibilityTest,
 	"MyProject2.World.Persistence.VersionedSaveSchema",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -156,7 +183,7 @@ bool FWorldPersistenceVersionedSaveCompatibilityTest::RunTest(const FString& Par
 	{
 		return false;
 	}
-	TestEqual(TEXT("Current full-world save schema is version 2"), CompleteSave->SaveSchemaVersion, 2);
+	TestEqual(TEXT("Current full-world save schema is version 3"), CompleteSave->SaveSchemaVersion, 3);
 	TestNotNull(TEXT("Full-world save remains readable through the legacy log-save base class"),
 		Cast<ULogSaveGame>(CompleteSave));
 

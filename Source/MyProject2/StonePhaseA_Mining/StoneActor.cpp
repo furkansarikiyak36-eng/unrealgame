@@ -21,6 +21,7 @@ void AStoneActor::InitializeFromDefinition(UStoneDefinition* Def)
 {
     if (!Def) return;
     Definition = Def;
+    BaseDefinition = Def;
     MaxHealth = FMath::Max(1.0f, Def->CompressiveStrength * 0.5f);
     Health = MaxHealth;
     if (UStaticMesh* LoadedMesh = Def->Mesh.LoadSynchronous()) MeshComponent->SetStaticMesh(LoadedMesh);
@@ -60,6 +61,31 @@ void AStoneActor::ApplyShape(EStoneShape NewShape, FVector NewDimensions)
     const float ScaleZ = NewDimensions.Z / 20.0f;
     Definition = NewDef;
     MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
+}
+
+bool AStoneActor::RestorePersistentState(float SavedHealth, EStructuralNodeState SavedState, EStoneShape SavedShape, const FVector& SavedDimensions, FString& OutError)
+{
+    OutError.Reset();
+    if (!Definition || !FMath::IsFinite(SavedHealth) || SavedHealth <= 0.0f || SavedHealth > MaxHealth
+        || !FMath::IsFinite(SavedDimensions.X) || !FMath::IsFinite(SavedDimensions.Y) || !FMath::IsFinite(SavedDimensions.Z)
+        || SavedDimensions.X <= 0.0f || SavedDimensions.Y <= 0.0f || SavedDimensions.Z <= 0.0f)
+    {
+        OutError = TEXT("Stone save data has invalid definition, health or dimensions.");
+        return false;
+    }
+    if (SavedState != EStructuralNodeState::Loose && SavedState != EStructuralNodeState::Installed && SavedState != EStructuralNodeState::Falling)
+    {
+        OutError = TEXT("Only loose, installed or falling stones can be restored.");
+        return false;
+    }
+    ApplyShape(SavedShape, SavedDimensions);
+    Health = SavedHealth;
+    if (GetStructuralState_Implementation() != SavedState && !SetStructuralState_Implementation(SavedState))
+    {
+        OutError = TEXT("Stone state machine rejected the saved structural state.");
+        return false;
+    }
+    return true;
 }
 
 void AStoneActor::ApplyDamage(float Amount)
