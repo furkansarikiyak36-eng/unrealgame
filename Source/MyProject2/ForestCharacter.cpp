@@ -9,6 +9,8 @@
 #include "PickupItem.h"
 #include "ForestOutline.h"
 #include "StructureLink.h"
+#include "WorldCore/WorldScanSubsystem.h"
+#include "WorldCore/WorldSystemContracts.h"
 #include "Campfire.h"
 #include "HaulCart.h"
 #include "FireStone.h"
@@ -1430,18 +1432,57 @@ void AForestCharacter::DebugHurt()
 
 bool AForestCharacter::TraceFromView(float Distance, FHitResult& OutHit, bool bIgnorePlans) const
 {
+	OutHit = FHitResult{};
+	UWorld* World = GetWorld();
+	if (!World || !Camera || !FMath::IsFinite(Distance) || Distance <= 0.0f)
+	{
+		return false;
+	}
+
 	const FVector Start = Camera->GetComponentLocation();
 	const FVector End = Start + Camera->GetForwardVector() * Distance;
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(ForestView), false, this);
+
+	// Preserve the existing wall-plan ghost ignore behavior while routing the normal
+	// player view trace through the shared, demand-driven scanner.
+	FWorldScanQuery Query;
+	Query.World = World;
+	Query.StartCm = Start;
+	Query.EndCm = End;
+	Query.ActorToIgnore = this;
+	Query.Channel = ECC_Visibility;
+	Query.bTraceComplex = false;
 	if (bIgnorePlans)
 	{
-		// Placing pieces looks through see-through wall plans; they are only filled with [E].
-		for (TActorIterator<ALogWallBlueprint> It(GetWorld()); It; ++It)
+		for (TActorIterator<ALogWallBlueprint> It(World); It; ++It)
 		{
-			Params.AddIgnoredComponent(It->GetGhosts());
+			if (UPrimitiveComponent* Ghosts = It->GetGhosts())
+			{
+				Query.ComponentsToIgnore.Add(Ghosts);
+			}
 		}
 	}
-	return GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);
+
+	if (const UWorldScanSubsystem* Scanner = World->GetSubsystem<UWorldScanSubsystem>())
+	{
+		FWorldScanHit ScanHit;
+		if (!Scanner->Trace(Query, ScanHit))
+		{
+			return false;
+		}
+		OutHit = ScanHit.Hit;
+		return true;
+	}
+
+	// Defensive fallback for unusual worlds where subsystem creation is disabled.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ForestViewFallback), false, this);
+	for (const UPrimitiveComponent* Component : Query.ComponentsToIgnore)
+	{
+		if (IsValid(Component))
+		{
+			Params.AddIgnoredComponent(Component);
+		}
+	}
+	return World->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);
 }
 
 void AForestCharacter::UpdateFocus()

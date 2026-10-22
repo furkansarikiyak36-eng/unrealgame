@@ -8,6 +8,7 @@
 #include "Engine/OverlapResult.h"
 
 class AActor;
+class UPrimitiveComponent;
 class UWorld;
 
 namespace WorldSystemContractValidation
@@ -74,6 +75,8 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
     FBox Bounds = FBox(ForceInit);
     FVector RegionSizeCm = FVector(800.0f);
     int32 MaxRegions = 100000;
+    /** Hard ceiling on extra vertical surface probes during one classification build. */
+    int32 MaxGeometrySamples = 1024;
     bool bIncludeGeometrySampling = true;
     bool bRespectManualOverrides = true;
 
@@ -92,9 +95,53 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
             OutError = TEXT("Classification region size must be finite and positive on every axis.");
             return false;
         }
+        if (Bounds.Min.X > Bounds.Max.X || Bounds.Min.Y > Bounds.Max.Y || Bounds.Min.Z > Bounds.Max.Z)
+        {
+            OutError = TEXT("Classification bounds minimum must not exceed maximum.");
+            return false;
+        }
+        const FVector BoundsSize = Bounds.GetSize();
+        if (!WorldSystemContractValidation::IsPositiveVector(BoundsSize))
+        {
+            OutError = TEXT("Classification bounds must have finite, positive size on every axis.");
+            return false;
+        }
         if (MaxRegions < 1 || MaxRegions > 1000000)
         {
             OutError = TEXT("MaxRegions must be in [1, 1000000].");
+            return false;
+        }
+        const double RatioX = static_cast<double>(BoundsSize.X) / RegionSizeCm.X;
+        const double RatioY = static_cast<double>(BoundsSize.Y) / RegionSizeCm.Y;
+        const double RatioZ = static_cast<double>(BoundsSize.Z) / RegionSizeCm.Z;
+        if (!FMath::IsFinite(RatioX) || !FMath::IsFinite(RatioY) || !FMath::IsFinite(RatioZ)
+            || RatioX <= 0.0 || RatioY <= 0.0 || RatioZ <= 0.0
+            || RatioX > MaxRegions || RatioY > MaxRegions || RatioZ > MaxRegions)
+        {
+            OutError = TEXT("Classification region grid exceeds MaxRegions or overflows numeric limits.");
+            return false;
+        }
+        const auto SafeCeil = [](double Ratio) -> int64
+        {
+            const int64 Truncated = static_cast<int64>(Ratio);
+            return Truncated + (static_cast<double>(Truncated) < Ratio ? 1 : 0);
+        };
+        const int64 CountX = SafeCeil(RatioX);
+        const int64 CountY = SafeCeil(RatioY);
+        const int64 CountZ = SafeCeil(RatioZ);
+        if ((CountX * CountY * CountZ) > MaxRegions)
+        {
+            OutError = TEXT("Classification region grid exceeds MaxRegions.");
+            return false;
+        }
+        if (MaxGeometrySamples < 0 || MaxGeometrySamples > 50000)
+        {
+            OutError = TEXT("MaxGeometrySamples must be in [0, 50000].");
+            return false;
+        }
+        if (bIncludeGeometrySampling && MaxGeometrySamples < 1)
+        {
+            OutError = TEXT("Geometry sampling is enabled but MaxGeometrySamples is zero.");
             return false;
         }
         return true;
@@ -318,6 +365,7 @@ struct MYPROJECT2_API FWorldScanQuery
     FVector StartCm = FVector::ZeroVector;
     FVector EndCm = FVector::ZeroVector;
     const AActor* ActorToIgnore = nullptr;
+    TArray<const UPrimitiveComponent*> ComponentsToIgnore;
     ECollisionChannel Channel = ECC_Visibility;
     bool bTraceComplex = false;
     bool bReturnPhysicalMaterial = false;
@@ -644,7 +692,7 @@ public:
     virtual ~IWorldClassificationSource() = default;
     virtual bool BuildClassification(
         const FWorldClassificationBuildRequest& Request,
-        FWorldClassificationBuildResult& OutResult) const = 0;
+        FWorldClassificationBuildResult& OutResult) = 0;
     virtual bool QueryClassification(
         const FVector& WorldPositionCm,
         FWorldRegionClassification& OutResult) const = 0;
