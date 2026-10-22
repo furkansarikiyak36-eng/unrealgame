@@ -86,6 +86,42 @@ bool FWorldVoxelMesherHorizontalPlaneTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FWorldVoxelMesherIsoLevelNodeTest,
+    "MyProject2.World.VoxelMesher.ExactIsoNodesStayConnected",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldVoxelMesherIsoLevelNodeTest::RunTest(const FString& Parameters)
+{
+    FWorldDensityChunkSnapshot Snapshot = MakeHorizontalPlaneSnapshot();
+    const int32 Side = Snapshot.CellsPerChunkAxis + 1 + 2 * Snapshot.BorderCells;
+    for (int32 Z = 0; Z < Side; ++Z)
+    {
+        for (int32 Y = 0; Y < Side; ++Y)
+        {
+            for (int32 X = 0; X < Side; ++X)
+            {
+                const int32 Index = (Z * Side + Y) * Side + X;
+                Snapshot.DensitySamples[Index] = Z < 2 ? 1.0f : (Z == 2 ? 0.5f : 0.0f);
+            }
+        }
+    }
+
+    FWorldMarchingTetrahedraMesher Mesher;
+    FWorldVoxelMeshData Mesh;
+    FString Error;
+    TestTrue(TEXT("A field containing exact ISO-level samples should mesh"), Mesher.BuildMesh(Snapshot, Mesh, Error));
+    TestTrue(TEXT("Exact ISO-level field should not leave an error"), Error.IsEmpty());
+    TestTrue(TEXT("Exact ISO-level field should produce surface triangles"), Mesh.TriangleIndices.Num() >= 3);
+    TestTrue(TEXT("Exact ISO-level output should retain valid topology"), Mesh.IsTopologyValid());
+    TestTrue(TEXT("Exact ISO-level crossings should share vertices"), Mesh.Vertices.Num() < Mesh.TriangleIndices.Num());
+    for (const FVector& Normal : Mesh.Normals)
+    {
+        TestTrue(TEXT("Exact ISO-level normals must be finite"), FMath::IsFinite(Normal.X) && FMath::IsFinite(Normal.Y) && FMath::IsFinite(Normal.Z));
+    }
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FWorldVoxelMesherInvalidDensityTest,
     "MyProject2.World.VoxelMesher.InvalidSampleRejected",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
