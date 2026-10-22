@@ -34,4 +34,4 @@ Specified → Implemented → Unit-tested → Cross-module-verified → Unreal-a
 
 
 ## Status
-Seven portable test groups and CMake/CTest/CI configuration are present; they remain unverified until a real run passes. Broader property/stress testing and UE 5.8 gates remain.
+Nine portable test groups and CMake/CTest/CI configuration are present. GitHub Actions passed on commit `2a4852ce43622ed54485c495d4dbcb6b2eb41138`. Broader property/stress testing and UE 5.8 gates remain.

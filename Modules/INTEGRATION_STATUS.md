@@ -13,16 +13,16 @@
 | MeshCollision | CPU surface mesher, mesh validation, stale-revision gate and bounded dirty-chunk queue; async scheduling and engine publisher remain | Full CPU mesher, mesh buffers/topology, bounded job queue, render/collision/nav adapters |
 | PlacementSnap | Candidate filtering/ranking and commit revision check | Piece-specific providers, full collision adapter, placement/resource transaction |
 | Excavation | Classification-authorized orchestration over density edit transaction | Capability/tool contracts, full event bus, integration tests |
-| Shoring | Deterministic trench layout proposal plus logical assembly lifecycle (validate/install/revalidate/damage/repair/remove) | Surface anchoring/coverage solver, actor lifecycle, repair/carry/remove adapters |
+| Shoring | Deterministic trench layout proposal plus logical assembly lifecycle (validate/install/revalidate/damage/repair/remove) | Unreal actor spawn/anchors/coverage, carry/replace, resource rollback adapters |
 | StructuralIntegrity | Deterministic DAG support assessment, damage, repair, collapse latch | More complete load distribution, replace/link lifecycle and stress tests |
 | WorldEnvironment | Timestamped optional environment sample contract | Water/soil/weather providers and persistence ownership |
 | Survival | Bounded exposure update and action effort costs | Canonical character-stat adapter and broader exposure rules |
 | Persistence | Staged multi-participant restore transaction contract | Portable density-snapshot codec now exists; whole-world schema/migration, module participants, durable storage and actor/player adapters remain |
-| Validation | Nine portable test groups and CMake/CTest/CI config; latest expanded run is pending | Actual CI execution evidence and broader coverage |
+| Validation | Nine portable test groups and CMake/CTest/CI config; latest GitHub Actions run passed | Actual CI execution evidence and broader coverage |
 
 ## Evidence state
-- Portable C++ source has been added for bounded algorithms above, including a CPU mesh extraction prototype and region-map overrides; this is not yet a complete game-mechanics implementation.
-- The previous commit's GitHub Actions workflow completed successfully for seven portable test groups. The newly added classification-map and CPU-mesher tests are pending a fresh CI run.
+- Portable C++ source covers bounded algorithms, including a CPU mesher, classification map/dirty-cell builder, shoring lifecycle and density snapshot codec. This remains a partial mechanics prototype, not a complete game.
+- GitHub Actions for commit `2a4852ce43622ed54485c495d4dbcb6b2eb41138` completed successfully: CMake configure/build and CTest passed. The executable contains nine portable test groups; this is not UE validation.
 - Existing `Source/MyProject2/` is still the Unreal implementation/reference area; migration parity has not been established.
 - Unreal Engine 5.8 UBT/UHT, Automation, Editor/PIE and Unreal Insights have not been run as part of this module work.
 - Schema v2/v3 stone persistence does not cover every carried/dragged tree/log/stone/rope/vehicle actor family.

@@ -39,4 +39,4 @@ Same inputs/revisions produce deterministic plan. Normal mode requires explicit 
 Station endpoints/spacing, max count, narrow/wide/deep bounds, missing surfaces, stale revisions, invalid links, collision issues, partial spawn rollback, remove and repair/replace lifecycle.
 
 ## Status
-Portable trench planner and a shoring-piece lifecycle model exist: proposed/validated/installed/needs-revalidation, source-revision invalidation, damage, repair and removal. Physical actor spawn, actual surface anchors/coverage, collision validation and persistence adapter remain engine/provider work. Expanded CI run pending.
+Portable trench planner and a shoring-piece lifecycle model exist: proposed/validated/installed/needs-revalidation, source-revision invalidation, damage, repair and removal. Physical actor spawn, actual surface anchors/coverage, collision validation and persistence adapter remain engine/provider work. GitHub Actions CMake/build/CTest passed on commit `2a4852ce43622ed54485c495d4dbcb6b2eb41138`; Unreal actor/physics behavior remains unverified.
