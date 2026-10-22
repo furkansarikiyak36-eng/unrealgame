@@ -50,6 +50,7 @@ void ULandscapeBuilderSubsystem::AddActorRegion(AActor* Actor, const FBox& Bound
 int32 ULandscapeBuilderSubsystem::BuildClassificationSnapshot()
 {
     Regions.Reset();
+    bSnapshotBuilt = false;
     LastScannedActorCount = 0;
     UWorld* World = GetWorld();
     if (!World)
@@ -115,6 +116,7 @@ int32 ULandscapeBuilderSubsystem::BuildClassificationSnapshot()
         }
     }
 
+    bSnapshotBuilt = true;
     return Regions.Num();
 }
 
