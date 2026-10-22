@@ -11,6 +11,7 @@
 #include "StructureLink.h"
 #include "WorldCore/WorldScanSubsystem.h"
 #include "WorldCore/WorldSystemContracts.h"
+#include "WorldCore/WorldVoxelInteractionSubsystem.h"
 #include "Campfire.h"
 #include "HaulCart.h"
 #include "FireStone.h"
@@ -1597,6 +1598,39 @@ void AForestCharacter::PerformHit()
 	{
 		return;
 	}
+
+	// The existing pickaxe swing becomes the player-facing Scan -> authorize -> density edit
+	// route for generated voxel terrain. Other tools and the wood/stone hit paths are unchanged.
+	if (CurrentTool == EForestTool::Pickaxe
+		&& UWorldVoxelInteractionSubsystem::IsVoxelSurfaceHit(Hit))
+	{
+		UWorldVoxelInteractionSubsystem* VoxelInteraction =
+			GetWorld() ? GetWorld()->GetSubsystem<UWorldVoxelInteractionSubsystem>() : nullptr;
+		FWorldVoxelEditResult EditResult;
+		FString Error;
+		if (VoxelInteraction
+			&& VoxelInteraction->DigFromView(
+				Camera->GetComponentLocation(),
+				Camera->GetForwardVector(),
+				ReachDistance,
+				45.0f,
+				this,
+				EditResult,
+				Error))
+		{
+			ShowMessage(FString::Printf(
+				TEXT("Voxel kazısı yapıldı: %d hücre güncellendi."),
+				EditResult.ModifiedSampleCount));
+		}
+		else
+		{
+			ShowMessage(Error.IsEmpty()
+				? TEXT("Bu voxel yüzeyi şu anda kazılamıyor.")
+				: Error);
+		}
+		return;
+	}
+
 	if (ACarvableLog* Carvable = Cast<ACarvableLog>(Hit.GetActor()))
 	{
 		ApplyCarveHit(Carvable);
@@ -2338,6 +2372,20 @@ bool AForestCharacter::ComputeBuildTransform(FTransform& OutTransform, const UIn
 		return false;
 	}
 
+	// Placement preview and click/commit both pass this same current-surface check.
+	// A density edit keeps the old collider visible while a worker mesh is pending;
+	// such a collider must never authorize a ghost or a newly consumed placement.
+	if (UWorldVoxelInteractionSubsystem::IsVoxelSurfaceHit(Hit))
+	{
+		UWorldVoxelInteractionSubsystem* VoxelInteraction =
+			GetWorld() ? GetWorld()->GetSubsystem<UWorldVoxelInteractionSubsystem>() : nullptr;
+		FString SurfaceError;
+		if (!VoxelInteraction || !VoxelInteraction->ValidateVoxelSurfaceHit(Hit, this, SurfaceError))
+		{
+			return false;
+		}
+	}
+
 	const FVector PieceScale = ForestItems::GetItemScale(SelectedBuildItem);
 	const FBox LocalBox = ScaledBox(PieceMesh, SelectedBuildItem);
 	const FVector Size = LocalBox.GetSize();
@@ -2498,6 +2546,16 @@ bool AForestCharacter::IsPlacementFree(const FTransform& Transform, const UInsta
 	const FBox LocalBox = ScaledBox(PieceMesh, SelectedBuildItem);
 	const FVector Center = PieceCenter(Transform, LocalBox);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(BuildOverlap), false);
+	Params.AddIgnoredActor(this);
+	// Generated voxel chunks are support surfaces, not blockers for an item whose
+	// preview/commit has already verified the current contact surface.
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (IsValid(*It) && (*It)->ActorHasTag(FName(TEXT("World.Object.VoxelSurface"))))
+		{
+			Params.AddIgnoredActor(*It);
+		}
+	}
 
 	if (SnappedTo)
 	{
