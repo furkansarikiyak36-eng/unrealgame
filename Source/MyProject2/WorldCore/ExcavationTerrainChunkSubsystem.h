@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "WorldCore/ExcavationTypes.h"
+#include "WorldCore/WorldRuntimeProfile.h"
 #include "ExcavationLandscapeDensitySource.h"
 #include "ExcavationTerrainChunkSubsystem.generated.h"
 
