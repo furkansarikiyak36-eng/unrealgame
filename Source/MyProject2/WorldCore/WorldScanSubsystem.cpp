@@ -147,14 +147,23 @@ void UWorldScanSubsystem::ApplyRegionSafety(
         && HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.Dig"))
         && !HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.NoDig"));
 
-    // A classified terrain surface is a physical support candidate even if its
-    // runtime mesh component is Movable. Stable placement/snap solvers still run later.
-    if (RegionKind == EWorldRegionKind::EditableVoxel)
+    const bool bHitTerrainSurface =
+        (Actor && Cast<ALandscapeProxy>(Actor) != nullptr)
+        || HasActorOrComponentTag(Actor, Component, TEXT("World.Object.VoxelSurface"))
+        || HasActorOrComponentTag(Actor, Component, TEXT("World.Region.EditableVoxel"))
+        || HasActorOrComponentTag(Actor, Component, TEXT("World.Region.StaticGeometry"))
+        || HasActorOrComponentTag(Actor, Component, TEXT("World.LandscapeLayer.EditableVoxel"))
+        || HasActorOrComponentTag(Actor, Component, TEXT("World.LandscapeLayer.StaticGeometry"));
+
+    // Do not infer terrain support merely because some unrelated prop overlaps a
+    // coarse classified cell. Runtime voxel surfaces should use World.Object.VoxelSurface
+    // (or be an explicitly tagged Landscape surface).
+    if (bHitTerrainSurface && RegionKind == EWorldRegionKind::EditableVoxel)
     {
         OutHit.bCanSupport = true;
         OutHit.bCanSnap = true;
     }
-    else if (RegionKind == EWorldRegionKind::StaticGeometry)
+    else if (bHitTerrainSurface && RegionKind == EWorldRegionKind::StaticGeometry)
     {
         OutHit.bCanSupport = true;
     }
