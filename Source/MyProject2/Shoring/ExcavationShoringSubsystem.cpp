@@ -573,9 +573,10 @@ bool UExcavationShoringSubsystem::MovePiece(
         }
     }
     else if (NewAnchor.Kind == EShoringAnchorKind::PieceSocket
-        && !PiecesById.Contains(NewAnchor.ConnectedPieceId))
+        && (!PiecesById.Contains(NewAnchor.ConnectedPieceId)
+            || !Piece->GetConnectedPieceIds().Contains(NewAnchor.ConnectedPieceId)))
     {
-        OutError = TEXT("Move request references a missing socket piece.");
+        OutError = TEXT("Move request must reference an existing socket that is already connected to this piece.");
         return false;
     }
 
@@ -628,6 +629,10 @@ bool UExcavationShoringSubsystem::RemovePiece(const FGuid& PieceId, FString& Out
     {
         PlanToPieces.Remove(PlanId);
         CommittedPlanIds.Remove(PlanId);
+    }
+    else
+    {
+        SetPlanState(PlanId, EShoringPieceState::NeedsRevalidation);
     }
     return true;
 }
@@ -734,6 +739,13 @@ bool UExcavationShoringSubsystem::RevalidatePlan(const FGuid& PlanId, FString& O
         }
         else if (Anchor.Kind == EShoringAnchorKind::PieceSocket)
         {
+            if (!IsValid(FindPiece(Anchor.ConnectedPieceId)))
+            {
+                OutError = FString::Printf(TEXT("Plan contains a missing primary socket anchor at piece %s."),
+                    *PieceId.ToString());
+                SetPlanState(PlanId, EShoringPieceState::Invalid);
+                return false;
+            }
             for (const FGuid& ConnectedId : Piece->GetConnectedPieceIds())
             {
                 if (!IsValid(FindPiece(ConnectedId)))
