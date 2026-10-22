@@ -53,7 +53,7 @@ fi
 echo "Faz 3 Automation testleri başlıyor..."
 if MSYS_NO_PATHCONV=1 timeout 400 "$UE/Binaries/Win64/UnrealEditor-Cmd.exe" "$PROJECT_WIN" \
     -ExecCmds="Automation RunTests MyProject2.World; Quit" \
-    -unattended -nullrhi -nosplash -nop4 -log=Phase3Tests.log >/dev/null 2>&1; then
+    -unattended -nullrhi -nosplash -nop4 -abslog="$ENGINE_LOG" >/dev/null 2>&1; then
   :
 else
   rc=$?
