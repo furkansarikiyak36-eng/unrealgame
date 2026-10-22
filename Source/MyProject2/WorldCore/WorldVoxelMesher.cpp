@@ -110,7 +110,11 @@ namespace
             }
 
             const FVector3d& Position = Positions[Node];
-            const FVector3d Normal = -DensityGradients[Node].GetSafeNormal();
+            FVector3d Normal = -DensityGradients[Node].GetSafeNormal();
+            if (Normal.SquaredLength() <= SMALL_NUMBER)
+            {
+                Normal = FVector3d(0.0, 0.0, 1.0);
+            }
             const int32 VertexIndex = OutMesh.Vertices.Num();
             OutMesh.Vertices.Add(FVector(Position.X, Position.Y, Position.Z));
             OutMesh.Normals.Add(FVector(Normal.X, Normal.Y, Normal.Z));
