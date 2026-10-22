@@ -40,6 +40,18 @@ struct MYPROJECT2_API FShoringPlacementCandidate
     UPROPERTY(BlueprintReadOnly, Category = "Shoring")
     bool bPlanValid = false;
 
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
+    bool bHasVoxelAnchor = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
+    FVector SupportAnchorWorldCm = FVector::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
+    FVector SupportNormal = FVector::UpVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
+    TArray<FName> RequiredAnchorIds;
+
     UPROPERTY(BlueprintReadOnly, Category = "Shoring")
     FString Message;
 };
@@ -56,10 +68,33 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Shoring")
     void InitializeFromSavedState(EShoringPieceType InType, FGuid InGuid, FName InAnchorId,
-        const FTransform& InTransform, FVector InDimensionsCm, float InHealth);
+        const FTransform& InTransform, FVector InDimensionsCm, float InHealth,
+        bool bInHasVoxelAnchor, FVector InSupportAnchorWorldCm, FVector InSupportNormal,
+        const TArray<FName>& InRequiredAnchorIds);
 
     UFUNCTION(BlueprintCallable, Category = "Shoring")
     void ApplyStructuralDamage(float Amount);
+
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Support")
+    void MarkSupportDirty();
+
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Support")
+    bool RevalidateVoxelAnchor();
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Support")
+    bool bHasVoxelAnchor = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Support")
+    FVector SupportAnchorWorldCm = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Support")
+    FVector SupportNormal = FVector::UpVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Support")
+    TArray<FName> RequiredAnchorIds;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Support")
+    bool bSupportRecheckRequired = true;
 
     UFUNCTION(BlueprintPure, Category = "Shoring")
     bool IsStructurallyIntact() const { return StructuralHealth > 0.0f; }
