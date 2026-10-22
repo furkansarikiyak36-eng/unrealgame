@@ -731,16 +731,8 @@ bool UWorldVoxelInteractionSubsystem::HasPlacementOverlap(
         Params.AddIgnoredActor(ActorToIgnore);
     }
 
-    // Terrain is the support surface, not an obstructing object for a piece placed
-    // against that surface. Other actors still participate in the overlap query.
-    for (TActorIterator<AActor> It(World); It; ++It)
-    {
-        if (IsValid(*It) && (*It)->ActorHasTag(VoxelSurfaceTag))
-        {
-            Params.AddIgnoredActor(*It);
-        }
-    }
-
+    // Keep voxel collision in the local overlap query; the two-centimetre inset
+    // permits surface contact while still rejecting a piece that penetrates terrain.
     const FVector ShrunkenExtent = (PieceHalfExtentCm - FVector(2.0f)).ComponentMax(FVector(1.0f));
     return World->OverlapAnyTestByObjectType(
         Transform.GetLocation(),
