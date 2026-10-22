@@ -94,13 +94,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Profile|High-End")
     FWorldRuntimeProfileValues HighEnd;
 
-    UFUNCTION(BlueprintPure, Category = "Profile")
     const FWorldRuntimeProfileValues& GetActiveSettings() const
     {
         return ActiveProfile == EWorldRuntimeProfile::HighEnd ? HighEnd : LowMid;
     }
 
     UFUNCTION(BlueprintPure, Category = "Profile")
+    FWorldRuntimeProfileValues GetActiveSettingsCopy() const
+    {
+        return GetActiveSettings();
+    }
+
+    UFUNCTION(BlueprintCallable, Category = "Profile")
     bool ValidateActiveSettings(FString& OutError) const
     {
         return GetActiveSettings().Validate(&OutError);
