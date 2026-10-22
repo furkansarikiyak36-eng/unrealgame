@@ -45,6 +45,7 @@ private:
 
     TArray<TWeakObjectPtr<ALandscapeProxy>> LandscapeProxies;
     mutable TMap<FIntPoint, float> SurfaceHeightCache;
+    mutable TMap<FIntPoint, int32> MaterialIdCache;
 
     UPROPERTY(Transient)
     TArray<FExcavationLandscapeMaterialMapping> MaterialMappings;
