@@ -356,12 +356,13 @@ bool UExcavationVolumeSubsystem::BuildChunkSnapshot(
         return false;
     }
 
+    const uint64 SnapshotRevision = DensityRevision;
     FWorldDensityChunkSnapshot Candidate;
     Candidate.ChunkCoordinate = ChunkCoordinate;
     Candidate.CellsPerChunkAxis = CellsPerChunkAxis;
     Candidate.BorderCells = BorderCells;
     Candidate.SampleSpacingCm = CellSizeCm;
-    Candidate.SourceRevision = DensityRevision;
+    Candidate.SourceRevision = SnapshotRevision;
     Candidate.DensitySamples.SetNumUninitialized(static_cast<int32>(SampleCount64));
     Candidate.MaterialIds.SetNumUninitialized(static_cast<int32>(SampleCount64));
 
@@ -395,6 +396,12 @@ bool UExcavationVolumeSubsystem::BuildChunkSnapshot(
                 Candidate.MaterialIds[Index] = MaterialId;
             }
         }
+    }
+
+    if (DensityRevision != SnapshotRevision)
+    {
+        OutSnapshot = FWorldDensityChunkSnapshot{};
+        return false;
     }
 
     OutSnapshot = MoveTemp(Candidate);
