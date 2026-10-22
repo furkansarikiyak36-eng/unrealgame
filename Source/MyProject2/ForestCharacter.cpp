@@ -712,7 +712,7 @@ FString AForestCharacter::ShovelStroke(const FVector& Point, const FVector& Norm
             return StaminaFailure;
         }
 
-        const float Gained = Record.MovedCellCount * CellM3 * Swell;
+        const float Gained = FMath::Max(0.0f, Record.SolidVolumeDeltaM3) * Swell;
         LooseSoilM3 = FMath::Min(MaxLooseSoilM3, LooseSoilM3 + Gained);
         return FString::Printf(TEXT("Toprak kazıldı +%.2f m³ (çuval %.2f / %.1f m³)"),
             Gained, LooseSoilM3, MaxLooseSoilM3);
@@ -742,7 +742,7 @@ FString AForestCharacter::ShovelStroke(const FVector& Point, const FVector& Norm
         return StaminaFailure;
     }
 
-    const float Used = FMath::Min(LooseSoilM3, Record.MovedCellCount * CellM3 * Swell);
+    const float Used = FMath::Min(LooseSoilM3, FMath::Max(0.0f, -Record.SolidVolumeDeltaM3) * Swell);
     LooseSoilM3 = FMath::Max(0.f, LooseSoilM3 - Used);
     return FString::Printf(TEXT("Toprak döküldü −%.2f m³ (çuval %.2f / %.1f m³)"),
         Used, LooseSoilM3, MaxLooseSoilM3);
