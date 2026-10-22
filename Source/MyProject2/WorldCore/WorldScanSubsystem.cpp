@@ -159,7 +159,7 @@ void UWorldScanSubsystem::ApplyRegionSafety(
         OutHit.bCanSupport = true;
     }
 
-    if (RegionKind == EWorldRegionKind::Water || RegionKind == EWorldRegionKind::Unknown)
+    if (RegionKind == EWorldRegionKind::Water)
     {
         OutHit.bCanSupport = false;
     }
