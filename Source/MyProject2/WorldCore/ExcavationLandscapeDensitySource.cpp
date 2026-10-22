@@ -17,6 +17,15 @@ bool UExcavationLandscapeDensitySource::SetLandscapeProxies(const TArray<ALandsc
         }
     }
 
+    Candidate.Sort([](const TWeakObjectPtr<ALandscapeProxy>& A, const TWeakObjectPtr<ALandscapeProxy>& B)
+    {
+        const ALandscapeProxy* ProxyA = A.Get();
+        const ALandscapeProxy* ProxyB = B.Get();
+        const FString NameA = IsValid(ProxyA) ? ProxyA->GetPathName() : FString();
+        const FString NameB = IsValid(ProxyB) ? ProxyB->GetPathName() : FString();
+        return NameA < NameB;
+    });
+
     bool bChanged = Candidate.Num() != LandscapeProxies.Num();
     if (!bChanged)
     {
@@ -29,15 +38,6 @@ bool UExcavationLandscapeDensitySource::SetLandscapeProxies(const TArray<ALandsc
             }
         }
     }
-
-    Candidate.Sort([](const TWeakObjectPtr<ALandscapeProxy>& A, const TWeakObjectPtr<ALandscapeProxy>& B)
-    {
-        const ALandscapeProxy* ProxyA = A.Get();
-        const ALandscapeProxy* ProxyB = B.Get();
-        const FString NameA = IsValid(ProxyA) ? ProxyA->GetPathName() : FString();
-        const FString NameB = IsValid(ProxyB) ? ProxyB->GetPathName() : FString();
-        return NameA < NameB;
-    });
 
     if (bChanged)
     {
