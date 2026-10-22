@@ -363,6 +363,7 @@ bool UExcavationVolumeSubsystem::BuildChunkSnapshot(
     Candidate.SampleSpacingCm = CellSizeCm;
     Candidate.SourceRevision = DensityRevision;
     Candidate.DensitySamples.SetNumUninitialized(static_cast<int32>(SampleCount64));
+    Candidate.MaterialIds.SetNumUninitialized(static_cast<int32>(SampleCount64));
 
     for (int32 Z = 0; Z < Side; ++Z)
     {
@@ -384,6 +385,14 @@ bool UExcavationVolumeSubsystem::BuildChunkSnapshot(
 
                 const int32 Index = (Z * Side + Y) * Side + X;
                 Candidate.DensitySamples[Index] = Density;
+
+                int32 MaterialId = 0;
+                if (!TrySampleBaseMaterialIdAtWorld(WorldPosition, MaterialId))
+                {
+                    OutSnapshot = FWorldDensityChunkSnapshot{};
+                    return false;
+                }
+                Candidate.MaterialIds[Index] = MaterialId;
             }
         }
     }
