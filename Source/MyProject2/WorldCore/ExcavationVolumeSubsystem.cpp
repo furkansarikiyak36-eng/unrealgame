@@ -194,7 +194,48 @@ bool UExcavationVolumeSubsystem::TryGetDensityOverrideAtCell(
     return true;
 }
 
-bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
+bool UExcavationVolumeSubsystem::ConfigureGridForRuntimeProfile(
+    float InCellSizeCm,
+    int32 InCellsPerChunkAxis,
+    FString& OutError)
+{
+    OutError.Reset();
+    if (!FMath::IsFinite(InCellSizeCm) || InCellSizeCm < 1.0f
+        || InCellsPerChunkAxis < 4 || InCellsPerChunkAxis > 64)
+    {
+        OutError = TEXT("Voxel grid profile requires cell size >= 1 cm and 4..64 cells per chunk axis.");
+        return false;
+    }
+
+    if (CellOverrides.Num() > 0)
+    {
+        const bool bCellSizeMatches = FMath::IsNearlyEqual(CellSizeCm, InCellSizeCm, 0.001f)
+            && (LockedCellSizeCm <= 0.0f || FMath::IsNearlyEqual(LockedCellSizeCm, InCellSizeCm, 0.001f));
+        const bool bChunkGridMatches = CellsPerChunkAxis == InCellsPerChunkAxis
+            && (LockedCellsPerChunkAxis <= 0 || LockedCellsPerChunkAxis == InCellsPerChunkAxis);
+        if (!bCellSizeMatches || !bChunkGridMatches)
+        {
+            OutError = TEXT("Existing excavation overrides use a different grid. Refusing to reinterpret saved/world cells.");
+            return false;
+        }
+    }
+    else
+    {
+        CellSizeCm = InCellSizeCm;
+        CellsPerChunkAxis = InCellsPerChunkAxis;
+        LockedCellSizeCm = 0.0f;
+        LockedCellsPerChunkAxis = 0;
+    }
+
+    if (!IsGridConfigurationCompatible())
+    {
+        OutError = TEXT("Configured excavation grid failed internal consistency checks.");
+        return false;
+    }
+    return true;
+}
+
+bool UExcavationVolumeSubsystem::TrySampleBaseDensityAtWorld(
     const FVector& WorldPositionCm,
     float& OutDensity) const
 {
@@ -202,11 +243,6 @@ bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
     if (!TryWorldToCell(WorldPositionCm, Cell))
     {
         return false;
-    }
-
-    if (TryGetDensityOverrideAtCell(Cell, OutDensity))
-    {
-        return true;
     }
 
     UObject* DensitySource = IsValid(BaseDensitySourceObject)
@@ -241,6 +277,109 @@ bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
 
     OutDensity = DefaultBaseDensity;
     return true;
+}
+
+bool UExcavationVolumeSubsystem::TrySampleDensityAtWorld(
+    const FVector& WorldPositionCm,
+    float& OutDensity) const
+{
+    FIntVector Cell;
+    if (!TryWorldToCell(WorldPositionCm, Cell))
+    {
+        return false;
+    }
+
+    if (TryGetDensityOverrideAtCell(Cell, OutDensity))
+    {
+        return true;
+    }
+
+    return TrySampleBaseDensityAtWorld(WorldPositionCm, OutDensity);
+}
+
+bool UExcavationVolumeSubsystem::SampleBaseDensityAtWorld(
+    const FVector& PositionCm,
+    float& OutDensity) const
+{
+    return TrySampleBaseDensityAtWorld(PositionCm, OutDensity);
+}
+
+bool UExcavationVolumeSubsystem::SampleDensityAtWorld(
+    const FVector& PositionCm,
+    float& OutDensity) const
+{
+    return TrySampleDensityAtWorld(PositionCm, OutDensity);
+}
+
+bool UExcavationVolumeSubsystem::BuildChunkSnapshot(
+    const FIntVector& ChunkCoordinate,
+    FWorldDensityChunkSnapshot& OutSnapshot) const
+{
+    OutSnapshot = FWorldDensityChunkSnapshot{};
+    if (!IsGridConfigurationCompatible()
+        || CellsPerChunkAxis < 4 || CellsPerChunkAxis > 64
+        || !FMath::IsFinite(CellSizeCm) || CellSizeCm < 1.0f)
+    {
+        return false;
+    }
+
+    constexpr int32 BorderCells = 1;
+    const int64 Cells = CellsPerChunkAxis;
+    const int64 BaseX = static_cast<int64>(ChunkCoordinate.X) * Cells;
+    const int64 BaseY = static_cast<int64>(ChunkCoordinate.Y) * Cells;
+    const int64 BaseZ = static_cast<int64>(ChunkCoordinate.Z) * Cells;
+    const int64 MinCoordinate = TNumericLimits<int32>::Lowest();
+    const int64 MaxCoordinate = TNumericLimits<int32>::Max();
+    if (BaseX - BorderCells < MinCoordinate || BaseY - BorderCells < MinCoordinate
+        || BaseZ - BorderCells < MinCoordinate
+        || BaseX + Cells + BorderCells > MaxCoordinate
+        || BaseY + Cells + BorderCells > MaxCoordinate
+        || BaseZ + Cells + BorderCells > MaxCoordinate)
+    {
+        return false;
+    }
+
+    const int32 Side = CellsPerChunkAxis + 1 + (2 * BorderCells);
+    const int64 SampleCount64 = static_cast<int64>(Side) * Side * Side;
+    if (SampleCount64 <= 0 || SampleCount64 > MAX_int32)
+    {
+        return false;
+    }
+
+    FWorldDensityChunkSnapshot Candidate;
+    Candidate.ChunkCoordinate = ChunkCoordinate;
+    Candidate.CellsPerChunkAxis = CellsPerChunkAxis;
+    Candidate.BorderCells = BorderCells;
+    Candidate.SampleSpacingCm = CellSizeCm;
+    Candidate.SourceRevision = DensityRevision;
+    Candidate.DensitySamples.SetNumUninitialized(static_cast<int32>(SampleCount64));
+
+    for (int32 Z = 0; Z < Side; ++Z)
+    {
+        for (int32 Y = 0; Y < Side; ++Y)
+        {
+            for (int32 X = 0; X < Side; ++X)
+            {
+                const FIntVector Cell(
+                    static_cast<int32>(BaseX + X - BorderCells),
+                    static_cast<int32>(BaseY + Y - BorderCells),
+                    static_cast<int32>(BaseZ + Z - BorderCells));
+                const FVector WorldPosition = CellToWorldCenter(Cell);
+                float Density = 0.0f;
+                if (!TrySampleDensityAtWorld(WorldPosition, Density) || !IsValidDensity(Density))
+                {
+                    OutSnapshot = FWorldDensityChunkSnapshot{};
+                    return false;
+                }
+
+                const int32 Index = (Z * Side + Y) * Side + X;
+                Candidate.DensitySamples[Index] = Density;
+            }
+        }
+    }
+
+    OutSnapshot = MoveTemp(Candidate);
+    return OutSnapshot.HasValidSampleStorage();
 }
 
 bool UExcavationVolumeSubsystem::TrySampleBaseMaterialIdAtWorld(
@@ -419,6 +558,11 @@ bool UExcavationVolumeSubsystem::ImportSnapshot(
         LockedCellsPerChunkAxis = 0;
     }
 
+    ++DensityRevision;
+    if (DensityRevision == 0)
+    {
+        ++DensityRevision;
+    }
     OnVolumeReset.Broadcast();
     return true;
 }
@@ -765,6 +909,11 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
 
     CandidateRecord.bCommitted = true;
     OutRecord = MoveTemp(CandidateRecord);
+    ++DensityRevision;
+    if (DensityRevision == 0)
+    {
+        ++DensityRevision;
+    }
     OnVolumeChanged.Broadcast(OutRecord, false);
     return true;
 }
@@ -840,6 +989,11 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
         CellsByChunk.Reset();
     }
 
+    ++DensityRevision;
+    if (DensityRevision == 0)
+    {
+        ++DensityRevision;
+    }
     OnVolumeChanged.Broadcast(Record, true);
     return true;
 }
