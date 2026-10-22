@@ -56,6 +56,10 @@ bool APlaceableShoringPiece::InitializeFromSpec(const FShoringPieceSpec& Spec, b
     SupportAnchor = Spec.SupportAnchor;
     ConnectedPieceIds = Spec.ConnectedPieceIds;
     HalfExtentsCm = Spec.HalfExtentsCm;
+    DesignLoad = Spec.DesignLoad;
+    Health = MaxHealth;
+    bHasCollapsed = false;
+    LastDamageCause = EShoringDamageCause::Manual;
 
     CollisionBox->SetBoxExtent(HalfExtentsCm);
     VisualMesh->SetRelativeScale3D(HalfExtentsCm * 0.02f);
@@ -68,10 +72,88 @@ bool APlaceableShoringPiece::InitializeFromSpec(const FShoringPieceSpec& Spec, b
     return true;
 }
 
+bool APlaceableShoringPiece::ApplyDamage(float Amount, EShoringDamageCause Cause, FString& OutError)
+{
+    OutError.Reset();
+    if (!FMath::IsFinite(Amount) || Amount <= 0.0f)
+    {
+        OutError = TEXT("Damage amount must be finite and positive.");
+        return false;
+    }
+    if (PieceState != EShoringPieceState::Active
+        && PieceState != EShoringPieceState::Damaged
+        && PieceState != EShoringPieceState::Warning
+        && PieceState != EShoringPieceState::Overloaded)
+    {
+        OutError = TEXT("Only an active, damaged or overloaded shoring piece can take new damage.");
+        return false;
+    }
+
+    Health = FMath::Clamp(Health - Amount, 0.0f, MaxHealth);
+    LastDamageCause = Cause;
+    if (Health <= KINDA_SMALL_NUMBER)
+    {
+        SetPieceState(EShoringPieceState::Failed);
+    }
+    else if (Health <= MaxHealth * 0.7f)
+    {
+        SetPieceState(EShoringPieceState::Damaged);
+    }
+    else
+    {
+        SetPieceState(EShoringPieceState::Active);
+    }
+    return true;
+}
+
+bool APlaceableShoringPiece::Repair(float Amount, FString& OutError)
+{
+    OutError.Reset();
+    if (!FMath::IsFinite(Amount) || Amount <= 0.0f)
+    {
+        OutError = TEXT("Repair amount must be finite and positive.");
+        return false;
+    }
+    if ((PieceState != EShoringPieceState::Damaged
+            && PieceState != EShoringPieceState::Warning
+            && PieceState != EShoringPieceState::Overloaded)
+        || Health <= KINDA_SMALL_NUMBER
+        || Health >= MaxHealth - KINDA_SMALL_NUMBER)
+    {
+        OutError = TEXT("Only a non-failed shoring piece with lost durability can be repaired. Failed pieces must be replaced.");
+        return false;
+    }
+
+    Health = FMath::Clamp(Health + Amount, 0.0f, MaxHealth);
+    if (Health >= MaxHealth - KINDA_SMALL_NUMBER)
+    {
+        Health = MaxHealth;
+        SetPieceState(EShoringPieceState::Active);
+    }
+    else if (Health <= MaxHealth * 0.7f)
+    {
+        SetPieceState(EShoringPieceState::Damaged);
+    }
+    else
+    {
+        SetPieceState(EShoringPieceState::Active);
+    }
+    return true;
+}
+
 void APlaceableShoringPiece::SetPieceState(EShoringPieceState NewState)
 {
     PieceState = NewState;
+    if (NewState == EShoringPieceState::Unsupported)
+    {
+        bHasCollapsed = true;
+    }
     RefreshCollisionState();
+}
+
+void APlaceableShoringPiece::ClearCollapseAfterReattachment()
+{
+    bHasCollapsed = false;
 }
 
 bool APlaceableShoringPiece::UpdateSupportAnchor(const FShoringSupportAnchor& NewAnchor)
@@ -98,11 +180,22 @@ void APlaceableShoringPiece::UpdateConnections(const TArray<FGuid>& NewConnected
 
 void APlaceableShoringPiece::RefreshCollisionState()
 {
-    const bool bShouldCollide = PieceState == EShoringPieceState::Active;
+    const bool bShouldSimulateCollapse = PieceState == EShoringPieceState::Unsupported;
+    const bool bShouldCollide =
+        PieceState == EShoringPieceState::Active
+        || PieceState == EShoringPieceState::Damaged
+        || PieceState == EShoringPieceState::Warning
+        || PieceState == EShoringPieceState::Overloaded
+        || bShouldSimulateCollapse;
+
     CollisionBox->SetCollisionEnabled(
         bShouldCollide ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
-    VisualMesh->SetRenderCustomDepth(PieceState == EShoringPieceState::Planned);
-    if (PieceState != EShoringPieceState::Planned)
+    CollisionBox->SetEnableGravity(bShouldSimulateCollapse);
+    CollisionBox->SetSimulatePhysics(bShouldSimulateCollapse);
+    VisualMesh->SetRenderCustomDepth(
+        PieceState == EShoringPieceState::Planned
+        || PieceState == EShoringPieceState::Failed);
+    if (PieceState != EShoringPieceState::Planned && PieceState != EShoringPieceState::Failed)
     {
         VisualMesh->SetCustomDepthStencilValue(0);
     }

@@ -15,7 +15,7 @@ class APlaceableShoringPiece;
  * Owns preview/commit/reposition/remove operations for separate shoring actors.
  * Terrain density remains authoritative in UExcavationVolumeSubsystem.
  */
-UCLASS()
+UCLASS(BlueprintType)
 class MYPROJECT2_API UExcavationShoringSubsystem final
     : public UWorldSubsystem
     , public IStructureSupportAdapter
@@ -46,7 +46,31 @@ public:
         FString& OutError,
         TSubclassOf<APlaceableShoringPiece> PieceClass = nullptr);
 
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Support")
     bool RevalidatePlan(const FGuid& PlanId, FString& OutError);
+
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Support")
+    bool GetPlanSupportAssessment(
+        const FGuid& PlanId,
+        TArray<FShoringSupportAssessment>& OutAssessments,
+        FString& OutError) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Damage")
+    bool ApplyDamageToPiece(
+        const FGuid& PieceId,
+        float Amount,
+        EShoringDamageCause Cause,
+        FShoringSupportAssessment& OutAssessment,
+        FString& OutError);
+
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Damage")
+    bool RepairPiece(const FGuid& PieceId, float Amount, FString& OutError);
+
+    bool ReplaceFailedPiece(
+        const FGuid& PieceId,
+        APlaceableShoringPiece*& OutReplacement,
+        FString& OutError,
+        TSubclassOf<APlaceableShoringPiece> PieceClass = nullptr);
 
     bool MovePiece(
         const FGuid& PieceId,
@@ -83,7 +107,8 @@ private:
         bool bRequireSameRevision,
         float MaxDeviationCm,
         FVector& OutResolvedPositionCm,
-        FString& OutError) const;
+        FString& OutError,
+        bool* bOutTransientFailure = nullptr) const;
 
     bool ValidateWorldCollision(
         const FTransform& Transform,
@@ -97,6 +122,18 @@ private:
         const FGuid& PieceToIgnore,
         const TArray<FGuid>* AllowedConnectedPieceIds,
         FString& OutError) const;
+
+    bool BuildSupportNodes(
+        const FGuid& PlanId,
+        TArray<FShoringSupportNode>& OutNodes,
+        FString& OutError,
+        bool bAnchorsWereRevalidated = false) const;
+
+    bool EvaluateAndApplyPlanSupport(
+        const FGuid& PlanId,
+        TArray<FShoringSupportAssessment>& OutAssessments,
+        FString& OutError,
+        bool bAnchorsWereRevalidated = false);
 
     void SetPlanState(const FGuid& PlanId, EShoringPieceState State);
     void MarkAllPlansForRevalidation();

@@ -4,6 +4,20 @@
 
 namespace
 {
+    float EstimateDesignLoad(EShoringPieceKind Kind, float DepthCm, float WidthCm)
+    {
+        switch (Kind)
+        {
+        case EShoringPieceKind::Upright:  return 0.55f + DepthCm / 650.0f + WidthCm / 2000.0f;
+        case EShoringPieceKind::Lagging:  return 0.35f + DepthCm / 1600.0f + WidthCm / 2500.0f;
+        case EShoringPieceKind::Strut:    return 0.55f + WidthCm / 400.0f + DepthCm / 1800.0f;
+        case EShoringPieceKind::BaseSole: return 0.40f + DepthCm / 1200.0f;
+        case EShoringPieceKind::Platform: return 0.40f + WidthCm / 500.0f;
+        case EShoringPieceKind::Ladder:   return 0.25f + DepthCm / 1200.0f;
+        default:                          return 1.0f;
+        }
+    }
+
     void AddConnection(
         FShoringLayoutPlan& Plan,
         const TMap<FGuid, int32>& PieceIndexById,
@@ -146,6 +160,8 @@ bool FShoringLayoutPlanner::BuildPlan(
                 InwardNormal,
                 Request.SourceDensityRevision);
 
+            Piece.DesignLoad = EstimateDesignLoad(Piece.Kind, Request.TrenchDepthCm, Request.TrenchWidthCm);
+
             const FGuid PieceId = Piece.PieceId;
             PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
             OutPlan.Pieces.Add(MoveTemp(Piece));
@@ -203,6 +219,7 @@ bool FShoringLayoutPlanner::BuildPlan(
                         InwardNormal,
                         Request.SourceDensityRevision,
                         FirstUpright);
+                    Piece.DesignLoad = EstimateDesignLoad(Piece.Kind, Request.TrenchDepthCm, Request.TrenchWidthCm);
                     const FGuid PieceId = Piece.PieceId;
                     PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
                     OutPlan.Pieces.Add(MoveTemp(Piece));
@@ -243,6 +260,7 @@ bool FShoringLayoutPlanner::BuildPlan(
                 Lateral,
                 Request.SourceDensityRevision,
                 NegativeSideUprights[Station]);
+            Piece.DesignLoad = EstimateDesignLoad(Piece.Kind, Request.TrenchDepthCm, Request.TrenchWidthCm);
             const FGuid PieceId = Piece.PieceId;
             PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
             OutPlan.Pieces.Add(MoveTemp(Piece));
@@ -268,6 +286,7 @@ bool FShoringLayoutPlanner::BuildPlan(
             FVector::UpVector,
             Request.SourceDensityRevision,
             NegativeSideUprights[MidStation]);
+        Piece.DesignLoad = EstimateDesignLoad(Piece.Kind, Request.TrenchDepthCm, Request.TrenchWidthCm);
         const FGuid PieceId = Piece.PieceId;
         PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
         OutPlan.Pieces.Add(MoveTemp(Piece));
@@ -292,6 +311,7 @@ bool FShoringLayoutPlanner::BuildPlan(
             Lateral * -1.0f,
             Request.SourceDensityRevision,
             PositiveSideUprights[0]);
+        Piece.DesignLoad = EstimateDesignLoad(Piece.Kind, Request.TrenchDepthCm, Request.TrenchWidthCm);
         const FGuid PieceId = Piece.PieceId;
         PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
         OutPlan.Pieces.Add(MoveTemp(Piece));
