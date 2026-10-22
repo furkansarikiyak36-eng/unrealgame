@@ -4,6 +4,7 @@
 
 #include "WorldCore/ExcavationVolumeSubsystem.h"
 #include "WorldCore/ExcavationTerrainChunkActor.h"
+#include "WorldCore/ExcavationTerrainChunkSubsystem.h"
 #include "WorldCore/WorldClassificationSubsystem.h"
 #include "WorldCore/WorldRuntimeProfileSubsystem.h"
 #include "WorldCore/WorldScanSubsystem.h"
@@ -124,19 +125,12 @@ bool UWorldVoxelInteractionSubsystem::IsCurrentVoxelSurfaceActor(
     }
 
     UWorld* World = GetWorld();
-    const UExcavationVolumeSubsystem* Excavation =
-        World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    UExcavationTerrainChunkSubsystem* Renderer =
+        World ? World->GetSubsystem<UExcavationTerrainChunkSubsystem>() : nullptr;
     const AExcavationTerrainChunkActor* Chunk = Cast<AExcavationTerrainChunkActor>(Actor);
-    if (!Excavation || !Chunk)
+    if (!Renderer || !Chunk || !Renderer->IsChunkMeshCurrent(Chunk))
     {
-        OutError = TEXT("The voxel surface has no known published-density revision.");
-        return false;
-    }
-
-    const uint64 PublishedRevision = Chunk->GetPublishedDensityRevision();
-    if (PublishedRevision == 0 || PublishedRevision != Excavation->GetDensityRevision())
-    {
-        OutError = TEXT("Voxel surface is stale; wait for the latest mesh and collision to publish.");
+        OutError = TEXT("Voxel surface is being rebuilt or has no current published mesh/collision; retry after the chunk update.");
         return false;
     }
     return true;
