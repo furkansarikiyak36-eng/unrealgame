@@ -29,6 +29,18 @@ struct MYPROJECT2_API FSavedShoringPieceRecord
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Save")
     float StructuralHealth = 100.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Save")
+    bool bHasVoxelAnchor = false;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Save")
+    FVector SupportAnchorWorldCm = FVector::ZeroVector;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Save")
+    FVector SupportNormal = FVector::UpVector;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Save")
+    TArray<FName> RequiredAnchorIds;
 };
 
 UCLASS()
