@@ -222,7 +222,7 @@ struct MYPROJECT2_API FWorldDensityChunkSnapshot
     bool IsShapeMetadataValid() const
     {
         return CellsPerChunkAxis >= 1
-            && CellsPerChunkAxis <= 512
+            && CellsPerChunkAxis <= 128
             && BorderCells >= 0
             && BorderCells <= 8
             && FMath::IsFinite(SampleSpacingCm)
