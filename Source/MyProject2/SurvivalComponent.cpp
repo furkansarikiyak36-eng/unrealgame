@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "SurvivalComponent.h"
+#include "WorldCore/Events/WorldMechanicEventSubsystem.h"
+#include "Engine/World.h"
 
 USurvivalComponent::USurvivalComponent()
 {
@@ -132,6 +134,21 @@ void USurvivalComponent::SetEnvironmentalExposure(float AmbientTemperatureInC, f
     AmbientTemperatureC = FMath::Clamp(AmbientTemperatureInC, -100.0f, 100.0f);
     Wetness01 = FMath::Clamp(Wetness01In, 0.0f, 1.0f);
     ShelterHeatC = FMath::Clamp(ShelterHeatInC, 0.0f, 60.0f);
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+        {
+            FWorldMechanicEvent Event;
+            Event.Type = EWorldMechanicEventType::SurvivalEnvironmentChanged;
+            Event.ScalarValue = AmbientTemperatureC;
+            Event.SecondaryValue = Wetness01;
+            Event.TertiaryValue = ShelterHeatC;
+            Event.SourceTag = TEXT("SurvivalComponent");
+            Event.SourceActor = GetOwner();
+            Events->EnqueueEvent(MoveTemp(Event));
+        }
+    }
 }
 
 bool USurvivalComponent::ExportState(FSurvivalStateSnapshot& OutState) const
