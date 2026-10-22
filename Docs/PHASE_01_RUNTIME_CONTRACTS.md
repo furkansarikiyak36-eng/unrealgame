@@ -10,7 +10,7 @@
 |---|---|---|
 | `WorldCore/WorldRuntimeProfile.h/.cpp` | LOW_MID ve HIGH_END profil verisi, default ayarlar, grid tutarlılığı, enum ve profil doğrulama | Kod yazıldı; UBT doğrulaması bekliyor |
 | `WorldCore/WorldRuntimeProfileSubsystem.h/.cpp` | Dünya başına aktif profili seçmek, doğrulamak ve seans sırasında grid profili kilidini sağlamak | Kod yazıldı; henüz voxel bootstrap çağırmıyor |
-| `WorldCore/WorldSystemContracts.h` | Classification, voxel edit/density, mesh, collision, scan, placement, support, persistence ve survival API sözleşmeleri; sınıflandırma/edit/trace/overlap/sample/placement istek validasyonu; density sample storage ve mesh topology doğrulaması | Header sözleşmeleri yazıldı; gerçek adapter'lar sonraki fazlarda |
+| `WorldCore/WorldSystemContracts.h` | Classification, voxel edit/density, mesh, collision, scan, placement, support, persistence ve survival API sözleşmeleri; sınıflandırma/edit/raycast/trace/overlap/sample/placement istek validasyonu; density sample storage ve mesh topology doğrulaması | Header sözleşmeleri yazıldı; gerçek adapter'lar sonraki fazlarda |
 | `Tests/WorldRuntimeProfileTests.cpp` | LOW_MID/HIGH_END defaultları, grid/enum/queue doğrulaması, profile lock, request validation, density buffer boyutu ve mesh indeksleri için Unreal Automation Test tanımları | 3 test tanımı yazıldı; UE 5.8'de çalıştırılmadı |
 | `Scripts/run_phase1_tests.sh` | UE 5.8 build + `MyProject2.World` automation grubunu çalıştırır; beklenen üç test adını ve başarı/failure satırlarını doğrular | Bash sözdizimi kontrol edildi; Windows Git Bash + Unreal koşusu bekliyor |
 | `Docs/PHASE_00_BASELINE_AUDIT.md` | Kanonik sistem sahipliği ve çakışma riskleri | Statik denetim belgesi |
