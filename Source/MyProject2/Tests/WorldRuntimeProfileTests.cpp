@@ -136,12 +136,30 @@ bool FWorldSystemContractsValidationTest::RunTest(const FString& Parameters)
     Edit.HalfExtentCm = FVector(50.0f, -1.0f, 50.0f);
     TestFalse(TEXT("Box edit with a negative half-extent should be rejected"), Edit.Validate(Error));
 
+    FWorldClassificationBuildRequest Classification;
+    Classification.Bounds = FBox(FVector::ZeroVector, FVector(800.0f));
+    TestTrue(TEXT("Finite classification bounds/region size should be valid"), Classification.Validate(Error));
+    Classification.RegionSizeCm.X = 0.0f;
+    TestFalse(TEXT("Classification with zero region width should be rejected"), Classification.Validate(Error));
+
     FWorldSurfaceSampleRequest Surface;
     TestTrue(TEXT("Default surface sample request should be valid"), Surface.Validate(Error));
     Surface.SamplesX = 6;
     Surface.SamplesY = 6;
     Surface.MaxSamples = 25;
     TestFalse(TEXT("Surface sample grid larger than MaxSamples should be rejected"), Surface.Validate(Error));
+
+    FWorldOverlapRequest Overlap;
+    TestTrue(TEXT("Default sphere overlap should be valid"), Overlap.Validate(Error));
+    Overlap.Shape = EWorldOverlapShape::OrientedBox;
+    Overlap.HalfExtentCm = FVector(50.0f);
+    Overlap.Rotation = FQuat(0.0f, 0.0f, 0.0f, 0.0f);
+    TestFalse(TEXT("Oriented box overlap with a zero quaternion should be rejected"), Overlap.Validate(Error));
+
+    FWorldPlacementQuery Placement;
+    TestTrue(TEXT("Default placement query should be valid"), Placement.Validate(Error));
+    Placement.MaxSnapDistanceCm = 0.0f;
+    TestFalse(TEXT("Placement query with zero snap distance should be rejected"), Placement.Validate(Error));
 
     FWorldShapeTraceRequest ShapeTrace;
     TestTrue(TEXT("Default sphere trace request should be valid"), ShapeTrace.Validate(Error));
