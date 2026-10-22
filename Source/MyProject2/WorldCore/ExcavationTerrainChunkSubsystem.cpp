@@ -765,7 +765,9 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
 
     for (const FIntVector& Coordinate : OrderedDirtyChunks)
     {
-        if (InFlightMeshJobs.Num() >= JobLimit)
+        // Count finished-but-not-yet-published jobs as outstanding too. This bounds
+        // worker output memory when publication/collision budgets are the bottleneck.
+        if (InFlightMeshJobs.Num() + CompletedMeshResults.Num() >= JobLimit)
         {
             break;
         }
