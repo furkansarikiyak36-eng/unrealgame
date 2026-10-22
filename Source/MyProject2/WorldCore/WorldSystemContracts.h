@@ -95,9 +95,31 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
             OutError = TEXT("Classification region size must be finite and positive on every axis.");
             return false;
         }
+        if (Bounds.Min.X > Bounds.Max.X || Bounds.Min.Y > Bounds.Max.Y || Bounds.Min.Z > Bounds.Max.Z)
+        {
+            OutError = TEXT("Classification bounds minimum must not exceed maximum.");
+            return false;
+        }
+        const FVector BoundsSize = Bounds.GetSize();
+        if (!WorldSystemContractValidation::IsPositiveVector(BoundsSize))
+        {
+            OutError = TEXT("Classification bounds must have finite, positive size on every axis.");
+            return false;
+        }
         if (MaxRegions < 1 || MaxRegions > 1000000)
         {
             OutError = TEXT("MaxRegions must be in [1, 1000000].");
+            return false;
+        }
+        const double CountX = FMath::CeilToDouble(static_cast<double>(BoundsSize.X) / RegionSizeCm.X);
+        const double CountY = FMath::CeilToDouble(static_cast<double>(BoundsSize.Y) / RegionSizeCm.Y);
+        const double CountZ = FMath::CeilToDouble(static_cast<double>(BoundsSize.Z) / RegionSizeCm.Z);
+        if (!FMath::IsFinite(CountX) || !FMath::IsFinite(CountY) || !FMath::IsFinite(CountZ)
+            || CountX < 1.0 || CountY < 1.0 || CountZ < 1.0
+            || CountX > MaxRegions || CountY > MaxRegions || CountZ > MaxRegions
+            || (CountX * CountY * CountZ) > MaxRegions)
+        {
+            OutError = TEXT("Classification region grid exceeds MaxRegions or overflows numeric limits.");
             return false;
         }
         if (MaxGeometrySamples < 0 || MaxGeometrySamples > 50000)
