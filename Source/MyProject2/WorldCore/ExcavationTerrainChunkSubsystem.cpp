@@ -495,7 +495,7 @@ void UExcavationTerrainChunkSubsystem::HandleVolumeReset()
     DirtyChunkQueue.Reset();
     bFullRefreshPending = true;
 }
-\n
+
 void UExcavationTerrainChunkSubsystem::QueueChunkRebuild(const FIntVector& Coordinate)
 {
     if (!bRuntimeReady || DirtyChunkQueue.Contains(Coordinate))
