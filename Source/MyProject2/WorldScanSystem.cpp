@@ -66,6 +66,29 @@ bool WorldScanSystem::Trace(
 	return OutResult.bHit;
 }
 
+bool WorldScanSystem::TraceWithParams(
+    UWorld* World, const FVector& Start, const FVector& End,
+    const FCollisionQueryParams& InParams, FScanResult& OutResult,
+    ECollisionChannel Channel, bool bTraceComplex)
+{
+    OutResult = FScanResult{};
+    OutResult.TraceStart = Start;
+    OutResult.TraceEnd = End;
+    OutResult.TraceLengthCm = FVector::Distance(Start, End);
+
+    if (!World || OutResult.TraceLengthCm <= KINDA_SMALL_NUMBER)
+    {
+        return false;
+    }
+
+    FCollisionQueryParams Params = InParams;
+    Params.bTraceComplex = bTraceComplex;
+    Params.bReturnPhysicalMaterial = true;
+    Params.bFindInitialOverlaps = false;
+    OutResult.bHit = World->LineTraceSingleByChannel(OutResult.Hit, Start, End, Channel, Params);
+    return OutResult.bHit;
+}
+
 bool WorldScanSystem::AnalyzeHit(const FScanResult& Scan, FWorldAnalysis& OutAnalysis)
 {
 	OutAnalysis = FWorldAnalysis{};
