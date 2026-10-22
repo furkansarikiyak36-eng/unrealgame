@@ -10,6 +10,26 @@
 class AActor;
 class UWorld;
 
+namespace WorldSystemContractValidation
+{
+    inline bool IsFiniteVector(const FVector& Value)
+    {
+        return FMath::IsFinite(Value.X)
+            && FMath::IsFinite(Value.Y)
+            && FMath::IsFinite(Value.Z);
+    }
+
+    inline bool IsPositiveVector(const FVector& Value)
+    {
+        return IsFiniteVector(Value) && Value.X > 0.0f && Value.Y > 0.0f && Value.Z > 0.0f;
+    }
+
+    inline bool IsFiniteVector2D(const FVector2D& Value)
+    {
+        return FMath::IsFinite(Value.X) && FMath::IsFinite(Value.Y);
+    }
+}
+
 /**
  * Shared design contracts for the Landscape Builder, smooth-voxel runtime,
  * scanning, placement, shoring, survival and persistence systems.
@@ -56,6 +76,27 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
     int32 MaxRegions = 100000;
     bool bIncludeGeometrySampling = true;
     bool bRespectManualOverrides = true;
+
+    bool Validate(FString& OutError) const
+    {
+        OutError.Reset();
+        if (!Bounds.IsValid())
+        {
+            OutError = TEXT("Classification bounds must be valid.");
+            return false;
+        }
+        if (!WorldSystemContractValidation::IsPositiveVector(RegionSizeCm))
+        {
+            OutError = TEXT("Classification region size must be finite and positive on every axis.");
+            return false;
+        }
+        if (MaxRegions < 1 || MaxRegions > 1000000)
+        {
+            OutError = TEXT("MaxRegions must be in [1, 1000000].");
+            return false;
+        }
+        return true;
+    }
 };
 
 struct MYPROJECT2_API FWorldClassificationBuildResult
@@ -90,6 +131,52 @@ struct MYPROJECT2_API FWorldVoxelEditRequest
     float RadiusCm = 0.0f;
     float TargetDensity = 0.0f;
     int32 MaxSamples = 100000;
+
+    bool Validate(FString& OutError) const
+    {
+        OutError.Reset();
+        if (!OperationId.IsValid())
+        {
+            OutError = TEXT("Voxel edit request requires a valid operation ID.");
+            return false;
+        }
+        if (!WorldSystemContractValidation::IsFiniteVector(CenterCm)
+            || !WorldSystemContractValidation::IsFiniteVector(EndCm)
+            || !WorldSystemContractValidation::IsFiniteVector(HalfExtentCm)
+            || !FMath::IsFinite(TargetDensity))
+        {
+            OutError = TEXT("Voxel edit geometry and target density must be finite.");
+            return false;
+        }
+        if (MaxSamples < 1 || MaxSamples > 50000000)
+        {
+            OutError = TEXT("MaxSamples must be in [1, 50000000].");
+            return false;
+        }
+
+        switch (Shape)
+        {
+        case EWorldVoxelEditShape::Sphere:
+        case EWorldVoxelEditShape::Capsule:
+            if (!FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
+            {
+                OutError = TEXT("Sphere/capsule voxel edits require a finite positive radius.");
+                return false;
+            }
+            break;
+        case EWorldVoxelEditShape::Box:
+            if (!WorldSystemContractValidation::IsPositiveVector(HalfExtentCm))
+            {
+                OutError = TEXT("Box voxel edits require finite positive half-extents.");
+                return false;
+            }
+            break;
+        default:
+            OutError = TEXT("Unsupported voxel edit shape.");
+            return false;
+        }
+        return true;
+    }
 };
 
 struct MYPROJECT2_API FWorldDirtyChunkSet
@@ -124,10 +211,30 @@ struct MYPROJECT2_API FWorldDensityChunkSnapshot
 
     bool IsShapeMetadataValid() const
     {
-        return CellsPerChunkAxis > 0
+        return CellsPerChunkAxis >= 1
+            && CellsPerChunkAxis <= 512
             && BorderCells >= 0
+            && BorderCells <= 8
             && FMath::IsFinite(SampleSpacingCm)
             && SampleSpacingCm > 0.0f;
+    }
+
+    /** Number of scalar density samples when each chunk includes both boundary planes and border cells. */
+    int64 GetExpectedDensitySampleCount() const
+    {
+        if (!IsShapeMetadataValid())
+        {
+            return INDEX_NONE;
+        }
+
+        const int64 SamplesPerAxis = static_cast<int64>(CellsPerChunkAxis) + 1 + (2LL * BorderCells);
+        return SamplesPerAxis * SamplesPerAxis * SamplesPerAxis;
+    }
+
+    bool HasValidSampleStorage() const
+    {
+        const int64 Expected = GetExpectedDensitySampleCount();
+        return Expected > 0 && Expected <= MAX_int32 && DensitySamples.Num() == Expected;
     }
 };
 
@@ -145,9 +252,51 @@ struct MYPROJECT2_API FWorldVoxelMeshData
 
     bool IsTopologyValid() const
     {
-        return Vertices.Num() == Normals.Num()
-            && (UV0.IsEmpty() || UV0.Num() == Vertices.Num())
-            && (TriangleIndices.Num() % 3) == 0;
+        if (Vertices.Num() != Normals.Num()
+            || (!UV0.IsEmpty() && UV0.Num() != Vertices.Num())
+            || (TriangleIndices.Num() % 3) != 0
+            || (!TriangleMaterialIds.IsEmpty()
+                && TriangleMaterialIds.Num() != TriangleIndices.Num() / 3))
+        {
+            return false;
+        }
+
+        for (int32 Index : TriangleIndices)
+        {
+            if (Index < 0 || Index >= Vertices.Num())
+            {
+                return false;
+            }
+        }
+        for (int32 MaterialId : TriangleMaterialIds)
+        {
+            if (MaterialId < 0)
+            {
+                return false;
+            }
+        }
+        for (const FVector& Vertex : Vertices)
+        {
+            if (!WorldSystemContractValidation::IsFiniteVector(Vertex))
+            {
+                return false;
+            }
+        }
+        for (const FVector& Normal : Normals)
+        {
+            if (!WorldSystemContractValidation::IsFiniteVector(Normal))
+            {
+                return false;
+            }
+        }
+        for (const FVector2D& UV : UV0)
+        {
+            if (!WorldSystemContractValidation::IsFiniteVector2D(UV))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 };
 
@@ -192,6 +341,47 @@ struct MYPROJECT2_API FWorldShapeTraceRequest
     FVector HalfExtentCm = FVector(25.0f);
     float HalfHeightCm = 50.0f;
     bool bMultiHit = false;
+
+    bool Validate(FString& OutError) const
+    {
+        OutError.Reset();
+        if (!WorldSystemContractValidation::IsFiniteVector(StartCm)
+            || !WorldSystemContractValidation::IsFiniteVector(EndCm))
+        {
+            OutError = TEXT("Shape trace start/end must be finite.");
+            return false;
+        }
+
+        switch (Shape)
+        {
+        case EWorldShapeTraceKind::Sphere:
+            if (!FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
+            {
+                OutError = TEXT("Sphere trace requires a finite positive radius.");
+                return false;
+            }
+            break;
+        case EWorldShapeTraceKind::Box:
+            if (!WorldSystemContractValidation::IsPositiveVector(HalfExtentCm))
+            {
+                OutError = TEXT("Box trace requires finite positive half-extents.");
+                return false;
+            }
+            break;
+        case EWorldShapeTraceKind::Capsule:
+            if (!FMath::IsFinite(RadiusCm) || !FMath::IsFinite(HalfHeightCm)
+                || RadiusCm <= 0.0f || HalfHeightCm < RadiusCm)
+            {
+                OutError = TEXT("Capsule trace requires positive radius and half-height at least the radius.");
+                return false;
+            }
+            break;
+        default:
+            OutError = TEXT("Unsupported shape trace kind.");
+            return false;
+        }
+        return true;
+    }
 };
 
 struct MYPROJECT2_API FWorldShapeTraceResult
@@ -213,6 +403,45 @@ struct MYPROJECT2_API FWorldOverlapRequest
     float RadiusCm = 100.0f;
     FVector HalfExtentCm = FVector(100.0f);
     FQuat Rotation = FQuat::Identity;
+
+    bool Validate(FString& OutError) const
+    {
+        OutError.Reset();
+        if (!WorldSystemContractValidation::IsFiniteVector(CenterCm))
+        {
+            OutError = TEXT("Overlap center must be finite.");
+            return false;
+        }
+
+        switch (Shape)
+        {
+        case EWorldOverlapShape::Sphere:
+            if (!FMath::IsFinite(RadiusCm) || RadiusCm <= 0.0f)
+            {
+                OutError = TEXT("Sphere overlap requires a finite positive radius.");
+                return false;
+            }
+            break;
+        case EWorldOverlapShape::OrientedBox:
+            if (!WorldSystemContractValidation::IsPositiveVector(HalfExtentCm))
+            {
+                OutError = TEXT("Box overlap requires finite positive half-extents.");
+                return false;
+            }
+            if (!FMath::IsFinite(Rotation.X) || !FMath::IsFinite(Rotation.Y)
+                || !FMath::IsFinite(Rotation.Z) || !FMath::IsFinite(Rotation.W)
+                || Rotation.SizeSquared() <= SMALL_NUMBER)
+            {
+                OutError = TEXT("Box overlap rotation must be finite and non-zero.");
+                return false;
+            }
+            break;
+        default:
+            OutError = TEXT("Unsupported overlap shape.");
+            return false;
+        }
+        return true;
+    }
 };
 
 struct MYPROJECT2_API FWorldOverlapResult
@@ -242,6 +471,31 @@ struct MYPROJECT2_API FWorldSurfaceSampleRequest
     float TraceUpCm = 200.0f;
     float TraceDownCm = 400.0f;
     int32 MaxSamples = 25;
+
+    bool Validate(FString& OutError) const
+    {
+        OutError.Reset();
+        if (!WorldSystemContractValidation::IsFiniteVector(CenterCm)
+            || !WorldSystemContractValidation::IsFiniteVector2D(HalfExtentCm)
+            || HalfExtentCm.X <= 0.0f || HalfExtentCm.Y <= 0.0f)
+        {
+            OutError = TEXT("Surface sample center/extents must be finite and extents must be positive.");
+            return false;
+        }
+        if (SamplesX < 1 || SamplesY < 1 || MaxSamples < 1
+            || static_cast<int64>(SamplesX) * static_cast<int64>(SamplesY) > MaxSamples)
+        {
+            OutError = TEXT("Surface sample grid must be positive and fit within MaxSamples.");
+            return false;
+        }
+        if (!FMath::IsFinite(TraceUpCm) || !FMath::IsFinite(TraceDownCm)
+            || TraceUpCm <= 0.0f || TraceDownCm <= 0.0f)
+        {
+            OutError = TEXT("Surface trace distances must be finite and positive.");
+            return false;
+        }
+        return true;
+    }
 };
 
 struct MYPROJECT2_API FWorldSurfaceSampleResult
@@ -289,6 +543,30 @@ struct MYPROJECT2_API FWorldPlacementQuery
     FName RequiredGroup = NAME_None;
     float MaxSnapDistanceCm = 100.0f;
     uint64 ExpectedWorldRevision = 0;
+
+    bool Validate(FString& OutError) const
+    {
+        OutError.Reset();
+        if (!WorldSystemContractValidation::IsFiniteVector(HitPointCm)
+            || !WorldSystemContractValidation::IsFiniteVector(HitNormal)
+            || !WorldSystemContractValidation::IsFiniteVector(DesiredAxis)
+            || !WorldSystemContractValidation::IsPositiveVector(PieceHalfExtentCm))
+        {
+            OutError = TEXT("Placement query vectors must be finite and piece half-extents positive.");
+            return false;
+        }
+        if (HitNormal.IsNearlyZero() || DesiredAxis.IsNearlyZero())
+        {
+            OutError = TEXT("Placement query requires non-zero hit normal and desired axis.");
+            return false;
+        }
+        if (!FMath::IsFinite(MaxSnapDistanceCm) || MaxSnapDistanceCm <= 0.0f)
+        {
+            OutError = TEXT("MaxSnapDistanceCm must be finite and positive.");
+            return false;
+        }
+        return true;
+    }
 };
 
 struct MYPROJECT2_API FWorldPlacementResult
