@@ -20,7 +20,7 @@ public:
     FIntVector GetChunkCoordinate() const { return ChunkCoordinate; }
 
     void ApplySurface(const TArray<FVector>& Vertices, const TArray<int32>& Triangles,
-        const TArray<FVector>& Normals, bool bCreateCollision);
+        const TArray<FVector>& Normals, bool bCreateCollision, bool bUseAsyncCollision);
 
     UProceduralMeshComponent* GetVoxelMesh() const { return VoxelMesh; }
 
