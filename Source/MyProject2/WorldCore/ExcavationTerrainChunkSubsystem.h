@@ -36,6 +36,7 @@ public:
 
     bool IsRuntimeReady() const { return bRuntimeReady; }
     FString GetRuntimeSetupError() const { return RuntimeSetupError; }
+    const FWorldRuntimeProfileValues& GetRuntimeSettings() const { return RuntimeSettings; }
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Materials")
     TArray<FExcavationLandscapeMaterialMapping> LandscapeMaterialMappings;
