@@ -106,13 +106,10 @@ bool UExcavationVolumeSubsystem::IsGridConfigurationCompatible() const
         return false;
     }
 
-    if (CellOverrides.Num() > 0)
+    if ((LockedCellSizeCm > 0.0f && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
+        || (LockedCellsPerChunkAxis > 0 && CellsPerChunkAxis != LockedCellsPerChunkAxis))
     {
-        if ((LockedCellSizeCm > 0.0f && !FMath::IsNearlyEqual(CellSizeCm, LockedCellSizeCm))
-            || (LockedCellsPerChunkAxis > 0 && CellsPerChunkAxis != LockedCellsPerChunkAxis))
-        {
-            return false;
-        }
+        return false;
     }
 
     return true;
@@ -126,6 +123,7 @@ void UExcavationVolumeSubsystem::Deinitialize()
     FallbackBaseDensitySourceObject = nullptr;
     LockedCellSizeCm = 0.0f;
     LockedCellsPerChunkAxis = 0;
+    bRuntimeGridLocked = false;
     Super::Deinitialize();
 }
 
@@ -207,13 +205,23 @@ bool UExcavationVolumeSubsystem::ConfigureGridForRuntimeProfile(
         return false;
     }
 
+    const bool bExistingCellSizeMatches = FMath::IsNearlyEqual(CellSizeCm, InCellSizeCm, 0.001f);
+    const bool bExistingChunkGridMatches = CellsPerChunkAxis == InCellsPerChunkAxis;
+    const bool bLockedCellSizeMatches = LockedCellSizeCm <= 0.0f
+        || FMath::IsNearlyEqual(LockedCellSizeCm, InCellSizeCm, 0.001f);
+    const bool bLockedChunkGridMatches = LockedCellsPerChunkAxis <= 0
+        || LockedCellsPerChunkAxis == InCellsPerChunkAxis;
+
+    if (bRuntimeGridLocked && (!bLockedCellSizeMatches || !bLockedChunkGridMatches))
+    {
+        OutError = TEXT("Runtime voxel grid is already locked to a different profile.");
+        return false;
+    }
+
     if (CellOverrides.Num() > 0)
     {
-        const bool bCellSizeMatches = FMath::IsNearlyEqual(CellSizeCm, InCellSizeCm, 0.001f)
-            && (LockedCellSizeCm <= 0.0f || FMath::IsNearlyEqual(LockedCellSizeCm, InCellSizeCm, 0.001f));
-        const bool bChunkGridMatches = CellsPerChunkAxis == InCellsPerChunkAxis
-            && (LockedCellsPerChunkAxis <= 0 || LockedCellsPerChunkAxis == InCellsPerChunkAxis);
-        if (!bCellSizeMatches || !bChunkGridMatches)
+        if (!bExistingCellSizeMatches || !bExistingChunkGridMatches
+            || !bLockedCellSizeMatches || !bLockedChunkGridMatches)
         {
             OutError = TEXT("Existing excavation overrides use a different grid. Refusing to reinterpret saved/world cells.");
             return false;
@@ -223,9 +231,11 @@ bool UExcavationVolumeSubsystem::ConfigureGridForRuntimeProfile(
     {
         CellSizeCm = InCellSizeCm;
         CellsPerChunkAxis = InCellsPerChunkAxis;
-        LockedCellSizeCm = 0.0f;
-        LockedCellsPerChunkAxis = 0;
     }
+
+    LockedCellSizeCm = InCellSizeCm;
+    LockedCellsPerChunkAxis = InCellsPerChunkAxis;
+    bRuntimeGridLocked = true;
 
     if (!IsGridConfigurationCompatible())
     {
@@ -537,6 +547,9 @@ bool UExcavationVolumeSubsystem::ImportSnapshot(
         || !IsValidDensity(Snapshot.DefaultBaseDensity)
         || MaxSnapshotOverrideCells <= 0
         || Snapshot.Overrides.Num() > MaxSnapshotOverrideCells
+        || (bRuntimeGridLocked
+            && (!FMath::IsNearlyEqual(Snapshot.CellSizeCm, LockedCellSizeCm, 0.001f)
+                || Snapshot.CellsPerChunkAxis != LockedCellsPerChunkAxis))
         || (!bReplaceExistingState && CellOverrides.Num() > 0))
     {
         return false;
@@ -573,7 +586,12 @@ bool UExcavationVolumeSubsystem::ImportSnapshot(
     CellsPerChunkAxis = Snapshot.CellsPerChunkAxis;
     DefaultBaseDensity = Snapshot.DefaultBaseDensity;
 
-    if (CellOverrides.Num() > 0)
+    if (bRuntimeGridLocked)
+    {
+        // Runtime profile settings remain authoritative even when the save contains no overrides.
+        // The import validation above already guaranteed these dimensions match.
+    }
+    else if (CellOverrides.Num() > 0)
     {
         LockedCellSizeCm = CellSizeCm;
         LockedCellsPerChunkAxis = CellsPerChunkAxis;
@@ -1010,8 +1028,11 @@ bool UExcavationVolumeSubsystem::RollbackEdit(const FExcavationEditRecord& Recor
 
     if (CellOverrides.Num() == 0)
     {
-        LockedCellSizeCm = 0.0f;
-        LockedCellsPerChunkAxis = 0;
+        if (!bRuntimeGridLocked)
+        {
+            LockedCellSizeCm = 0.0f;
+            LockedCellsPerChunkAxis = 0;
+        }
         CellsByChunk.Reset();
     }
 
