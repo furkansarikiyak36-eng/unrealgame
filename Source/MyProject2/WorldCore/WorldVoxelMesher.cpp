@@ -59,6 +59,13 @@ namespace
             DensityGradients[NodeA]
             + (DensityGradients[NodeB] - DensityGradients[NodeA]) * Alpha).GetSafeNormal();
         Result.Normal = Result.Normal.GetSafeNormal();
+        if (Result.Normal.SquaredLength() <= SMALL_NUMBER)
+        {
+            const bool bSolidA = DensityA >= FWorldMarchingTetrahedraMesher::IsoLevel;
+            Result.Normal = bSolidA
+                ? (Positions[NodeB] - Positions[NodeA]).GetSafeNormal()
+                : (Positions[NodeA] - Positions[NodeB]).GetSafeNormal();
+        }
         return Result;
     }
 
@@ -85,29 +92,52 @@ namespace
         return 0;
     }
 
+    int32 GetOrCreateSurfaceVertexIndex(
+        int32 NodeA,
+        int32 NodeB,
+        const TArray<float>& Densities,
+        const TArray<FVector3d>& Positions,
+        const TArray<FVector3d>& DensityGradients,
+        TMap<uint64, int32>& EdgeVertexCache,
+        FWorldVoxelMeshData& OutMesh)
+    {
+        const uint32 LowNode = static_cast<uint32>(FMath::Min(NodeA, NodeB));
+        const uint32 HighNode = static_cast<uint32>(FMath::Max(NodeA, NodeB));
+        const uint64 EdgeKey = (static_cast<uint64>(LowNode) << 32) | HighNode;
+        if (const int32* Existing = EdgeVertexCache.Find(EdgeKey))
+        {
+            return *Existing;
+        }
+
+        const FSurfaceVertex Vertex = InterpolateSurfaceVertex(
+            NodeA, NodeB, Densities, Positions, DensityGradients);
+        const int32 VertexIndex = OutMesh.Vertices.Num();
+        OutMesh.Vertices.Add(FVector(Vertex.Position.X, Vertex.Position.Y, Vertex.Position.Z));
+        OutMesh.Normals.Add(FVector(Vertex.Normal.X, Vertex.Normal.Y, Vertex.Normal.Z));
+        OutMesh.UV0.Add(FVector2D(Vertex.Position.X / 100.0, Vertex.Position.Y / 100.0));
+        EdgeVertexCache.Add(EdgeKey, VertexIndex);
+        return VertexIndex;
+    }
+
     bool AppendTriangle(
-        const FSurfaceVertex& A,
-        const FSurfaceVertex& B,
-        const FSurfaceVertex& C,
+        int32 V0,
+        int32 V1,
+        int32 V2,
         const FVector3d& SolidCentroid,
         const FVector3d& EmptyCentroid,
         int32 MaterialId,
         FWorldVoxelMeshData& OutMesh,
         FString& OutError)
     {
-        FSurfaceVertex V0 = A;
-        FSurfaceVertex V1 = B;
-        FSurfaceVertex V2 = C;
-
         FVector3d FaceNormal = FVector3d::CrossProduct(
-            V1.Position - V0.Position,
-            V2.Position - V0.Position);
+            FVector3d(OutMesh.Vertices[V1]) - FVector3d(OutMesh.Vertices[V0]),
+            FVector3d(OutMesh.Vertices[V2]) - FVector3d(OutMesh.Vertices[V0]));
         if (!FMath::IsFinite(FaceNormal.X)
             || !FMath::IsFinite(FaceNormal.Y)
             || !FMath::IsFinite(FaceNormal.Z)
             || FaceNormal.SquaredLength() <= SMALL_NUMBER)
         {
-            // Degenerate tetrahedron crossings do not contribute render or collision triangles.
+            // Degenerate tetrahedron crossings do not contribute a render/collision triangle.
             return true;
         }
 
@@ -115,9 +145,7 @@ namespace
         if (FVector3d::DotProduct(FaceNormal, Outward) < 0.0)
         {
             Swap(V1, V2);
-            FaceNormal = -FaceNormal;
         }
-        FaceNormal = FaceNormal.GetSafeNormal();
 
         if (OutMesh.TriangleIndices.Num() / 3 >= FWorldMarchingTetrahedraMesher::MaxOutputTriangles)
         {
@@ -125,39 +153,9 @@ namespace
             return false;
         }
 
-        const auto AddVertex = [&OutMesh, &FaceNormal, &Outward](const FSurfaceVertex& Vertex)
-        {
-            FVector3d SmoothNormal = Vertex.Normal;
-            if (!FMath::IsFinite(SmoothNormal.X)
-                || !FMath::IsFinite(SmoothNormal.Y)
-                || !FMath::IsFinite(SmoothNormal.Z)
-                || SmoothNormal.SquaredLength() <= SMALL_NUMBER)
-            {
-                SmoothNormal = FaceNormal;
-            }
-            else
-            {
-                SmoothNormal = SmoothNormal.GetSafeNormal();
-                if (FVector3d::DotProduct(SmoothNormal, Outward) < 0.0)
-                {
-                    SmoothNormal = -SmoothNormal;
-                }
-            }
-
-            const int32 VertexIndex = OutMesh.Vertices.Num();
-            OutMesh.Vertices.Add(FVector(Vertex.Position.X, Vertex.Position.Y, Vertex.Position.Z));
-            OutMesh.Normals.Add(FVector(SmoothNormal.X, SmoothNormal.Y, SmoothNormal.Z));
-            // One metre of local world distance corresponds to one UV unit.
-            OutMesh.UV0.Add(FVector2D(Vertex.Position.X / 100.0, Vertex.Position.Y / 100.0));
-            return VertexIndex;
-        };
-
-        const int32 I0 = AddVertex(V0);
-        const int32 I1 = AddVertex(V1);
-        const int32 I2 = AddVertex(V2);
-        OutMesh.TriangleIndices.Add(I0);
-        OutMesh.TriangleIndices.Add(I1);
-        OutMesh.TriangleIndices.Add(I2);
+        OutMesh.TriangleIndices.Add(V0);
+        OutMesh.TriangleIndices.Add(V1);
+        OutMesh.TriangleIndices.Add(V2);
         OutMesh.TriangleMaterialIds.Add(FMath::Max(0, MaterialId));
         return true;
     }
@@ -168,6 +166,7 @@ namespace
         const TArray<FVector3d>& Positions,
         const TArray<FVector3d>& DensityGradients,
         const TArray<int32>& SampleMaterialIds,
+        TMap<uint64, int32>& EdgeVertexCache,
         FWorldVoxelMeshData& OutMesh,
         FString& OutError)
     {
@@ -204,28 +203,28 @@ namespace
 
         if (SolidCount == 1)
         {
-            const FSurfaceVertex A = InterpolateSurfaceVertex(SolidNodes[0], EmptyNodes[0], Densities, Positions, DensityGradients);
-            const FSurfaceVertex B = InterpolateSurfaceVertex(SolidNodes[0], EmptyNodes[1], Densities, Positions, DensityGradients);
-            const FSurfaceVertex C = InterpolateSurfaceVertex(SolidNodes[0], EmptyNodes[2], Densities, Positions, DensityGradients);
+            const int32 A = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+            const int32 B = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+            const int32 C = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[2], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
             return AppendTriangle(A, B, C, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError);
         }
 
         if (SolidCount == 3)
         {
-            const FSurfaceVertex A = InterpolateSurfaceVertex(EmptyNodes[0], SolidNodes[0], Densities, Positions, DensityGradients);
-            const FSurfaceVertex B = InterpolateSurfaceVertex(EmptyNodes[0], SolidNodes[1], Densities, Positions, DensityGradients);
-            const FSurfaceVertex C = InterpolateSurfaceVertex(EmptyNodes[0], SolidNodes[2], Densities, Positions, DensityGradients);
+            const int32 A = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+            const int32 B = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+            const int32 C = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[2], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
             return AppendTriangle(A, B, C, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError);
         }
 
-        const FSurfaceVertex P00 = InterpolateSurfaceVertex(SolidNodes[0], EmptyNodes[0], Densities, Positions, DensityGradients);
-        const FSurfaceVertex P01 = InterpolateSurfaceVertex(SolidNodes[0], EmptyNodes[1], Densities, Positions, DensityGradients);
-        const FSurfaceVertex P10 = InterpolateSurfaceVertex(SolidNodes[1], EmptyNodes[0], Densities, Positions, DensityGradients);
-        const FSurfaceVertex P11 = InterpolateSurfaceVertex(SolidNodes[1], EmptyNodes[1], Densities, Positions, DensityGradients);
+        const int32 P00 = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+        const int32 P01 = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+        const int32 P10 = GetOrCreateSurfaceVertexIndex(SolidNodes[1], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+        const int32 P11 = GetOrCreateSurfaceVertexIndex(SolidNodes[1], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
         return AppendTriangle(P00, P01, P11, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError)
             && AppendTriangle(P00, P11, P10, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError);
     }
-}
+
 
 bool FWorldMarchingTetrahedraMesher::BuildMesh(
     const FWorldDensityChunkSnapshot& Input,
@@ -303,6 +302,8 @@ bool FWorldMarchingTetrahedraMesher::BuildMesh(
 
     OutMesh.ChunkCoordinate = Input.ChunkCoordinate;
     OutMesh.SourceRevision = Input.SourceRevision;
+    TMap<uint64, int32> EdgeVertexCache;
+    EdgeVertexCache.Reserve(Cells * Cells * 12);
 
     for (int32 Z = 0; Z < Cells; ++Z)
     {
@@ -334,6 +335,7 @@ bool FWorldMarchingTetrahedraMesher::BuildMesh(
                         Positions,
                         DensityGradients,
                         Input.MaterialIds,
+                        EdgeVertexCache,
                         OutMesh,
                         OutError))
                     {
