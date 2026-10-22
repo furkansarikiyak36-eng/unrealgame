@@ -10,14 +10,6 @@
 
 namespace
 {
-    struct FVertexKeyHasher
-    {
-        uint32 operator()(const FIntVector& K) const
-        {
-            return HashCombine(HashCombine(GetTypeHash(K.X), GetTypeHash(K.Y)), GetTypeHash(K.Z));
-        }
-    };
-
     struct FMeshBuffers
     {
         TArray<FVector> Vertices;
@@ -39,7 +31,7 @@ namespace
     }
 
     static void AddOrientedTriangle(FMeshBuffers& Mesh,
-        TMap<FIntVector, int32, FDefaultSetAllocator, TDefaultMapHashableKeyFuncs<FIntVector, int32, false>>& Cache,
+        TMap<FIntVector, int32>& Cache,
         FVector A, FVector B, FVector C, const FVector& Outward)
     {
         FVector FaceNormal = FVector::CrossProduct(B - A, C - A);
@@ -239,6 +231,8 @@ void UVoxelChunkMeshSubsystem::Tick(float DeltaTime)
         }
         if (!bFoundReadyChunk) break;
     }
+
+    ProcessDensitySamples(Profile.GetMaxDensitySamplesPerTick());
 }
 
 void UVoxelChunkMeshSubsystem::QueueChunk(FIntVector Coordinate)
@@ -328,43 +322,107 @@ void UVoxelChunkMeshSubsystem::StartOneBuild(FIntVector Coordinate)
         return;
     }
 
-    const float CellSize = Volume->CellSizeCm;
-    const int32 N = Volume->CellsPerChunkAxis;
-    const int32 Dim = N + 1;
-    if (!FMath::IsFinite(CellSize) || CellSize < 1.0f || N < 4 || N > 96)
+    // Preserve the world's logical chunk bounds across profiles. Profile changes only
+    // change the mesh sampling density, never the saved sparse-cell address space.
+    const double SourceChunkWorldSize = static_cast<double>(Volume->CellSizeCm) * Volume->CellsPerChunkAxis;
+    const float RequestedSpacing = UWorldRuntimeProfileSettings::Get().GetCellSizeCm();
+    if (!FMath::IsFinite(SourceChunkWorldSize) || SourceChunkWorldSize < 4.0
+        || !FMath::IsFinite(RequestedSpacing) || RequestedSpacing < 1.0f)
     {
         return;
     }
 
-    const FVector WorldOrigin(static_cast<double>(Coordinate.X) * N * CellSize,
-        static_cast<double>(Coordinate.Y) * N * CellSize,
-        static_cast<double>(Coordinate.Z) * N * CellSize);
-    TArray<float> Samples;
-    Samples.SetNumUninitialized(Dim * Dim * Dim);
+    const int32 N = FMath::Clamp(FMath::RoundToInt(SourceChunkWorldSize / RequestedSpacing), 4, 96);
+    const float SampleSpacing = static_cast<float>(SourceChunkWorldSize / N);
+    const int32 Dim = N + 1;
+    const FVector WorldOrigin(
+        static_cast<double>(Coordinate.X) * SourceChunkWorldSize,
+        static_cast<double>(Coordinate.Y) * SourceChunkWorldSize,
+        static_cast<double>(Coordinate.Z) * SourceChunkWorldSize);
 
-    ULandscapeBuilderSubsystem* Builder = World->GetSubsystem<ULandscapeBuilderSubsystem>();
-    for (int32 Z = 0; Z < Dim; ++Z)
-    for (int32 Y = 0; Y < Dim; ++Y)
-    for (int32 X = 0; X < Dim; ++X)
-    {
-        const FVector WorldPoint = WorldOrigin + FVector((X + 0.5) * CellSize, (Y + 0.5) * CellSize, (Z + 0.5) * CellSize);
-        float Density = 0.0f;
-        const bool bHasDensity = Volume->TrySampleDensityAtWorld(WorldPoint, Density);
-        if (!bHasDensity) Density = 0.0f;
-
-        if (Builder && Builder->QueryModeAtWorld(WorldPoint).Mode == EWorldTerrainMode::StaticGeometry)
-        {
-            Density = 0.0f;
-        }
-        Samples[X + Dim * (Y + Dim * Z)] = FMath::Clamp(Density, 0.0f, 1.0f);
-    }
+    FActiveSampleJob Job;
+    Job.Coordinate = Coordinate;
+    Job.WorldOrigin = WorldOrigin;
+    Job.SampleSpacingCm = SampleSpacing;
+    Job.CellsPerAxis = N;
+    Job.Samples.SetNumZeroed(Dim * Dim * Dim);
+    Job.NextSampleIndex = 0;
 
     InFlightChunks.Add(Coordinate);
+    ActiveSampleJobs.Add(MoveTemp(Job));
+}
+
+void UVoxelChunkMeshSubsystem::ProcessDensitySamples(int32 MaxSamplesThisTick)
+{
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Volume = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!World || !Volume || MaxSamplesThisTick <= 0)
+    {
+        return;
+    }
+
+    ULandscapeBuilderSubsystem* Builder = World->GetSubsystem<ULandscapeBuilderSubsystem>();
+    int32 RemainingBudget = MaxSamplesThisTick;
+    int32 JobIndex = 0;
+
+    while (RemainingBudget > 0 && JobIndex < ActiveSampleJobs.Num())
+    {
+        FActiveSampleJob& Job = ActiveSampleJobs[JobIndex];
+        const int32 Dim = Job.CellsPerAxis + 1;
+        const int32 TotalSamples = Dim * Dim * Dim;
+        const int32 JobsLeft = ActiveSampleJobs.Num() - JobIndex;
+        const int32 FairShare = FMath::Max(1, RemainingBudget / FMath::Max(1, JobsLeft));
+        const int32 ToProcess = FMath::Min(FairShare, TotalSamples - Job.NextSampleIndex);
+
+        for (int32 Count = 0; Count < ToProcess; ++Count)
+        {
+            const int32 FlatIndex = Job.NextSampleIndex++;
+            const int32 X = FlatIndex % Dim;
+            const int32 Y = (FlatIndex / Dim) % Dim;
+            const int32 Z = FlatIndex / (Dim * Dim);
+            const FVector WorldPoint = Job.WorldOrigin + FVector(
+                (X + 0.5f) * Job.SampleSpacingCm,
+                (Y + 0.5f) * Job.SampleSpacingCm,
+                (Z + 0.5f) * Job.SampleSpacingCm);
+
+            float Density = 0.0f;
+            if (!Volume->TrySampleDensityAtWorld(WorldPoint, Density))
+            {
+                Density = 0.0f;
+            }
+
+            if (Builder && Builder->QueryModeAtWorld(WorldPoint).Mode == EWorldTerrainMode::StaticGeometry)
+            {
+                Density = 0.0f;
+            }
+            Job.Samples[FlatIndex] = FMath::Clamp(Density, 0.0f, 1.0f);
+        }
+
+        RemainingBudget -= ToProcess;
+        const bool bJobComplete = Job.NextSampleIndex >= TotalSamples;
+        if (bJobComplete)
+        {
+            FActiveSampleJob Completed = MoveTemp(Job);
+            ActiveSampleJobs.RemoveAt(JobIndex, 1, EAllowShrinking::No);
+            StartMeshingFromSamples(Completed.Coordinate, Completed.WorldOrigin,
+                Completed.SampleSpacingCm, Completed.CellsPerAxis, MoveTemp(Completed.Samples));
+            // Don't increment JobIndex; another job shifted into the same slot.
+        }
+        else
+        {
+            ++JobIndex;
+        }
+    }
+}
+
+void UVoxelChunkMeshSubsystem::StartMeshingFromSamples(FIntVector Coordinate, FVector WorldOrigin,
+    float SampleSpacingCm, int32 CellsPerAxis, TArray<float>&& Samples)
+{
     TWeakObjectPtr<UVoxelChunkMeshSubsystem> WeakThis(this);
     Async(EAsyncExecution::ThreadPool,
-        [WeakThis, Coordinate, WorldOrigin, CellSize, N, Samples = MoveTemp(Samples)]() mutable
+        [WeakThis, Coordinate, WorldOrigin, SampleSpacingCm, CellsPerAxis, Samples = MoveTemp(Samples)]() mutable
         {
-            FMeshBuffers Built = BuildMarchingTetrahedra(Samples, N, CellSize);
+            FMeshBuffers Built = BuildMarchingTetrahedra(Samples, CellsPerAxis, SampleSpacingCm);
             AsyncTask(ENamedThreads::GameThread,
                 [WeakThis, Coordinate, WorldOrigin, Built = MoveTemp(Built)]() mutable
                 {
