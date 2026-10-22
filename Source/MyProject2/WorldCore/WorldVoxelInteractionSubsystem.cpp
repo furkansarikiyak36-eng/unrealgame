@@ -210,7 +210,7 @@ bool UWorldVoxelInteractionSubsystem::ValidateVoxelSurfaceHit(
         return false;
     }
 
-    const UWorld* World = GetWorld();
+    UWorld* World = GetWorld();
     const UWorldScanSubsystem* Scanner =
         World ? World->GetSubsystem<UWorldScanSubsystem>() : nullptr;
     const FVector Normal = Hit.ImpactNormal.GetSafeNormal();
@@ -311,9 +311,12 @@ bool UWorldVoxelInteractionSubsystem::DigFromView(
         Request.MaxSamples = Profile->GetActiveSettings().MaxDensitySamplesPerEdit;
     }
 
-    return ApplyAuthorizedEdit(Request, OutResult, /*bHasCurrentScanAuthorization*/ true)
-        ? true
-        : (OutError = OutResult.Error, false);
+    if (!ApplyAuthorizedEdit(Request, OutResult, /*bHasCurrentScanAuthorization*/ true))
+    {
+        OutError = OutResult.Error;
+        return false;
+    }
+    return true;
 }
 
 bool UWorldVoxelInteractionSubsystem::ApplyEdit(
@@ -656,10 +659,9 @@ bool UWorldVoxelInteractionSubsystem::BuildPlacementPreview(
     if (!GatherCandidatesForActor(Query, ActorToIgnore, Candidates, Error) || Candidates.IsEmpty())
     {
         OutResult.Failure = Error.Contains(TEXT("stale"), ESearchCase::IgnoreCase)
+            || Error.Contains(TEXT("revision"), ESearchCase::IgnoreCase)
             ? EWorldPlacementFailure::StaleSurface
-            : Error.Contains(TEXT("StaticRegion"), ESearchCase::IgnoreCase)
-                ? EWorldPlacementFailure::StaticRegion
-                : EWorldPlacementFailure::NoCompatibleSnap;
+            : EWorldPlacementFailure::NoCompatibleSnap;
         OutResult.Message = Error.IsEmpty() ? TEXT("No compatible voxel surface candidate was found.") : Error;
         return false;
     }
@@ -685,7 +687,7 @@ bool UWorldVoxelInteractionSubsystem::BuildPlacementPreview(
         return false;
     }
 
-    const UWorld* World = GetWorld();
+    UWorld* World = GetWorld();
     const UExcavationVolumeSubsystem* Excavation =
         World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
     if (!Excavation)
@@ -717,7 +719,7 @@ bool UWorldVoxelInteractionSubsystem::ValidatePlacementCommit(
         return false;
     }
 
-    const UWorld* World = GetWorld();
+    UWorld* World = GetWorld();
     const UExcavationVolumeSubsystem* Excavation =
         World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
     if (!Excavation || Excavation->GetDensityRevision() != Preview.ValidatedWorldRevision)
