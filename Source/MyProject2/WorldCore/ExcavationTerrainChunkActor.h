@@ -43,9 +43,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "Excavation|Terrain")
     FIntVector GetChunkCoordinate() const { return ChunkCoordinate; }
 
-    /** Regenerates the visual surface and complex collision from the authoritative density sampler. */
+    /** Synchronous fallback rebuild; normal runtime uses the bounded subsystem queue. */
     UFUNCTION(BlueprintCallable, Category = "Excavation|Terrain")
     bool RebuildTerrainChunk();
+
+    /** Publishes immutable CPU mesh output on the game thread and refreshes collision. */
+    bool PublishVoxelMeshData(const FWorldVoxelMeshData& MeshData, FString& OutError);
 
     UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Excavation|Terrain")
     FIntVector ChunkCoordinate = FIntVector::ZeroValue;
