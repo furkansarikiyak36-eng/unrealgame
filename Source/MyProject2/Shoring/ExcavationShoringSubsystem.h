@@ -85,6 +85,7 @@ public:
     bool ValidateSnapshot(const FShoringWorldSnapshot& Snapshot, FString& OutError) const;
     bool ImportSnapshot(const FShoringWorldSnapshot& Snapshot, FString& OutError, TSubclassOf<APlaceableShoringPiece> PieceClass = nullptr);
     void GetCommittedPlanIds(TArray<FGuid>& OutPlanIds) const;
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Persistence")
     bool RevalidateAllPlans(FString& OutError);
 
     APlaceableShoringPiece* FindPiece(const FGuid& PieceId) const;

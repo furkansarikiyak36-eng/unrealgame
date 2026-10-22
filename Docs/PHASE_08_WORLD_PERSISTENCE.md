@@ -29,6 +29,7 @@ Yeni kayıt şeması `UWorldSaveGame : ULogSaveGame` olarak tanımlandı. Eski `
 4. Voxel state atomik snapshot import'uyla değiştirilir. Shoring aktörleri staged edilir ve tümü kurulmadan mevcut shoring kaldırılmaz.
 5. Shoring import başarısız olursa eski voxel snapshot geri yüklenir. Oyuncu state restore aşaması başarısız olursa önceki oyuncu, shoring ve voxel snapshot'ları geri uygulanır.
 6. Yalnızca başarılı commit sonunda mevcut log aktörleri silinir ve staged log aktörleri kalıcı kalır.
+7. Yüklenen tahkimat parçaları `NeedsRevalidation` kalır. Voxel mesh/collision yayınlandıktan sonra Blueprint/C++ `UExcavationShoringSubsystem::RevalidateAllPlans` çağırmalıdır; geçici collision rebuild boşluğu varsa işlem daha sonra tekrar denenmelidir.
 
 ### Güvenlik: destekler load sonrası otomatik aktif sayılmaz
 

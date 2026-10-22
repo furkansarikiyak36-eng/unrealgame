@@ -12,6 +12,8 @@
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Controller.h"
 
 namespace
 {
@@ -96,7 +98,8 @@ namespace
             Log->SetActorTransform(Data.Transform);
             Log->ApplyCut(static_cast<EWoodShape>(Data.Shape), Data.CurrentLength);
             Log->SetHealth(Data.Health);
-            if (Log->GetLogState() != static_cast<ELogState>(Data.State)\n                && !Log->SetLogState(static_cast<ELogState>(Data.State)))
+            if (Log->GetLogState() != static_cast<ELogState>(Data.State)
+                && !Log->SetLogState(static_cast<ELogState>(Data.State)))
             {
                 Log->Destroy();
                 OutError = TEXT("A staged log actor rejected its saved state.");
@@ -338,9 +341,12 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
             OutError = TEXT("Player is missing a required survival/exposure component.");
             return false;
         }
-        if (Save->bHasExposureState && !Player->GetExposureMutable()->ValidateSnapshot(Save->Exposure, Error))
+        if (!Save->bHasExposureState
+            || !Player->GetExposureMutable()->ValidateSnapshot(Save->Exposure, Error))
         {
-            OutError = FString::Printf(TEXT("Exposure snapshot validation failed: %s"), *Error);
+            OutError = Error.IsEmpty()
+                ? TEXT("Complete player saves must include a valid exposure snapshot.")
+                : FString::Printf(TEXT("Exposure snapshot validation failed: %s"), *Error);
             return false;
         }
     }
@@ -393,12 +399,17 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
     if (Save->bHasPlayerState && Player)
     {
         bool bPlayerRestored = Player->GetSurvivalMutable()->RestoreSnapshot(Save->Survival, Error)
-            && (!Save->bHasExposureState || Player->GetExposureMutable()->RestoreSnapshot(Save->Exposure, Error))
+            && Player->GetExposureMutable()->RestoreSnapshot(Save->Exposure, Error)
             && Player->ImportInventorySaveData(Save->InventoryItemIds, Save->InventoryCounts, Error);
         if (bPlayerRestored)
         {
             Player->SetRespawnTransformForSave(Save->RespawnTransform);
             Player->SetActorTransform(Save->PlayerTransform, false, nullptr, ETeleportType::TeleportPhysics);
+            Player->GetCharacterMovement()->StopMovementImmediately();
+            if (AController* Controller = Player->GetController())
+            {
+                Controller->SetControlRotation(Save->PlayerTransform.Rotator());
+            }
         }
         if (!bPlayerRestored)
         {
@@ -407,6 +418,7 @@ bool USaveGameSubsystem::LoadCompleteWorld(UWorldSaveGame* Save, UWorld* World, 
             Player->ImportInventorySaveData(OldInventoryIds, OldInventoryCounts, Error);
             Player->SetRespawnTransformForSave(OldRespawnTransform);
             Player->SetActorTransform(OldPlayerTransform, false, nullptr, ETeleportType::TeleportPhysics);
+            Player->GetCharacterMovement()->StopMovementImmediately();
             Shoring->ImportSnapshot(OldShoring, Error);
             Volume->ImportSnapshot(OldVoxel, true);
             DestroyActors(StagedLogs);
