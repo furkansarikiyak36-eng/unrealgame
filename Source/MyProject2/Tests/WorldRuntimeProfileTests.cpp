@@ -165,6 +165,10 @@ bool FWorldSystemContractsValidationTest::RunTest(const FString& Parameters)
     Edit.HalfExtentCm = FVector(50.0f, -1.0f, 50.0f);
     TestFalse(TEXT("Box edit with a negative half-extent should be rejected"), Edit.Validate(Error));
 
+    Edit = FWorldVoxelEditRequest();
+    Edit.Operation = static_cast<EWorldVoxelEditOperation>(255);
+    TestFalse(TEXT("Unsupported edit operation enum should be rejected"), Edit.Validate(Error));
+
     FWorldClassificationBuildRequest Classification;
     Classification.Bounds = FBox(FVector::ZeroVector, FVector(800.0f));
     TestTrue(TEXT("Finite classification bounds/region size should be valid"), Classification.Validate(Error));
@@ -177,6 +181,10 @@ bool FWorldSystemContractsValidationTest::RunTest(const FString& Parameters)
     Surface.SamplesY = 6;
     Surface.MaxSamples = 25;
     TestFalse(TEXT("Surface sample grid larger than MaxSamples should be rejected"), Surface.Validate(Error));
+    Surface.SamplesX = 33;
+    Surface.SamplesY = 1;
+    Surface.MaxSamples = 1024;
+    TestFalse(TEXT("Surface sampling wider than 32 samples should be rejected"), Surface.Validate(Error));
 
     FWorldOverlapRequest Overlap;
     TestTrue(TEXT("Default sphere overlap should be valid"), Overlap.Validate(Error));
