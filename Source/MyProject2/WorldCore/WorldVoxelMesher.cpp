@@ -99,8 +99,35 @@ namespace
         const TArray<FVector3d>& Positions,
         const TArray<FVector3d>& DensityGradients,
         TMap<uint64, int32>& EdgeVertexCache,
+        TMap<int32, int32>& IsoNodeVertexCache,
         FWorldVoxelMeshData& OutMesh)
     {
+        const auto GetIsoNodeVertex = [&](int32 Node)
+        {
+            if (const int32* Existing = IsoNodeVertexCache.Find(Node))
+            {
+                return *Existing;
+            }
+
+            const FVector3d& Position = Positions[Node];
+            const FVector3d Normal = -DensityGradients[Node].GetSafeNormal();
+            const int32 VertexIndex = OutMesh.Vertices.Num();
+            OutMesh.Vertices.Add(FVector(Position.X, Position.Y, Position.Z));
+            OutMesh.Normals.Add(FVector(Normal.X, Normal.Y, Normal.Z));
+            OutMesh.UV0.Add(FVector2D(Position.X / 100.0, Position.Y / 100.0));
+            IsoNodeVertexCache.Add(Node, VertexIndex);
+            return VertexIndex;
+        };
+
+        if (FMath::IsNearlyEqual(Densities[NodeA], FWorldMarchingTetrahedraMesher::IsoLevel, KINDA_SMALL_NUMBER))
+        {
+            return GetIsoNodeVertex(NodeA);
+        }
+        if (FMath::IsNearlyEqual(Densities[NodeB], FWorldMarchingTetrahedraMesher::IsoLevel, KINDA_SMALL_NUMBER))
+        {
+            return GetIsoNodeVertex(NodeB);
+        }
+
         const uint32 LowNode = static_cast<uint32>(FMath::Min(NodeA, NodeB));
         const uint32 HighNode = static_cast<uint32>(FMath::Max(NodeA, NodeB));
         const uint64 EdgeKey = (static_cast<uint64>(LowNode) << 32) | HighNode;
@@ -167,6 +194,7 @@ namespace
         const TArray<FVector3d>& DensityGradients,
         const TArray<int32>& SampleMaterialIds,
         TMap<uint64, int32>& EdgeVertexCache,
+        TMap<int32, int32>& IsoNodeVertexCache,
         FWorldVoxelMeshData& OutMesh,
         FString& OutError)
     {
@@ -203,24 +231,24 @@ namespace
 
         if (SolidCount == 1)
         {
-            const int32 A = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
-            const int32 B = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
-            const int32 C = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[2], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+            const int32 A = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
+            const int32 B = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
+            const int32 C = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[2], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
             return AppendTriangle(A, B, C, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError);
         }
 
         if (SolidCount == 3)
         {
-            const int32 A = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
-            const int32 B = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
-            const int32 C = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[2], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+            const int32 A = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
+            const int32 B = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
+            const int32 C = GetOrCreateSurfaceVertexIndex(EmptyNodes[0], SolidNodes[2], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
             return AppendTriangle(A, B, C, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError);
         }
 
-        const int32 P00 = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
-        const int32 P01 = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
-        const int32 P10 = GetOrCreateSurfaceVertexIndex(SolidNodes[1], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
-        const int32 P11 = GetOrCreateSurfaceVertexIndex(SolidNodes[1], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, OutMesh);
+        const int32 P00 = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
+        const int32 P01 = GetOrCreateSurfaceVertexIndex(SolidNodes[0], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
+        const int32 P10 = GetOrCreateSurfaceVertexIndex(SolidNodes[1], EmptyNodes[0], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
+        const int32 P11 = GetOrCreateSurfaceVertexIndex(SolidNodes[1], EmptyNodes[1], Densities, Positions, DensityGradients, EdgeVertexCache, IsoNodeVertexCache, OutMesh);
         return AppendTriangle(P00, P01, P11, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError)
             && AppendTriangle(P00, P11, P10, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError);
     }
@@ -303,7 +331,9 @@ bool FWorldMarchingTetrahedraMesher::BuildMesh(
     OutMesh.ChunkCoordinate = Input.ChunkCoordinate;
     OutMesh.SourceRevision = Input.SourceRevision;
     TMap<uint64, int32> EdgeVertexCache;
+    TMap<int32, int32> IsoNodeVertexCache;
     EdgeVertexCache.Reserve(Cells * Cells * 12);
+    IsoNodeVertexCache.Reserve(SampleCount / 16);
 
     for (int32 Z = 0; Z < Cells; ++Z)
     {
@@ -336,6 +366,7 @@ bool FWorldMarchingTetrahedraMesher::BuildMesh(
                         DensityGradients,
                         Input.MaterialIds,
                         EdgeVertexCache,
+                        IsoNodeVertexCache,
                         OutMesh,
                         OutError))
                     {
