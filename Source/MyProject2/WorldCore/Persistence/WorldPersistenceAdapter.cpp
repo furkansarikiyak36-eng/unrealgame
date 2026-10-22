@@ -3,6 +3,8 @@
 #include "WorldCore/Persistence/WorldRuntimeSaveGame.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
 #include "Shoring/PlaceableShoringPiece.h"
+#include "Shoring/ExcavationShoringSubsystem.h"
+#include "Components/StaticMeshComponent.h"
 #include "SurvivalComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
@@ -162,6 +164,10 @@ bool UWorldPersistenceAdapter::LoadWorldFromSlot(const FString& SlotName, int32 
         {
             Piece->PieceMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
         }
+    }
+    if (UExcavationShoringSubsystem* Shoring = World->GetSubsystem<UExcavationShoringSubsystem>())
+    {
+        Shoring->RevalidateAllVoxelAnchors();
     }
 
     if (SaveObject->bHasPlayerTransform)
