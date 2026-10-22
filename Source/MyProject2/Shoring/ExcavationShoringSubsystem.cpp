@@ -103,7 +103,7 @@ bool UExcavationShoringSubsystem::BuildPlan(
     OutPlan = FShoringLayoutPlan{};
     OutError.Reset();
 
-    const UWorld* World = GetWorld();
+    UWorld* World = GetWorld();
     const UExcavationVolumeSubsystem* Volume =
         World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
     if (!Volume)
@@ -180,6 +180,7 @@ bool UExcavationShoringSubsystem::PreviewPlan(
                     Spawned->Destroy();
                 }
             }
+            OutPreviewPieces.Reset();
             OutError = TEXT("A shoring preview actor could not be created; the partial preview was cleared.");
             return false;
         }
@@ -293,7 +294,7 @@ bool UExcavationShoringSubsystem::ValidatePlanForCommit(
         return false;
     }
 
-    const UWorld* World = GetWorld();
+    UWorld* World = GetWorld();
     const UExcavationVolumeSubsystem* Volume =
         World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
     if (!World || !Volume)
