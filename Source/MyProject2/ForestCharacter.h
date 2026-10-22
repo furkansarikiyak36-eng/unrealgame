@@ -7,6 +7,7 @@
 #include "InputActionValue.h"
 #include "ForestTypes.h"
 #include "CarvableLog.h"
+#include "WorldScanSystem.h"
 #include "ForestCharacter.generated.h"
 
 class UCameraComponent;
@@ -179,6 +180,7 @@ private:
 
 	UInputAction* MakeAction(const TCHAR* Name, EInputActionValueType Type);
 	bool TraceFromView(float Distance, FHitResult& OutHit, bool bIgnorePlans = false) const;
+	const WorldScanSystem::FWorldAnalysis& GetLatestWorldAnalysis() const { return LatestWorldAnalysis; }
 	void UpdateFocus();
 	void UpdateBuildPreview();
 	bool ComputeBuildTransform(FTransform& OutTransform, const UInstancedStaticMeshComponent** OutSnappedTo = nullptr) const;
@@ -417,4 +419,6 @@ private:
 	int32 CarveHits = 0;
 	FVector4 CarveKey = FVector4(0.f, 0.f, 0.f, -1.f);
 	TWeakObjectPtr<ACarvableLog> CarveTarget;
+
+	mutable WorldScanSystem::FWorldAnalysis LatestWorldAnalysis;
 };
