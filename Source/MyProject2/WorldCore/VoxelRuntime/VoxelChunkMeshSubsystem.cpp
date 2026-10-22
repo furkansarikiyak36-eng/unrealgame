@@ -500,5 +500,7 @@ void UVoxelChunkMeshSubsystem::PublishCompleted(FCompletedMesh&& Mesh)
     AProceduralVoxelChunkActor* Actor = FindOrCreateChunk(Mesh.Coordinate, Mesh.WorldOrigin);
     if (!Actor) return;
     Actor->SetActorLocation(Mesh.WorldOrigin);
-    Actor->ApplySurface(Mesh.Vertices, Mesh.Triangles, Mesh.Normals, UWorldRuntimeProfileSettings::Get().bGenerateCollision);
+    const UWorldRuntimeProfileSettings& Profile = UWorldRuntimeProfileSettings::Get();
+    Actor->ApplySurface(Mesh.Vertices, Mesh.Triangles, Mesh.Normals,
+        Profile.bGenerateCollision, Profile.bUseAsyncCollision);
 }
