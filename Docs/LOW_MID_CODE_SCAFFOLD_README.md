@@ -16,6 +16,15 @@
 - Adds a SaveGame adapter for sparse excavation state, shoring records and player/survival state.
 - Adds Blueprint-callable `AVoxelPrototypeDirector` and automation test definitions.
 
+## Cross-system integration added in this pass
+
+- The existing player `ShovelStroke` is the canonical excavation input. It now calls `UVoxelEditService` for both carve and fill, preserving the current loose-soil sack accounting rather than introducing a second shovel mechanic.
+- Dig/fill cost stamina through `UExcavationSurvivalAdapterComponent`; if payment fails, the voxel transaction is rolled back.
+- View traces in `AForestCharacter::TraceFromView` now route through the shared Scan API while keeping the existing placement-ghost ignore rules.
+- `LogSnapSystem::Resolve` now delegates candidate selection to the linked `WorldSnap` resolver.
+- `UWorldMechanicEventSubsystem` provides a bounded, prioritized event channel. Classification, voxel edit/rollback/reset, mesh publish, shoring damage/break, shoring invalidation, survival exposure and save/load completion publish events.
+- Save/load validates survival data before changing live state; voxel density deltas and shoring state are staged and rollback is attempted if staging fails.
+
 ## Test-map setup
 
 1. Build/open the project in Unreal Engine **5.8** after checking out this branch. Confirm the `ProceduralMeshComponent` plugin is installed for that engine build.
