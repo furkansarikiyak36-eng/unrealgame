@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build MyProject2 and run all phase-1 and phase-2 world automation tests.
+# Build MyProject2 and run all phase-1, phase-2 and phase-3 world automation tests.
 # Intended for Windows Git Bash / MSYS with Unreal Engine 5.8 installed.
 #
 #   bash Scripts/run_phase3_tests.sh
@@ -23,7 +23,7 @@ fail() {
   exit 1
 }
 
-for tool in cygpath timeout grep; do
+for tool in cygpath timeout grep tail; do
   command -v "$tool" >/dev/null 2>&1 || fail "Gerekli araç bulunamadı: $tool (Windows Git Bash/MSYS kullanın)."
 done
 
