@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
+#include "WorldCore/Classification/LandscapeBuilderSubsystem.h"
 
 APlaceableShoringPiece::APlaceableShoringPiece()
 {
@@ -74,6 +75,13 @@ void APlaceableShoringPiece::InitializeFromSavedState(EShoringPieceType InType, 
     RequiredAnchorIds = InRequiredAnchorIds;
     bSupportRecheckRequired = true;
     SetActorTransform(InTransform);
+    if (UWorld* World = GetWorld())
+    {
+        if (UExcavationVolumeSubsystem* Volume = World->GetSubsystem<UExcavationVolumeSubsystem>())
+        {
+            Volume->TryWorldToCell(SupportAnchorWorldCm, ApproximateAnchorCell);
+        }
+    }
     SetActorScale3D(FVector(
         FMath::Max(0.01f, DimensionsCm.X / 100.0f),
         FMath::Max(0.01f, DimensionsCm.Y / 100.0f),
@@ -143,8 +151,10 @@ bool APlaceableShoringPiece::RevalidateVoxelAnchor()
         }
         const float ProbeDepth = FMath::Max(2.0f, Volume->CellSizeCm * 1.5f);
         const FVector ProbePoint = SupportAnchorWorldCm - SupportNormal.GetSafeNormal() * ProbeDepth;
+        ULandscapeBuilderSubsystem* Builder = World->GetSubsystem<ULandscapeBuilderSubsystem>();
         float Density = 0.0f;
-        if (!Volume->TrySampleDensityAtWorld(ProbePoint, Density) || Density < 0.5f)
+        if (!Builder || Builder->QueryModeAtWorld(ProbePoint).Mode != EWorldTerrainMode::EditableVoxel
+            || !Volume->TrySampleDensityAtWorld(ProbePoint, Density) || Density < 0.5f)
         {
             MarkSupportDirty();
             return false;
