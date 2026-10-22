@@ -325,9 +325,9 @@ struct MYPROJECT2_API FWorldScanQuery
     bool Validate(FString& OutError) const
     {
         OutError.Reset();
-        if (!IsValid(World))
+        if (World == nullptr)
         {
-            OutError = TEXT("World scan query requires a valid UWorld.");
+            OutError = TEXT("World scan query requires a non-null UWorld.");
             return false;
         }
         if (!WorldSystemContractValidation::IsFiniteVector(StartCm)
