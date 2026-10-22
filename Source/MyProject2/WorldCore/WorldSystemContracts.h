@@ -6,6 +6,9 @@
 #include "Engine/EngineTypes.h"
 #include "Engine/HitResult.h"
 
+class AActor;
+class UWorld;
+
 /**
  * Shared design contracts for the Landscape Builder, smooth-voxel runtime,
  * scanning, placement, shoring, survival and persistence systems.
@@ -172,6 +175,63 @@ struct MYPROJECT2_API FWorldScanHit
     bool bCanInteract = false;
 };
 
+enum class EWorldShapeTraceKind : uint8
+{
+    Sphere,
+    Box,
+    Capsule
+};
+
+struct MYPROJECT2_API FWorldShapeTraceRequest
+{
+    FVector StartCm = FVector::ZeroVector;
+    FVector EndCm = FVector::ZeroVector;
+    EWorldShapeTraceKind Shape = EWorldShapeTraceKind::Sphere;
+    float RadiusCm = 25.0f;
+    FVector HalfExtentCm = FVector(25.0f);
+    float HalfHeightCm = 50.0f;
+    bool bMultiHit = false;
+};
+
+struct MYPROJECT2_API FWorldShapeTraceResult
+{
+    bool bSucceeded = false;
+    TArray<FHitResult> Hits;
+};
+
+enum class EWorldOverlapShape : uint8
+{
+    Sphere,
+    OrientedBox
+};
+
+struct MYPROJECT2_API FWorldOverlapRequest
+{
+    EWorldOverlapShape Shape = EWorldOverlapShape::Sphere;
+    FVector CenterCm = FVector::ZeroVector;
+    float RadiusCm = 100.0f;
+    FVector HalfExtentCm = FVector(100.0f);
+    FQuat Rotation = FQuat::Identity;
+};
+
+struct MYPROJECT2_API FWorldOverlapResult
+{
+    bool bSucceeded = false;
+    TArray<FOverlapResult> Overlaps;
+};
+
+struct MYPROJECT2_API FWorldActorSnapshot
+{
+    bool bValid = false;
+    FBox Bounds = FBox(ForceInit);
+    FVector OriginCm = FVector::ZeroVector;
+    FVector DimensionsCm = FVector::ZeroVector;
+    FVector LinearVelocityCmPerSec = FVector::ZeroVector;
+    FVector AngularVelocityRadiansPerSec = FVector::ZeroVector;
+    bool bSimulatingPhysics = false;
+    bool bRigidBodyAwake = false;
+};
+
 struct MYPROJECT2_API FWorldSurfaceSampleRequest
 {
     FVector CenterCm = FVector::ZeroVector;
@@ -327,11 +387,24 @@ class MYPROJECT2_API IWorldScanProvider
 public:
     virtual ~IWorldScanProvider() = default;
     virtual bool Trace(const FWorldScanQuery& Query, FWorldScanHit& OutHit) const = 0;
+    virtual bool ShapeTrace(
+        UWorld* World,
+        const FWorldShapeTraceRequest& Request,
+        const AActor* ActorToIgnore,
+        FWorldShapeTraceResult& OutResult,
+        ECollisionChannel Channel = ECC_Visibility) const = 0;
+    virtual bool QueryOverlaps(
+        UWorld* World,
+        const FWorldOverlapRequest& Request,
+        const AActor* ActorToIgnore,
+        FWorldOverlapResult& OutResult,
+        ECollisionChannel Channel = ECC_Visibility) const = 0;
     virtual bool SampleSurface(
         UWorld* World,
         const FWorldSurfaceSampleRequest& Request,
         const AActor* ActorToIgnore,
         FWorldSurfaceSampleResult& OutResult) const = 0;
+    virtual bool AnalyzeActor(const AActor* Actor, FWorldActorSnapshot& OutSnapshot) const = 0;
 };
 
 /** Supplies generic snap anchors for logs, planks, stone pieces, and voxel surfaces. */
