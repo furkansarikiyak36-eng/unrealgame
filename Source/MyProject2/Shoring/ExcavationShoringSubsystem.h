@@ -103,7 +103,8 @@ private:
         bool bRequireSameRevision,
         float MaxDeviationCm,
         FVector& OutResolvedPositionCm,
-        FString& OutError) const;
+        FString& OutError,
+        bool* bOutTransientFailure = nullptr) const;
 
     bool ValidateWorldCollision(
         const FTransform& Transform,
@@ -121,12 +122,14 @@ private:
     bool BuildSupportNodes(
         const FGuid& PlanId,
         TArray<FShoringSupportNode>& OutNodes,
-        FString& OutError) const;
+        FString& OutError,
+        bool bAnchorsWereRevalidated = false) const;
 
     bool EvaluateAndApplyPlanSupport(
         const FGuid& PlanId,
         TArray<FShoringSupportAssessment>& OutAssessments,
-        FString& OutError);
+        FString& OutError,
+        bool bAnchorsWereRevalidated = false);
 
     void SetPlanState(const FGuid& PlanId, EShoringPieceState State);
     void MarkAllPlansForRevalidation();
