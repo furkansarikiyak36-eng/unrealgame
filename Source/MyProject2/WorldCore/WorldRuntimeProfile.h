@@ -32,28 +32,28 @@ struct MYPROJECT2_API FWorldRuntimeProfileValues
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Voxel", meta = (ClampMin = "100.0"))
     float ChunkSizeCm = 800.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Voxel", meta = (ClampMin = "4"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Voxel", meta = (ClampMin = "4", ClampMax = "128"))
     int32 CellsPerChunkAxis = 32;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scheduling", meta = (ClampMin = "1"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scheduling", meta = (ClampMin = "1", ClampMax = "64"))
     int32 MaxMeshJobsInFlight = 1;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scheduling", meta = (ClampMin = "1"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scheduling", meta = (ClampMin = "1", ClampMax = "4096"))
     int32 MaxQueuedMeshJobs = 8;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scheduling", meta = (ClampMin = "1"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scheduling", meta = (ClampMin = "1", ClampMax = "64"))
     int32 MaxChunksPublishedPerFrame = 1;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scheduling", meta = (ClampMin = "1"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scheduling", meta = (ClampMin = "1", ClampMax = "64"))
     int32 MaxCollisionUpdatesPerFrame = 1;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scan", meta = (ClampMin = "1", ClampMax = "32"))
     int32 MaxSurfaceSamplesPerAxis = 5;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Voxel", meta = (ClampMin = "1"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Voxel", meta = (ClampMin = "1", ClampMax = "100000"))
     int32 MaxActiveEditableChunks = 32;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Voxel", meta = (ClampMin = "1"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Voxel", meta = (ClampMin = "1", ClampMax = "50000000"))
     int32 MaxDensitySamplesPerEdit = 100000;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rendering")
