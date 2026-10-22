@@ -671,15 +671,18 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
                 {
                     return !Entry.IsValid();
                 });
+                AExcavationTerrainChunkActor* FailedActor = nullptr;
                 for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : *FailedBucket)
                 {
                     if (AExcavationTerrainChunkActor* Actor = Entry.Get())
                     {
-                        Actor->InvalidateVoxelMesh();
+                        FailedActor = Actor;
+                        break;
                     }
                 }
-                if (!FailedBucket->IsEmpty())
+                if (FailedActor)
                 {
+                    FailedActor->InvalidateVoxelMesh();
                     ++PublishedThisTick;
                 }
             }
