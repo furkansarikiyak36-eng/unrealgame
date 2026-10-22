@@ -51,4 +51,4 @@ Round-trip, wrong map, unknown schema, v2 migration, duplicate IDs, bad refs, ov
 
 
 ## Status
-A portable participant interface and staged restore coordinator exist, but actual snapshot codecs, module participants, durable store, schema migration and whole-world restore remain unimplemented.
+Portable density snapshot codec (versioned little-endian records, deterministic ordering, bounded decode and checksum) plus the generic staged-restore coordinator exist. This codec covers the voxel density snapshot only; whole-world schema/participants, durable store, legacy migration and actor/player adapters remain unimplemented. New codec tests await CI.

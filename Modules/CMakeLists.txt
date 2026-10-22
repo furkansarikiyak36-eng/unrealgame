@@ -9,6 +9,7 @@ add_library(world_mechanics
   TerrainVoxel/src/terrain_voxel.cpp
   Excavation/src/excavation.cpp
   Shoring/src/shoring.cpp
+  Persistence/src/density_snapshot_codec.cpp
   StructuralIntegrity/src/structural_integrity.cpp
   Survival/src/survival.cpp
 )

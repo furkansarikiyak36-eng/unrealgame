@@ -14,6 +14,7 @@
 #include "world_mechanics/structural_integrity.hpp"
 #include "world_mechanics/survival.hpp"
 #include "world_mechanics/persistence_transaction.hpp"
+#include "world_mechanics/density_snapshot_codec.hpp"
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -169,6 +170,13 @@ bool TestTerrainEditRollbackAndSnapshot() {
   auto stale=req; stale.operationId="dig-stale"; stale.expectedRevision=1;
   auto rejected=terrain.ApplyEdit(stale); CHECK(!rejected&&rejected.error==wm::ErrorCode::StaleRevision);
   auto snapshot=terrain.ExportSnapshot(); CHECK(snapshot); CHECK(!snapshot.value.overrides.empty());
+  auto encoded=wm::DensitySnapshotCodec::Encode(snapshot.value); CHECK(encoded);
+  auto decoded=wm::DensitySnapshotCodec::Decode(encoded.value); CHECK(decoded);
+  CHECK(decoded.value.revision==snapshot.value.revision);
+  CHECK(decoded.value.overrides.size()==snapshot.value.overrides.size());
+  CHECK(decoded.value.appliedOperationIds.size()==snapshot.value.appliedOperationIds.size());
+  auto damagedBytes=encoded.value; damagedBytes[8]^=0x01;
+  CHECK(!wm::DensitySnapshotCodec::Decode(damagedBytes));
   wm::DensityVolume restored(profile,[](const wm::Vec3&){return wm::CellValue{1.0,2};});
   CHECK(restored.ImportSnapshot(snapshot.value)); CHECK(restored.Sample({0,0,0}).density==0.0);
   auto rolled=terrain.Rollback(edit.value); CHECK(rolled); CHECK(terrain.Sample({0,0,0}).density==1.0);

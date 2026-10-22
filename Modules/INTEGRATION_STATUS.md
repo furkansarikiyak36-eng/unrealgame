@@ -17,7 +17,7 @@
 | StructuralIntegrity | Deterministic DAG support assessment, damage, repair, collapse latch | More complete load distribution, replace/link lifecycle and stress tests |
 | WorldEnvironment | Timestamped optional environment sample contract | Water/soil/weather providers and persistence ownership |
 | Survival | Bounded exposure update and action effort costs | Canonical character-stat adapter and broader exposure rules |
-| Persistence | Staged multi-participant restore transaction contract | World snapshot codec/migration, actual module participants and durable store |
+| Persistence | Staged multi-participant restore transaction contract | Portable density-snapshot codec now exists; whole-world schema/migration, module participants, durable storage and actor/player adapters remain |
 | Validation | Nine portable test groups and CMake/CTest/CI config; latest expanded run is pending | Actual CI execution evidence and broader coverage |
 
 ## Evidence state

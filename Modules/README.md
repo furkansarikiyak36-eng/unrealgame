@@ -20,7 +20,7 @@ Existing Unreal code remains in `Source/MyProject2/` as a reference/implementati
 10. `StructuralIntegrity` — support graph, damage, repair and collapse decisions.
 11. `WorldEnvironment` — time/weather/water/moisture/light input contracts.
 12. `Survival` — effort costs and underground exposure integration.
-13. `Persistence` — schema, snapshots, restore staging and rollback.
+13. `Persistence` — versioned density snapshot codec, save coordination, restore staging and rollback.
 14. `Validation` — actual tests and evidence gates.
 
 ## Documents
