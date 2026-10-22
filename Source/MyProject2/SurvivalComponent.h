@@ -31,6 +31,25 @@ struct MYPROJECT2_API FSurvivalStateSnapshot
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") bool bExhausted = false;
 };
 
+/** Snapshot for the survival fields that must survive world save/load. */
+USTRUCT(BlueprintType)
+struct MYPROJECT2_API FSurvivalStateSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float Health = 100.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float Stamina = 100.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float Hunger = 100.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float Thirst = 100.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float BodyTemperatureC = 37.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float AmbientTemperatureC = 18.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float Wetness01 = 0.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float ShelterHeatC = 0.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float StaminaIdleTime = 0.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") float StarvingTime = 0.0f;
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save") bool bExhausted = false;
+};
+
 UCLASS(ClassGroup = (Forest), meta = (BlueprintSpawnableComponent))
 class MYPROJECT2_API USurvivalComponent : public UActorComponent
 {
