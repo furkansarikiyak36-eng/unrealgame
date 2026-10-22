@@ -39,11 +39,12 @@ bool UWorldRuntimeProfileSubsystem::ConfigureProfile(
         return false;
     }
 
-    const FWorldRuntimeProfileValues& CandidateSettings = InProfileAsset->GetActiveSettings();
-    if (!CandidateSettings.Validate(&OutError))
+    if (!InProfileAsset->ValidateActiveSettings(OutError))
     {
         return false;
     }
+
+    const FWorldRuntimeProfileValues& CandidateSettings = InProfileAsset->GetActiveSettings();
 
     RuntimeSettings = CandidateSettings;
     ActiveProfile = InProfileAsset->ActiveProfile;
