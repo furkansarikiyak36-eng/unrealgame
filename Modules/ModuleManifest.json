@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "project": "World Systems Mechanics",
+  "maturity": "pre-unreal-module-design",
+  "unrealIntegrated": false,
+  "modules": [
+    {"id":"CoreContracts","path":"Modules/CoreContracts","dependsOn":[]},
+    {"id":"WorldScan","path":"Modules/WorldScan","dependsOn":["CoreContracts"]},
+    {"id":"TerrainVoxel","path":"Modules/TerrainVoxel","dependsOn":["CoreContracts"]},
+    {"id":"Excavation","path":"Modules/Excavation","dependsOn":["CoreContracts","WorldScan","TerrainVoxel"]},
+    {"id":"Shoring","path":"Modules/Shoring","dependsOn":["CoreContracts","WorldScan","TerrainVoxel","Excavation"]},
+    {"id":"StructuralIntegrity","path":"Modules/StructuralIntegrity","dependsOn":["CoreContracts","TerrainVoxel","Shoring"]},
+    {"id":"Survival","path":"Modules/Survival","dependsOn":["CoreContracts","TerrainVoxel","Excavation"]},
+    {"id":"Persistence","path":"Modules/Persistence","dependsOn":["CoreContracts","TerrainVoxel","Excavation","Shoring","StructuralIntegrity","Survival"]},
+    {"id":"Validation","path":"Modules/Validation","dependsOn":["CoreContracts","WorldScan","TerrainVoxel","Excavation","Shoring","StructuralIntegrity","Survival","Persistence"]}
+  ]
+}
