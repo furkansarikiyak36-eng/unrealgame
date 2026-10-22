@@ -63,6 +63,9 @@ public:
     /** Configure the density grid before the first edit. Existing overrides must already match. */
     bool ConfigureGridForRuntimeProfile(float InCellSizeCm, int32 InCellsPerChunkAxis, FString& OutError);
 
+    /** Call after the registered base density source or its terrain coverage changes. */
+    void NotifyBaseDensityChanged();
+
     virtual bool SampleBaseDensityAtWorld(const FVector& PositionCm, float& OutDensity) const override;
     virtual bool SampleDensityAtWorld(const FVector& PositionCm, float& OutDensity) const override;
     virtual bool BuildChunkSnapshot(
