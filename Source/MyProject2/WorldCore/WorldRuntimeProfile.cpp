@@ -6,6 +6,8 @@ bool FWorldRuntimeProfileValues::HasConsistentChunkGrid(float ToleranceCm) const
 {
     if (!FMath::IsFinite(VoxelSampleSpacingCm)
         || !FMath::IsFinite(ChunkSizeCm)
+        || !FMath::IsFinite(ToleranceCm)
+        || ToleranceCm < 0.0f
         || VoxelSampleSpacingCm <= 0.0f
         || ChunkSizeCm <= 0.0f
         || CellsPerChunkAxis <= 0)
@@ -14,11 +16,17 @@ bool FWorldRuntimeProfileValues::HasConsistentChunkGrid(float ToleranceCm) const
     }
 
     const float DerivedChunkSize = VoxelSampleSpacingCm * static_cast<float>(CellsPerChunkAxis);
-    return FMath::IsNearlyEqual(DerivedChunkSize, ChunkSizeCm, FMath::Max(0.0f, ToleranceCm));
+    return FMath::IsFinite(DerivedChunkSize)
+        && FMath::IsNearlyEqual(DerivedChunkSize, ChunkSizeCm, ToleranceCm);
 }
 
 bool FWorldRuntimeProfileValues::Validate(FString* OutError) const
 {
+    if (OutError)
+    {
+        OutError->Reset();
+    }
+
     const auto Fail = [OutError](const TCHAR* Message)
     {
         if (OutError)
