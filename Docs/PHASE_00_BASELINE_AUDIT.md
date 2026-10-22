@@ -75,7 +75,7 @@ Bu çalışma dalındaki `Scripts/run_tests.sh` şu şekilde güncellendi:
 - Mekanik testi için beklenen `SONUÇ: N geçti, M kaldı` satırını zorunlu kılma; başarısız veya eksik sonuçta nonzero exit.
 - Başarılı koşudan sonra logları `Saved/TestRuns` altına saklama ve doküman üreticisini çalıştırma.
 
-**Bu değişiklik henüz Windows Git Bash + UE 5.8 üzerinde çalıştırılmadı.** Kaynak değişikliği yapıldı; gerçek test sonucu değildir. Mevcut yerel test ortamı olmadan runner düzeltmesini “doğrulanmış” ilan etmiyoruz.
+Güncellenen script içeriğine Linux shell ortamında `bash -n` uygulandı ve **sözdizimi kontrolü PASS** verdi. Ancak script **Windows Git Bash + UE 5.8 üzerinde çalıştırılmadı**; bu yalnızca shell syntax kontrolüdür, gerçek build/test sonucu değildir. Mevcut yerel test ortamı olmadan runner düzeltmesini “doğrulanmış” ilan etmiyoruz.
 
 ### Adım 6 — Bu oturumun gerçek ortamı kontrol edildi
 
