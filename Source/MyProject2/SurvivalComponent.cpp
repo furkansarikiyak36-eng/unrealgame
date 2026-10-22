@@ -173,17 +173,34 @@ bool USurvivalComponent::ExportState(FSurvivalStateSnapshot& OutState) const
     return true;
 }
 
+bool USurvivalComponent::IsValidStateSnapshot(const FSurvivalStateSnapshot& InState)
+{
+    const float Values[] = {
+        InState.Health, InState.Stamina, InState.Hunger, InState.Thirst,
+        InState.BodyTemperatureC, InState.AmbientTemperatureC, InState.Wetness01,
+        InState.ShelterHeatC, InState.StaminaIdleTime, InState.StarvingTime
+    };
+    for (const float Value : Values)
+    {
+        if (!FMath::IsFinite(Value))
+        {
+            return false;
+        }
+    }
+
+    return InState.Health > 0.0f
+        && InState.Stamina >= 0.0f
+        && InState.Hunger >= 0.0f
+        && InState.Thirst >= 0.0f
+        && InState.Wetness01 >= 0.0f && InState.Wetness01 <= 1.0f
+        && InState.ShelterHeatC >= 0.0f
+        && InState.StaminaIdleTime >= 0.0f
+        && InState.StarvingTime >= 0.0f;
+}
+
 bool USurvivalComponent::ImportState(const FSurvivalStateSnapshot& InState)
 {
-    const float Values[] = { InState.Health, InState.Stamina, InState.Hunger, InState.Thirst,
-        InState.BodyTemperatureC, InState.AmbientTemperatureC, InState.Wetness01,
-        InState.ShelterHeatC, InState.StaminaIdleTime, InState.StarvingTime };
-    for (float Value : Values)
-    {
-        if (!FMath::IsFinite(Value)) return false;
-    }
-    if (InState.Health <= 0.0f || InState.Wetness01 < 0.0f || InState.Wetness01 > 1.0f
-        || InState.StaminaIdleTime < 0.0f || InState.StarvingTime < 0.0f)
+    if (!IsValidStateSnapshot(InState))
     {
         return false;
     }
