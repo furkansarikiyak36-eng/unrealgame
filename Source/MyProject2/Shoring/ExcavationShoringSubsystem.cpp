@@ -1231,8 +1231,10 @@ bool UExcavationShoringSubsystem::ImportSnapshot(
     {
         FActorSpawnParameters SpawnParameters;
         SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        TSubclassOf<APlaceableShoringPiece> RestoreClass = Record.ActorClass;
+        if (!RestoreClass) RestoreClass = PieceClass;
         APlaceableShoringPiece* Staged = World->SpawnActor<APlaceableShoringPiece>(
-            PieceClass, Record.Spec.Transform, SpawnParameters);
+            RestoreClass, Record.Spec.Transform, SpawnParameters);
         if (!IsValid(Staged))
         {
             OutError = TEXT("Failed to stage a shoring actor during world restore.");

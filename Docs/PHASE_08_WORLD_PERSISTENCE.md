@@ -10,7 +10,7 @@
 Yeni kayıt şeması `UWorldSaveGame : ULogSaveGame` olarak tanımlandı. Eski `ULogSaveGame` slotları okunabilir kalırken Faz 8 kaydı tek slota aşağıdaki durumları yazar:
 
 - **Voxel:** `UExcavationVolumeSubsystem::ExportSnapshot` ile sparse density override'ları, grid hücre boyutu, chunk ölçüsü ve baseline density.
-- **Tahkimat:** parça GUID/plan GUID, transform, parça türü, support anchor/socket bağlantıları, design load, health/max health, son hasar sebebi ve collapse latch.
+- **Tahkimat:** parça GUID/plan GUID, Blueprint aktör sınıfı, transform, parça türü, support anchor/socket bağlantıları, design load, health/max health, son hasar sebebi ve collapse latch.
 - **Oyuncu:** transform ve respawn transform'u; mevcut envanter item/count dizileri; health, stamina, hunger, thirst ve starvation/exhaustion sayaçları; Faz 7 sıcaklık/ıslaklık/termal-karanlık-su maruziyet snapshot'ı.
 - **Eski log aktörleri:** önceki `ULogSaveGame.Logs` dizisi aynı slotta korunur.
 

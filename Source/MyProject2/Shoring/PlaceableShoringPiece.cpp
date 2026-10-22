@@ -83,6 +83,7 @@ void APlaceableShoringPiece::ExportSaveData(FShoringPieceSaveData& OutSaveData) 
     OutSaveData.Spec.DesignLoad = DesignLoad;
     OutSaveData.Spec.SupportAnchor = SupportAnchor;
     OutSaveData.Spec.ConnectedPieceIds = ConnectedPieceIds;
+    OutSaveData.ActorClass = GetClass();
     OutSaveData.SavedState = PieceState;
     OutSaveData.bHasCollapsed = bHasCollapsed;
     OutSaveData.Health = Health;

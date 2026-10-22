@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "ShoringTypes.generated.h"
 
+class APlaceableShoringPiece;
+
 UENUM(BlueprintType)
 enum class EShoringPieceKind : uint8
 {
@@ -185,6 +187,10 @@ struct MYPROJECT2_API FShoringPieceSaveData
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
     FShoringPieceSpec Spec;
+
+    /** Preserves authored Blueprint subclass visuals and collision defaults. */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    TSubclassOf<APlaceableShoringPiece> ActorClass;
 
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
     EShoringPieceState SavedState = EShoringPieceState::Active;
