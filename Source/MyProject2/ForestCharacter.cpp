@@ -2547,15 +2547,8 @@ bool AForestCharacter::IsPlacementFree(const FTransform& Transform, const UInsta
 	const FVector Center = PieceCenter(Transform, LocalBox);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(BuildOverlap), false);
 	Params.AddIgnoredActor(this);
-	// Generated voxel chunks are support surfaces, not blockers for an item whose
-	// preview/commit has already verified the current contact surface.
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
-	{
-		if (IsValid(*It) && (*It)->ActorHasTag(FName(TEXT("World.Object.VoxelSurface"))))
-		{
-			Params.AddIgnoredActor(*It);
-		}
-	}
+	// Keep voxel collision in the local overlap query: a grid-snapped piece on a
+	// slope/hole must still be rejected if its footprint penetrates the current surface.
 
 	if (SnappedTo)
 	{
