@@ -8,10 +8,10 @@
 
 | Dosya | Sorumluluk | Gerçek durum |
 |---|---|---|
-| `WorldCore/WorldRuntimeProfile.h/.cpp` | LOW_MID ve HIGH_END profil verisi, default ayarlar, profil doğrulama | Kod yazıldı; UBT doğrulaması bekliyor |
+| `WorldCore/WorldRuntimeProfile.h/.cpp` | LOW_MID ve HIGH_END profil verisi, default ayarlar, grid tutarlılığı, enum ve profil doğrulama | Kod yazıldı; UBT doğrulaması bekliyor |
 | `WorldCore/WorldRuntimeProfileSubsystem.h/.cpp` | Dünya başına aktif profili seçmek, doğrulamak ve seans sırasında grid profili kilidini sağlamak | Kod yazıldı; henüz voxel bootstrap çağırmıyor |
-| `WorldCore/WorldSystemContracts.h` | Classification, voxel edit/density, mesh, collision, scan, placement, support, persistence ve survival API sözleşmeleri | Header sözleşmeleri yazıldı; gerçek adapter'lar sonraki fazlarda |
-| `Tests/WorldRuntimeProfileTests.cpp` | Profil değerleri/grid tutarlılığı için Unreal Automation Test tanımı | Test yazıldı; çalıştırılmadı |
+| `WorldCore/WorldSystemContracts.h` | Classification, voxel edit/density, mesh, collision, scan, placement, support, persistence ve survival API sözleşmeleri; sınıflandırma/edit/trace/overlap/sample/placement istek validasyonu; density sample storage ve mesh topology doğrulaması | Header sözleşmeleri yazıldı; gerçek adapter'lar sonraki fazlarda |
+| `Tests/WorldRuntimeProfileTests.cpp` | LOW_MID/HIGH_END defaultları, grid/enum/queue doğrulaması, profile lock, request validation, density buffer boyutu ve mesh indeksleri için Unreal Automation Test tanımları | 3 test tanımı yazıldı; UE 5.8'de çalıştırılmadı |
 | `Docs/PHASE_00_BASELINE_AUDIT.md` | Kanonik sistem sahipliği ve çakışma riskleri | Statik denetim belgesi |
 
 ## Başlangıç profil değerleri
@@ -20,8 +20,8 @@
 |---|---:|---:|
 | Örnek aralığı | 25 cm | 12,5 cm |
 | Chunk kenarı | 800 cm | 800 cm |
-| Hücre/samples per axis | 32 | 64 |
-| Yaklaşık hacim örnek sayısı | 32³ = 32.768 | 64³ = 262.144 |
+| Chunk grid cells per axis | 32 | 64 |
+| Hücre sayısı yaklaşımı (32³ / 64³) | 32.768 | 262.144 |
 | Paralel mesh işi üst sınırı | 1 | 3 |
 | Kuyruk sınırı | 8 | 32 |
 | Kare başına mesh publish üst sınırı | 1 | 2 |
@@ -31,9 +31,11 @@
 | Adaptive voxel LOD | Kapalı | Açık (ileride uygulanacak) |
 | Asenkron collision izni | Kapalı | Açık (ileride doğrulanacak) |
 
-Bunlar ilk profil konfigürasyonu ve test başlangıç değerleridir, performans garantisi veya benchmark sonucu değildir. HIGH_END profilinin daha ince yoğunluğu aynı 8 m hacimde yaklaşık sekiz kat yoğunluk örneği oluşturur. Üretilen mesh/collision, geçici buffer ve malzeme verisi gerçek bellek maliyetini yükseltir.
+Bunlar ilk profil konfigürasyonu ve test başlangıç değerleridir, performans garantisi veya benchmark sonucu değildir. HIGH_END profilinin daha ince yoğunluğu aynı 8 m hacimde yaklaşık sekiz kat hücre oluşturur. Density snapshot buffer'ı ayrıca iki chunk sınır düzlemini ve border örneklerini tutar; örnek sayısı `(CellsPerChunkAxis + 1 + 2 * BorderCells)^3` şeklinde hesaplanır. Üretilen mesh/collision, geçici buffer ve malzeme verisi gerçek bellek maliyetini yükseltir.
 
 ## Bilinçli sınırlar
+
+Contract header'ındaki doğrulayıcılar ön koşul kontrolüdür; bir isteği gerçekleştirmez, collision channel seçmez ve kaynak ayırmaz. Mesher, voxel edit servisi, collision updater ve classification/placement adapter'ları sonraki fazların sorumluluğundadır.
 
 Bu fazda **bilerek yapılmayanlar**:
 
@@ -54,8 +56,9 @@ Faz 1 ancak şu koşullarda kapatılır:
 1. Unreal Engine 5.8 UBT build başarılı.
 2. `WorldRuntimeProfile.DefaultProfilesValidate` otomasyon testi çalışır ve geçer.
 3. LOW_MID varsayılan seçim olarak yüklenir; geçersiz grid ayarı reddedilir.
-4. Profili kilitlemeden yapılandırma yapılabilir; kilit sonrası değişiklik reddedilir.
-5. Mevcut ana dal kütük/StructureLink davranışı değişmeden kalır.
+4. Profili kilitlemeden yapılandırma yapılabilir; kilit sonrası değişiklik reddedilir (`MyProject2.World.RuntimeProfile.ConfigureAndLock`).
+5. Request validation bozuk edit, trace, surface sample ve placement isteklerini reddeder; density sample buffer boyutu ve mesh üçgen indeksleri kontrol edilir (`MyProject2.World.Contracts.ValidateRequestsAndBuffers`).
+6. Mevcut ana dal kütük/StructureLink davranışı değişmeden kalır.
 
 ## Sıradaki faz
 
