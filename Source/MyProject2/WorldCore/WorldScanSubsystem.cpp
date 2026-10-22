@@ -144,6 +144,7 @@ void UWorldScanSubsystem::ApplyRegionSafety(
     // The shared scan core can infer actor capabilities, but editable terrain is
     // the only source of excavation permission.
     OutHit.bCanDig = RegionKind == EWorldRegionKind::EditableVoxel
+        && HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.Dig"))
         && !HasActorOrComponentTag(Actor, Component, TEXT("World.Capability.NoDig"));
 
     if (RegionKind == EWorldRegionKind::Water || RegionKind == EWorldRegionKind::Unknown)
@@ -189,7 +190,8 @@ bool UWorldScanSubsystem::Trace(const FWorldScanQuery& Query, FWorldScanHit& Out
         LegacyScan,
         Query.Channel,
         Query.bTraceComplex,
-        &Query.ComponentsToIgnore))
+        &Query.ComponentsToIgnore,
+        Query.bReturnPhysicalMaterial))
     {
         return false;
     }
