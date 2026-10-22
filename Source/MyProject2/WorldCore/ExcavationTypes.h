@@ -99,6 +99,14 @@ struct MYPROJECT2_API FExcavationEditRecord
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
     TArray<FExcavationCellChange> Changes;
 
+    /** Number of cells changed by the committed edit, used for soil volume accounting. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
+    int32 MovedCellCount = 0;
+
+    /** Reserved for adapters that perform partial/blocked edits; atomic preflight currently rejects them instead. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
+    int32 BlockedCellCount = 0;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
     bool bCommitted = false;
 };
