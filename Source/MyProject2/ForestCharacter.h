@@ -30,6 +30,7 @@ class ARemnantNote;
 class ARawMaterialNode;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
+class UExcavationSurvivalAdapterComponent;
 class UChunkManager;
 class UCableComponent;
 class ULineBatchComponent;
@@ -366,6 +367,10 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USurvivalComponent> Survival;
+
+    /** Explicit adapter for stamina costs and environmental exposure caused by voxel work. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival")
+    TObjectPtr<UExcavationSurvivalAdapterComponent> ExcavationSurvivalAdapter;
 
 	/** Keeps the world chunks round the player loaded so water, soil and seasons are simulated where the player is. */
 	UPROPERTY(VisibleAnywhere, Category = "World")
