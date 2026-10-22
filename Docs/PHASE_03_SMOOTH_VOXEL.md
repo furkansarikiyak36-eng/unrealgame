@@ -81,6 +81,8 @@ Tamamlanan sonuç game thread'e geri gelir ve şu kapılardan geçer:
 4. Dynamic Mesh'e atomik yayın;
 5. collision ve navigation güncellemesi.
 
+Aynı, hâlâ güncel density revision'ı için snapshot veya meshing başarısız olursa eski chunk mesh/collision'ı güvenli biçimde geçersizleştirilir. Hata daha eski bir revision'dan geldiyse bu eski sonuç yeni geometriyi silmez; chunk güncel revision ile yeniden kuyruğa alınır.
+
 LOW_MID başlangıç değerleri:
 - `MaxMeshJobsInFlight = 1`;
 - `MaxQueuedMeshJobs = 8`;
