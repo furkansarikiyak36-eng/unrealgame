@@ -12,6 +12,7 @@
 | `WorldCore/WorldRuntimeProfileSubsystem.h/.cpp` | Dünya başına aktif profili seçmek, doğrulamak ve seans sırasında grid profili kilidini sağlamak | Kod yazıldı; henüz voxel bootstrap çağırmıyor |
 | `WorldCore/WorldSystemContracts.h` | Classification, voxel edit/density, mesh, collision, scan, placement, support, persistence ve survival API sözleşmeleri; sınıflandırma/edit/trace/overlap/sample/placement istek validasyonu; density sample storage ve mesh topology doğrulaması | Header sözleşmeleri yazıldı; gerçek adapter'lar sonraki fazlarda |
 | `Tests/WorldRuntimeProfileTests.cpp` | LOW_MID/HIGH_END defaultları, grid/enum/queue doğrulaması, profile lock, request validation, density buffer boyutu ve mesh indeksleri için Unreal Automation Test tanımları | 3 test tanımı yazıldı; UE 5.8'de çalıştırılmadı |
+| `Scripts/run_phase1_tests.sh` | UE 5.8 build + `MyProject2.World` automation grubunu çalıştırır; beklenen üç test adını ve başarı/failure satırlarını doğrular | Bash sözdizimi kontrol edildi; Windows Git Bash + Unreal koşusu bekliyor |
 | `Docs/PHASE_00_BASELINE_AUDIT.md` | Kanonik sistem sahipliği ve çakışma riskleri | Statik denetim belgesi |
 
 ## Başlangıç profil değerleri
@@ -57,8 +58,9 @@ Faz 1 ancak şu koşullarda kapatılır:
 2. `WorldRuntimeProfile.DefaultProfilesValidate` otomasyon testi çalışır ve geçer.
 3. LOW_MID varsayılan seçim olarak yüklenir; geçersiz grid ayarı reddedilir.
 4. Profili kilitlemeden yapılandırma yapılabilir; kilit sonrası değişiklik reddedilir (`MyProject2.World.RuntimeProfile.ConfigureAndLock`).
-5. Request validation bozuk edit, trace, surface sample ve placement isteklerini reddeder; density sample buffer boyutu ve mesh üçgen indeksleri kontrol edilir (`MyProject2.World.Contracts.ValidateRequestsAndBuffers`).
-6. Mevcut ana dal kütük/StructureLink davranışı değişmeden kalır.
+5. Faz 1 otomasyon betiği build sonucunu, üç beklenen test adını ve test sonuçlarını doğrular. Komut: `bash Scripts/run_phase1_tests.sh`.
+6. Request validation bozuk edit, trace, surface sample ve placement isteklerini reddeder; density sample buffer boyutu ve mesh üçgen indeksleri kontrol edilir (`MyProject2.World.Contracts.ValidateRequestsAndBuffers`).
+7. Mevcut ana dal kütük/StructureLink davranışı değişmeden kalır.
 
 ## Sıradaki faz
 
