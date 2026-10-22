@@ -260,6 +260,11 @@ void AExcavationTerrainChunkActor::ClearMeshAndCollision()
     UNavigationSystemV1::UpdateComponentInNavOctree(*DynamicMeshComponent);
 }
 
+void AExcavationTerrainChunkActor::InvalidateVoxelMesh()
+{
+    ClearMeshAndCollision();
+}
+
 bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
 {
     UWorld* World = GetWorld();
