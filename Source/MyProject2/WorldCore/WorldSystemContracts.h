@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/EngineTypes.h"
 #include "Engine/HitResult.h"
+#include "Engine/OverlapResult.h"
 
 class AActor;
 class UWorld;
