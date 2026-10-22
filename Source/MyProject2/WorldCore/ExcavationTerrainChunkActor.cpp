@@ -101,7 +101,7 @@ namespace
                 TriangleId, MaterialSlot ? *MaterialSlot : 0);
         }
 
-        if (!OutMesh.CheckValidity(UE::Geometry::FDynamicMesh3::FValidityOptions(), UE::Geometry::EValidityCheckFailMode::ReturnOnly))
+        if (!OutMesh.CheckValidity(UE::Geometry::FDynamicMesh3::FValidityOptions(false, false), UE::Geometry::EValidityCheckFailMode::ReturnOnly))
         {
             OutError = TEXT("Converted dynamic mesh failed GeometryCore structural validation.");
             return false;
