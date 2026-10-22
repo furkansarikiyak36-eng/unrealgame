@@ -4,24 +4,26 @@
 
 namespace
 {
-    void AddConnection(FShoringLayoutPlan& Plan, const FGuid& A, const FGuid& B)
+    void AddConnection(
+        FShoringLayoutPlan& Plan,
+        const TMap<FGuid, int32>& PieceIndexById,
+        const FGuid& A,
+        const FGuid& B)
     {
         if (!A.IsValid() || !B.IsValid() || A == B)
         {
             return;
         }
 
-        for (FShoringPieceSpec& Piece : Plan.Pieces)
+        const int32* IndexA = PieceIndexById.Find(A);
+        const int32* IndexB = PieceIndexById.Find(B);
+        if (!IndexA || !IndexB || !Plan.Pieces.IsValidIndex(*IndexA) || !Plan.Pieces.IsValidIndex(*IndexB))
         {
-            if (Piece.PieceId == A && !Piece.ConnectedPieceIds.Contains(B))
-            {
-                Piece.ConnectedPieceIds.Add(B);
-            }
-            else if (Piece.PieceId == B && !Piece.ConnectedPieceIds.Contains(A))
-            {
-                Piece.ConnectedPieceIds.Add(A);
-            }
+            return;
         }
+
+        Plan.Pieces[*IndexA].ConnectedPieceIds.AddUnique(B);
+        Plan.Pieces[*IndexB].ConnectedPieceIds.AddUnique(A);
     }
 
     FShoringPieceSpec MakePiece(
@@ -101,6 +103,8 @@ bool FShoringLayoutPlanner::BuildPlan(
 
     OutPlan.PlanId = FGuid::NewGuid();
     OutPlan.SourceDensityRevision = Request.SourceDensityRevision;
+    TMap<FGuid, int32> PieceIndexById;
+    PieceIndexById.Reserve(static_cast<int32>(EstimatedPieceCount));
 
     TArray<FVector> StationCenters;
     TArray<float> StationTopZ;
@@ -143,6 +147,7 @@ bool FShoringLayoutPlanner::BuildPlan(
                 Request.SourceDensityRevision);
 
             const FGuid PieceId = Piece.PieceId;
+            PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
             OutPlan.Pieces.Add(MoveTemp(Piece));
             if (Side < 0)
             {
@@ -199,9 +204,10 @@ bool FShoringLayoutPlanner::BuildPlan(
                         Request.SourceDensityRevision,
                         FirstUpright);
                     const FGuid PieceId = Piece.PieceId;
-                    OutPlan.Pieces.Add(MoveTemp(Piece));
-                    AddConnection(OutPlan, PieceId, FirstUpright);
-                    AddConnection(OutPlan, PieceId, SecondUpright);
+                    PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
+            OutPlan.Pieces.Add(MoveTemp(Piece));
+                    AddConnection(OutPlan, PieceIndexById, PieceId, FirstUpright);
+                    AddConnection(OutPlan, PieceIndexById, PieceId, SecondUpright);
                 }
             }
         }
@@ -238,9 +244,10 @@ bool FShoringLayoutPlanner::BuildPlan(
                 Request.SourceDensityRevision,
                 NegativeSideUprights[Station]);
             const FGuid PieceId = Piece.PieceId;
+            PieceIndexById.Add(PieceId, OutPlan.Pieces.Num());
             OutPlan.Pieces.Add(MoveTemp(Piece));
-            AddConnection(OutPlan, PieceId, NegativeSideUprights[Station]);
-            AddConnection(OutPlan, PieceId, PositiveSideUprights[Station]);
+            AddConnection(OutPlan, PieceIndexById, PieceId, NegativeSideUprights[Station]);
+            AddConnection(OutPlan, PieceIndexById, PieceId, PositiveSideUprights[Station]);
         }
     }
 
@@ -263,8 +270,8 @@ bool FShoringLayoutPlanner::BuildPlan(
             NegativeSideUprights[MidStation]);
         const FGuid PieceId = Piece.PieceId;
         OutPlan.Pieces.Add(MoveTemp(Piece));
-        AddConnection(OutPlan, PieceId, NegativeSideUprights[MidStation]);
-        AddConnection(OutPlan, PieceId, PositiveSideUprights[MidStation]);
+        AddConnection(OutPlan, PieceIndexById, PieceId, NegativeSideUprights[MidStation]);
+        AddConnection(OutPlan, PieceIndexById, PieceId, PositiveSideUprights[MidStation]);
     }
 
     if (Request.bIncludeLadder)
@@ -286,7 +293,7 @@ bool FShoringLayoutPlanner::BuildPlan(
             PositiveSideUprights[0]);
         const FGuid PieceId = Piece.PieceId;
         OutPlan.Pieces.Add(MoveTemp(Piece));
-        AddConnection(OutPlan, PieceId, PositiveSideUprights[0]);
+        AddConnection(OutPlan, PieceIndexById, PieceId, PositiveSideUprights[0]);
     }
 
     OutPlan.bValid = true;
