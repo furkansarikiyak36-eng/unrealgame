@@ -23,6 +23,9 @@ void UExcavationTerrainChunkSubsystem::Initialize(FSubsystemCollectionBase& Coll
     DirtyChunkQueue.Reset();
     InFlightMeshJobs.Reset();
     CompletedMeshResults.Reset();
+    FullRefreshCoordinates.Reset();
+    FullRefreshCursor = 0;
+    bFullRefreshListReady = false;
     RuntimeSetupError.Reset();
 
     if (!TerrainChunkActorClass)
@@ -117,7 +120,10 @@ void UExcavationTerrainChunkSubsystem::Deinitialize()
     DirtyChunkQueue.Reset();
     InFlightMeshJobs.Reset();
     CompletedMeshResults.Reset();
+    FullRefreshCoordinates.Reset();
+    FullRefreshCursor = 0;
     bFullRefreshPending = false;
+    bFullRefreshListReady = false;
     bRuntimeReady = false;
     FlatFallbackDensitySource = nullptr;
     LandscapeFallbackDensitySource = nullptr;
@@ -498,12 +504,15 @@ void UExcavationTerrainChunkSubsystem::HandleVolumeChanged(
 void UExcavationTerrainChunkSubsystem::HandleVolumeReset()
 {
     DirtyChunkQueue.Reset();
+    FullRefreshCoordinates.Reset();
+    FullRefreshCursor = 0;
+    bFullRefreshListReady = false;
     bFullRefreshPending = true;
 }
 
 void UExcavationTerrainChunkSubsystem::QueueChunkRebuild(const FIntVector& Coordinate)
 {
-    if (!bRuntimeReady || bFullRefreshPending || DirtyChunkQueue.Contains(Coordinate))
+    if (!bRuntimeReady || DirtyChunkQueue.Contains(Coordinate))
     {
         return;
     }
@@ -515,6 +524,9 @@ void UExcavationTerrainChunkSubsystem::QueueChunkRebuild(const FIntVector& Coord
     {
         // One bounded full reconciliation is safer than silently losing final state.
         DirtyChunkQueue.Reset();
+        FullRefreshCoordinates.Reset();
+        FullRefreshCursor = 0;
+        bFullRefreshListReady = false;
         bFullRefreshPending = true;
         return;
     }
@@ -543,21 +555,53 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
         return;
     }
 
-    if (bFullRefreshPending)
+    const int32 QueueLimit = FMath::Min(
+        FMath::Clamp(RuntimeSettings.MaxQueuedMeshJobs, 1, 4096),
+        FMath::Clamp(MaxQueuedDirtyChunks, 16, 4096));
+
+    if (bFullRefreshPending && !bFullRefreshListReady)
     {
-        DirtyChunkQueue.Reset();
+        FullRefreshCoordinates.Reset();
         for (const TPair<FIntVector, TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>>& Pair : RegisteredChunks)
         {
             for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : Pair.Value)
             {
                 if (Entry.IsValid())
                 {
-                    DirtyChunkQueue.Add(Pair.Key);
+                    FullRefreshCoordinates.Add(Pair.Key);
                     break;
                 }
             }
         }
+        FullRefreshCoordinates.Sort([](const FIntVector& A, const FIntVector& B)
+        {
+            if (A.X != B.X) return A.X < B.X;
+            if (A.Y != B.Y) return A.Y < B.Y;
+            return A.Z < B.Z;
+        });
+        FullRefreshCursor = 0;
+        bFullRefreshListReady = true;
+    }
+
+    // Reconciliation feeds the bounded dirty queue incrementally, so a reset over
+    // many active chunks cannot defeat MaxQueuedMeshJobs with one unbounded burst.
+    while (bFullRefreshPending
+        && DirtyChunkQueue.Num() < QueueLimit
+        && FullRefreshCursor < FullRefreshCoordinates.Num())
+    {
+        const FIntVector Coordinate = FullRefreshCoordinates[FullRefreshCursor++];
+        if (!InFlightMeshJobs.Contains(Coordinate) && !CompletedMeshResults.Contains(Coordinate))
+        {
+            DirtyChunkQueue.Add(Coordinate);
+        }
+    }
+
+    if (bFullRefreshPending && FullRefreshCursor >= FullRefreshCoordinates.Num())
+    {
         bFullRefreshPending = false;
+        bFullRefreshListReady = false;
+        FullRefreshCoordinates.Reset();
+        FullRefreshCursor = 0;
     }
 
     const int32 PublishBudget = FMath::Max(0, FMath::Min(
