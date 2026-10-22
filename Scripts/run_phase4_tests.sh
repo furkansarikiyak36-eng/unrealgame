@@ -15,7 +15,7 @@ STAMP="$(date +%Y-%m-%d_%H%M%S)"
 RUNS="$ROOT/Saved/TestRuns"
 LOGS="$ROOT/Saved/Logs"
 BUILD_LOG="$RUNS/phase4_build_$STAMP.log"
-ENGINE_LOG="$LOGS/Phase3Tests.log"
+ENGINE_LOG="$LOGS/Phase4Tests.log"
 SAVED_LOG="$RUNS/phase4_tests_$STAMP.log"
 
 fail() {
