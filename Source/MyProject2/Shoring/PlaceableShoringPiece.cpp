@@ -114,9 +114,13 @@ bool APlaceableShoringPiece::Repair(float Amount, FString& OutError)
         OutError = TEXT("Repair amount must be finite and positive.");
         return false;
     }
-    if (PieceState != EShoringPieceState::Damaged || Health <= KINDA_SMALL_NUMBER)
+    if ((PieceState != EShoringPieceState::Damaged
+            && PieceState != EShoringPieceState::Warning
+            && PieceState != EShoringPieceState::Overloaded)
+        || Health <= KINDA_SMALL_NUMBER
+        || Health >= MaxHealth - KINDA_SMALL_NUMBER)
     {
-        OutError = TEXT("Only a damaged, non-failed shoring piece can be repaired. Failed pieces must be replaced.");
+        OutError = TEXT("Only a non-failed shoring piece with lost durability can be repaired. Failed pieces must be replaced.");
         return false;
     }
 
@@ -124,6 +128,14 @@ bool APlaceableShoringPiece::Repair(float Amount, FString& OutError)
     if (Health >= MaxHealth - KINDA_SMALL_NUMBER)
     {
         Health = MaxHealth;
+        SetPieceState(EShoringPieceState::Active);
+    }
+    else if (Health <= MaxHealth * 0.7f)
+    {
+        SetPieceState(EShoringPieceState::Damaged);
+    }
+    else
+    {
         SetPieceState(EShoringPieceState::Active);
     }
     return true;
