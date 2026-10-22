@@ -1,5 +1,7 @@
 #include "ExcavationLandscapeDensitySource.h"
 
+#include <cmath>
+
 #include "LandscapeProxy.h"
 #include "LandscapeHeightfieldCollisionComponent.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
@@ -125,8 +127,8 @@ bool UExcavationLandscapeDensitySource::TryGetSurfaceHeight(
     // Sample grid positions are spaced by at least 12.5 cm in the HIGH_END profile,
     // so integer-centimetre keys preserve distinct voxel columns while avoiding a
     // repeated heightfield query for every Z sample in the same column.
-    const double KeyX = FMath::RoundToDouble(WorldXcm);
-    const double KeyY = FMath::RoundToDouble(WorldYcm);
+    const double KeyX = std::round(static_cast<double>(WorldXcm));
+    const double KeyY = std::round(static_cast<double>(WorldYcm));
     if (KeyX < TNumericLimits<int32>::Lowest() || KeyX > TNumericLimits<int32>::Max()
         || KeyY < TNumericLimits<int32>::Lowest() || KeyY > TNumericLimits<int32>::Max())
     {
@@ -219,8 +221,8 @@ int32 UExcavationLandscapeDensitySource::SampleBaseMaterialIdAtWorld_Implementat
         return 0;
     }
 
-    const double KeyX = FMath::RoundToDouble(WorldPositionCm.X);
-    const double KeyY = FMath::RoundToDouble(WorldPositionCm.Y);
+    const double KeyX = std::round(static_cast<double>(WorldPositionCm.X));
+    const double KeyY = std::round(static_cast<double>(WorldPositionCm.Y));
     if (KeyX < TNumericLimits<int32>::Lowest() || KeyX > TNumericLimits<int32>::Max()
         || KeyY < TNumericLimits<int32>::Lowest() || KeyY > TNumericLimits<int32>::Max())
     {
