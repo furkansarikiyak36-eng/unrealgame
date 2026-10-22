@@ -120,7 +120,7 @@ AExcavationTerrainChunkActor::AExcavationTerrainChunkActor()
     DynamicMeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
     DynamicMeshComponent->SetComplexAsSimpleCollisionEnabled(true, false);
     DynamicMeshComponent->SetDeferredCollisionUpdatesEnabled(true, false);
-    DynamicMeshComponent->bUseAsyncCooking = true;
+    DynamicMeshComponent->bUseAsyncCooking = false;
     Tags.AddUnique(FName(TEXT("World.Object.VoxelSurface")));
     DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     DynamicMeshComponent->SetCanEverAffectNavigation(true);
@@ -269,6 +269,12 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
     {
         ClearMeshAndCollision();
         return false;
+    }
+
+    if (IsValid(RegisteredSubsystem) && RegisteredSubsystem->IsRuntimeReady())
+    {
+        DynamicMeshComponent->bUseAsyncCooking =
+            RegisteredSubsystem->GetRuntimeSettings().bAllowAsyncCollision;
     }
 
     FWorldDensityChunkSnapshot Snapshot;
