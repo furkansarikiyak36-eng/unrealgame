@@ -48,14 +48,28 @@ private:
         TArray<FVector> Normals;
     };
 
+    struct FActiveSampleJob
+    {
+        FIntVector Coordinate = FIntVector::ZeroValue;
+        FVector WorldOrigin = FVector::ZeroVector;
+        float SampleSpacingCm = 25.0f;
+        int32 CellsPerAxis = 32;
+        TArray<float> Samples;
+        int32 NextSampleIndex = 0;
+    };
+
     TSet<FIntVector> DirtyChunks;
     TSet<FIntVector> InFlightChunks;
+    TArray<FActiveSampleJob> ActiveSampleJobs;
     UPROPERTY(Transient)
     TMap<FIntVector, TObjectPtr<AProceduralVoxelChunkActor>> ChunkActors;
     TArray<FCompletedMesh> PendingPublishes;
 
     void QueueChunk(FIntVector Coordinate);
     void StartOneBuild(FIntVector Coordinate);
+    void ProcessDensitySamples(int32 MaxSamplesThisTick);
+    void StartMeshingFromSamples(FIntVector Coordinate, FVector WorldOrigin, float SampleSpacingCm,
+        int32 CellsPerAxis, TArray<float>&& Samples);
     void PublishCompleted(FCompletedMesh&& Mesh);
     AProceduralVoxelChunkActor* FindOrCreateChunk(FIntVector Coordinate, FVector WorldOrigin);
 };
