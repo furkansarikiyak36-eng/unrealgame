@@ -99,9 +99,13 @@ struct MYPROJECT2_API FExcavationEditRecord
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
     TArray<FExcavationCellChange> Changes;
 
-    /** Number of cells changed by the committed edit, used for soil volume accounting. */
+    /** Number of density cells modified by this committed edit. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
     int32 MovedCellCount = 0;
+
+    /** Signed change to solid volume in cubic metres: positive removes solid, negative adds solid. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
+    float SolidVolumeDeltaM3 = 0.0f;
 
     /** Reserved for adapters that perform partial/blocked edits; atomic preflight currently rejects them instead. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Excavation")
