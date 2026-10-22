@@ -40,6 +40,7 @@
 #include "StructureManager.h"
 #include "SurvivalComponent.h"
 #include "Survival/ExcavationSurvivalAdapterComponent.h"
+#include "WorldCore/Excavation/VoxelExcavationToolComponent.h"
 #include "WorldPhaseW1_Chunk/ChunkManager.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
 #include "WorldCore/ExcavationTerrainChunkActor.h"
@@ -110,6 +111,7 @@ AForestCharacter::AForestCharacter()
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
     ExcavationSurvivalAdapter = CreateDefaultSubobject<UExcavationSurvivalAdapterComponent>(TEXT("ExcavationSurvivalAdapter"));
+    VoxelExcavationTool = CreateDefaultSubobject<UVoxelExcavationToolComponent>(TEXT("VoxelExcavationTool"));
 	WorldChunks = CreateDefaultSubobject<UChunkManager>(TEXT("WorldChunks"));
 	WorldChunks->ActivationRadius = 256.f; // metres: 4 chunks (64 m) each way
 	CoreInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("CoreInventory"));
