@@ -265,7 +265,10 @@ struct MYPROJECT2_API FWorldDensityChunkSnapshot
     int32 CellsPerChunkAxis = 0;
     int32 BorderCells = 1;
     float SampleSpacingCm = 0.0f;
+    /** Monotonic revision of the authoritative density store used to build this snapshot. */
+    uint64 SourceRevision = 0;
     TArray<float> DensitySamples;
+    /** Optional material ID per density sample; empty means the default material layer. */
     TArray<int32> MaterialIds;
 
     bool IsShapeMetadataValid() const
