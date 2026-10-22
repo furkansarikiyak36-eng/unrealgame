@@ -1286,6 +1286,38 @@ bool UExcavationShoringSubsystem::ImportSnapshot(
     return true;
 }
 
+void UExcavationShoringSubsystem::GetCommittedPlanIds(TArray<FGuid>& OutPlanIds) const
+{
+    OutPlanIds.Reset();
+    CommittedPlanIds.GenerateKeyArray(OutPlanIds);
+    OutPlanIds.Sort([](const FGuid& A, const FGuid& B)
+    {
+        return A.ToString() < B.ToString();
+    });
+}
+
+bool UExcavationShoringSubsystem::RevalidateAllPlans(FString& OutError)
+{
+    OutError.Reset();
+    TArray<FGuid> PlanIds;
+    GetCommittedPlanIds(PlanIds);
+    TArray<FString> Failures;
+    for (const FGuid& PlanId : PlanIds)
+    {
+        FString PlanError;
+        if (!RevalidatePlan(PlanId, PlanError))
+        {
+            Failures.Add(FString::Printf(TEXT("%s: %s"), *PlanId.ToString(), *PlanError));
+        }
+    }
+    if (Failures.Num() > 0)
+    {
+        OutError = FString::Join(Failures, TEXT("\n"));
+        return false;
+    }
+    return true;
+}
+
 APlaceableShoringPiece* UExcavationShoringSubsystem::FindPiece(const FGuid& PieceId) const
 {
     const TWeakObjectPtr<APlaceableShoringPiece>* Found = PiecesById.Find(PieceId);

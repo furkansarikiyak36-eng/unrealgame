@@ -70,7 +70,7 @@ struct FSurvivalComponentSnapshot
 			OutError = TEXT("Survival snapshot contains an invalid stat or timer.");
 			return false;
 		}
-		if (bDead != (Health <= KINDA_SMALL_NUMBER))
+		if (bDead != (Health <= 0.0f))
 		{
 			OutError = TEXT("Survival snapshot dead flag does not match health.");
 			return false;

@@ -18,12 +18,12 @@ struct FLogSaveData
 {
     GENERATED_BODY()
 
-    UPROPERTY() FTransform Transform = FTransform::Identity;
-    UPROPERTY() TObjectPtr<ULogDefinition> Definition = nullptr;
-    UPROPERTY() uint8 State = 0;
-    UPROPERTY() float Health = 100.0f;
-    UPROPERTY() float CurrentLength = 65.0f;
-    UPROPERTY() uint8 Shape = 0;
+    UPROPERTY(SaveGame) FTransform Transform = FTransform::Identity;
+    UPROPERTY(SaveGame) TObjectPtr<ULogDefinition> Definition = nullptr;
+    UPROPERTY(SaveGame) uint8 State = 0;
+    UPROPERTY(SaveGame) float Health = 100.0f;
+    UPROPERTY(SaveGame) float CurrentLength = 65.0f;
+    UPROPERTY(SaveGame) uint8 Shape = 0;
 };
 
 UCLASS()
@@ -31,7 +31,7 @@ class MYPROJECT2_API ULogSaveGame : public USaveGame
 {
     GENERATED_BODY()
 public:
-    UPROPERTY() TArray<FLogSaveData> Logs;
+    UPROPERTY(SaveGame) TArray<FLogSaveData> Logs;
 };
 
 /**

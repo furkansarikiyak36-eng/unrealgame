@@ -84,6 +84,8 @@ public:
     bool ExportSnapshot(FShoringWorldSnapshot& OutSnapshot, FString& OutError) const;
     bool ValidateSnapshot(const FShoringWorldSnapshot& Snapshot, FString& OutError) const;
     bool ImportSnapshot(const FShoringWorldSnapshot& Snapshot, FString& OutError, TSubclassOf<APlaceableShoringPiece> PieceClass = nullptr);
+    void GetCommittedPlanIds(TArray<FGuid>& OutPlanIds) const;
+    bool RevalidateAllPlans(FString& OutError);
 
     APlaceableShoringPiece* FindPiece(const FGuid& PieceId) const;
     TArray<APlaceableShoringPiece*> GetPlanPieces(const FGuid& PlanId) const;

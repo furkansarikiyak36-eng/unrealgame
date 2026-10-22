@@ -96,7 +96,7 @@ namespace
             Log->SetActorTransform(Data.Transform);
             Log->ApplyCut(static_cast<EWoodShape>(Data.Shape), Data.CurrentLength);
             Log->SetHealth(Data.Health);
-            if (!Log->SetLogState(static_cast<ELogState>(Data.State)))
+            if (Log->GetLogState() != static_cast<ELogState>(Data.State)\n                && !Log->SetLogState(static_cast<ELogState>(Data.State)))
             {
                 Log->Destroy();
                 OutError = TEXT("A staged log actor rejected its saved state.");
