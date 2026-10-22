@@ -4,6 +4,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "WorldCore/ExcavationTypes.h"
 #include "WorldCore/WorldRuntimeProfile.h"
+#include "WorldCore/WorldSystemContracts.h"
 #include "ExcavationLandscapeDensitySource.h"
 #include "ExcavationTerrainChunkSubsystem.generated.h"
 
@@ -11,6 +12,14 @@ class AExcavationTerrainChunkActor;
 class UExcavationFlatBaseDensitySource;
 class UExcavationVolumeSubsystem;
 class UWorldRuntimeProfileSubsystem;
+
+/** Worker result contains plain CPU data only; UObject/component work stays on game thread. */
+struct FQueuedVoxelMeshResult
+{
+    bool bSucceeded = false;
+    FWorldVoxelMeshData Mesh;
+    FString Error;
+};
 
 /**
  * Routes excavation edits to derived mesh adapters and optionally streams those
@@ -75,6 +84,7 @@ protected:
 
     void UpdateStreamedChunks();
     void ProcessDirtyChunkQueue();
+    void CompleteMeshJob(const FIntVector& Coordinate, FQueuedVoxelMeshResult&& Result);
     void RefreshLandscapeFallbackProvider();
     bool HasLiveRegisteredChunk(const FIntVector& Coordinate);
     void RemoveInvalidRegisteredActors();
@@ -91,6 +101,8 @@ protected:
     TMap<FIntVector, TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>> RegisteredChunks;
     TMap<FIntVector, TWeakObjectPtr<AExcavationTerrainChunkActor>> ManagedChunkActors;
     TSet<FIntVector> DirtyChunkQueue;
+    TSet<FIntVector> InFlightMeshJobs;
+    TMap<FIntVector, FQueuedVoxelMeshResult> CompletedMeshResults;
     FWorldRuntimeProfileValues RuntimeSettings;
     FString RuntimeSetupError;
     bool bRuntimeReady = false;
