@@ -44,9 +44,9 @@ bool FWorldRuntimeProfileValues::Validate(FString* OutError) const
     {
         return Fail(TEXT("ChunkSizeCm must be finite and at least 100 cm."));
     }
-    if (CellsPerChunkAxis < 4 || CellsPerChunkAxis > 512)
+    if (CellsPerChunkAxis < 4 || CellsPerChunkAxis > 128)
     {
-        return Fail(TEXT("CellsPerChunkAxis must be in [4, 512]."));
+        return Fail(TEXT("CellsPerChunkAxis must be in [4, 128]."));
     }
     if (!HasConsistentChunkGrid())
     {
