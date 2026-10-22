@@ -3,11 +3,11 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Survival/UndergroundExposureComponent.h"
 #include "SurvivalExcavationAdapter.generated.h"
 
 class USurvivalComponent;
 class UUndergroundExposureComponent;
-struct FSurvivalExposureSample;
 
 UENUM(BlueprintType)
 enum class ESurvivalExcavationAction : uint8
