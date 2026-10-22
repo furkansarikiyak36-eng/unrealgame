@@ -178,6 +178,7 @@ void UVoxelChunkMeshSubsystem::Deinitialize()
     }
     DirtyChunks.Reset();
     InFlightChunks.Reset();
+    ActiveSampleJobs.Reset();
     PendingPublishes.Reset();
     ChunkActors.Reset();
     Super::Deinitialize();
