@@ -33,7 +33,7 @@ Repoda oyuncu konumundan sıcaklık, nem, aydınlık ve su derinliğini birlikte
 
 Yeni test adları:
 - `MyProject2.World.Survival.ActionCostsAreValidatedAndEnvironmentScaled`
-- `MyProject2.World.Survival.ExposureSampleClampsAndRejectsInvalid`
+- `MyProject2.World.Survival.ExposureSampleRejectsInvalidValues`
 - `MyProject2.World.Survival.ExposureSnapshotRestoresWithoutCatchup`
 
 Faz 7 runner Faz 1–6 test adlarını korur ve 3 yeni adla toplam 26 test bekler. Bu statik eşleşme Unreal testlerinin gerçekten çalıştığını kanıtlamaz.

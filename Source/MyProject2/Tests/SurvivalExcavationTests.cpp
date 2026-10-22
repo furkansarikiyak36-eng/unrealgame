@@ -37,7 +37,7 @@ bool FSurvivalActionCostDeterminismTest::RunTest(const FString& Parameters)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSurvivalEnvironmentSampleValidationTest,
-	"MyProject2.World.Survival.ExposureSampleClampsAndRejectsInvalid",
+	"MyProject2.World.Survival.ExposureSampleRejectsInvalidValues",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FSurvivalEnvironmentSampleValidationTest::RunTest(const FString& Parameters)

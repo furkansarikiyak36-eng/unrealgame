@@ -90,7 +90,7 @@ EXPECTED_TESTS=(
   "MyProject2.World.Shoring.SupportLossPropagatesAndCyclesFailClosed"
   "MyProject2.World.Shoring.DamageRepairAndFailedSupportReplacement"
   "MyProject2.World.Survival.ActionCostsAreValidatedAndEnvironmentScaled"
-  "MyProject2.World.Survival.ExposureSampleClampsAndRejectsInvalid"
+  "MyProject2.World.Survival.ExposureSampleRejectsInvalidValues"
   "MyProject2.World.Survival.ExposureSnapshotRestoresWithoutCatchup"
 )
 for test_name in "${EXPECTED_TESTS[@]}"; do
