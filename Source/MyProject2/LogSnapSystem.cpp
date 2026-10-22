@@ -2,6 +2,7 @@
 
 #include "LogSnapSystem.h"
 #include "CarvableLog.h"
+#include "WorldSnapResolver.h"
 
 namespace
 {
@@ -91,30 +92,55 @@ bool LogSnapSystem::BuildPoints(const ACarvableLog* Log, TArray<FPoint>& OutPoin
 
 bool LogSnapSystem::Resolve(const TArray<FPoint>& Points, const FQuery& Query, FPoint& OutPoint)
 {
-	if (Points.IsEmpty()) return false;
-	const FVector HitNormal = Query.HitNormal.GetSafeNormal();
-	float BestScore = TNumericLimits<float>::Max();
-	bool bFound = false;
+    OutPoint = FPoint{};
+    if (Points.IsEmpty())
+    {
+        return false;
+    }
 
-	for (const FPoint& Candidate : Points)
-	{
-		const float AlongError = FMath::Abs(FVector::DotProduct(Query.HitPoint - Candidate.Position, Candidate.Axis));
-		if (AlongError > Query.MaxAlongAxisError) continue;
-		const float NormalDot = FVector::DotProduct(HitNormal, Candidate.Normal);
-		if (!HitNormal.IsNearlyZero() && NormalDot < Query.NormalAlignmentThreshold) continue;
+    TArray<WorldSnap::FPoint> Candidates;
+    Candidates.Reserve(Points.Num());
+    for (int32 Index = 0; Index < Points.Num(); ++Index)
+    {
+        const FPoint& Source = Points[Index];
+        WorldSnap::FPoint& Candidate = Candidates.AddDefaulted_GetRef();
+        Candidate.Id = Source.Id;
+        switch (Source.Face)
+        {
+        case EFace::Top: Candidate.Group = TEXT("Top"); break;
+        case EFace::Bottom: Candidate.Group = TEXT("Bottom"); break;
+        case EFace::Front: Candidate.Group = TEXT("Front"); break;
+        case EFace::Back: Candidate.Group = TEXT("Back"); break;
+        case EFace::EndA: Candidate.Group = TEXT("EndA"); break;
+        case EFace::EndB: Candidate.Group = TEXT("EndB"); break;
+        }
+        Candidate.Position = Source.Position;
+        Candidate.Normal = Source.Normal;
+        Candidate.Axis = Source.Axis;
+        Candidate.SourceIndex = Index;
+    }
 
-		const FVector Delta = Query.HitPoint - Candidate.Position;
-		const FVector AcrossAxis = Delta - Candidate.Axis * FVector::DotProduct(Delta, Candidate.Axis);
-		const float Score = AlongError * AlongError + AcrossAxis.SizeSquared() * 0.02f
-			+ (HitNormal.IsNearlyZero() ? 0.f : (1.f - FMath::Clamp(NormalDot, -1.f, 1.f)) * NormalPenalty);
-		if (Score < BestScore)
-		{
-			BestScore = Score;
-			OutPoint = Candidate;
-			bFound = true;
-		}
-	}
-	return bFound;
+    WorldSnap::FQuery SharedQuery;
+    SharedQuery.HitPoint = Query.HitPoint;
+    SharedQuery.HitNormal = Query.HitNormal;
+    SharedQuery.MaxDistanceCm = 0.0f; // Preserve the legacy log resolver's axis-limited, non-radial behavior.
+    SharedQuery.bRequireNormalCompatibility = true;
+    SharedQuery.NormalAlignmentThreshold = Query.NormalAlignmentThreshold;
+    SharedQuery.bUseAxisConstraint = true;
+    SharedQuery.MaxAlongAxisErrorCm = Query.MaxAlongAxisError;
+    SharedQuery.AlongAxisWeight = 1.0f;
+    SharedQuery.AcrossAxisWeight = 0.02f;
+    SharedQuery.NormalPenalty = 10000.0f;
+
+    WorldSnap::FResolveResult Result;
+    if (!FWorldSnapResolver::Resolve(Candidates, SharedQuery, Result)
+        || !Points.IsValidIndex(Result.Point.SourceIndex))
+    {
+        return false;
+    }
+
+    OutPoint = Points[Result.Point.SourceIndex];
+    return true;
 }
 
 float LogSnapSystem::FoldAxisYawDelta(float DeltaDegrees)
