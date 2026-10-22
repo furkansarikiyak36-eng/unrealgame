@@ -372,6 +372,39 @@ void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
         }
     }
 
+    RemoveInvalidRegisteredActors();
+
+    TArray<FIntVector> OrderedDesiredChunks = DesiredChunks.Array();
+    OrderedDesiredChunks.Sort([&PlayerChunk](const FIntVector& A, const FIntVector& B)
+    {
+        const double ADX = static_cast<double>(A.X) - PlayerChunk.X;
+        const double ADY = static_cast<double>(A.Y) - PlayerChunk.Y;
+        const double ADZ = static_cast<double>(A.Z) - PlayerChunk.Z;
+        const double BDX = static_cast<double>(B.X) - PlayerChunk.X;
+        const double BDY = static_cast<double>(B.Y) - PlayerChunk.Y;
+        const double BDZ = static_cast<double>(B.Z) - PlayerChunk.Z;
+        const double DistanceA = (ADX * ADX) + (ADY * ADY) + (ADZ * ADZ);
+        const double DistanceB = (BDX * BDX) + (BDY * BDY) + (BDZ * BDZ);
+        if (!FMath::IsNearlyEqual(DistanceA, DistanceB))
+        {
+            return DistanceA < DistanceB;
+        }
+        if (A.X != B.X) return A.X < B.X;
+        if (A.Y != B.Y) return A.Y < B.Y;
+        return A.Z < B.Z;
+    });
+
+    const int32 MaxActive = FMath::Clamp(RuntimeSettings.MaxActiveEditableChunks, 1, 100000);
+    if (OrderedDesiredChunks.Num() > MaxActive)
+    {
+        OrderedDesiredChunks.SetNum(MaxActive, EAllowShrinking::No);
+    }
+    DesiredChunks.Reset();
+    for (const FIntVector& Coordinate : OrderedDesiredChunks)
+    {
+        DesiredChunks.Add(Coordinate);
+    }
+
     // Destroy only actors spawned by this renderer; manually placed chunk actors remain user-owned.
     for (auto It = ManagedChunkActors.CreateIterator(); It; ++It)
     {
@@ -386,21 +419,24 @@ void UExcavationTerrainChunkSubsystem::UpdateStreamedChunks()
         }
     }
 
-    RemoveInvalidRegisteredActors();
-
-    TArray<FIntVector> OrderedDesiredChunks = DesiredChunks.Array();
-    OrderedDesiredChunks.Sort([](const FIntVector& A, const FIntVector& B)
+    // Manually placed actors are user-owned and cannot be evicted by streaming. Reserve
+    // their live slots before spawning managed chunks so the profile cap is respected.
+    int32 RegisteredActorCount = 0;
+    for (const TPair<FIntVector, TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>>& Pair : RegisteredChunks)
     {
-        if (A.X != B.X) return A.X < B.X;
-        if (A.Y != B.Y) return A.Y < B.Y;
-        return A.Z < B.Z;
-    });
+        for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : Pair.Value)
+        {
+            RegisteredActorCount += Entry.IsValid() ? 1 : 0;
+        }
+    }
+    const int32 ManualActorCount = FMath::Max(0, RegisteredActorCount - ManagedChunkActors.Num());
+    const int32 ManagedQuota = FMath::Max(0, MaxActive - ManualActorCount);
 
     int32 SpawnedThisTick = 0;
     const int32 SpawnBudget = FMath::Clamp(MaxChunksSpawnedPerTick, 1, 16);
     for (const FIntVector& Coordinate : OrderedDesiredChunks)
     {
-        if (SpawnedThisTick >= SpawnBudget)
+        if (SpawnedThisTick >= SpawnBudget || ManagedChunkActors.Num() >= ManagedQuota)
         {
             break;
         }
