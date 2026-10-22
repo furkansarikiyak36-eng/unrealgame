@@ -235,6 +235,16 @@ bool UExcavationVolumeSubsystem::ConfigureGridForRuntimeProfile(
     return true;
 }
 
+void UExcavationVolumeSubsystem::NotifyBaseDensityChanged()
+{
+    ++DensityRevision;
+    if (DensityRevision == 0)
+    {
+        ++DensityRevision;
+    }
+    OnVolumeReset.Broadcast();
+}
+
 bool UExcavationVolumeSubsystem::TrySampleBaseDensityAtWorld(
     const FVector& WorldPositionCm,
     float& OutDensity) const
