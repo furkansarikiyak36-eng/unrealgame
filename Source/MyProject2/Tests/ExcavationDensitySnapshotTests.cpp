@@ -59,7 +59,7 @@ bool FExcavationDensitySnapshotRevisionTest::RunTest(const FString& Parameters)
     FWorldDensityChunkSnapshot Before;
     TestTrue(
         TEXT("A chunk snapshot should sample the configured base density"),
-        Excavation->BuildChunkSnapshot(FIntVector::ZeroValue, Before));
+        Excavation->BuildChunkSnapshot(FIntVector(0, 0, -1), Before));
     TestTrue(TEXT("Snapshot storage should match its metadata"), Before.HasValidSampleStorage());
     TestEqual(TEXT("Snapshot includes one base material ID per density sample"),
         Before.MaterialIds.Num(), Before.DensitySamples.Num());
@@ -74,7 +74,7 @@ bool FExcavationDensitySnapshotRevisionTest::RunTest(const FString& Parameters)
 
     const uint64 InitialRevision = Before.SourceRevision;
     FExcavationEditRecord EditRecord;
-    const FVector CellCenter = Excavation->CellToWorldCenter(FIntVector(16, 16, 16));
+    const FVector CellCenter = Excavation->CellToWorldCenter(FIntVector(16, 16, -16));
     TestTrue(
         TEXT("Sphere carve should commit to authoritative sparse density"),
         Excavation->ApplySphereEdit(CellCenter, 40.0f, EExcavationEditType::Carve, EditRecord));
@@ -82,7 +82,7 @@ bool FExcavationDensitySnapshotRevisionTest::RunTest(const FString& Parameters)
         Excavation->GetDensityRevision() > InitialRevision);
 
     FWorldDensityChunkSnapshot After;
-    TestTrue(TEXT("Post-edit chunk snapshot should rebuild"), Excavation->BuildChunkSnapshot(FIntVector::ZeroValue, After));
+    TestTrue(TEXT("Post-edit chunk snapshot should rebuild"), Excavation->BuildChunkSnapshot(FIntVector(0, 0, -1), After));
     TestTrue(TEXT("Snapshot revision should advance after a committed edit"),
         After.SourceRevision > Before.SourceRevision);
     TestTrue(TEXT("Carved center sample should now be empty"),
