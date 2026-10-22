@@ -98,6 +98,19 @@ bool FExcavationDensitySnapshotRevisionTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Rejected grid change must preserve the original chunk grid"),
         Excavation->CellsPerChunkAxis, 32);
 
+    FExcavationVolumeSnapshot IncompatibleSave;
+    TestTrue(TEXT("Current excavation state should be exportable for compatibility testing"),
+        Excavation->ExportSnapshot(IncompatibleSave));
+    IncompatibleSave.CellSizeCm = 12.5f;
+    IncompatibleSave.CellsPerChunkAxis = 64;
+    TestFalse(
+        TEXT("Snapshot import must not override a runtime-locked voxel grid"),
+        Excavation->ImportSnapshot(IncompatibleSave, true));
+    TestTrue(TEXT("Rejected snapshot import preserves the active grid"),
+        FMath::IsNearlyEqual(Excavation->CellSizeCm, 25.0f));
+    TestEqual(TEXT("Rejected snapshot import preserves active chunk cells"),
+        Excavation->CellsPerChunkAxis, 32);
+
     World->DestroyWorld(false);
     return true;
 }
