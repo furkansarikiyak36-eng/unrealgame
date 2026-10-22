@@ -1,0 +1,20 @@
+name: Portable Mechanics Modules
+on:
+  push:
+    branches:
+      - modules/mechanics-pre-unreal
+  pull_request:
+    paths:
+      - 'Modules/**'
+      - '.github/workflows/portable-mechanics.yml'
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S Modules -B build/modules -DWM_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build/modules --parallel 2
+      - name: Test
+        run: ctest --test-dir build/modules --output-on-failure
