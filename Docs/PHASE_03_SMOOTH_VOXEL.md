@@ -49,7 +49,7 @@ Eski dalda bulunan renderer'ın her üçgen için yeni üç vertex üretmesi yer
 - HIGH_END tanımı: `12.5 cm` örnek aralığı, `64` hücre/eksen, `8 m` chunk. Faz 3 kodu bu profile göre ayar alabilir; HIGH_END performans kabulü veya benchmark sonucu değildir.
 - Bir chunk snapshot'ı her eksende `Cells + 1 + 2*BorderCells` sample tutar. Border bir hücre olduğu için LOW_MID snapshot boyutu `35³`; renderer içteki hücreleri işler ve dış örnekleri gradient/normaller için kullanır.
 - Density revision, edit/import/rollback/base-provider değişiminde ilerler. Snapshot örnekleme sırasında revision değişirse snapshot reddedilir. Mesher sonucu da yayınlanmadan önce güncel revision ile eşleştirilir.
-- Sparse override içeren kaydedilmiş hücreler varken profile grid'i farklıysa subsystem, hücre koordinatlarını sessizce yeniden yorumlamak yerine başlangıcı reddeder. Profil oturum sırasında kilitlenir.
+- Sparse override içeren kaydedilmiş hücreler varken profile grid'i farklıysa subsystem, hücre koordinatlarını sessizce yeniden yorumlamak yerine başlangıcı reddeder. Profil oturum sırasında kilitlenir; snapshot import da kilitli profil ile farklı hücre boyutu/ekseni getiremez.
 - Landscape height/material sorguları XY kolon anahtarıyla sınırlı bir cache kullanır. Cache sınırına gelince sıfırlanır; sınırsız büyümez.
 
 ## 4. Smooth density ve mesh
@@ -75,7 +75,7 @@ Yeni test adları:
 
 - `MyProject2.World.VoxelMesher.HorizontalPlane`
 - `MyProject2.World.VoxelMesher.InvalidSampleRejected`
-- `MyProject2.World.VoxelDensity.SnapshotRevisionAndGrid`
+- `MyProject2.World.VoxelDensity.SnapshotRevisionAndGrid` (revision, material buffer, profile grid ve farklı grid taşıyan save import reddi)
 
 Test runner aşağıdaki Faz 1/2 testlerini de ister; toplam 10 test adı kontrol edilir.
 
