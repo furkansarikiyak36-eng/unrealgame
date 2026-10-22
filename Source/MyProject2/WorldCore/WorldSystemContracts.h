@@ -8,6 +8,7 @@
 #include "Engine/OverlapResult.h"
 
 class AActor;
+class UPrimitiveComponent;
 class UWorld;
 
 namespace WorldSystemContractValidation
@@ -74,6 +75,8 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
     FBox Bounds = FBox(ForceInit);
     FVector RegionSizeCm = FVector(800.0f);
     int32 MaxRegions = 100000;
+    /** Hard ceiling on extra vertical surface probes during one classification build. */
+    int32 MaxGeometrySamples = 1024;
     bool bIncludeGeometrySampling = true;
     bool bRespectManualOverrides = true;
 
@@ -95,6 +98,16 @@ struct MYPROJECT2_API FWorldClassificationBuildRequest
         if (MaxRegions < 1 || MaxRegions > 1000000)
         {
             OutError = TEXT("MaxRegions must be in [1, 1000000].");
+            return false;
+        }
+        if (MaxGeometrySamples < 0 || MaxGeometrySamples > 50000)
+        {
+            OutError = TEXT("MaxGeometrySamples must be in [0, 50000].");
+            return false;
+        }
+        if (bIncludeGeometrySampling && MaxGeometrySamples < 1)
+        {
+            OutError = TEXT("Geometry sampling is enabled but MaxGeometrySamples is zero.");
             return false;
         }
         return true;
@@ -318,6 +331,7 @@ struct MYPROJECT2_API FWorldScanQuery
     FVector StartCm = FVector::ZeroVector;
     FVector EndCm = FVector::ZeroVector;
     const AActor* ActorToIgnore = nullptr;
+    TArray<const UPrimitiveComponent*> ComponentsToIgnore;
     ECollisionChannel Channel = ECC_Visibility;
     bool bTraceComplex = false;
     bool bReturnPhysicalMaterial = false;
@@ -644,7 +658,7 @@ public:
     virtual ~IWorldClassificationSource() = default;
     virtual bool BuildClassification(
         const FWorldClassificationBuildRequest& Request,
-        FWorldClassificationBuildResult& OutResult) const = 0;
+        FWorldClassificationBuildResult& OutResult) = 0;
     virtual bool QueryClassification(
         const FVector& WorldPositionCm,
         FWorldRegionClassification& OutResult) const = 0;
