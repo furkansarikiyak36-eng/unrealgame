@@ -4,6 +4,7 @@
 
 #include "WorldCore/WorldClassificationSubsystem.h"
 #include "WorldCore/WorldScanSubsystem.h"
+#include "WorldScanSystem.h"
 #include "Engine/World.h"
 #include "Misc/AutomationTest.h"
 
@@ -240,6 +241,51 @@ bool FWorldScanDemandDrivenQueriesTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Empty surface sample should not claim success"), SurfaceResult.bSucceeded);
 
     World->DestroyWorld(false);
+    return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FWorldScanCoreClassificationRulesTest,
+    "MyProject2.World.Scan.CoreClassificationRules",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldScanCoreClassificationRulesTest::RunTest(const FString& Parameters)
+{
+    float SurfaceAngle = -1.0f;
+    const WorldScanSystem::ESurfaceProfile Flat =
+        WorldScanSystem::ClassifySurface(FVector::UpVector, &SurfaceAngle);
+    TestEqual(
+        TEXT("Up-facing normal should classify as flat"),
+        static_cast<uint8>(Flat),
+        static_cast<uint8>(WorldScanSystem::ESurfaceProfile::Flat));
+    TestTrue(TEXT("Flat surface angle should be approximately zero"), FMath::Abs(SurfaceAngle) < 0.1f);
+
+    const WorldScanSystem::ESurfaceProfile Vertical =
+        WorldScanSystem::ClassifySurface(FVector::ForwardVector, &SurfaceAngle);
+    TestEqual(
+        TEXT("Horizontal normal should classify as vertical wall"),
+        static_cast<uint8>(Vertical),
+        static_cast<uint8>(WorldScanSystem::ESurfaceProfile::Vertical));
+    TestTrue(TEXT("Vertical wall angle should be approximately 90 degrees"), FMath::Abs(SurfaceAngle - 90.0f) < 0.1f);
+
+    const WorldScanSystem::ECapability LogCapabilities =
+        WorldScanSystem::InferCapabilities(WorldScanSystem::EObjectType::Log, WorldScanSystem::EPhysicalState::Static);
+    TestTrue(
+        TEXT("Stable log should be a support, snap, harvest and carry candidate"),
+        EnumHasAllFlags(
+            LogCapabilities,
+            WorldScanSystem::ECapability::CanSupport
+                | WorldScanSystem::ECapability::CanSnap
+                | WorldScanSystem::ECapability::CanHarvest
+                | WorldScanSystem::ECapability::CanCarry));
+
+    const WorldScanSystem::ECapability FallingTreeCapabilities =
+        WorldScanSystem::InferCapabilities(WorldScanSystem::EObjectType::Tree, WorldScanSystem::EPhysicalState::Falling);
+    TestFalse(
+        TEXT("Falling tree must not be considered a safe structural support"),
+        EnumHasAnyFlags(FallingTreeCapabilities, WorldScanSystem::ECapability::CanSupport));
+
     return true;
 }
 
