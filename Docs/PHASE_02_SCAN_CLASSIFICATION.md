@@ -21,7 +21,8 @@ This is the sensing/classification slice. It does not yet generate smooth voxel 
 | File | Responsibility | Validation state |
 |---|---|---|
 | `WorldCore/WorldClassificationSubsystem.h/.cpp` | Bounded region grid, actor/component region tags, landscape-layer marker tags, manual AABB overrides, limited center-ray fallback, point query/revision | Written; UE build/test pending |
-| `WorldCore/WorldScanSubsystem.h/.cpp` | Raycast, sphere/box/capsule sweep, sphere/box overlap, grid surface samples, actor bounds/physics snapshot; implements `IWorldScanProvider` | Written; UE build/test pending |
+| `WorldCore/WorldScanSubsystem.h/.cpp` | Adapter that implements `IWorldScanProvider` on top of the shared scan core and classification map | Written; UE build/test pending |
+| `WorldScanSystem.h/.cpp`, `WorldScanPlan.cpp`, `WorldScanQueries.cpp` | Reused scan core for hit analysis, actor classification, line/shape trace, overlap, surface sample, bounds/physics snapshot and selective scan plan | Imported from scanner drafts and adapted; UE build/test pending |
 | `ForestCharacter.cpp` | `TraceFromView` uses the shared scanner when available; wall-plan ghost component ignore behavior is preserved | Source path updated; UE build/PIE pending |
 | `WorldCore/WorldSystemContracts.h` | Adds a hard limit for classification geometry probes and makes classification-map builds explicitly mutating | Updated |
 | `Tests/WorldScanClassificationTests.cpp` | Region marker policy, manual grid overrides/boundary rules, demand-driven scanner smoke tests | Three tests written; not run |
@@ -68,13 +69,14 @@ A marker that only partially covers a region creates `Transition`; equal-priorit
 ## Scanner behavior
 
 - `AForestCharacter::TraceFromView` now calls this scanner for its ordinary first-person view ray. The pre-existing `bIgnorePlans` path still ignores each wall-plan ghost component; a direct trace remains as a defensive fallback only if the subsystem is unavailable.
-- `Trace`: returns `true` only on a blocking actor hit. `OutHit.bHit` describes the hit and the result includes the raw hit, object class name, region kind and capabilities.
+- `WorldScanSubsystem` reuses the existing `WorldScanSystem` hit analysis and query implementations rather than implementing a second independent set of ray/sweep/overlap/physics routines. It adapts those results to the Faz 1 contracts.
+- `Trace`: returns `true` only on a blocking actor hit. `OutHit.bHit` describes the hit and the result includes the raw hit, object class name, region kind and capabilities. The request controls whether physical material lookup is needed and can ignore specific ghost components.
 - `ShapeTrace`: returns `true` when a valid query is executed; `OutResult.bSucceeded` distinguishes an executed query from invalid input. A valid no-hit query has zero hits.
 - `QueryOverlaps`: returns `true` when a valid overlap query is executed; inspect `Overlaps` for matches.
 - `SampleSurface`: returns `true` when at least one requested downward sample hit a surface. The result reports hit points/normals, min/max Z and maximum slope angle.
 - `AnalyzeActor`: returns bounds/dimensions, actor origin, and a physics velocity/awake snapshot where a primitive component is available.
 
-Capabilities are inferred conservatively from the classified region and explicit `World.Object.*` / `World.Capability.*` tags. `World.Capability.NoSupport`, `NoSnap`, and `NoDig` are opt-outs. Digging is never granted unless the final region kind is `EditableVoxel`. Moving/falling physics targets are not considered safe supports.
+Capabilities begin with the shared `WorldScanSystem` object/physics analysis and are constrained by the region map. `World.Capability.NoSupport`, `NoSnap`, and `NoDig` are opt-outs. **Digging is opt-in**: a hit must both be inside an `EditableVoxel` region and carry `World.Capability.Dig`; a region label by itself does not authorize destructive interaction. Moving/falling physics targets are not considered safe supports.
 
 ## Tests
 
