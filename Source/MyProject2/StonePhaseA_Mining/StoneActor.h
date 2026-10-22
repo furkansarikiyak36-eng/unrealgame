@@ -29,6 +29,7 @@ public:
     UFUNCTION(BlueprintCallable) void ApplyDamage(float Amount);
     UFUNCTION(BlueprintPure) float GetHealth() const { return Health; }
     UFUNCTION(BlueprintPure) float GetMaxHealth() const { return MaxHealth; }
+    bool RestorePersistentState(float SavedHealth, EStructuralNodeState SavedState, EStoneShape SavedShape, const FVector& SavedDimensions, FString& OutError);
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UStaticMeshComponent> MeshComponent;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UStoneStateMachine> StateMachine;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UStoneConnectionGraph> ConnectionGraph;
