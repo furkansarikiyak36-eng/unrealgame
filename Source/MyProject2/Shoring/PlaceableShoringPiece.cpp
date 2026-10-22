@@ -81,6 +81,7 @@ bool APlaceableShoringPiece::ApplyDamage(float Amount, EShoringDamageCause Cause
     }
     if (PieceState != EShoringPieceState::Active
         && PieceState != EShoringPieceState::Damaged
+        && PieceState != EShoringPieceState::Warning
         && PieceState != EShoringPieceState::Overloaded)
     {
         OutError = TEXT("Only an active, damaged or overloaded shoring piece can take new damage.");
@@ -161,6 +162,7 @@ void APlaceableShoringPiece::RefreshCollisionState()
     const bool bShouldCollide =
         PieceState == EShoringPieceState::Active
         || PieceState == EShoringPieceState::Damaged
+        || PieceState == EShoringPieceState::Warning
         || PieceState == EShoringPieceState::Overloaded
         || bShouldSimulateCollapse;
 

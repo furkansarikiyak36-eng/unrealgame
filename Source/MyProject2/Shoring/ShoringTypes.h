@@ -364,6 +364,8 @@ struct MYPROJECT2_API FShoringSupportNode
     float HealthFraction = 1.0f;
     float DesignLoad = 1.0f;
     bool bAnchorCurrent = true;
+    /** Once a member has physically collapsed, surface revalidation alone cannot restore it. */
+    bool bIsCollapsed = false;
 };
 
 struct MYPROJECT2_API FShoringSupportAssessment

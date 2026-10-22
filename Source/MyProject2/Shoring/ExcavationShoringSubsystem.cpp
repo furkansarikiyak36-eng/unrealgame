@@ -829,6 +829,7 @@ bool UExcavationShoringSubsystem::BuildSupportNodes(
         Node.ConnectedPieceIds = Piece->GetConnectedPieceIds();
         Node.HealthFraction = Piece->GetHealthFraction();
         Node.DesignLoad = Piece->GetDesignLoad();
+        Node.bIsCollapsed = Piece->GetPieceState() == EShoringPieceState::Unsupported;
         Node.bAnchorCurrent = Anchor.Kind != EShoringAnchorKind::VoxelSurface
             || Anchor.SourceDensityRevision == CurrentRevision;
     }

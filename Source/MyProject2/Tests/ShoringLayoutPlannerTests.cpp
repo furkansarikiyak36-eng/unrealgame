@@ -6,6 +6,7 @@
 #include "Shoring/PlaceableShoringPiece.h"
 #include "Shoring/ShoringLayoutPlanner.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
+#include "Shoring/ShoringSupportResolver.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Misc/AutomationTest.h"
@@ -305,8 +306,6 @@ bool FShoringPreviewMoveRevalidateRemoveTest::RunTest(const FString& Parameters)
 
 
 
-#include "Shoring/ShoringSupportResolver.h"
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FShoringSupportLoadThresholdsTest,
     "MyProject2.World.Shoring.SupportLoadThresholdsAreDeterministic",
@@ -477,9 +476,9 @@ bool FShoringDamageRepairReplacementTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("Replacement GUID differs from failed member"), Replacement->GetPieceId() != RootId);
         TestTrue(TEXT("Replacement starts with full durability"),
             FMath::IsNearlyEqual(Replacement->GetHealth(), 100.0f));
-        TestEqual(TEXT("Revalidated downstream member returns to active"),
+        TestEqual(TEXT("Previously collapsed downstream member stays collapsed until explicitly repositioned"),
             static_cast<uint8>(Shoring->FindPiece(ChildId)->GetPieceState()),
-            static_cast<uint8>(EShoringPieceState::Active));
+            static_cast<uint8>(EShoringPieceState::Unsupported));
     }
 
     World->DestroyWorld(false);

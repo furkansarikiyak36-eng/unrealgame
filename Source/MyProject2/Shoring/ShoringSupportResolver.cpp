@@ -83,6 +83,13 @@ bool FShoringSupportResolver::Evaluate(
             Assessment.Reason = TEXT("Piece durability is depleted; replace the failed member.");
             continue;
         }
+        if (Node.bIsCollapsed)
+        {
+            bUnsupported[Index] = true;
+            Assessment.Condition = EShoringSupportCondition::Unsupported;
+            Assessment.Reason = TEXT("Member has already collapsed and must be repositioned or replaced.");
+            continue;
+        }
         if (!Node.bAnchorCurrent)
         {
             bUnsupported[Index] = true;
