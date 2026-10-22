@@ -19,6 +19,7 @@ public:
     AStoneActor();
     UFUNCTION(BlueprintCallable) void InitializeFromDefinition(UStoneDefinition* Def);
     UFUNCTION(BlueprintPure) UStoneDefinition* GetDefinition() const { return Definition; }
+    UFUNCTION(BlueprintPure) UStoneDefinition* GetBaseDefinition() const { return BaseDefinition ? BaseDefinition : Definition; }
     virtual EMaterialType GetMaterialType_Implementation() const override;
     virtual EStructuralNodeState GetStructuralState_Implementation() const override;
     virtual bool SetStructuralState_Implementation(EStructuralNodeState NewState) override;
@@ -35,6 +36,7 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UStoneConnectionGraph> ConnectionGraph;
 protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Definition") TObjectPtr<UStoneDefinition> Definition;
+    UPROPERTY(Transient) TObjectPtr<UStoneDefinition> BaseDefinition;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) float Health = 100.0f;
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly) float MaxHealth = 100.0f;
     UFUNCTION() void HandleStateChanged(AActor* Stone, EStructuralNodeState NewState);

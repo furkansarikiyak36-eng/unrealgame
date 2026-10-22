@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build MyProject2 and run all phase-1 through phase-7 world automation tests.
+# Build MyProject2 and run all world automation tests registered through Phase 9.
 # Intended for Windows Git Bash / MSYS with Unreal Engine 5.8 installed.
 #
 #   bash Scripts/run_phase9_tests.sh
@@ -15,7 +15,7 @@ STAMP="$(date +%Y-%m-%d_%H%M%S)"
 RUNS="$ROOT/Saved/TestRuns"
 LOGS="$ROOT/Saved/Logs"
 BUILD_LOG="$RUNS/phase9_build_$STAMP.log"
-ENGINE_LOG="$LOGS/Phase7Tests.log"
+ENGINE_LOG="$LOGS/Phase9Tests.log"
 SAVED_LOG="$RUNS/phase9_tests_$STAMP.log"
 
 fail() {

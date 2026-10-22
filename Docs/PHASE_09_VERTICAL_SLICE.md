@@ -46,6 +46,8 @@ Voxel import density revision'ı değiştirir. Bu nedenle yüklenen tahkimatlar 
 
 ## Yeni Automation testleri
 
+- `MyProject2.World.Persistence.StoneRecordsValidatePersistentStates`
+
 - `MyProject2.World.Persistence.VoxelSnapshotRoundTrip`
 - `MyProject2.World.Persistence.ShoringSnapshotRejectsDuplicateIds`
 - `MyProject2.World.Persistence.PlayerSnapshotRejectsInvalidStats`
@@ -63,7 +65,7 @@ UE_ENGINE_ROOT="/d/UE/UE_5.8/Engine" bash Scripts/run_phase9_tests.sh
 ## Kapanış kapıları
 
 1. UE 5.8 Development Editor UBT/UHT build başarılı olmalı.
-2. 30/30 Automation testi gerçek çalışmada başarılı olmalı.
+2. 31/31 Automation testi gerçek çalışmada başarılı olmalı.
 3. PIE: kazı → tahkimat → hasar/çöküş → kaydet → restart/restore → revalidate zincirini görsel olarak doğrula.
 4. Çakışma/failure enjekte edilerek staged log/shoring spawn ve rollback yolları doğrulanmalı.
 5. Voxel chunk collision yeniden yayımlanmadan tahkimat parçalarının aktif collision almadığı doğrulanmalı.

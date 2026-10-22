@@ -21,6 +21,7 @@ void AStoneActor::InitializeFromDefinition(UStoneDefinition* Def)
 {
     if (!Def) return;
     Definition = Def;
+    BaseDefinition = Def;
     MaxHealth = FMath::Max(1.0f, Def->CompressiveStrength * 0.5f);
     Health = MaxHealth;
     if (UStaticMesh* LoadedMesh = Def->Mesh.LoadSynchronous()) MeshComponent->SetStaticMesh(LoadedMesh);

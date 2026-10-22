@@ -136,7 +136,7 @@ namespace
             UStoneDefinition* Definition = Stone->GetDefinition();
             if (!Definition) { OutError = TEXT("World save blocked: a stone actor has no persistent definition."); OutStones.Reset(); return; }
             FStoneSaveData Data;
-            Data.Transform = Stone->GetActorTransform(); Data.Definition = Definition; Data.ActorClass = Stone->GetClass();
+            Data.Transform = Stone->GetActorTransform(); Data.Definition = Stone->GetBaseDefinition(); Data.ActorClass = Stone->GetClass();
             Data.Health = Stone->GetHealth(); Data.State = static_cast<uint8>(State);
             Data.Shape = static_cast<uint8>(Definition->Shape); Data.Dimensions = Definition->Dimensions;
             if (!Data.Validate(OutError)) { OutStones.Reset(); return; }
