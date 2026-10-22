@@ -108,6 +108,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Profile")
     bool ValidateActiveSettings(FString& OutError) const
     {
+        switch (ActiveProfile)
+        {
+        case EWorldRuntimeProfile::LowMid:
+        case EWorldRuntimeProfile::HighEnd:
+            break;
+        default:
+            OutError = TEXT("ActiveProfile contains an unsupported enum value.");
+            return false;
+        }
+
         return GetActiveSettings().Validate(&OutError);
     }
 
