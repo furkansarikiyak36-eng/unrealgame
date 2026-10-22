@@ -59,6 +59,7 @@ void UExcavationShoringSubsystem::HandleVolumeChanged(const FExcavationEditRecor
 
 void UExcavationShoringSubsystem::HandleVolumeReset()
 {
+    LastInvalidatedPieceCount = 0;
     if (UWorld* World = GetWorld())
     {
         for (TActorIterator<APlaceableShoringPiece> It(World); It; ++It)
