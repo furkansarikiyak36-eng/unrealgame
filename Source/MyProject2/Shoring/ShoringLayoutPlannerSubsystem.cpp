@@ -111,7 +111,7 @@ bool UShoringLayoutPlannerSubsystem::BuildTrenchPlan(FVector StartTopCm, FVector
                 const FVector Wall = SegmentCentre + Side * (WallSide * WidthCm * 0.5f);
                 AddCandidate(EShoringPieceType::WallBoard, FVector(Wall.X, Wall.Y, BoardZ),
                     Yaw, FVector(SegmentLength, WallBoardThicknessCm, WallBoardHeightCm),
-                    I * 100 + Row, WallSide, TEXT("BOARD"), true, Wall,
+                    I * 100 + Row, WallSide, TEXT("BOARD"), true, FVector(Wall.X, Wall.Y, BoardZ),
                     -Side * static_cast<float>(WallSide),
                     TArray<FName>{ FName(*FString::Printf(TEXT("UPRIGHT_%d_%d"), I, WallSide)),
                         FName(*FString::Printf(TEXT("UPRIGHT_%d_%d"), I + 1, WallSide)) });
