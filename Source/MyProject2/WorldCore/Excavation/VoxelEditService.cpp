@@ -25,7 +25,30 @@ bool UVoxelEditService::EnsureServices(ULandscapeBuilderSubsystem*& OutBuilder, 
     return true;
 }
 
-bool UVoxelEditService::IsEditablePoint(FVector PointCm, FString& OutFailure)
+bool UVoxelEditService::EnsureServices(ULandscapeBuilderSubsystem*& OutBuilder, UExcavationVolumeSubsystem*& OutVolume)
+{
+    OutBuilder = nullptr;
+    OutVolume = nullptr;
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return false;
+    }
+    OutBuilder = World->GetSubsystem<ULandscapeBuilderSubsystem>();
+    OutVolume = World->GetSubsystem<UExcavationVolumeSubsystem>();
+    if (!OutBuilder || !OutVolume)
+    {
+        return false;
+    }
+    if (!OutBuilder->HasBuiltSnapshot())
+    {
+        OutBuilder->BuildClassificationSnapshot();
+    }
+    return true;
+}
+
+bool UVoxelEditService::ValidateEditableShape(EExcavationShapeType ShapeType, FVector CenterCm,
+    FVector EndCm, FVector HalfExtentCm, float RadiusCm, FString& OutFailure)
 {
     ULandscapeBuilderSubsystem* Builder = nullptr;
     UExcavationVolumeSubsystem* Volume = nullptr;
@@ -35,15 +58,115 @@ bool UVoxelEditService::IsEditablePoint(FVector PointCm, FString& OutFailure)
         return false;
     }
 
-    const FWorldClassificationResult Classification = Builder->QueryModeAtWorld(PointCm);
-    if (Classification.Mode != EWorldTerrainMode::EditableVoxel)
+    const float CellSize = Volume->CellSizeCm;
+    if (!FMath::IsFinite(CellSize) || CellSize < 1.0f)
     {
-        OutFailure = Classification.Mode == EWorldTerrainMode::StaticGeometry
-            ? TEXT("This region is protected static geometry.")
-            : TEXT("This region has not been classified as editable voxel terrain.");
+        OutFailure = TEXT("Voxel cell size is invalid.");
         return false;
     }
 
+    FVector MinCm;
+    FVector MaxCm;
+    if (ShapeType == EExcavationShapeType::Sphere)
+    {
+        const FVector R(RadiusCm);
+        MinCm = CenterCm - R;
+        MaxCm = CenterCm + R;
+    }
+    else if (ShapeType == EExcavationShapeType::Capsule)
+    {
+        const FVector R(RadiusCm);
+        MinCm = FVector(FMath::Min(CenterCm.X, EndCm.X), FMath::Min(CenterCm.Y, EndCm.Y),
+            FMath::Min(CenterCm.Z, EndCm.Z)) - R;
+        MaxCm = FVector(FMath::Max(CenterCm.X, EndCm.X), FMath::Max(CenterCm.Y, EndCm.Y),
+            FMath::Max(CenterCm.Z, EndCm.Z)) + R;
+    }
+    else if (ShapeType == EExcavationShapeType::Box)
+    {
+        MinCm = CenterCm - HalfExtentCm;
+        MaxCm = CenterCm + HalfExtentCm;
+    }
+    else
+    {
+        OutFailure = TEXT("Unsupported edit shape.");
+        return false;
+    }
+
+    FIntVector MinCell, MaxCell;
+    if (!Volume->TryWorldToCell(MinCm, MinCell) || !Volume->TryWorldToCell(MaxCm, MaxCell))
+    {
+        OutFailure = TEXT("Edit bounds cannot be mapped to voxel cells.");
+        return false;
+    }
+
+    const int64 CountX = static_cast<int64>(MaxCell.X) - MinCell.X + 1;
+    const int64 CountY = static_cast<int64>(MaxCell.Y) - MinCell.Y + 1;
+    const int64 CountZ = static_cast<int64>(MaxCell.Z) - MinCell.Z + 1;
+    if (CountX <= 0 || CountY <= 0 || CountZ <= 0
+        || CountX > Volume->MaxCellsPerEdit
+        || CountY > Volume->MaxCellsPerEdit / CountX
+        || CountZ > Volume->MaxCellsPerEdit / (CountX * CountY))
+    {
+        OutFailure = TEXT("Edit is too large to preflight safely.");
+        return false;
+    }
+
+    const double RadiusSquared = static_cast<double>(RadiusCm) * RadiusCm;
+    auto DistanceSquaredToSegment = [](const FVector& Point, const FVector& A, const FVector& B)
+    {
+        const FVector Segment = B - A;
+        const double LengthSquared = Segment.SizeSquared();
+        if (LengthSquared <= KINDA_SMALL_NUMBER)
+        {
+            return FVector::DistSquared(Point, A);
+        }
+        const double T = FMath::Clamp(FVector::DotProduct(Point - A, Segment) / LengthSquared, 0.0, 1.0);
+        return FVector::DistSquared(Point, A + Segment * T);
+    };
+
+    // Match the edit core's cell-centre inclusion rule. Only voxels that the edit
+    // would actually touch are required to be editable, preventing edits through static rock.
+    for (int32 X = MinCell.X; ; ++X)
+    {
+        for (int32 Y = MinCell.Y; ; ++Y)
+        {
+            for (int32 Z = MinCell.Z; ; ++Z)
+            {
+                const FIntVector Cell(X, Y, Z);
+                const FVector P = Volume->CellToWorldCenter(Cell);
+                bool bInside = false;
+                switch (ShapeType)
+                {
+                case EExcavationShapeType::Sphere:
+                    bInside = FVector::DistSquared(P, CenterCm) <= RadiusSquared;
+                    break;
+                case EExcavationShapeType::Capsule:
+                    bInside = DistanceSquaredToSegment(P, CenterCm, EndCm) <= RadiusSquared;
+                    break;
+                case EExcavationShapeType::Box:
+                    bInside = FMath::Abs(P.X - CenterCm.X) <= HalfExtentCm.X
+                        && FMath::Abs(P.Y - CenterCm.Y) <= HalfExtentCm.Y
+                        && FMath::Abs(P.Z - CenterCm.Z) <= HalfExtentCm.Z;
+                    break;
+                default:
+                    break;
+                }
+
+                if (bInside && Builder->QueryModeAtWorld(P).Mode != EWorldTerrainMode::EditableVoxel)
+                {
+                    const EWorldTerrainMode Mode = Builder->QueryModeAtWorld(P).Mode;
+                    OutFailure = Mode == EWorldTerrainMode::StaticGeometry
+                        ? TEXT("Edit intersects protected static geometry.")
+                        : TEXT("Edit intersects a region not classified as editable voxel terrain.");
+                    return false;
+                }
+
+                if (Z == MaxCell.Z) break;
+            }
+            if (Y == MaxCell.Y) break;
+        }
+        if (X == MaxCell.X) break;
+    }
     return true;
 }
 
