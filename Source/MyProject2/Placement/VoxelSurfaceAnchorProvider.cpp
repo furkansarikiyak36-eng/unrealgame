@@ -1,7 +1,6 @@
 #include "VoxelSurfaceAnchorProvider.h"
 
 #include "WorldScanSystem.h"
-#include "LandscapeBuilderSubsystem.h"
 #include "WorldCore/Classification/LandscapeBuilderSubsystem.h"
 #include "Engine/World.h"
 #include "Components/PrimitiveComponent.h"
