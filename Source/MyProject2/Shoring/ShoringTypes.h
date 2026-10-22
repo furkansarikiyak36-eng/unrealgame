@@ -51,7 +51,7 @@ struct MYPROJECT2_API FShoringSupportAnchor
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Shoring|Anchor")
     FVector Normal = FVector::UpVector;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Shoring|Anchor")
+    UPROPERTY(VisibleAnywhere, SaveGame, Category = "Shoring|Anchor")
     uint64 SourceDensityRevision = 0;
 
     /** Primary linked piece for this socket. Additional links are stored on the piece spec. */
@@ -181,7 +181,7 @@ struct MYPROJECT2_API FShoringLayoutRequest
     int32 MaxPieces = 512;
 
     /** Filled by the world subsystem; pure planner tests may supply their own non-zero revision. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shoring|Planner")
+    UPROPERTY(VisibleAnywhere, Category = "Shoring|Planner")
     uint64 SourceDensityRevision = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shoring|Planner", meta = (ClampMin = "5.0", ClampMax = "50.0"))
@@ -249,7 +249,7 @@ struct MYPROJECT2_API FShoringLayoutPlan
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Shoring|Plan")
     FGuid PlanId;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Shoring|Plan")
+    UPROPERTY(VisibleAnywhere, Category = "Shoring|Plan")
     uint64 SourceDensityRevision = 0;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Shoring|Plan")
