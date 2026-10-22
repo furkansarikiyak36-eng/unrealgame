@@ -6,6 +6,7 @@
 #include "WorldCore/WorldRuntimeProfileSubsystem.h"
 #include "WorldCore/WorldSystemContracts.h"
 #include "Misc/AutomationTest.h"
+#include "Engine/World.h"
 #include "UObject/UObjectGlobals.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -70,12 +71,28 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWorldRuntimeProfileSubsystemLockTest::RunTest(const FString& Parameters)
 {
-    UWorldRuntimeProfileDataAsset* Asset = NewObject<UWorldRuntimeProfileDataAsset>(GetTransientPackage());
-    UWorldRuntimeProfileSubsystem* Runtime = NewObject<UWorldRuntimeProfileSubsystem>(GetTransientPackage());
-
-    if (!TestNotNull(TEXT("Runtime profile asset should be created"), Asset)
-        || !TestNotNull(TEXT("Runtime profile subsystem object should be created"), Runtime))
+    UWorld* TestWorld = UWorld::CreateWorld(EWorldType::Game, false, FName(TEXT("WorldRuntimeProfileAutomationWorld")));
+    if (!TestNotNull(TEXT("Test world should be created"), TestWorld))
     {
+        return false;
+    }
+
+    TestWorld->InitializeNewWorld(
+        UWorld::InitializationValues()
+            .AllowAudioPlayback(false)
+            .RequiresHitProxies(false)
+            .CreatePhysicsScene(false)
+            .CreateNavigation(false)
+            .CreateAISystem(false)
+            .ShouldSimulatePhysics(false)
+            .SetTransactional(false));
+
+    UWorldRuntimeProfileDataAsset* Asset = NewObject<UWorldRuntimeProfileDataAsset>(GetTransientPackage());
+    UWorldRuntimeProfileSubsystem* Runtime = TestWorld->GetSubsystem<UWorldRuntimeProfileSubsystem>();
+    if (!TestNotNull(TEXT("Runtime profile asset should be created"), Asset)
+        || !TestNotNull(TEXT("World should auto-create the runtime profile subsystem"), Runtime))
+    {
+        TestWorld->DestroyWorld(false);
         return false;
     }
 
@@ -112,6 +129,7 @@ bool FWorldRuntimeProfileSubsystemLockTest::RunTest(const FString& Parameters)
         static_cast<uint8>(Runtime->GetActiveProfile()),
         static_cast<uint8>(EWorldRuntimeProfile::HighEnd));
 
+    TestWorld->DestroyWorld(false);
     return true;
 }
 
