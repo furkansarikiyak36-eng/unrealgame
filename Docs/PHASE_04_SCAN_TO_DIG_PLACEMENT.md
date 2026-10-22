@@ -54,7 +54,7 @@ UWorldVoxelInteractionSubsystem, Faz 1/2'de tanımlanan IVoxelEditService sözle
 Sözleşme şunları doğrular:
 - işlem GUID'si benzersiz ve request geçerli;
 - Carve için hedef density 0.0, Fill için 1.0;
-- doğrudan çağrılan edit'in merkez noktası bilinen EditableVoxel classification içinde; yalnızca scanner'dan o an alınmış onay, map'in henüz tanımadığı ama tag policy ile yetkilendirilmiş interaktif hedef için fallback sağlar;
+- doğrudan çağrılan edit'in merkez noktası bilinen EditableVoxel classification içinde; scanner-authorized interaktif edit classification map kurulmamışken tag policy ile fallback yapabilir. Map kurulmuşsa editin tüm conservative AABB footprint'i de map içinde kalmalı ve kesiştiği her coarse cell EditableVoxel olmalı;
 - shape bounds'undan hesaplanan konservatif hücre tahmini, request/profile/volume bütçelerini aşmaz.
 
 Asıl edit yine yalnızca UExcavationVolumeSubsystem üzerinden gerçekleşir. Sonuç, request transaction ID'si, değiştirilmiş hücre sayısı ve etkilenen/neighbor chunk'ları içerir; volume delegate'i mevcut dirty chunk queue'yu tetikler. Son 512 in-memory edit için rollback makbuzu tutulur. Bu receipt listesi persistence değildir; daha eski makbuzlar veya world reload sonrası rollback bu fazda desteklenmez.
@@ -84,10 +84,11 @@ Bir placement invalid/stale olduğunda PlaceSelected mevcut akışta transform/o
 ## 6. Yeni Automation testleri
 
 - MyProject2.World.VoxelInteraction.EditRollbackAndDirtyChunks
+- MyProject2.World.VoxelInteraction.EditFootprintCannotCrossStaticRegion
 - MyProject2.World.VoxelInteraction.UnknownAndInvalidEditsFailClosed
 - MyProject2.World.VoxelInteraction.PlacementRejectsStaleRevision
 
-Runner, ayrıca Faz 1, 2 ve 3'ün 11 mevcut test adını arar; toplam **14 test adı** beklenir.
+Runner, ayrıca Faz 1, 2 ve 3'ün 11 mevcut test adını arar; toplam **15 test adı** beklenir.
 
 Windows Git Bash/MSYS, Unreal Engine 5.8 kurulu ve Unreal Editor kapalıyken:
 
@@ -101,7 +102,7 @@ Bu ortamda runner çalıştırılmadı. Dolayısıyla kodun derlendiği veya tes
 
 ## 7. Fazı kapatmadan önce motor içi kontrol
 
-1. UBT/UHT build ve 14 Automation testinin tümü başarılı olmalı.
+1. UBT/UHT build ve 15 Automation testinin tümü başarılı olmalı.
 2. EditableVoxel + Dig capability tag'li test alanında Pickaxe vurduğunda density edit oluşmalı; static, unknown, transition, water ve NoDig hedeflerde değişiklik olmamalı.
 3. Kazıdan sonra mesh/collision yayımlanmadan önce tekrar vurma ve placement denemesi güvenli biçimde reddedilmeli; publish sonrasında ray yeni surface hit'e ulaşmalı.
 4. Bir chunk sınırında kazı yapıp komşu chunk'ların güncellendiğini ve yerleştirme overlap kontrolünün terrain'e nüfuz eden transform'u reddettiğini doğrula.
