@@ -3,6 +3,8 @@
 #include "world_mechanics/world_scan.hpp"
 #include "world_mechanics/world_classification.hpp"
 #include "world_mechanics/classification_map.hpp"
+#include "world_mechanics/landscape_builder.hpp"
+#include "world_mechanics/dirty_chunk_queue.hpp"
 #include "world_mechanics/cpu_surface_mesher.hpp"
 #include "world_mechanics/terrain_voxel.hpp"
 #include "world_mechanics/revision_gate.hpp"
@@ -35,6 +37,20 @@ class FakeQuery final : public wm::IWorldQueryProvider {
     return wm::Result<std::vector<wm::SurfaceSample>>::Success({{{0,0,0},{0,0,1},0.0,true}});
   }
   mutable wm::Vec3 lastDirection{};
+};
+
+class FakeProbe final : public wm::IClassificationProbeProvider {
+ public:
+  wm::Result<std::vector<wm::ClassificationEvidence>> ProbeCell(
+      const wm::RegionCellCoord& cell,const wm::Vec3&) const override {
+    if(cell.x==99)
+      return wm::Result<std::vector<wm::ClassificationEvidence>>::Failure(wm::ErrorCode::Failed,"injected probe failure");
+    if(cell.x==2) return wm::Result<std::vector<wm::ClassificationEvidence>>::Success({});
+    const auto kind=cell.x==0?wm::RegionKind::EditableVoxel:wm::RegionKind::StaticGeometry;
+    return wm::Result<std::vector<wm::ClassificationEvidence>>::Success({
+      {kind,wm::EvidenceSource::LayerMarker,false,static_cast<wm::Id>(100+cell.x),"fake layer sample"}
+    });
+  }
 };
 
 class FakeRestore final : public wm::IRestoreParticipant {
@@ -100,9 +116,31 @@ bool TestClassificationMapAndQueryBudgets() {
   CHECK(map.RemoveOverride(1));
   auto afterRemove=map.ClassifyAt({1,1,1}); CHECK(afterRemove); CHECK(afterRemove.value.canDig);
   CHECK(map.GetRevision()>before);
+
+  FakeProbe probe;
+  const auto beforeBuild=map.GetRevision();
+  auto report=wm::LandscapeBuilder::BuildDirtyCells(map,{{0,0,0},{1,0,0},{2,0,0}},probe,10);
+  CHECK(report); CHECK(report.value.cellsProbed==3); CHECK(report.value.cellsMarkedUnknown==1);
+  CHECK(report.value.previousRevision==beforeBuild); CHECK(report.value.newRevision>beforeBuild);
+  auto cell0=map.ClassifyAt({1,1,1}); CHECK(cell0); CHECK(cell0.value.kind==wm::RegionKind::EditableVoxel);
+  auto cell1=map.ClassifyAt({9,1,1}); CHECK(cell1); CHECK(cell1.value.kind==wm::RegionKind::StaticGeometry);
+  auto cell2=map.ClassifyAt({17,1,1}); CHECK(cell2); CHECK(cell2.value.kind==wm::RegionKind::Unknown);
+  const auto beforeFailedBatch=map.GetRevision();
+  auto failedBatch=wm::LandscapeBuilder::BuildDirtyCells(map,{{3,0,0},{99,0,0}},probe,10);
+  CHECK(!failedBatch); CHECK(map.GetRevision()==beforeFailedBatch);
+  auto untouched=map.ClassifyAt({25,1,1}); CHECK(untouched); CHECK(untouched.value.kind==wm::RegionKind::Unknown);
   return true;
 }
 bool TestCpuMesherAndRevisionGate() {
+  wm::DirtyChunkQueue queue(2);
+  CHECK(queue.Enqueue({{0,0,0},1,1}));
+  CHECK(queue.Enqueue({{1,0,0},1,1}));
+  CHECK(queue.Enqueue({{0,0,0},3,2})); // coalesces and advances revision
+  CHECK(queue.Size()==2);
+  CHECK(!queue.Enqueue({{2,0,0},1,1}));
+  auto popped=queue.Pop(1); CHECK(popped.size()==1); CHECK(popped.front().densityRevision==3);
+  CHECK(queue.Size()==1);
+
   wm::DensityGridSnapshot snapshot; snapshot.origin={0,0,0}; snapshot.spacingM=1;
   snapshot.sizeX=3; snapshot.sizeY=3; snapshot.sizeZ=3; snapshot.sourceRevision=4; snapshot.profileFingerprint=17;
   snapshot.density.reserve(27); snapshot.materialIds.reserve(27);

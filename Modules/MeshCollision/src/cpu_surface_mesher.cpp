@@ -135,7 +135,7 @@ Result<TriangleMeshData> CpuSurfaceMesher::Build(const DensityGridSnapshot& s,co
         if(!addTet(tp,tv,tm))
           return Result<TriangleMeshData>::Failure(ErrorCode::BudgetExceeded,"triangle budget or vertex index cap exceeded");
         if(mesh.indices.size()<before)
-          return Result<TriangleMeshData>::Failure(ErrorCode::InternalFailure,"mesher index count regressed");
+          return Result<TriangleMeshData>::Failure(ErrorCode::Failed,"mesher index count regressed");
       }
     }
   std::string why;

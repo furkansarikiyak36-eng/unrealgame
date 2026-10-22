@@ -34,4 +34,4 @@ Mesh is derived from density. If mesh/collision update fails, density remains au
 Plane/corner cases, shared edges, exact iso value, index validity, material IDs, triangle cap, stale job rejection, queue saturation, border samples, neighbor seam refresh and render/collision revision mismatch.
 
 ## Status
-Only a portable derived-revision gate exists so far. Full Marching Tetrahedra mesh generation, topology buffers, bounded worker queue and render/collision/navigation publishing are not implemented in this module tree. Test execution is pending.
+Portable CPU surface-mesher source, mesh-buffer validation, a stale-revision gate and a bounded/coalescing dirty-chunk queue exist. Async worker scheduling and actual Unreal Dynamic Mesh, collision and navigation publishing remain unimplemented. The latest expanded CI run is pending.

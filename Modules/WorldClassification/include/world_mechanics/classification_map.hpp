@@ -28,6 +28,8 @@ class ClassificationMap {
   Revision GetRevision() const noexcept { return revision_; }
   Result<bool> SetCellEvidence(const RegionCellCoord& cell,std::vector<ClassificationEvidence> evidence);
   Result<bool> RebuildCells(const std::vector<RegionCellSample>& samples,std::size_t maxCellCount=1000000);
+  Result<bool> UpsertCells(const std::vector<RegionCellSample>& samples,std::size_t maxCellCount=1000000);
+  Vec3 CellCenterFor(const RegionCellCoord& cell) const { return CellCenter(cell); }
   Result<bool> AddOverride(ManualRegionOverride overrideData);
   Result<bool> RemoveOverride(Id overrideId);
   Result<ClassificationResult> ClassifyAt(const Vec3& point,

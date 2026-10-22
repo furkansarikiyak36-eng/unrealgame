@@ -42,4 +42,4 @@ Output: class, capabilities, evidence source/confidence, map revision and reject
 Precedence, deny-over-allow, AABB boundaries, region-cell edges, rebuild revision, Unknown fallback, transition policy and budgeted dirty updates.
 
 ## Status
-A deterministic evidence-priority classifier and versioned region map with batch cell rebuild/AABB overrides exist in portable C++. Landscape Builder sampling/provider and incremental dirty-region rebuild remain unimplemented; new test execution is pending.
+Portable evidence-priority classification, versioned region-cell map, AABB overrides and provider-driven transactional dirty-cell rebuild exist. The actual Unreal actor/component/physical-material/Landscape probe provider, world sampling policy and broader cache invalidation are still missing. Expanded CI results are pending.

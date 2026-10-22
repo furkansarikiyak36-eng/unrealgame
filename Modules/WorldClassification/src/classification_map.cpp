@@ -56,6 +56,29 @@ Result<bool> ClassificationMap::RebuildCells(const std::vector<RegionCellSample>
   cells_.swap(staged); ++revision_;
   return Result<bool>::Success(true);
 }
+Result<bool> ClassificationMap::UpsertCells(const std::vector<RegionCellSample>& samples,std::size_t maxCellCount) {
+  if(maxCellCount==0||samples.size()>maxCellCount)
+    return Result<bool>::Failure(ErrorCode::BudgetExceeded,"classification update exceeds cell budget");
+  std::unordered_map<RegionCellCoord,std::vector<ClassificationEvidence>,RegionCellCoordHash> changes;
+  changes.reserve(samples.size());
+  for(const auto& sample:samples) {
+    if(sample.evidence.empty()) return Result<bool>::Failure(ErrorCode::InvalidArgument,"classification update contains an evidence-free cell");
+    for(const auto& e:sample.evidence) {
+      if(static_cast<int>(e.source)<1||static_cast<int>(e.source)>5||
+         static_cast<int>(e.kind)<0||static_cast<int>(e.kind)>static_cast<int>(RegionKind::Water))
+        return Result<bool>::Failure(ErrorCode::InvalidArgument,"classification update contains invalid enum");
+    }
+    if(!changes.emplace(sample.cell,sample.evidence).second)
+      return Result<bool>::Failure(ErrorCode::Conflict,"classification update contains duplicate cell key");
+  }
+  auto staged=cells_;
+  for(auto& pair:changes) staged[pair.first]=std::move(pair.second);
+  if(staged.size()>maxCellCount*8ULL)
+    return Result<bool>::Failure(ErrorCode::BudgetExceeded,"updated classification map exceeds storage cap");
+  cells_.swap(staged); ++revision_;
+  return Result<bool>::Success(true);
+}
+
 Result<bool> ClassificationMap::AddOverride(ManualRegionOverride o) {
   if(o.overrideId==0||!o.bounds.IsValid()||
      static_cast<int>(o.evidence.kind)<0||static_cast<int>(o.evidence.kind)>static_cast<int>(RegionKind::Water))

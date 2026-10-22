@@ -32,5 +32,5 @@ Demand-driven by default. Never scan the whole actor world each frame or cast hu
 ## Tests
 Hit/miss, filters, range edge, zero direction, invalid values, result cap, unsupported query type, deterministic tie order, stale result and bounded surface sample cost.
 
-## Status\nA portable provider contract and initial ray/overlap validation wrappers exist. Shape-sweep and surface-sampling service wrappers, provider implementation and engine adapter remain incomplete. Tests have not yet been executed.\n
-Specified; engine query adapter and executed tests remain unverified.
+## Status
+Portable ray/shape-sweep/overlap/surface-sample request wrappers and provider contracts exist. A real world-query provider and Unreal adapter are absent; broader query tests are pending.

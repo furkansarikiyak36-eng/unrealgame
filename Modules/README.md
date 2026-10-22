@@ -11,9 +11,9 @@ Existing Unreal code remains in `Source/MyProject2/` as a reference/implementati
 1. `CoreContracts` — IDs, units, typed errors, revisions and invariants.
 2. `RuntimeProfiles` — LOW_MID/HIGH_END budgets and session grid policy.
 3. `WorldScan` — bounded ray/overlap queries and query-provider contracts.
-4. `WorldClassification` — region semantics and Landscape Builder policy.
+4. `WorldClassification` — region semantics, versioned cell map, manual overrides and dirty-cell Landscape Builder provider.
 5. `TerrainVoxel` — authoritative base density and sparse editable overrides.
-6. `MeshCollision` — CPU meshing source, derived mesh/collision/nav revisions and publish gates.
+6. `MeshCollision` — CPU surface meshing, bounded dirty-chunk work queue, derived mesh/collision/nav revisions and publish gates.
 7. `PlacementSnap` — candidate ranking, preview and commit revalidation.
 8. `Excavation` — authorized dig/fill operations and edit orchestration.
 9. `Shoring` — physical support-piece families and trench planning.
@@ -33,6 +33,6 @@ Existing Unreal code remains in `Source/MyProject2/` as a reference/implementati
 - [Current implementation status](INTEGRATION_STATUS.md)
 
 ## Status rules
-This tree now contains a **partial portable C++ prototype** for bounded algorithms plus full specifications. A CPU surface mesher and versioned region classification map have source code, but engine providers, Landscape Builder sampling, queued render/collision publishing, universal physical-actor adapters and broad validation remain incomplete. No Unreal integration is claimed.
+This tree now contains a **partial portable C++ prototype** for bounded algorithms plus full specifications. A CPU surface mesher, revision gate, bounded dirty-chunk queue, versioned region map and provider-driven dirty-cell builder have source code. Unreal world-probe providers, background scheduling, render/collision/navigation publishing, universal physical-actor adapters and broad validation remain incomplete. No Unreal integration is claimed.
 
 A module graduates only with complete source, dependency review, actual test output, unresolved-failure records and (later) UE 5.8 build/Automation/PIE evidence.
