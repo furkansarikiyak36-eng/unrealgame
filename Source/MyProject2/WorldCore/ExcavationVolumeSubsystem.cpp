@@ -759,6 +759,9 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
                     Change.PreviousDensity = Existing ? Existing->Density : DefaultBaseDensity;
                     Change.PreviousOperationId = Existing ? Existing->LastOperationId : FGuid();
                     Change.NewDensity = TargetDensity;
+                    const double CellSizeMeters = static_cast<double>(CellSizeCm) / 100.0;
+                    CandidateRecord.SolidVolumeDeltaM3 += static_cast<float>(
+                        (ResolvedBefore - TargetDensity) * CellSizeMeters * CellSizeMeters * CellSizeMeters);
                     CandidateRecord.Changes.Add(Change);
                 }
 
