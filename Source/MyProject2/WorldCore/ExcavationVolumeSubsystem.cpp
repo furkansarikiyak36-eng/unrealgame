@@ -773,6 +773,8 @@ bool UExcavationVolumeSubsystem::ApplyBoundedEdit(
     {
         return false;
     }
+    CandidateRecord.MovedCellCount = CandidateRecord.Changes.Num();
+    CandidateRecord.BlockedCellCount = 0; // Atomic edit preflight rejects protected cells before mutation.
 
     if (CellOverrides.Num() == 0)
     {
