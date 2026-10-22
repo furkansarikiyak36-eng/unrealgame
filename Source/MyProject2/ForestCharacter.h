@@ -31,7 +31,6 @@ class ARawMaterialNode;
 class UInstancedStaticMeshComponent;
 class USurvivalComponent;
 class UExcavationSurvivalAdapterComponent;
-class UVoxelExcavationToolComponent;
 class UChunkManager;
 class UCableComponent;
 class ULineBatchComponent;
@@ -373,9 +372,6 @@ private:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival")
     TObjectPtr<UExcavationSurvivalAdapterComponent> ExcavationSurvivalAdapter;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Voxel|Excavation")
-    TObjectPtr<UVoxelExcavationToolComponent> VoxelExcavationTool;
-
 	/** Keeps the world chunks round the player loaded so water, soil and seasons are simulated where the player is. */
 	UPROPERTY(VisibleAnywhere, Category = "World")
 	TObjectPtr<UChunkManager> WorldChunks;
@@ -470,6 +466,12 @@ private:
 	float LooseSoilM3 = 0.f;
 	static constexpr float MaxLooseSoilM3 = 1.0f;
 	static constexpr float ShovelRadiusCm = 45.f;
+
+    UPROPERTY(EditAnywhere, Category = "Survival|Excavation", meta = (ClampMin = "0.0"))
+    float ShovelStaminaCost = 4.0f;
+
+    UPROPERTY(EditAnywhere, Category = "Survival|Excavation", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float ShovelFillStaminaMultiplier = 0.5f;
 	bool bPendingHit = false;
 
 	bool bWallStartSet = false;
