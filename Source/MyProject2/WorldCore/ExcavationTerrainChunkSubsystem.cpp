@@ -279,6 +279,7 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
     }
 
     bool bProviderChanged = false;
+    bool bProviderPointerChanged = false;
     if (!Proxies.IsEmpty())
     {
         if (!IsValid(LandscapeFallbackDensitySource))
@@ -297,6 +298,7 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
             }
             RegisteredFallbackDensitySource = LandscapeFallbackDensitySource;
             bProviderChanged = true;
+            bProviderPointerChanged = true;
         }
 
         bProviderChanged = bProviderChanged || bProxySetChanged || bMaterialMappingsChanged;
@@ -316,12 +318,14 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
             }
             RegisteredFallbackDensitySource = FlatFallbackDensitySource;
             bProviderChanged = true;
+            bProviderPointerChanged = true;
         }
     }
 
     // A provider/proxy set change alters density samples even without a cell edit.
-    if (bProviderChanged)
+    if (bProviderChanged && !bProviderPointerChanged)
     {
+        // RegisterFallbackBaseDensitySource already advanced the revision if the pointer changed.
         Excavation->NotifyBaseDensityChanged();
     }
 }
