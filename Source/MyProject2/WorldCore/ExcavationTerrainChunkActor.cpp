@@ -139,8 +139,11 @@ void AExcavationTerrainChunkActor::BeginPlay()
             if (RegisteredSubsystem)
             {
                 RegisteredSubsystem->RegisterChunkActor(this);
+                RegisteredSubsystem->QueueChunkRebuild(ChunkCoordinate);
+                return;
             }
         }
+        // Fallback for nonstandard worlds that do not create the renderer subsystem.
         RebuildTerrainChunk();
     }
 }
@@ -178,6 +181,8 @@ bool AExcavationTerrainChunkActor::SetChunkCoordinate(const FIntVector& NewCoord
         {
             RegisteredSubsystem->UnregisterChunkActor(this);
             RegisteredSubsystem->RegisterChunkActor(this);
+            RegisteredSubsystem->QueueChunkRebuild(ChunkCoordinate);
+            return true;
         }
         return RebuildTerrainChunk();
     }
