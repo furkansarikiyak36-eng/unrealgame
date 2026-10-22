@@ -15,7 +15,7 @@ class APlaceableShoringPiece;
  * Owns preview/commit/reposition/remove operations for separate shoring actors.
  * Terrain density remains authoritative in UExcavationVolumeSubsystem.
  */
-UCLASS()
+UCLASS(BlueprintType)
 class MYPROJECT2_API UExcavationShoringSubsystem final
     : public UWorldSubsystem
     , public IStructureSupportAdapter
