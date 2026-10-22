@@ -56,6 +56,8 @@ public:
     uint64 GetClassificationRevision() const { return ClassificationRevision; }
     bool HasBuiltClassification() const { return bHasBuiltClassification; }
     FIntVector GetCachedGridDimensions() const { return CachedGridDimensions; }
+    FVector GetCachedRegionSizeCm() const { return CachedRegionSizeCm; }
+    FBox GetCachedBuildBounds() const { return CachedBuildBounds; }
 
     /** Parses stable region/layer tag names. Returns false for unrelated tags. */
     static bool TryClassifyRegionTag(

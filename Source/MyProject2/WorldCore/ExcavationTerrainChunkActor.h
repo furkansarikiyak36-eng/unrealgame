@@ -44,6 +44,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Excavation|Terrain")
     FIntVector GetChunkCoordinate() const { return ChunkCoordinate; }
 
+    /** Density revision currently represented by both the visible mesh and the collision. Zero means unavailable/stale. */
+    uint64 GetPublishedDensityRevision() const { return PublishedDensityRevision; }
+
     /** Synchronous fallback rebuild; normal runtime uses the bounded subsystem queue. */
     UFUNCTION(BlueprintCallable, Category = "Excavation|Terrain")
     bool RebuildTerrainChunk();
@@ -78,4 +81,6 @@ protected:
 
     UPROPERTY(Transient)
     TObjectPtr<UExcavationTerrainChunkSubsystem> RegisteredSubsystem;
+
+    uint64 PublishedDensityRevision = 0;
 };

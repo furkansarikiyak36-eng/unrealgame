@@ -11,6 +11,7 @@
 #include "StructureLink.h"
 #include "WorldCore/WorldScanSubsystem.h"
 #include "WorldCore/WorldSystemContracts.h"
+#include "WorldCore/WorldVoxelInteractionSubsystem.h"
 #include "Campfire.h"
 #include "HaulCart.h"
 #include "FireStone.h"
@@ -1597,6 +1598,39 @@ void AForestCharacter::PerformHit()
 	{
 		return;
 	}
+
+	// The existing pickaxe swing becomes the player-facing Scan -> authorize -> density edit
+	// route for generated voxel terrain. Other tools and the wood/stone hit paths are unchanged.
+	if (CurrentTool == EForestTool::Pickaxe
+		&& UWorldVoxelInteractionSubsystem::IsVoxelSurfaceHit(Hit))
+	{
+		UWorldVoxelInteractionSubsystem* VoxelInteraction =
+			GetWorld() ? GetWorld()->GetSubsystem<UWorldVoxelInteractionSubsystem>() : nullptr;
+		FWorldVoxelEditResult EditResult;
+		FString Error;
+		if (VoxelInteraction
+			&& VoxelInteraction->DigFromView(
+				Camera->GetComponentLocation(),
+				Camera->GetForwardVector(),
+				ReachDistance,
+				45.0f,
+				this,
+				EditResult,
+				Error))
+		{
+			ShowMessage(FString::Printf(
+				TEXT("Voxel kazısı yapıldı: %d hücre güncellendi."),
+				EditResult.ModifiedSampleCount));
+		}
+		else
+		{
+			ShowMessage(Error.IsEmpty()
+				? TEXT("Bu voxel yüzeyi şu anda kazılamıyor.")
+				: Error);
+		}
+		return;
+	}
+
 	if (ACarvableLog* Carvable = Cast<ACarvableLog>(Hit.GetActor()))
 	{
 		ApplyCarveHit(Carvable);
@@ -2324,8 +2358,21 @@ void AForestCharacter::UpdateBuildPreview()
 	}
 }
 
-bool AForestCharacter::ComputeBuildTransform(FTransform& OutTransform, const UInstancedStaticMeshComponent** OutSnappedTo) const
+bool AForestCharacter::ComputeBuildTransform(
+	FTransform& OutTransform,
+	const UInstancedStaticMeshComponent** OutSnappedTo,
+	FWorldPlacementQuery* OutVoxelQuery,
+	FWorldPlacementResult* OutVoxelPlacement) const
 {
+	if (OutVoxelQuery)
+	{
+		*OutVoxelQuery = FWorldPlacementQuery{};
+	}
+	if (OutVoxelPlacement)
+	{
+		*OutVoxelPlacement = FWorldPlacementResult{};
+	}
+
 	const UStaticMesh* PieceMesh = BuildPreview->GetStaticMesh();
 	if (!PieceMesh || !Structures)
 	{
@@ -2338,9 +2385,71 @@ bool AForestCharacter::ComputeBuildTransform(FTransform& OutTransform, const UIn
 		return false;
 	}
 
+	// Placement preview and click/commit both pass this same current-surface check.
+	// A density edit keeps the old collider visible while a worker mesh is pending;
+	// such a collider must never authorize a ghost or a newly consumed placement.
+	if (UWorldVoxelInteractionSubsystem::IsVoxelSurfaceHit(Hit))
+	{
+		UWorldVoxelInteractionSubsystem* VoxelInteraction =
+			GetWorld() ? GetWorld()->GetSubsystem<UWorldVoxelInteractionSubsystem>() : nullptr;
+		FString SurfaceError;
+		if (!VoxelInteraction || !VoxelInteraction->ValidateVoxelSurfaceHit(Hit, this, SurfaceError))
+		{
+			return false;
+		}
+	}
+
 	const FVector PieceScale = ForestItems::GetItemScale(SelectedBuildItem);
 	const FBox LocalBox = ScaledBox(PieceMesh, SelectedBuildItem);
 	const FVector Size = LocalBox.GetSize();
+
+	// Use the shared revision-aware placement candidate for voxel terrain. The normal
+	// forest snap/grid logic remains unchanged for logs, stones, walls and other actors.
+	if (UWorldVoxelInteractionSubsystem::IsVoxelSurfaceHit(Hit))
+	{
+		UWorldVoxelInteractionSubsystem* VoxelInteraction =
+			GetWorld() ? GetWorld()->GetSubsystem<UWorldVoxelInteractionSubsystem>() : nullptr;
+		if (!VoxelInteraction)
+		{
+			return false;
+		}
+
+		FWorldPlacementQuery PlacementQuery;
+		PlacementQuery.HitPointCm = Hit.ImpactPoint;
+		PlacementQuery.HitNormal = Hit.ImpactNormal;
+		PlacementQuery.DesiredAxis = GetControlRotation().Vector();
+		PlacementQuery.PieceHalfExtentCm = LocalBox.GetExtent().ComponentMax(FVector(1.0f));
+		PlacementQuery.RequiredGroup = FName(TEXT("VoxelSurface"));
+		PlacementQuery.MaxSnapDistanceCm = FMath::Max(50.0f, BuildDistance);
+
+		FWorldPlacementResult Placement;
+		if (!VoxelInteraction->BuildPlacementPreview(PlacementQuery, this, Placement)
+			|| !Placement.bValid)
+		{
+			return false;
+		}
+
+		// Preserve the exact preview contract so PlaceSelected can revalidate it immediately
+		// before any actor is spawned or inventory is consumed.
+		if (OutVoxelQuery)
+		{
+			*OutVoxelQuery = PlacementQuery;
+		}
+		if (OutVoxelPlacement)
+		{
+			*OutVoxelPlacement = Placement;
+		}
+
+		const FQuat Rotation = Placement.Transform.GetRotation();
+		const FVector ActorLocation =
+			Placement.Transform.GetLocation() - Rotation.RotateVector(LocalBox.GetCenter());
+		OutTransform = FTransform(Rotation, ActorLocation, PieceScale);
+		if (OutSnappedTo)
+		{
+			*OutSnappedTo = nullptr;
+		}
+		return true;
+	}
 
 	// Looking at a placed piece of the same kind (free placed or part of a planned wall): stack onto it.
 	const UInstancedStaticMeshComponent* Pieces = Cast<UInstancedStaticMeshComponent>(Hit.GetComponent());
@@ -2498,6 +2607,9 @@ bool AForestCharacter::IsPlacementFree(const FTransform& Transform, const UInsta
 	const FBox LocalBox = ScaledBox(PieceMesh, SelectedBuildItem);
 	const FVector Center = PieceCenter(Transform, LocalBox);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(BuildOverlap), false);
+	Params.AddIgnoredActor(this);
+	// Keep voxel collision in the local overlap query: a grid-snapped piece on a
+	// slope/hole must still be rejected if its footprint penetrates the current surface.
 
 	if (SnappedTo)
 	{
@@ -2527,11 +2639,34 @@ void AForestCharacter::PlaceSelected()
 	}
 	FTransform Transform;
 	const UInstancedStaticMeshComponent* SnappedTo = nullptr;
-	if (!ComputeBuildTransform(Transform, &SnappedTo) || !IsPlacementFree(Transform, SnappedTo))
+	FWorldPlacementQuery VoxelPlacementQuery;
+	FWorldPlacementResult VoxelPreview;
+	if (!ComputeBuildTransform(Transform, &SnappedTo, &VoxelPlacementQuery, &VoxelPreview)
+		|| !IsPlacementFree(Transform, SnappedTo))
 	{
 		ShowMessage(TEXT("Buraya yerleştirilemez"));
 		return;
 	}
+
+	// Preview and commit are separate authority checks. Density may have changed since
+	// the preview was prepared; fail closed before spawning actors or consuming resources.
+	if (VoxelPreview.bValid)
+	{
+		UWorldVoxelInteractionSubsystem* VoxelInteraction =
+			GetWorld() ? GetWorld()->GetSubsystem<UWorldVoxelInteractionSubsystem>() : nullptr;
+		FWorldPlacementResult CommitResult;
+		if (!VoxelInteraction
+			|| !VoxelInteraction->ValidatePlacementCommit(
+				VoxelPlacementQuery, VoxelPreview, this, CommitResult)
+			|| !CommitResult.bValid)
+		{
+			ShowMessage(CommitResult.Message.IsEmpty()
+				? TEXT("Voxel yüzeyi değişti; yerleştirme iptal edildi.")
+				: CommitResult.Message);
+			return;
+		}
+	}
+
 	if (SelectedBuildItem == EForestItem::StoneBlock)
 	{
 		FActorSpawnParameters SpawnParams;

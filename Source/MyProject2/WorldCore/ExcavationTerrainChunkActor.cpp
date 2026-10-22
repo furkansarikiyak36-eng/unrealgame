@@ -122,6 +122,8 @@ AExcavationTerrainChunkActor::AExcavationTerrainChunkActor()
     DynamicMeshComponent->SetDeferredCollisionUpdatesEnabled(true, false);
     DynamicMeshComponent->bUseAsyncCooking = false;
     Tags.AddUnique(FName(TEXT("World.Object.VoxelSurface")));
+    Tags.AddUnique(FName(TEXT("World.Region.EditableVoxel")));
+    Tags.AddUnique(FName(TEXT("World.Capability.Dig")));
     DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     DynamicMeshComponent->SetCanEverAffectNavigation(true);
     DynamicMeshComponent->SetMaterial(0, UMaterial::GetDefaultMaterial(MD_Surface));
@@ -248,6 +250,7 @@ bool AExcavationTerrainChunkActor::RefreshChunkWorldTransform()
 
 void AExcavationTerrainChunkActor::ClearMeshAndCollision()
 {
+    PublishedDensityRevision = 0;
     if (!DynamicMeshComponent)
     {
         return;
@@ -383,5 +386,6 @@ bool AExcavationTerrainChunkActor::PublishVoxelMeshData(
     }
 
     UNavigationSystemV1::UpdateComponentInNavOctree(*DynamicMeshComponent);
+    PublishedDensityRevision = MeshData.SourceRevision;
     return true;
 }
