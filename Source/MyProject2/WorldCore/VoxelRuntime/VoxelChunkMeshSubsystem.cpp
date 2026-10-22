@@ -25,7 +25,7 @@ namespace
         TArray<FVector> Normals;
     };
 
-    static int32 AddSharedVertex(FMeshBuffers& Mesh, TMap<FIntVector, int32, FDefaultSetAllocator, TDefaultMapHashableKeyFuncs<FIntVector, int32, false>>& Cache, const FVector& Position)
+    static int32 AddSharedVertex(FMeshBuffers& Mesh, TMap<FIntVector, int32>& Cache, const FVector& Position)
     {
         const FIntVector Key(FMath::RoundToInt(Position.X * 10.0f),
             FMath::RoundToInt(Position.Y * 10.0f), FMath::RoundToInt(Position.Z * 10.0f));
@@ -73,7 +73,7 @@ namespace
             {0,3,7,6}, {0,7,4,6}, {0,4,5,6}
         };
 
-        TMap<FIntVector, int32, FDefaultSetAllocator, TDefaultMapHashableKeyFuncs<FIntVector, int32, false>> VertexCache;
+        TMap<FIntVector, int32> VertexCache;
         VertexCache.Reserve(N * N * 6);
 
         for (int32 Z = 0; Z < N; ++Z)
