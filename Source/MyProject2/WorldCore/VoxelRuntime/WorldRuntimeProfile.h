@@ -50,6 +50,12 @@ public:
     UPROPERTY(Config, EditAnywhere, Category = "Scheduling", meta = (ClampMin = "1", ClampMax = "4"))
     int32 MaxChunksPublishedPerTick = 1;
 
+    UPROPERTY(Config, EditAnywhere, Category = "Scheduling", meta = (ClampMin = "256"))
+    int32 LowMidMaxDensitySamplesPerTick = 8192;
+
+    UPROPERTY(Config, EditAnywhere, Category = "Scheduling", meta = (ClampMin = "256"))
+    int32 HighEndMaxDensitySamplesPerTick = 32768;
+
     UPROPERTY(Config, EditAnywhere, Category = "Terrain", meta = (ClampMin = "1"))
     int32 MaxCellsPerEdit = 250000;
 
@@ -76,6 +82,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "World|Profile")
     float GetChunkSizeCm() const;
+
+    UFUNCTION(BlueprintPure, Category = "World|Profile")
+    int32 GetMaxDensitySamplesPerTick() const;
 
     /** Applies grid settings only before edits exist; never silently reinterprets saved cells. */
     bool ApplyTo(class UExcavationVolumeSubsystem* Volume) const;
