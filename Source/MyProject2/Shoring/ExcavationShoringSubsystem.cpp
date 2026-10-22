@@ -280,6 +280,16 @@ bool UExcavationShoringSubsystem::CommitPlan(
     }
     PlanToPieces.Add(Plan.PlanId, MoveTemp(PieceIds));
     CommittedPlanIds.Add(Plan.PlanId);
+
+    TArray<FShoringSupportAssessment> SupportAssessments;
+    if (!EvaluateAndApplyPlanSupport(Plan.PlanId, SupportAssessments, OutError))
+    {
+        FString RollbackError;
+        RemovePlan(Plan.PlanId, RollbackError);
+        OutPieces.Reset();
+        OutError = FString::Printf(TEXT("Support evaluation failed after spawn; the plan was removed: %s"), *OutError);
+        return false;
+    }
     return true;
 }
 
@@ -348,6 +358,39 @@ bool UExcavationShoringSubsystem::ValidatePlanForCommit(
         }
         if (!HasExistingShoringConflict(Spec.Transform, Spec.HalfExtentsCm, FGuid(), nullptr, OutError))
         {
+            return false;
+        }
+    }
+
+    TArray<FShoringSupportNode> ProposedNodes;
+    ProposedNodes.Reserve(Plan.Pieces.Num());
+    for (const FShoringPieceSpec& Spec : Plan.Pieces)
+    {
+        FShoringSupportNode& Node = ProposedNodes.AddDefaulted_GetRef();
+        Node.PieceId = Spec.PieceId;
+        Node.Kind = Spec.Kind;
+        Node.AnchorKind = Spec.SupportAnchor.Kind;
+        Node.PrimarySupportPieceId = Spec.SupportAnchor.ConnectedPieceId;
+        Node.ConnectedPieceIds = Spec.ConnectedPieceIds;
+        Node.HealthFraction = 1.0f;
+        Node.DesignLoad = Spec.DesignLoad;
+        Node.bAnchorCurrent = true; // Voxel anchors were re-traced and validated above.
+    }
+
+    TArray<FShoringSupportAssessment> ProposedAssessments;
+    if (!FShoringSupportResolver::Evaluate(ProposedNodes, ProposedAssessments, OutError))
+    {
+        return false;
+    }
+    for (const FShoringSupportAssessment& Assessment : ProposedAssessments)
+    {
+        if (Assessment.Condition == EShoringSupportCondition::Unsupported
+            || Assessment.Condition == EShoringSupportCondition::Failed
+            || Assessment.Condition == EShoringSupportCondition::NeedsRevalidation
+            || Assessment.Condition == EShoringSupportCondition::Overloaded)
+        {
+            OutError = FString::Printf(TEXT("Proposed plan has an invalid or overloaded support at piece %s: %s"),
+                *Assessment.PieceId.ToString(), *Assessment.Reason);
             return false;
         }
     }
@@ -541,9 +584,11 @@ bool UExcavationShoringSubsystem::MovePiece(
 {
     OutError.Reset();
     APlaceableShoringPiece* Piece = FindPiece(PieceId);
-    if (!IsValid(Piece) || Piece->GetPieceState() == EShoringPieceState::Removed)
+    if (!IsValid(Piece)
+        || Piece->GetPieceState() == EShoringPieceState::Removed
+        || Piece->GetPieceState() == EShoringPieceState::Failed)
     {
-        OutError = TEXT("Shoring piece does not exist.");
+        OutError = TEXT("Shoring piece does not exist or has failed; failed members must be replaced.");
         return false;
     }
     if (!IsFiniteVector(NewTransform.GetLocation()) || !NewAnchor.IsFinite())
@@ -731,10 +776,10 @@ bool UExcavationShoringSubsystem::RevalidatePlan(const FGuid& PlanId, FString& O
                     ResolvedPoint,
                     AnchorError))
             {
-                OutError = FString::Printf(TEXT("Plan support was lost at piece %s: %s"),
-                    *PieceId.ToString(), *AnchorError);
-                SetPlanState(PlanId, EShoringPieceState::Invalid);
-                return false;
+                // Surface loss is a support failure, not a silent plan-wide reset.
+                // Mark this member unsupported and let the GUID dependency graph cascade it.
+                Piece->SetPieceState(EShoringPieceState::Unsupported);
+                continue;
             }
             FShoringSupportAnchor UpdatedAnchor = Anchor;
             UpdatedAnchor.SourceDensityRevision = CurrentRevision;
