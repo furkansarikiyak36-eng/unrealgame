@@ -17,6 +17,7 @@ class UWorldRuntimeProfileSubsystem;
 struct FQueuedVoxelMeshResult
 {
     bool bSucceeded = false;
+    uint64 SourceRevision = 0;
     FWorldVoxelMeshData Mesh;
     FString Error;
 };
