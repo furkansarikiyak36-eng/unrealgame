@@ -5,6 +5,7 @@
 #include "GameFramework/Actor.h"
 #include "LandscapeProxy.h"
 #include "Components/PrimitiveComponent.h"
+#include "WorldCore/Events/WorldMechanicEventSubsystem.h"
 
 bool ULandscapeBuilderSubsystem::ActorHasTerrainTag(const AActor* Actor, FName Tag)
 {
@@ -117,6 +118,15 @@ int32 ULandscapeBuilderSubsystem::BuildClassificationSnapshot()
     }
 
     bSnapshotBuilt = true;
+    if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+    {
+        FWorldMechanicEvent Event;
+        Event.Type = EWorldMechanicEventType::ClassificationRebuilt;
+        Event.ScalarValue = static_cast<float>(Regions.Num());
+        Event.SourceTag = TEXT("LandscapeBuilder");
+        Event.bHighPriority = true;
+        Events->EnqueueEvent(MoveTemp(Event));
+    }
     return Regions.Num();
 }
 
