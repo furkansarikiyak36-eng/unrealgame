@@ -406,8 +406,24 @@ bool UWorldScanSubsystem::AnalyzeActor(const AActor* Actor, FWorldActorSnapshot&
         return false;
     }
 
+    if (!Bounds.bValid || !Bounds.Bounds.IsValid
+        || !WorldSystemContractValidation::IsFiniteVector(Bounds.Origin)
+        || !WorldSystemContractValidation::IsFiniteVector(Bounds.Extent)
+        || !WorldSystemContractValidation::IsFiniteVector(Bounds.Dimensions))
+    {
+        return false;
+    }
+
     WorldScanSystem::FPhysicsStateAnalysis Physics;
-    WorldScanSystem::QueryPhysicsState(Actor, Primitive, Physics);
+    if (!WorldScanSystem::QueryPhysicsState(Actor, Primitive, Physics))
+    {
+        return false;
+    }
+    if (!WorldSystemContractValidation::IsFiniteVector(Physics.LinearVelocityCmPerSec)
+        || !WorldSystemContractValidation::IsFiniteVector(Physics.AngularVelocityRadiansPerSec))
+    {
+        return false;
+    }
 
     OutSnapshot.bValid = true;
     OutSnapshot.Bounds = Bounds.Bounds;
