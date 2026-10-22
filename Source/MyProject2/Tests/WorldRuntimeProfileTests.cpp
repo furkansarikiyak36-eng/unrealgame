@@ -186,12 +186,18 @@ bool FWorldSystemContractsValidationTest::RunTest(const FString& Parameters)
     Surface.MaxSamples = 1024;
     TestFalse(TEXT("Surface sampling wider than 32 samples should be rejected"), Surface.Validate(Error));
 
+    FWorldScanQuery WorldScan;
+    TestFalse(TEXT("World scan without a world should be rejected"), WorldScan.Validate(Error));
+    TestFalse(TEXT("Invalid world scan should explain the missing world"), Error.IsEmpty());
+
     FWorldOverlapRequest Overlap;
     TestTrue(TEXT("Default sphere overlap should be valid"), Overlap.Validate(Error));
     Overlap.Shape = EWorldOverlapShape::OrientedBox;
     Overlap.HalfExtentCm = FVector(50.0f);
     Overlap.Rotation = FQuat(0.0f, 0.0f, 0.0f, 0.0f);
     TestFalse(TEXT("Oriented box overlap with a zero quaternion should be rejected"), Overlap.Validate(Error));
+    Overlap.Rotation = FQuat(0.0f, 0.0f, 0.0f, 2.0f);
+    TestFalse(TEXT("Oriented box overlap with a non-normalized quaternion should be rejected"), Overlap.Validate(Error));
 
     FWorldPlacementQuery Placement;
     TestTrue(TEXT("Default placement query should be valid"), Placement.Validate(Error));
