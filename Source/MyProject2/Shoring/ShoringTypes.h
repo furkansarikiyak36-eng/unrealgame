@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "ShoringTypes.generated.h"
 
+class APlaceableShoringPiece;
+
 UENUM(BlueprintType)
 enum class EShoringPieceKind : uint8
 {
@@ -172,6 +174,91 @@ struct MYPROJECT2_API FShoringPieceSpec
         {
             OutError = TEXT("A piece-socket anchor must identify its primary connected piece.");
             return false;
+        }
+        return true;
+    }
+};
+
+/** Per-member persistent record. The support graph is rebuilt and revalidated after load. */
+USTRUCT(BlueprintType)
+struct MYPROJECT2_API FShoringPieceSaveData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    FShoringPieceSpec Spec;
+
+    /** Preserves authored Blueprint subclass visuals and collision defaults. */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    TSubclassOf<APlaceableShoringPiece> ActorClass;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    EShoringPieceState SavedState = EShoringPieceState::Active;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    bool bHasCollapsed = false;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    float Health = 100.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    float MaxHealth = 100.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    EShoringDamageCause LastDamageCause = EShoringDamageCause::Manual;
+};
+
+USTRUCT(BlueprintType)
+struct MYPROJECT2_API FShoringWorldSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    int32 SchemaVersion = 1;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Shoring|Save")
+    TArray<FShoringPieceSaveData> Pieces;
+
+    bool Validate(FString& OutError) const
+    {
+        OutError.Reset();
+        if (SchemaVersion != 1 || Pieces.Num() > 4096)
+        {
+            OutError = TEXT("Unsupported shoring snapshot schema or piece budget.");
+            return false;
+        }
+
+        TSet<FGuid> SeenPieceIds;
+        SeenPieceIds.Reserve(Pieces.Num());
+        for (const FShoringPieceSaveData& Record : Pieces)
+        {
+            FString PieceError;
+            if (!Record.Spec.Validate(PieceError))
+            {
+                OutError = FString::Printf(TEXT("Invalid shoring save record: %s"), *PieceError);
+                return false;
+            }
+            if (Record.SavedState == EShoringPieceState::Planned || Record.SavedState == EShoringPieceState::Removed
+                || static_cast<uint8>(Record.SavedState) > static_cast<uint8>(EShoringPieceState::Failed)
+                || static_cast<uint8>(Record.LastDamageCause) > static_cast<uint8>(EShoringDamageCause::Manual))
+            {
+                OutError = TEXT("Snapshot contains a preview/removed piece or unknown piece/damage state.");
+                return false;
+            }
+            if (SeenPieceIds.Contains(Record.Spec.PieceId))
+            {
+                OutError = TEXT("Shoring snapshot contains duplicate piece GUIDs.");
+                return false;
+            }
+            SeenPieceIds.Add(Record.Spec.PieceId);
+            if (!FMath::IsFinite(Record.MaxHealth) || Record.MaxHealth <= 0.0f
+                || Record.MaxHealth > 1000000.0f || !FMath::IsFinite(Record.Health)
+                || Record.Health < 0.0f || Record.Health > Record.MaxHealth
+                || ((Record.SavedState == EShoringPieceState::Failed) != (Record.Health <= KINDA_SMALL_NUMBER)))
+            {
+                OutError = TEXT("Shoring snapshot contains invalid durability or failed-state values.");
+                return false;
+            }
         }
         return true;
     }

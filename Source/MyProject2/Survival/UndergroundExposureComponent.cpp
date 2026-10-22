@@ -185,7 +185,7 @@ FSurvivalExposureSnapshot UUndergroundExposureComponent::CaptureSnapshot() const
 	return Snapshot;
 }
 
-bool UUndergroundExposureComponent::RestoreSnapshot(const FSurvivalExposureSnapshot& Snapshot, FString& OutError)
+bool UUndergroundExposureComponent::ValidateSnapshot(const FSurvivalExposureSnapshot& Snapshot, FString& OutError) const
 {
 	OutError.Reset();
 	if (Snapshot.SchemaVersion != CurrentExposureSchemaVersion)
@@ -216,7 +216,15 @@ bool UUndergroundExposureComponent::RestoreSnapshot(const FSurvivalExposureSnaps
 		OutError = TEXT("Exposure snapshot contains invalid physiological values or timers.");
 		return false;
 	}
+	return true;
+}
 
+bool UUndergroundExposureComponent::RestoreSnapshot(const FSurvivalExposureSnapshot& Snapshot, FString& OutError)
+{
+	if (!ValidateSnapshot(Snapshot, OutError))
+	{
+		return false;
+	}
 	// State-only restore. No Tick or damage callback is invoked here.
 	CurrentEnvironment = Snapshot.Environment;
 	BodyTemperatureC = Snapshot.BodyTemperatureC;

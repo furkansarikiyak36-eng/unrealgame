@@ -11,6 +11,74 @@
  * Stamina gates sprinting and heavy actions; hunger and thirst only hurt after
  * staying empty for a while; at zero health the owner dies and respawns.
  */
+/** Persistable state for the existing health/stamina/hunger/thirst owner. */
+USTRUCT(BlueprintType)
+struct FSurvivalComponentSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	int32 SchemaVersion = 1;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	float MaxValue = 100.0f;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	float Health = 100.0f;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	float Stamina = 100.0f;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	float Hunger = 100.0f;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	float Thirst = 100.0f;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	bool bExhausted = false;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	bool bDead = false;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	float StaminaIdleTime = 0.0f;
+
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Survival|Save")
+	float StarvingTime = 0.0f;
+
+	bool Validate(FString& OutError) const
+	{
+		OutError.Reset();
+		if (SchemaVersion != 1 || !FMath::IsFinite(MaxValue) || MaxValue < 1.0f || MaxValue > 1000000.0f)
+		{
+			OutError = TEXT("Unsupported survival snapshot schema or max value.");
+			return false;
+		}
+		const auto IsValueInRange = [this](float Value)
+		{
+			return FMath::IsFinite(Value) && Value >= 0.0f && Value <= MaxValue;
+		};
+		const auto IsValidTimer = [](float Value)
+		{
+			return FMath::IsFinite(Value) && Value >= 0.0f && Value <= 100000000.0f;
+		};
+		if (!IsValueInRange(Health) || !IsValueInRange(Stamina)
+			|| !IsValueInRange(Hunger) || !IsValueInRange(Thirst)
+			|| !IsValidTimer(StaminaIdleTime) || !IsValidTimer(StarvingTime))
+		{
+			OutError = TEXT("Survival snapshot contains an invalid stat or timer.");
+			return false;
+		}
+		if (bDead != (Health <= 0.0f))
+		{
+			OutError = TEXT("Survival snapshot dead flag does not match health.");
+			return false;
+		}
+		return true;
+	}
+};
+
 UCLASS(ClassGroup = (Forest), meta = (BlueprintSpawnableComponent))
 class MYPROJECT2_API USurvivalComponent : public UActorComponent
 {
@@ -26,6 +94,9 @@ public:
 	float GetHunger() const { return Hunger; }
 	float GetThirst() const { return Thirst; }
 	float GetMax() const { return MaxValue; }
+
+	FSurvivalComponentSnapshot CaptureSnapshot() const;
+	bool RestoreSnapshot(const FSurvivalComponentSnapshot& Snapshot, FString& OutError);
 
 	/** Sprinting drains stamina every tick while true. */
 	void SetSprinting(bool bInSprinting) { bSprinting = bInSprinting; }

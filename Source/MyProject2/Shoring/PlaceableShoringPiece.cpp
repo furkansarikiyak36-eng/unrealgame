@@ -72,6 +72,65 @@ bool APlaceableShoringPiece::InitializeFromSpec(const FShoringPieceSpec& Spec, b
     return true;
 }
 
+void APlaceableShoringPiece::ExportSaveData(FShoringPieceSaveData& OutSaveData) const
+{
+    OutSaveData = FShoringPieceSaveData();
+    OutSaveData.Spec.PieceId = PieceId;
+    OutSaveData.Spec.PlanId = PlanId;
+    OutSaveData.Spec.Kind = PieceKind;
+    OutSaveData.Spec.Transform = GetActorTransform();
+    OutSaveData.Spec.HalfExtentsCm = HalfExtentsCm;
+    OutSaveData.Spec.DesignLoad = DesignLoad;
+    OutSaveData.Spec.SupportAnchor = SupportAnchor;
+    OutSaveData.Spec.ConnectedPieceIds = ConnectedPieceIds;
+    OutSaveData.ActorClass = GetClass();
+    OutSaveData.SavedState = PieceState;
+    OutSaveData.bHasCollapsed = bHasCollapsed;
+    OutSaveData.Health = Health;
+    OutSaveData.MaxHealth = MaxHealth;
+    OutSaveData.LastDamageCause = LastDamageCause;
+}
+
+bool APlaceableShoringPiece::InitializeFromSaveData(const FShoringPieceSaveData& SaveData, FString& OutError)
+{
+    OutError.Reset();
+    FString SpecError;
+    if (!SaveData.Spec.Validate(SpecError)
+        || !FMath::IsFinite(SaveData.MaxHealth) || SaveData.MaxHealth <= 0.0f || SaveData.MaxHealth > 1000000.0f
+        || !FMath::IsFinite(SaveData.Health) || SaveData.Health < 0.0f || SaveData.Health > SaveData.MaxHealth
+        || static_cast<uint8>(SaveData.SavedState) > static_cast<uint8>(EShoringPieceState::Failed)
+        || SaveData.SavedState == EShoringPieceState::Planned || SaveData.SavedState == EShoringPieceState::Removed
+        || static_cast<uint8>(SaveData.LastDamageCause) > static_cast<uint8>(EShoringDamageCause::Manual)
+        || ((SaveData.SavedState == EShoringPieceState::Failed) != (SaveData.Health <= KINDA_SMALL_NUMBER)))
+    {
+        OutError = SpecError.IsEmpty() ? TEXT("Shoring piece save data is invalid.") : SpecError;
+        return false;
+    }
+    if (!InitializeFromSpec(SaveData.Spec, false))
+    {
+        OutError = TEXT("Shoring piece could not initialize from the saved spec.");
+        return false;
+    }
+
+    MaxHealth = SaveData.MaxHealth;
+    Health = SaveData.Health;
+    LastDamageCause = SaveData.LastDamageCause;
+    bHasCollapsed = SaveData.bHasCollapsed;
+
+    // Never trust saved placement/support validity after voxel density is imported.
+    // The preserved collapse latch makes a previously collapsed piece remain unsupported.
+    if (Health <= KINDA_SMALL_NUMBER)
+    {
+        SetPieceState(EShoringPieceState::Failed);
+    }
+    else
+    {
+        PieceState = EShoringPieceState::NeedsRevalidation;
+        RefreshCollisionState();
+    }
+    return true;
+}
+
 bool APlaceableShoringPiece::ApplyDamage(float Amount, EShoringDamageCause Cause, FString& OutError)
 {
     OutError.Reset();

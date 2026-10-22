@@ -105,3 +105,41 @@ void USurvivalComponent::ResetAll()
 	bDead = bExhausted = false;
 	StarvingTime = StaminaIdleTime = 0.f;
 }
+
+FSurvivalComponentSnapshot USurvivalComponent::CaptureSnapshot() const
+{
+	FSurvivalComponentSnapshot Snapshot;
+	Snapshot.SchemaVersion = 1;
+	Snapshot.MaxValue = MaxValue;
+	Snapshot.Health = Health;
+	Snapshot.Stamina = Stamina;
+	Snapshot.Hunger = Hunger;
+	Snapshot.Thirst = Thirst;
+	Snapshot.bExhausted = bExhausted;
+	Snapshot.bDead = bDead;
+	Snapshot.StaminaIdleTime = StaminaIdleTime;
+	Snapshot.StarvingTime = StarvingTime;
+	return Snapshot;
+}
+
+bool USurvivalComponent::RestoreSnapshot(const FSurvivalComponentSnapshot& Snapshot, FString& OutError)
+{
+	if (!Snapshot.Validate(OutError))
+	{
+		return false;
+	}
+
+	MaxValue = Snapshot.MaxValue;
+	Health = Snapshot.Health;
+	Stamina = Snapshot.Stamina;
+	Hunger = Snapshot.Hunger;
+	Thirst = Snapshot.Thirst;
+	bExhausted = Snapshot.bExhausted;
+	bDead = Snapshot.bDead;
+	StaminaIdleTime = Snapshot.StaminaIdleTime;
+	StarvingTime = Snapshot.StarvingTime;
+	// A loading transaction restores state, not transient input intent.
+	bSprinting = false;
+	// Deliberately do not invoke OnDeath while restoring a state that was already dead.
+	return true;
+}
