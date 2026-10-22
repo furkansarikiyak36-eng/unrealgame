@@ -10,6 +10,7 @@
 #include "LandscapeProxy.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Async/Async.h"
 
 void UExcavationTerrainChunkSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -20,6 +21,8 @@ void UExcavationTerrainChunkSubsystem::Initialize(FSubsystemCollectionBase& Coll
     bRuntimeReady = false;
     bFullRefreshPending = false;
     DirtyChunkQueue.Reset();
+    InFlightMeshJobs.Reset();
+    CompletedMeshResults.Reset();
     RuntimeSetupError.Reset();
 
     if (!TerrainChunkActorClass)
@@ -112,6 +115,8 @@ void UExcavationTerrainChunkSubsystem::Deinitialize()
 
     RegisteredChunks.Reset();
     DirtyChunkQueue.Reset();
+    InFlightMeshJobs.Reset();
+    CompletedMeshResults.Reset();
     bFullRefreshPending = false;
     bRuntimeReady = false;
     FlatFallbackDensitySource = nullptr;
@@ -498,22 +503,37 @@ void UExcavationTerrainChunkSubsystem::HandleVolumeReset()
 
 void UExcavationTerrainChunkSubsystem::QueueChunkRebuild(const FIntVector& Coordinate)
 {
-    if (!bRuntimeReady || DirtyChunkQueue.Contains(Coordinate))
+    if (!bRuntimeReady || bFullRefreshPending || DirtyChunkQueue.Contains(Coordinate))
     {
         return;
     }
 
-    const int32 QueueLimit = FMath::Clamp(MaxQueuedDirtyChunks, 16, 4096);
+    const int32 ProfileQueueLimit = FMath::Clamp(RuntimeSettings.MaxQueuedMeshJobs, 1, 4096);
+    const int32 ConfiguredQueueLimit = FMath::Clamp(MaxQueuedDirtyChunks, 16, 4096);
+    const int32 QueueLimit = FMath::Min(ProfileQueueLimit, ConfiguredQueueLimit);
     if (DirtyChunkQueue.Num() >= QueueLimit)
     {
-        // Drop individual requests; one full reconciliation is cheaper and cannot
-        // lose final state because density remains authoritative in ExcavationVolumeSubsystem.
+        // One bounded full reconciliation is safer than silently losing final state.
         DirtyChunkQueue.Reset();
         bFullRefreshPending = true;
         return;
     }
 
     DirtyChunkQueue.Add(Coordinate);
+}
+
+void UExcavationTerrainChunkSubsystem::CompleteMeshJob(
+    const FIntVector& Coordinate,
+    FQueuedVoxelMeshResult&& Result)
+{
+    // This function is only called on the game thread by AsyncTask's continuation.
+    InFlightMeshJobs.Remove(Coordinate);
+    if (!bRuntimeReady)
+    {
+        return;
+    }
+
+    CompletedMeshResults.Add(Coordinate, MoveTemp(Result));
 }
 
 void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
@@ -528,18 +548,13 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
         DirtyChunkQueue.Reset();
         for (const TPair<FIntVector, TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>>& Pair : RegisteredChunks)
         {
-            bool bHasLiveActor = false;
             for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : Pair.Value)
             {
                 if (Entry.IsValid())
                 {
-                    bHasLiveActor = true;
+                    DirtyChunkQueue.Add(Pair.Key);
                     break;
                 }
-            }
-            if (bHasLiveActor)
-            {
-                DirtyChunkQueue.Add(Pair.Key);
             }
         }
         bFullRefreshPending = false;
@@ -548,24 +563,60 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
     const int32 PublishBudget = FMath::Max(0, FMath::Min(
         RuntimeSettings.MaxChunksPublishedPerFrame,
         RuntimeSettings.MaxCollisionUpdatesPerFrame));
-    if (PublishBudget == 0 || DirtyChunkQueue.IsEmpty())
+    if (PublishBudget == 0)
     {
         return;
     }
 
-    TArray<FIntVector> OrderedChunks = DirtyChunkQueue.Array();
-    OrderedChunks.Sort([](const FIntVector& A, const FIntVector& B)
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Excavation =
+        World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!Excavation)
+    {
+        RuntimeSetupError = TEXT("Density owner became unavailable while processing voxel mesh jobs.");
+        return;
+    }
+
+    // 1) Publish completed CPU output on the game thread under a shared mesh/collision budget.
+    TArray<FIntVector> CompletedCoordinates;
+    CompletedMeshResults.GenerateKeyArray(CompletedCoordinates);
+    CompletedCoordinates.Sort([](const FIntVector& A, const FIntVector& B)
     {
         if (A.X != B.X) return A.X < B.X;
         if (A.Y != B.Y) return A.Y < B.Y;
         return A.Z < B.Z;
     });
 
-    const int32 CountToProcess = FMath::Min(PublishBudget, OrderedChunks.Num());
-    for (int32 Index = 0; Index < CountToProcess; ++Index)
+    int32 PublishedThisTick = 0;
+    for (const FIntVector& Coordinate : CompletedCoordinates)
     {
-        const FIntVector Coordinate = OrderedChunks[Index];
-        DirtyChunkQueue.Remove(Coordinate);
+        if (PublishedThisTick >= PublishBudget)
+        {
+            break;
+        }
+
+        FQueuedVoxelMeshResult* FoundResult = CompletedMeshResults.Find(Coordinate);
+        if (!FoundResult)
+        {
+            continue;
+        }
+
+        FQueuedVoxelMeshResult Result = MoveTemp(*FoundResult);
+        CompletedMeshResults.Remove(Coordinate);
+
+        if (!Result.bSucceeded)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Voxel meshing failed for chunk (%d,%d,%d): %s"),
+                Coordinate.X, Coordinate.Y, Coordinate.Z, *Result.Error);
+            continue;
+        }
+
+        // A terrain change may have occurred while the worker was running.
+        if (Excavation->GetDensityRevision() != Result.Mesh.SourceRevision)
+        {
+            QueueChunkRebuild(Coordinate);
+            continue;
+        }
 
         TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>* Bucket = RegisteredChunks.Find(Coordinate);
         if (!Bucket)
@@ -578,12 +629,148 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
             return !Entry.IsValid();
         });
 
+        AExcavationTerrainChunkActor* TargetActor = nullptr;
         for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : *Bucket)
         {
             if (AExcavationTerrainChunkActor* Actor = Entry.Get())
             {
-                Actor->RebuildTerrainChunk();
+                TargetActor = Actor;
+                break;
             }
         }
+        if (!TargetActor)
+        {
+            continue;
+        }
+
+        FString PublishError;
+        if (!TargetActor->PublishVoxelMeshData(Result.Mesh, PublishError)
+            && !PublishError.Contains(TEXT("stale voxel mesh")))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Voxel mesh publication failed for chunk (%d,%d,%d): %s"),
+                Coordinate.X, Coordinate.Y, Coordinate.Z, *PublishError);
+        }
+        ++PublishedThisTick;
+    }
+
+    if (!RuntimeSettings.bAllowBackgroundMeshing)
+    {
+        // Synchronous fallback still respects per-frame publication/collision limits.
+        TArray<FIntVector> OrderedDirtyChunks = DirtyChunkQueue.Array();
+        OrderedDirtyChunks.Sort([](const FIntVector& A, const FIntVector& B)
+        {
+            if (A.X != B.X) return A.X < B.X;
+            if (A.Y != B.Y) return A.Y < B.Y;
+            return A.Z < B.Z;
+        });
+
+        for (const FIntVector& Coordinate : OrderedDirtyChunks)
+        {
+            if (PublishedThisTick >= PublishBudget)
+            {
+                break;
+            }
+            if (InFlightMeshJobs.Contains(Coordinate) || CompletedMeshResults.Contains(Coordinate))
+            {
+                continue;
+            }
+
+            TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>* Bucket = RegisteredChunks.Find(Coordinate);
+            if (!Bucket)
+            {
+                DirtyChunkQueue.Remove(Coordinate);
+                continue;
+            }
+            Bucket->RemoveAll([](const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry)
+            {
+                return !Entry.IsValid();
+            });
+            if (Bucket->IsEmpty())
+            {
+                DirtyChunkQueue.Remove(Coordinate);
+                continue;
+            }
+
+            DirtyChunkQueue.Remove(Coordinate);
+            if (AExcavationTerrainChunkActor* Actor = Bucket->Last().Get())
+            {
+                Actor->RebuildTerrainChunk();
+            }
+            ++PublishedThisTick;
+        }
+        return;
+    }
+
+    // 2) Snapshot sampling stays on the game thread because a base density provider
+    // can query Landscape/UObjects. The pure mesher receives arrays only on workers.
+    const int32 JobLimit = FMath::Clamp(RuntimeSettings.MaxMeshJobsInFlight, 1, 64);
+    TArray<FIntVector> OrderedDirtyChunks = DirtyChunkQueue.Array();
+    OrderedDirtyChunks.Sort([](const FIntVector& A, const FIntVector& B)
+    {
+        if (A.X != B.X) return A.X < B.X;
+        if (A.Y != B.Y) return A.Y < B.Y;
+        return A.Z < B.Z;
+    });
+
+    for (const FIntVector& Coordinate : OrderedDirtyChunks)
+    {
+        if (InFlightMeshJobs.Num() >= JobLimit)
+        {
+            break;
+        }
+        if (InFlightMeshJobs.Contains(Coordinate) || CompletedMeshResults.Contains(Coordinate))
+        {
+            continue;
+        }
+
+        TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>* Bucket = RegisteredChunks.Find(Coordinate);
+        if (!Bucket)
+        {
+            DirtyChunkQueue.Remove(Coordinate);
+            continue;
+        }
+        Bucket->RemoveAll([](const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry)
+        {
+            return !Entry.IsValid();
+        });
+        if (Bucket->IsEmpty())
+        {
+            DirtyChunkQueue.Remove(Coordinate);
+            continue;
+        }
+
+        FWorldDensityChunkSnapshot Snapshot;
+        if (!Excavation->BuildChunkSnapshot(Coordinate, Snapshot))
+        {
+            DirtyChunkQueue.Remove(Coordinate);
+            UE_LOG(LogTemp, Warning, TEXT("Could not capture density snapshot for chunk (%d,%d,%d)."),
+                Coordinate.X, Coordinate.Y, Coordinate.Z);
+            continue;
+        }
+
+        DirtyChunkQueue.Remove(Coordinate);
+        InFlightMeshJobs.Add(Coordinate);
+        TWeakObjectPtr<UExcavationTerrainChunkSubsystem> WeakThis(this);
+
+        Async(EAsyncExecution::ThreadPool,
+            [WeakThis, Coordinate, Snapshot = MoveTemp(Snapshot)]() mutable
+            {
+                FQueuedVoxelMeshResult Result;
+                const FWorldMarchingTetrahedraMesher Mesher;
+                Result.bSucceeded = Mesher.BuildMesh(Snapshot, Result.Mesh, Result.Error);
+                if (!Result.bSucceeded && Result.Error.IsEmpty())
+                {
+                    Result.Error = TEXT("The CPU mesher rejected the density snapshot.");
+                }
+
+                AsyncTask(ENamedThreads::GameThread,
+                    [WeakThis, Coordinate, Result = MoveTemp(Result)]() mutable
+                    {
+                        if (UExcavationTerrainChunkSubsystem* Subsystem = WeakThis.Get())
+                        {
+                            Subsystem->CompleteMeshJob(Coordinate, MoveTemp(Result));
+                        }
+                    });
+            });
     }
 }
