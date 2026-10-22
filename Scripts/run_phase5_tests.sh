@@ -57,7 +57,7 @@ if MSYS_NO_PATHCONV=1 timeout 400 "$UE/Binaries/Win64/UnrealEditor-Cmd.exe" "$PR
   :
 else
   rc=$?
-  echo "Faz 4 Automation süreci başarısız veya zaman aşımına uğradı (exit=$rc)." >&2
+  echo "Faz 5 Automation süreci başarısız veya zaman aşımına uğradı (exit=$rc)." >&2
   tail -n 100 "$ENGINE_LOG" >&2 2>/dev/null || true
   exit "$rc"
 fi
@@ -103,5 +103,5 @@ if [[ "$SUCCESS_COUNT" -lt "${#EXPECTED_TESTS[@]}" || "$FAILURE_COUNT" -ne 0 ]];
   exit 1
 fi
 
-echo "GEÇTİ — Faz 4 otomasyon testleri: $SUCCESS_COUNT başarı, $FAILURE_COUNT failure kaydı"
+echo "GEÇTİ — Faz 5 otomasyon testleri: $SUCCESS_COUNT başarı, $FAILURE_COUNT failure kaydı"
 echo "Kayıt: $SAVED_LOG"
