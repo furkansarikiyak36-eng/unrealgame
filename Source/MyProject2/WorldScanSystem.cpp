@@ -42,7 +42,8 @@ bool WorldScanSystem::Trace(
 	const AActor* ActorToIgnore,
 	FScanResult& OutResult,
 	ECollisionChannel Channel,
-	bool bTraceComplex)
+	bool bTraceComplex,
+	const TArray<const UPrimitiveComponent*>* ComponentsToIgnore)
 {
 	OutResult = FScanResult{};
 	OutResult.TraceStart = Start;
@@ -60,6 +61,16 @@ bool WorldScanSystem::Trace(
 	if (ActorToIgnore)
 	{
 		Params.AddIgnoredActor(ActorToIgnore);
+	}
+	if (ComponentsToIgnore)
+	{
+		for (const UPrimitiveComponent* Component : *ComponentsToIgnore)
+		{
+			if (IsValid(Component))
+			{
+				Params.AddIgnoredComponent(Component);
+			}
+		}
 	}
 
 	OutResult.bHit = World->LineTraceSingleByChannel(OutResult.Hit, Start, End, Channel, Params);
