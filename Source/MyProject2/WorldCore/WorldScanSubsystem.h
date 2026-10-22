@@ -50,7 +50,7 @@ private:
         const FVector& WorldPositionCm,
         EWorldRegionKind& OutKind) const;
 
-    void ResolveCapabilities(
+    void ApplyRegionSafety(
         const AActor* Actor,
         const UPrimitiveComponent* Component,
         EWorldRegionKind RegionKind,
