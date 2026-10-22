@@ -50,6 +50,9 @@ bool FWorldVoxelMesherHorizontalPlaneTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Successful meshing should not leave an error"), Error.IsEmpty());
     TestTrue(TEXT("Generated topology should validate"), Mesh.IsTopologyValid());
     TestTrue(TEXT("Horizontal plane should generate triangles"), Mesh.TriangleIndices.Num() >= 3);
+    TestTrue(
+        TEXT("Adjacent tetrahedra should reuse shared iso-edge vertices instead of emitting a triangle soup"),
+        Mesh.Vertices.Num() < Mesh.TriangleIndices.Num());
     TestEqual(TEXT("Source revision should be retained"), Mesh.SourceRevision, Snapshot.SourceRevision);
 
     if (Mesh.Vertices.IsEmpty())
