@@ -20,6 +20,8 @@
 #include "MechanicsDemo.h"
 #include "StructureManager.h"
 #include "SurvivalComponent.h"
+#include "Survival/SurvivalExcavationAdapter.h"
+#include "Survival/UndergroundExposureComponent.h"
 #include "CableComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -82,6 +84,8 @@ AForestCharacter::AForestCharacter()
 	GetCharacterMovement()->AirControl = 0.3f;
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
+	UndergroundExposure = CreateDefaultSubobject<UUndergroundExposureComponent>(TEXT("UndergroundExposure"));
+	SurvivalExcavation = CreateDefaultSubobject<USurvivalExcavationAdapter>(TEXT("SurvivalExcavation"));
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
@@ -1369,7 +1373,16 @@ void AForestCharacter::UpdateCarry(float DeltaSeconds)
 		{
 			Cost = 1.f + 3.f * GetCarryLoad();
 		}
-		Survival->TryUseStamina(Cost * DeltaSeconds);
+		if (SurvivalExcavation)
+		{
+			float EffectiveCost = 0.0f;
+			FString CostError;
+			SurvivalExcavation->TryPayAction(ESurvivalExcavationAction::CarryLoad, Cost * DeltaSeconds, EffectiveCost, CostError);
+		}
+		else
+		{
+			Survival->TryUseStamina(Cost * DeltaSeconds);
+		}
 	}
 
 	// The rope only pulls once it is taut; the far end drags along the ground.
@@ -1579,9 +1592,16 @@ void AForestCharacter::PrimaryAction()
 		ShowMessage(TEXT("Elin dolu. [E] ile b\u0131rak."));
 		return;
 	}
-	if (!Survival->TryUseStamina(SwingStaminaCost))
+	float EffectiveSwingCost = 0.0f;
+	FString StaminaError;
+	const ESurvivalExcavationAction SwingAction = CurrentTool == EForestTool::Pickaxe
+		? ESurvivalExcavationAction::HeavyDig
+		: ESurvivalExcavationAction::ToolSwing;
+	if (SurvivalExcavation
+		? !SurvivalExcavation->TryPayAction(SwingAction, SwingStaminaCost, EffectiveSwingCost, StaminaError)
+		: !Survival->TryUseStamina(SwingStaminaCost))
 	{
-		ShowMessage(TEXT("\u00C7ok yorgunsun"));
+		ShowMessage(TEXT("\\u00C7ok yorgunsun"));
 		return;
 	}
 	LastSwingTime = Now;
