@@ -72,6 +72,7 @@ EXPECTED_TESTS=(
   "MyProject2.World.Classification.RegionTagPolicy"
   "MyProject2.World.Classification.ManualOverrideGrid"
   "MyProject2.World.Scan.DemandDrivenQueries"
+  "MyProject2.World.Scan.CoreClassificationRules"
 )
 for test_name in "${EXPECTED_TESTS[@]}"; do
   grep -Fq "$test_name" "$SAVED_LOG" || {
