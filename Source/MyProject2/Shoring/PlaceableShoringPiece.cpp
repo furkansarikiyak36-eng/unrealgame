@@ -6,6 +6,7 @@
 #include "EngineUtils.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
 #include "WorldCore/Classification/LandscapeBuilderSubsystem.h"
+#include "WorldCore/Events/WorldMechanicEventSubsystem.h"
 
 APlaceableShoringPiece::APlaceableShoringPiece()
 {
@@ -96,6 +97,23 @@ void APlaceableShoringPiece::ApplyStructuralDamage(float Amount)
         return;
     }
     StructuralHealth = FMath::Max(0.0f, StructuralHealth - Amount);
+    if (UWorld* World = GetWorld())
+    {
+        if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+        {
+            FWorldMechanicEvent Event;
+            Event.Type = StructuralHealth <= 0.0f
+                ? EWorldMechanicEventType::StructureBroken
+                : EWorldMechanicEventType::StructureDamaged;
+            Event.PositionCm = GetActorLocation();
+            Event.ScalarValue = Amount;
+            Event.SecondaryValue = StructuralHealth;
+            Event.SourceActor = this;
+            Event.SourceTag = FName(TEXT("Shoring"));
+            Event.bHighPriority = StructuralHealth <= 0.0f;
+            Events->EnqueueEvent(MoveTemp(Event));
+        }
+    }
     if (StructuralHealth <= 0.0f && PieceMesh)
     {
         Tags.AddUnique(TEXT("World.State.Unsupported"));
