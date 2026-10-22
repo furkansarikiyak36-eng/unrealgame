@@ -9,6 +9,7 @@
 class AActor;
 class UPhysicalMaterial;
 class UPrimitiveComponent;
+struct FCollisionQueryParams;
 
 /**
  * Shared world sensing primitives. Query methods acquire raw engine data; analysis methods
@@ -185,6 +186,11 @@ namespace WorldScanSystem
 	/** Method 1: line trace. */
 	MYPROJECT2_API bool Trace(UWorld* World, const FVector& Start, const FVector& End,
 		const AActor* ActorToIgnore, FScanResult& OutResult,
+		ECollisionChannel Channel = ECC_Visibility, bool bTraceComplex = true);
+
+	/** Trace with caller-supplied ignored actors/components; use this to preserve placement ghost filters. */
+	MYPROJECT2_API bool TraceWithParams(UWorld* World, const FVector& Start, const FVector& End,
+		const FCollisionQueryParams& InParams, FScanResult& OutResult,
 		ECollisionChannel Channel = ECC_Visibility, bool bTraceComplex = true);
 
 	/** Method 2: swept sphere/box/capsule. Multi-hit is optional to avoid accidental result explosions. */
