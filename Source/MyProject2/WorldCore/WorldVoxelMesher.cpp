@@ -224,7 +224,7 @@ namespace
         return AppendTriangle(P00, P01, P11, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError)
             && AppendTriangle(P00, P11, P10, SolidCentroid, EmptyCentroid, MaterialId, OutMesh, OutError);
     }
-
+}
 
 bool FWorldMarchingTetrahedraMesher::BuildMesh(
     const FWorldDensityChunkSnapshot& Input,
