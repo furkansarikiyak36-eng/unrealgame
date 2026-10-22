@@ -12,6 +12,8 @@
 #include "Components/PrimitiveComponent.h"
 #include "Math/RotationMatrix.h"
 
+#include <cmath>
+
 namespace
 {
     const FName VoxelSurfaceTag(TEXT("World.Object.VoxelSurface"));
@@ -69,9 +71,9 @@ namespace
         }
 
         const FVector Size = Bounds.GetSize();
-        const double CountX = static_cast<double>(FMath::CeilToInt64(static_cast<double>(Size.X) / CellSizeCm)) + 2.0;
-        const double CountY = static_cast<double>(FMath::CeilToInt64(static_cast<double>(Size.Y) / CellSizeCm)) + 2.0;
-        const double CountZ = static_cast<double>(FMath::CeilToInt64(static_cast<double>(Size.Z) / CellSizeCm)) + 2.0;
+        const double CountX = std::ceil(static_cast<double>(Size.X) / CellSizeCm) + 2.0;
+        const double CountY = std::ceil(static_cast<double>(Size.Y) / CellSizeCm) + 2.0;
+        const double CountZ = std::ceil(static_cast<double>(Size.Z) / CellSizeCm) + 2.0;
         if (!FMath::IsFinite(CountX) || !FMath::IsFinite(CountY) || !FMath::IsFinite(CountZ)
             || CountX < 1.0 || CountY < 1.0 || CountZ < 1.0
             || CountX > MaxSamples || CountY > MaxSamples || CountZ > MaxSamples)
