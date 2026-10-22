@@ -94,6 +94,9 @@ public:
     TArray<FName> RequiredAnchorIds;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Support")
+    FIntVector ApproximateAnchorCell = FIntVector::ZeroValue;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Support")
     bool bSupportRecheckRequired = true;
 
     UFUNCTION(BlueprintPure, Category = "Shoring")
