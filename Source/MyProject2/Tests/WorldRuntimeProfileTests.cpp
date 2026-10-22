@@ -99,6 +99,14 @@ bool FWorldRuntimeProfileSubsystemLockTest::RunTest(const FString& Parameters)
 
     FString Error;
     TestFalse(TEXT("Profile should begin unlocked"), Runtime->IsProfileLocked());
+    TestEqual(
+        TEXT("A world without an asset should default to LOW_MID"),
+        static_cast<uint8>(Runtime->GetActiveProfile()),
+        static_cast<uint8>(EWorldRuntimeProfile::LowMid));
+    TestEqual(
+        TEXT("Fallback world settings should use 25 cm spacing"),
+        Runtime->GetActiveSettings().VoxelSampleSpacingCm,
+        25.0f);
     TestTrue(
         TEXT("A valid LOW_MID profile should configure before the lock"),
         Runtime->ConfigureProfile(Asset, Error));
