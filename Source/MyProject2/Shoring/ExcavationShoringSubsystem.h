@@ -46,13 +46,16 @@ public:
         FString& OutError,
         TSubclassOf<APlaceableShoringPiece> PieceClass = nullptr);
 
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Support")
     bool RevalidatePlan(const FGuid& PlanId, FString& OutError);
 
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Support")
     bool GetPlanSupportAssessment(
         const FGuid& PlanId,
         TArray<FShoringSupportAssessment>& OutAssessments,
         FString& OutError) const;
 
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Damage")
     bool ApplyDamageToPiece(
         const FGuid& PieceId,
         float Amount,
@@ -60,6 +63,7 @@ public:
         FShoringSupportAssessment& OutAssessment,
         FString& OutError);
 
+    UFUNCTION(BlueprintCallable, Category = "Shoring|Damage")
     bool RepairPiece(const FGuid& PieceId, float Amount, FString& OutError);
 
     bool ReplaceFailedPiece(

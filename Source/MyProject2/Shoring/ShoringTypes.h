@@ -368,13 +368,29 @@ struct MYPROJECT2_API FShoringSupportNode
     bool bIsCollapsed = false;
 };
 
+USTRUCT(BlueprintType)
 struct MYPROJECT2_API FShoringSupportAssessment
 {
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
     FGuid PieceId;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
     EShoringSupportCondition Condition = EShoringSupportCondition::NeedsRevalidation;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
     float NominalCapacity = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
     float EffectiveCapacity = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
     float AppliedLoad = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
     float Utilization = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Shoring|Support")
     FString Reason;
 };
