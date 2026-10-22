@@ -48,6 +48,26 @@ public:
 
     bool RevalidatePlan(const FGuid& PlanId, FString& OutError);
 
+    bool GetPlanSupportAssessment(
+        const FGuid& PlanId,
+        TArray<FShoringSupportAssessment>& OutAssessments,
+        FString& OutError) const;
+
+    bool ApplyDamageToPiece(
+        const FGuid& PieceId,
+        float Amount,
+        EShoringDamageCause Cause,
+        FShoringSupportAssessment& OutAssessment,
+        FString& OutError);
+
+    bool RepairPiece(const FGuid& PieceId, float Amount, FString& OutError);
+
+    bool ReplaceFailedPiece(
+        const FGuid& PieceId,
+        APlaceableShoringPiece*& OutReplacement,
+        FString& OutError,
+        TSubclassOf<APlaceableShoringPiece> PieceClass = nullptr);
+
     bool MovePiece(
         const FGuid& PieceId,
         const FTransform& NewTransform,
@@ -97,6 +117,16 @@ private:
         const FGuid& PieceToIgnore,
         const TArray<FGuid>* AllowedConnectedPieceIds,
         FString& OutError) const;
+
+    bool BuildSupportNodes(
+        const FGuid& PlanId,
+        TArray<FShoringSupportNode>& OutNodes,
+        FString& OutError) const;
+
+    bool EvaluateAndApplyPlanSupport(
+        const FGuid& PlanId,
+        TArray<FShoringSupportAssessment>& OutAssessments,
+        FString& OutError);
 
     void SetPlanState(const FGuid& PlanId, EShoringPieceState State);
     void MarkAllPlansForRevalidation();

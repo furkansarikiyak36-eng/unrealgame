@@ -25,6 +25,7 @@ enum class EShoringPieceState : uint8
     Invalid,
     Removed,
     Damaged,
+    Warning,
     Overloaded,
     Unsupported,
     Failed
