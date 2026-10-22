@@ -89,8 +89,12 @@ bool UWorldPersistenceAdapter::LoadWorldFromSlot(const FString& SlotName, int32 
     // Validate all actor records before mutating the live world.
     for (const FSavedShoringPieceRecord& Record : SaveObject->ShoringPieces)
     {
-        if (!Record.Transform.GetLocation().IsFinite()
-            || !Record.DimensionsCm.IsFinite()
+        if (!FMath::IsFinite(Record.Transform.GetLocation().X)
+            || !FMath::IsFinite(Record.Transform.GetLocation().Y)
+            || !FMath::IsFinite(Record.Transform.GetLocation().Z)
+            || !FMath::IsFinite(Record.DimensionsCm.X)
+            || !FMath::IsFinite(Record.DimensionsCm.Y)
+            || !FMath::IsFinite(Record.DimensionsCm.Z)
             || Record.DimensionsCm.X <= 0.0f || Record.DimensionsCm.Y <= 0.0f || Record.DimensionsCm.Z <= 0.0f
             || !FMath::IsFinite(Record.StructuralHealth))
         {
