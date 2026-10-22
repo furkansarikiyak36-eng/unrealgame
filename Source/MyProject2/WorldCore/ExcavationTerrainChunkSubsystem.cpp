@@ -657,7 +657,34 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
 
         if (!Result.bSucceeded)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Voxel meshing failed for chunk (%d,%d,%d): %s"),
+            // Ignore an error produced from an obsolete snapshot; a new job can recover it.
+            if (Result.SourceRevision != Excavation->GetDensityRevision())
+            {
+                QueueChunkRebuild(Coordinate);
+                continue;
+            }
+
+            TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>* FailedBucket = RegisteredChunks.Find(Coordinate);
+            if (FailedBucket)
+            {
+                FailedBucket->RemoveAll([](const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry)
+                {
+                    return !Entry.IsValid();
+                });
+                for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : *FailedBucket)
+                {
+                    if (AExcavationTerrainChunkActor* Actor = Entry.Get())
+                    {
+                        Actor->InvalidateVoxelMesh();
+                    }
+                }
+                if (!FailedBucket->IsEmpty())
+                {
+                    ++PublishedThisTick;
+                }
+            }
+
+            UE_LOG(LogTemp, Warning, TEXT("Voxel meshing failed for current chunk revision (%d,%d,%d): %s"),
                 Coordinate.X, Coordinate.Y, Coordinate.Z, *Result.Error);
             continue;
         }
@@ -796,8 +823,10 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
         if (!Excavation->BuildChunkSnapshot(Coordinate, Snapshot))
         {
             DirtyChunkQueue.Remove(Coordinate);
-            UE_LOG(LogTemp, Warning, TEXT("Could not capture density snapshot for chunk (%d,%d,%d)."),
-                Coordinate.X, Coordinate.Y, Coordinate.Z);
+            FQueuedVoxelMeshResult Failure;
+            Failure.SourceRevision = Excavation->GetDensityRevision();
+            Failure.Error = TEXT("Could not capture a valid density snapshot.");
+            CompletedMeshResults.Add(Coordinate, MoveTemp(Failure));
             continue;
         }
 
@@ -809,6 +838,7 @@ void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
             [WeakThis, Coordinate, Snapshot = MoveTemp(Snapshot)]() mutable
             {
                 FQueuedVoxelMeshResult Result;
+                Result.SourceRevision = Snapshot.SourceRevision;
                 const FWorldMarchingTetrahedraMesher Mesher;
                 Result.bSucceeded = Mesher.BuildMesh(Snapshot, Result.Mesh, Result.Error);
                 if (!Result.bSucceeded && Result.Error.IsEmpty())
