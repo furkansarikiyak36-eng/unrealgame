@@ -62,7 +62,7 @@ else
   exit "$rc"
 fi
 
-[[ -s "$ENGINE_LOG" ]] || fail "Faz 4 test sonucu log'u oluşturulmadı: $ENGINE_LOG"
+[[ -s "$ENGINE_LOG" ]] || fail "Faz 5 test sonucu log'u oluşturulmadı: $ENGINE_LOG"
 cp "$ENGINE_LOG" "$SAVED_LOG"
 
 EXPECTED_TESTS=(
