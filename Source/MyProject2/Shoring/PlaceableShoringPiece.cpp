@@ -98,6 +98,7 @@ void APlaceableShoringPiece::ApplyStructuralDamage(float Amount)
     StructuralHealth = FMath::Max(0.0f, StructuralHealth - Amount);
     if (StructuralHealth <= 0.0f && PieceMesh)
     {
+        Tags.AddUnique(TEXT("World.State.Unsupported"));
         PieceMesh->SetCollisionEnabled(ECollisionEnabled::PhysicsOnly);
         PieceMesh->SetSimulatePhysics(true);
     }
