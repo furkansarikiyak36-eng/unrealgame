@@ -61,13 +61,18 @@ bool UShoringLayoutPlannerSubsystem::BuildTrenchPlan(FVector StartTopCm, FVector
     }
 
     auto AddCandidate = [&OutCandidates](EShoringPieceType Type, FVector Location, float PieceYaw,
-        FVector Dimensions, int32 Index, int32 SideIndex, FName Role)
+        FVector Dimensions, int32 Index, int32 SideIndex, FName Role,
+        bool bHasVoxelAnchor, FVector SupportPoint, FVector SupportNormal, TArray<FName> RequiredAnchors)
     {
         FShoringPlacementCandidate C;
         C.CandidateId = FGuid::NewGuid();
         C.PieceType = Type;
         C.Transform = FTransform(FRotator(0.0f, PieceYaw, 0.0f), Location);
         C.DimensionsCm = Dimensions;
+        C.bHasVoxelAnchor = bHasVoxelAnchor;
+        C.SupportAnchorWorldCm = SupportPoint;
+        C.SupportNormal = SupportNormal.GetSafeNormal();
+        C.RequiredAnchorIds = MoveTemp(RequiredAnchors);
         C.AnchorId = FName(*FString::Printf(TEXT("%s_%d_%d"), *Role.ToString(), Index, SideIndex));
         C.bPlanValid = true;
         C.Message = TEXT("Layout candidate only; commit performs dynamic-object overlap validation.");
@@ -84,7 +89,8 @@ bool UShoringLayoutPlannerSubsystem::BuildTrenchPlan(FVector StartTopCm, FVector
             const FVector Wall = Centre + Side * (WallSide * WidthCm * 0.5f);
             AddCandidate(EShoringPieceType::Upright,
                 FVector(Wall.X, Wall.Y, StartTopCm.Z - DepthCm * 0.5f),
-                Yaw, FVector(UprightThicknessCm, UprightThicknessCm, DepthCm), I, WallSide, TEXT("UPRIGHT"));
+                Yaw, FVector(UprightThicknessCm, UprightThicknessCm, DepthCm), I, WallSide, TEXT("UPRIGHT"),
+                true, FVector(Wall.X, Wall.Y, StartTopCm.Z - DepthCm), FVector::UpVector, TArray<FName>());
         }
     }
 
@@ -105,7 +111,10 @@ bool UShoringLayoutPlannerSubsystem::BuildTrenchPlan(FVector StartTopCm, FVector
                 const FVector Wall = SegmentCentre + Side * (WallSide * WidthCm * 0.5f);
                 AddCandidate(EShoringPieceType::WallBoard, FVector(Wall.X, Wall.Y, BoardZ),
                     Yaw, FVector(SegmentLength, WallBoardThicknessCm, WallBoardHeightCm),
-                    I * 100 + Row, WallSide, TEXT("BOARD"));
+                    I * 100 + Row, WallSide, TEXT("BOARD"), true, Wall,
+                    -Side * static_cast<float>(WallSide),
+                    TArray<FName>{ FName(*FString::Printf(TEXT("UPRIGHT_%d_%d"), I, WallSide)),
+                        FName(*FString::Printf(TEXT("UPRIGHT_%d_%d"), I + 1, WallSide)) });
             }
         }
     }
@@ -120,7 +129,9 @@ bool UShoringLayoutPlannerSubsystem::BuildTrenchPlan(FVector StartTopCm, FVector
             if (StrutZ <= StartTopCm.Z - DepthCm + StrutThicknessCm) continue;
             AddCandidate(EShoringPieceType::Strut, FVector(Centre.X, Centre.Y, StrutZ),
                 SideYaw, FVector(WidthCm, StrutThicknessCm, StrutThicknessCm),
-                I * 100 + Row, 0, TEXT("STRUT"));
+                I * 100 + Row, 0, TEXT("STRUT"), false, FVector::ZeroVector, FVector::UpVector,
+                TArray<FName>{ FName(*FString::Printf(TEXT("UPRIGHT_%d_-1"), I)),
+                    FName(*FString::Printf(TEXT("UPRIGHT_%d_1"), I)) });
         }
     }
 
@@ -192,6 +203,17 @@ bool UShoringLayoutPlannerSubsystem::CommitPlan(const TArray<FShoringPlacementCa
         }
         Piece->InitializeFromCandidate(Candidate);
         Spawned.Add(Piece);
+    }
+
+    // Build anchors in planner order: posts first, boards next, struts last.
+    for (APlaceableShoringPiece* Piece : Spawned)
+    {
+        if (!IsValid(Piece) || !Piece->RevalidateVoxelAnchor())
+        {
+            OutFailure = TEXT("At least one shoring piece has no valid terrain/support anchor; plan rolled back.");
+            for (APlaceableShoringPiece* SpawnedPiece : Spawned) if (IsValid(SpawnedPiece)) SpawnedPiece->Destroy();
+            return false;
+        }
     }
 
     OutSpawnedPieces = MoveTemp(Spawned);
