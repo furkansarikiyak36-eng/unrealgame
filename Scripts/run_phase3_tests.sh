@@ -74,6 +74,7 @@ EXPECTED_TESTS=(
   "MyProject2.World.Scan.DemandDrivenQueries"
   "MyProject2.World.Scan.CoreClassificationRules"
   "MyProject2.World.VoxelMesher.HorizontalPlane"
+  "MyProject2.World.VoxelMesher.ExactIsoNodesStayConnected"
   "MyProject2.World.VoxelMesher.InvalidSampleRejected"
   "MyProject2.World.VoxelDensity.SnapshotRevisionAndGrid"
 )
