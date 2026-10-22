@@ -1601,7 +1601,7 @@ void AForestCharacter::PrimaryAction()
 		? !SurvivalExcavation->TryPayAction(SwingAction, SwingStaminaCost, EffectiveSwingCost, StaminaError)
 		: !Survival->TryUseStamina(SwingStaminaCost))
 	{
-		ShowMessage(TEXT("\\u00C7ok yorgunsun"));
+		ShowMessage(TEXT("\u00C7ok yorgunsun"));
 		return;
 	}
 	LastSwingTime = Now;
