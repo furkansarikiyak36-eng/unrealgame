@@ -591,7 +591,9 @@ bool UExcavationShoringSubsystem::MovePiece(
 
     Piece->SetActorTransform(NewTransform);
     Piece->UpdateSupportAnchor(NewAnchor);
+    Piece->ClearCollapseAfterReattachment();
     SetPlanState(Piece->GetPlanId(), EShoringPieceState::NeedsRevalidation);
+    Piece->SetPieceState(EShoringPieceState::NeedsRevalidation);
     return true;
 }
 
@@ -829,7 +831,7 @@ bool UExcavationShoringSubsystem::BuildSupportNodes(
         Node.ConnectedPieceIds = Piece->GetConnectedPieceIds();
         Node.HealthFraction = Piece->GetHealthFraction();
         Node.DesignLoad = Piece->GetDesignLoad();
-        Node.bIsCollapsed = Piece->GetPieceState() == EShoringPieceState::Unsupported;
+        Node.bIsCollapsed = Piece->HasCollapsed();
         Node.bAnchorCurrent = Anchor.Kind != EShoringAnchorKind::VoxelSurface
             || Anchor.SourceDensityRevision == CurrentRevision;
     }

@@ -37,6 +37,7 @@ public:
     EShoringPieceState GetPieceState() const { return PieceState; }
 
     uint64 GetSourceDensityRevision() const { return SupportAnchor.SourceDensityRevision; }
+    bool HasCollapsed() const { return bHasCollapsed; }
     float GetHealth() const { return Health; }
     float GetHealthFraction() const { return MaxHealth > 0.0f ? Health / MaxHealth : 0.0f; }
     float GetDesignLoad() const { return DesignLoad; }
@@ -49,6 +50,7 @@ public:
     bool ApplyDamage(float Amount, EShoringDamageCause Cause, FString& OutError);
     bool Repair(float Amount, FString& OutError);
     void SetPieceState(EShoringPieceState NewState);
+    void ClearCollapseAfterReattachment();
     bool UpdateSupportAnchor(const FShoringSupportAnchor& NewAnchor);
     void UpdateConnections(const TArray<FGuid>& NewConnectedPieceIds);
 
@@ -79,6 +81,9 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring")
     FVector HalfExtentsCm = FVector(10.0f);
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Damage")
+    bool bHasCollapsed = false;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Shoring|Damage")
     float Health = 100.0f;

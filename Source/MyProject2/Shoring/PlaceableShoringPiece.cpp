@@ -58,6 +58,7 @@ bool APlaceableShoringPiece::InitializeFromSpec(const FShoringPieceSpec& Spec, b
     HalfExtentsCm = Spec.HalfExtentsCm;
     DesignLoad = Spec.DesignLoad;
     Health = MaxHealth;
+    bHasCollapsed = false;
     LastDamageCause = EShoringDamageCause::Manual;
 
     CollisionBox->SetBoxExtent(HalfExtentsCm);
@@ -131,7 +132,16 @@ bool APlaceableShoringPiece::Repair(float Amount, FString& OutError)
 void APlaceableShoringPiece::SetPieceState(EShoringPieceState NewState)
 {
     PieceState = NewState;
+    if (NewState == EShoringPieceState::Unsupported)
+    {
+        bHasCollapsed = true;
+    }
     RefreshCollisionState();
+}
+
+void APlaceableShoringPiece::ClearCollapseAfterReattachment()
+{
+    bHasCollapsed = false;
 }
 
 bool APlaceableShoringPiece::UpdateSupportAnchor(const FShoringSupportAnchor& NewAnchor)
