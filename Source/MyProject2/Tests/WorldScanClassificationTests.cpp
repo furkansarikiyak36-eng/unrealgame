@@ -197,6 +197,8 @@ bool FWorldScanDemandDrivenQueriesTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Missed ray should leave bHit false"), Hit.bHit);
 
     FWorldShapeTraceRequest Shape;
+    Shape.StartCm = FVector(0, 0, 500);
+    Shape.EndCm = FVector(0, 0, -500);
     Shape.RadiusCm = 0.0f;
     FWorldShapeTraceResult ShapeResult;
     TestFalse(TEXT("Invalid shape parameters should be rejected"), Scanner->ShapeTrace(
