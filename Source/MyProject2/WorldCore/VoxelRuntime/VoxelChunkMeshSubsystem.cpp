@@ -227,15 +227,17 @@ void UVoxelChunkMeshSubsystem::Tick(float DeltaTime)
             return A.Z < B.Z;
         });
 
-        FIntVector Next = Ordered[0];
-        DirtyChunks.Remove(Next);
-        if (InFlightChunks.Contains(Next))
+        bool bFoundReadyChunk = false;
+        for (const FIntVector& Candidate : Ordered)
         {
-            DirtyChunks.Add(Next);
+            if (InFlightChunks.Contains(Candidate)) continue;
+            DirtyChunks.Remove(Candidate);
+            StartOneBuild(Candidate);
+            ++Started;
+            bFoundReadyChunk = true;
             break;
         }
-        StartOneBuild(Next);
-        ++Started;
+        if (!bFoundReadyChunk) break;
     }
 }
 
