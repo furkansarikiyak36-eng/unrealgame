@@ -59,6 +59,17 @@ void USurvivalComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 			Health = FMath::Min(MaxValue, Health + HealthRegenPerSecond * DeltaTime);
 		}
 	}
+
+    // A lightweight exposure model. Region/weather systems provide the inputs;
+    // this component remains the authoritative owner of player health.
+    const float EffectiveAmbientC = AmbientTemperatureC + ShelterHeatC - Wetness01 * WetnessCoolingC;
+    const float TemperatureAlpha = 1.0f - FMath::Exp(-FMath::Max(0.001f, TemperatureResponseRate) * DeltaTime);
+    BodyTemperatureC = FMath::Lerp(BodyTemperatureC, EffectiveAmbientC, TemperatureAlpha);
+    if (BodyTemperatureC < ColdDamageThresholdC)
+    {
+        const float ColdExposure = ColdDamageThresholdC - BodyTemperatureC;
+        ApplyDamage(ColdExposure * ColdDamagePerDegreePerSecond * DeltaTime);
+    }
 }
 
 bool USurvivalComponent::TryUseStamina(float Amount)
