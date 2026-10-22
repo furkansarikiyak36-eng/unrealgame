@@ -4,6 +4,7 @@
 #include "ExcavationFlatBaseDensitySource.h"
 #include "ExcavationLandscapeDensitySource.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
+#include "WorldCore/WorldRuntimeProfileSubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "LandscapeProxy.h"
@@ -13,28 +14,68 @@
 void UExcavationTerrainChunkSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
+    Collection.InitializeDependency<UWorldRuntimeProfileSubsystem>();
     Collection.InitializeDependency<UExcavationVolumeSubsystem>();
+
+    bRuntimeReady = false;
+    bFullRefreshPending = false;
+    DirtyChunkQueue.Reset();
+    RuntimeSetupError.Reset();
 
     if (!TerrainChunkActorClass)
     {
         TerrainChunkActorClass = AExcavationTerrainChunkActor::StaticClass();
     }
 
+    UWorld* World = GetWorld();
+    UWorldRuntimeProfileSubsystem* Profile =
+        World ? World->GetSubsystem<UWorldRuntimeProfileSubsystem>() : nullptr;
+    UExcavationVolumeSubsystem* Excavation =
+        World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+
+    if (!Profile || !Excavation)
+    {
+        RuntimeSetupError = TEXT("Voxel chunk runtime could not resolve the world profile or authoritative excavation subsystem.");
+        UE_LOG(LogTemp, Error, TEXT("%s"), *RuntimeSetupError);
+        return;
+    }
+
+    RuntimeSettings = Profile->GetActiveSettings();
+    if (!RuntimeSettings.Validate(&RuntimeSetupError)
+        || !RuntimeSettings.HasConsistentChunkGrid())
+    {
+        if (RuntimeSetupError.IsEmpty())
+        {
+            RuntimeSetupError = TEXT("Selected world profile has inconsistent voxel spacing/chunk dimensions.");
+        }
+        UE_LOG(LogTemp, Error, TEXT("Voxel runtime disabled: %s"), *RuntimeSetupError);
+        return;
+    }
+
+    if (!Excavation->ConfigureGridForRuntimeProfile(
+        RuntimeSettings.VoxelSampleSpacingCm,
+        RuntimeSettings.CellsPerChunkAxis,
+        RuntimeSetupError))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Voxel runtime disabled: %s"), *RuntimeSetupError);
+        return;
+    }
+
     FlatFallbackDensitySource = NewObject<UExcavationFlatBaseDensitySource>(this);
     FlatFallbackDensitySource->SurfaceHeightCm = 0.0f;
+    FlatFallbackDensitySource->DensityTransitionWidthCm = RuntimeSettings.VoxelSampleSpacingCm;
     RegisteredFallbackDensitySource = FlatFallbackDensitySource;
 
-    if (UWorld* World = GetWorld())
-    {
-        if (UExcavationVolumeSubsystem* Excavation = World->GetSubsystem<UExcavationVolumeSubsystem>())
-        {
-            Excavation->RegisterFallbackBaseDensitySource(FlatFallbackDensitySource);
-            Excavation->OnVolumeChanged.AddDynamic(
-                this, &UExcavationTerrainChunkSubsystem::HandleVolumeChanged);
-            Excavation->OnVolumeReset.AddDynamic(
-                this, &UExcavationTerrainChunkSubsystem::HandleVolumeReset);
-        }
-    }
+    Excavation->RegisterFallbackBaseDensitySource(FlatFallbackDensitySource);
+    Excavation->OnVolumeChanged.AddDynamic(
+        this, &UExcavationTerrainChunkSubsystem::HandleVolumeChanged);
+    Excavation->OnVolumeReset.AddDynamic(
+        this, &UExcavationTerrainChunkSubsystem::HandleVolumeReset);
+
+    // The grid dimensions are immutable after this point; serialized cell coordinates
+    // remain meaningful for the full world session.
+    Profile->LockProfileForSession();
+    bRuntimeReady = true;
 }
 
 void UExcavationTerrainChunkSubsystem::Deinitialize()
@@ -70,6 +111,9 @@ void UExcavationTerrainChunkSubsystem::Deinitialize()
     }
 
     RegisteredChunks.Reset();
+    DirtyChunkQueue.Reset();
+    bFullRefreshPending = false;
+    bRuntimeReady = false;
     FlatFallbackDensitySource = nullptr;
     LandscapeFallbackDensitySource = nullptr;
     RegisteredFallbackDensitySource = nullptr;
@@ -88,6 +132,11 @@ bool UExcavationTerrainChunkSubsystem::IsTickable() const
 
 void UExcavationTerrainChunkSubsystem::Tick(float DeltaTime)
 {
+    if (!bRuntimeReady)
+    {
+        return;
+    }
+
     LandscapeDiscoveryAccumulatorSeconds += FMath::Max(0.0f, DeltaTime);
     if (!bDidInitialLandscapeDiscovery
         || LandscapeDiscoveryAccumulatorSeconds >= FMath::Max(0.1f, LandscapeDiscoveryIntervalSeconds))
@@ -96,6 +145,8 @@ void UExcavationTerrainChunkSubsystem::Tick(float DeltaTime)
         bDidInitialLandscapeDiscovery = true;
         RefreshLandscapeFallbackProvider();
     }
+
+    ProcessDirtyChunkQueue();
 
     if (!bEnableAutomaticStreaming)
     {
@@ -222,6 +273,7 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
         if (!IsValid(LandscapeFallbackDensitySource))
         {
             LandscapeFallbackDensitySource = NewObject<UExcavationLandscapeDensitySource>(this);
+            LandscapeFallbackDensitySource->SetDensityTransitionWidthCm(RuntimeSettings.VoxelSampleSpacingCm);
         }
 
         const bool bProxySetChanged = LandscapeFallbackDensitySource->SetLandscapeProxies(Proxies);
@@ -259,7 +311,7 @@ void UExcavationTerrainChunkSubsystem::RefreshLandscapeFallbackProvider()
     // A provider/proxy set change alters density samples even without a cell edit.
     if (bProviderChanged)
     {
-        HandleVolumeReset();
+        Excavation->NotifyBaseDensityChanged();
     }
 }
 
@@ -396,14 +448,89 @@ void UExcavationTerrainChunkSubsystem::HandleVolumeChanged(
     }
 
     const TArray<FIntVector> AffectedChunks = Excavation->GetAffectedChunksForEdit(Record);
-    TSet<FIntVector> UniqueAffectedChunks;
     for (const FIntVector& Coordinate : AffectedChunks)
     {
-        UniqueAffectedChunks.Add(Coordinate);
+        QueueChunkRebuild(Coordinate);
+    }
+}
+
+void UExcavationTerrainChunkSubsystem::HandleVolumeReset()
+{
+    DirtyChunkQueue.Reset();
+    bFullRefreshPending = true;
+}
+\n
+void UExcavationTerrainChunkSubsystem::QueueChunkRebuild(const FIntVector& Coordinate)
+{
+    if (!bRuntimeReady || DirtyChunkQueue.Contains(Coordinate))
+    {
+        return;
     }
 
-    for (const FIntVector& Coordinate : UniqueAffectedChunks)
+    const int32 QueueLimit = FMath::Clamp(MaxQueuedDirtyChunks, 16, 4096);
+    if (DirtyChunkQueue.Num() >= QueueLimit)
     {
+        // Drop individual requests; one full reconciliation is cheaper and cannot
+        // lose final state because density remains authoritative in ExcavationVolumeSubsystem.
+        DirtyChunkQueue.Reset();
+        bFullRefreshPending = true;
+        return;
+    }
+
+    DirtyChunkQueue.Add(Coordinate);
+}
+
+void UExcavationTerrainChunkSubsystem::ProcessDirtyChunkQueue()
+{
+    if (!bRuntimeReady)
+    {
+        return;
+    }
+
+    if (bFullRefreshPending)
+    {
+        DirtyChunkQueue.Reset();
+        for (const TPair<FIntVector, TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>>& Pair : RegisteredChunks)
+        {
+            bool bHasLiveActor = false;
+            for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : Pair.Value)
+            {
+                if (Entry.IsValid())
+                {
+                    bHasLiveActor = true;
+                    break;
+                }
+            }
+            if (bHasLiveActor)
+            {
+                DirtyChunkQueue.Add(Pair.Key);
+            }
+        }
+        bFullRefreshPending = false;
+    }
+
+    const int32 PublishBudget = FMath::Max(0, FMath::Min(
+        RuntimeSettings.MaxChunksPublishedPerFrame,
+        RuntimeSettings.MaxCollisionUpdatesPerFrame));
+    if (PublishBudget == 0 || DirtyChunkQueue.IsEmpty())
+    {
+        return;
+    }
+
+    TArray<FIntVector> OrderedChunks = DirtyChunkQueue.Array();
+    OrderedChunks.Sort([](const FIntVector& A, const FIntVector& B)
+    {
+        if (A.X != B.X) return A.X < B.X;
+        if (A.Y != B.Y) return A.Y < B.Y;
+        return A.Z < B.Z;
+    });
+
+    const int32 CountToProcess = FMath::Min(PublishBudget, OrderedChunks.Num());
+    for (int32 Index = 0; Index < CountToProcess; ++Index)
+    {
+        const FIntVector Coordinate = OrderedChunks[Index];
+        DirtyChunkQueue.Remove(Coordinate);
+
         TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>* Bucket = RegisteredChunks.Find(Coordinate);
         if (!Bucket)
         {
@@ -421,31 +548,6 @@ void UExcavationTerrainChunkSubsystem::HandleVolumeChanged(
             {
                 Actor->RebuildTerrainChunk();
             }
-        }
-    }
-}
-
-void UExcavationTerrainChunkSubsystem::HandleVolumeReset()
-{
-    for (auto It = RegisteredChunks.CreateIterator(); It; ++It)
-    {
-        TArray<TWeakObjectPtr<AExcavationTerrainChunkActor>>& Bucket = It.Value();
-        Bucket.RemoveAll([](const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry)
-        {
-            return !Entry.IsValid();
-        });
-
-        for (const TWeakObjectPtr<AExcavationTerrainChunkActor>& Entry : Bucket)
-        {
-            if (AExcavationTerrainChunkActor* Actor = Entry.Get())
-            {
-                Actor->RebuildTerrainChunk();
-            }
-        }
-
-        if (Bucket.IsEmpty())
-        {
-            It.RemoveCurrent();
         }
     }
 }
