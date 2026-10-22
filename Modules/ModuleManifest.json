@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "system": "World Mechanics Modules",
+  "target": "Pre-Unreal, engine-neutral domain design; eventual Unreal Engine 5.8 adapter",
+  "unrealIntegrated": false,
+  "implementationStatus": "specification-layer",
+  "modules": [
+    {"id":"CoreContracts","path":"Modules/CoreContracts","dependsOn":[]},
+    {"id":"RuntimeProfiles","path":"Modules/RuntimeProfiles","dependsOn":["CoreContracts"]},
+    {"id":"WorldScan","path":"Modules/WorldScan","dependsOn":["CoreContracts","RuntimeProfiles"]},
+    {"id":"WorldClassification","path":"Modules/WorldClassification","dependsOn":["CoreContracts","RuntimeProfiles","WorldScan"]},
+    {"id":"TerrainVoxel","path":"Modules/TerrainVoxel","dependsOn":["CoreContracts","RuntimeProfiles"]},
+    {"id":"MeshCollision","path":"Modules/MeshCollision","dependsOn":["CoreContracts","RuntimeProfiles","TerrainVoxel"]},
+    {"id":"PlacementSnap","path":"Modules/PlacementSnap","dependsOn":["CoreContracts","WorldScan","WorldClassification","TerrainVoxel","MeshCollision"]},
+    {"id":"Excavation","path":"Modules/Excavation","dependsOn":["CoreContracts","RuntimeProfiles","WorldScan","WorldClassification","TerrainVoxel","MeshCollision"]},
+    {"id":"Shoring","path":"Modules/Shoring","dependsOn":["CoreContracts","WorldScan","WorldClassification","TerrainVoxel","MeshCollision","PlacementSnap","Excavation"]},
+    {"id":"StructuralIntegrity","path":"Modules/StructuralIntegrity","dependsOn":["CoreContracts","Shoring"]},
+    {"id":"WorldEnvironment","path":"Modules/WorldEnvironment","dependsOn":["CoreContracts","RuntimeProfiles"]},
+    {"id":"Survival","path":"Modules/Survival","dependsOn":["CoreContracts","RuntimeProfiles","Excavation","Shoring","WorldEnvironment"]},
+    {"id":"Persistence","path":"Modules/Persistence","dependsOn":["CoreContracts","RuntimeProfiles","TerrainVoxel","Excavation","Shoring","StructuralIntegrity","Survival","WorldEnvironment"]},
+    {"id":"Validation","path":"Modules/Validation","dependsOn":["CoreContracts","RuntimeProfiles","WorldScan","WorldClassification","TerrainVoxel","MeshCollision","PlacementSnap","Excavation","Shoring","StructuralIntegrity","Survival","WorldEnvironment","Persistence"]}
+  ],
+  "statusVocabulary": ["specified","implemented","unit-tested","cross-module-verified","unreal-adapted","unreal-verified"]
+}
