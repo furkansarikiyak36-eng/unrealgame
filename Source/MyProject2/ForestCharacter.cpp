@@ -1435,13 +1435,25 @@ bool AForestCharacter::TraceFromView(float Distance, FHitResult& OutHit, bool bI
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(ForestView), false, this);
 	if (bIgnorePlans)
 	{
-		// Placing pieces looks through see-through wall plans; they are only filled with [E].
+		// Keep the placement ghost ignore list; scanner TraceWithParams accepts the same query contract.
 		for (TActorIterator<ALogWallBlueprint> It(GetWorld()); It; ++It)
 		{
 			Params.AddIgnoredComponent(It->GetGhosts());
 		}
 	}
-	return GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);
+
+	WorldScanSystem::FScanResult Scan;
+	const bool bHit = WorldScanSystem::TraceWithParams(
+		GetWorld(), Start, End, Params, Scan, ECC_Visibility, false);
+	if (!bHit)
+	{
+		LatestWorldAnalysis = WorldScanSystem::FWorldAnalysis{};
+		return false;
+	}
+
+	WorldScanSystem::AnalyzeHit(Scan, LatestWorldAnalysis);
+	OutHit = Scan.Hit;
+	return true;
 }
 
 void AForestCharacter::UpdateFocus()
