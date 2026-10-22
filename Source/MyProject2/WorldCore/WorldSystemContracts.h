@@ -154,6 +154,16 @@ struct MYPROJECT2_API FWorldVoxelEditRequest
             return false;
         }
 
+        switch (Operation)
+        {
+        case EWorldVoxelEditOperation::Carve:
+        case EWorldVoxelEditOperation::Fill:
+            break;
+        default:
+            OutError = TEXT("Unsupported voxel edit operation.");
+            return false;
+        }
+
         switch (Shape)
         {
         case EWorldVoxelEditShape::Sphere:
@@ -482,10 +492,11 @@ struct MYPROJECT2_API FWorldSurfaceSampleRequest
             OutError = TEXT("Surface sample center/extents must be finite and extents must be positive.");
             return false;
         }
-        if (SamplesX < 1 || SamplesY < 1 || MaxSamples < 1
+        if (SamplesX < 1 || SamplesX > 32 || SamplesY < 1 || SamplesY > 32
+            || MaxSamples < 1 || MaxSamples > 1024
             || static_cast<int64>(SamplesX) * static_cast<int64>(SamplesY) > MaxSamples)
         {
-            OutError = TEXT("Surface sample grid must be positive and fit within MaxSamples.");
+            OutError = TEXT("Surface sample dimensions must be in [1, 32], MaxSamples in [1, 1024], and the grid must fit within MaxSamples.");
             return false;
         }
         if (!FMath::IsFinite(TraceUpCm) || !FMath::IsFinite(TraceDownCm)
