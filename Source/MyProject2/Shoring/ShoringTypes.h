@@ -23,7 +23,33 @@ enum class EShoringPieceState : uint8
     Active,
     NeedsRevalidation,
     Invalid,
-    Removed
+    Removed,
+    Damaged,
+    Overloaded,
+    Unsupported,
+    Failed
+};
+
+UENUM(BlueprintType)
+enum class EShoringDamageCause : uint8
+{
+    Impact,
+    Excavation,
+    Fire,
+    Decay,
+    Overload,
+    Manual
+};
+
+UENUM(BlueprintType)
+enum class EShoringSupportCondition : uint8
+{
+    Stable,
+    Warning,
+    Overloaded,
+    Unsupported,
+    Failed,
+    NeedsRevalidation
 };
 
 UENUM(BlueprintType)
@@ -92,6 +118,10 @@ struct MYPROJECT2_API FShoringPieceSpec
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Shoring")
     FVector HalfExtentsCm = FVector(10.0f);
 
+    /** Abstract gameplay load demand. This is not a real engineering unit. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Shoring")
+    float DesignLoad = 1.0f;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Shoring")
     FShoringSupportAnchor SupportAnchor;
 
@@ -130,6 +160,11 @@ struct MYPROJECT2_API FShoringPieceSpec
             || HalfExtentsCm.X <= 0.0f || HalfExtentsCm.Y <= 0.0f || HalfExtentsCm.Z <= 0.0f)
         {
             OutError = TEXT("Shoring piece half-extents must be finite and positive.");
+            return false;
+        }
+        if (!FMath::IsFinite(DesignLoad) || DesignLoad <= 0.0f || DesignLoad > 1000.0f)
+        {
+            OutError = TEXT("Shoring design load must be finite and within (0, 1000].");
             return false;
         }
         if (SupportAnchor.Kind == EShoringAnchorKind::PieceSocket && !SupportAnchor.ConnectedPieceId.IsValid())
@@ -315,4 +350,28 @@ struct MYPROJECT2_API FShoringLayoutPlan
         }
         return true;
     }
+};
+
+/** Plain-data input for the deterministic, bounded support evaluator. */
+struct MYPROJECT2_API FShoringSupportNode
+{
+    FGuid PieceId;
+    EShoringPieceKind Kind = EShoringPieceKind::Upright;
+    EShoringAnchorKind AnchorKind = EShoringAnchorKind::PieceSocket;
+    FGuid PrimarySupportPieceId;
+    TArray<FGuid> ConnectedPieceIds;
+    float HealthFraction = 1.0f;
+    float DesignLoad = 1.0f;
+    bool bAnchorCurrent = true;
+};
+
+struct MYPROJECT2_API FShoringSupportAssessment
+{
+    FGuid PieceId;
+    EShoringSupportCondition Condition = EShoringSupportCondition::NeedsRevalidation;
+    float NominalCapacity = 0.0f;
+    float EffectiveCapacity = 0.0f;
+    float AppliedLoad = 0.0f;
+    float Utilization = 0.0f;
+    FString Reason;
 };
