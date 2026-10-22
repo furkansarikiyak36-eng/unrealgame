@@ -37,7 +37,7 @@ bool USurvivalExcavationAdapter::CalculateEffectiveCost(
 	OutEffectiveCost = 0.0f;
 	if (!FMath::IsFinite(BaseCost) || BaseCost < 0.0f || BaseCost > 1000000.0f
 		|| !FMath::IsFinite(Wetness01) || Wetness01 < 0.0f || Wetness01 > 1.0f
-		|| !FMath::IsFinite(BodyTemperatureC)
+		|| !FMath::IsFinite(BodyTemperatureC) || BodyTemperatureC < 25.0f || BodyTemperatureC > 45.0f
 		|| Action < ESurvivalExcavationAction::ToolSwing
 		|| Action > ESurvivalExcavationAction::CarryLoad)
 	{
@@ -104,13 +104,13 @@ bool USurvivalExcavationAdapter::TryPayAction(
 
 	if (Exposure && Action != ESurvivalExcavationAction::CarryLoad)
 	{
-		float HeatRise = 0.02f;
+		float HeatRise = 0.003f;
 		switch (Action)
 		{
-		case ESurvivalExcavationAction::HeavyDig: HeatRise = 0.04f; break;
-		case ESurvivalExcavationAction::PlaceShoring: HeatRise = 0.025f; break;
-		case ESurvivalExcavationAction::MoveShoring: HeatRise = 0.03f; break;
-		case ESurvivalExcavationAction::RepairShoring: HeatRise = 0.02f; break;
+		case ESurvivalExcavationAction::HeavyDig: HeatRise = 0.006f; break;
+		case ESurvivalExcavationAction::PlaceShoring: HeatRise = 0.004f; break;
+		case ESurvivalExcavationAction::MoveShoring: HeatRise = 0.005f; break;
+		case ESurvivalExcavationAction::RepairShoring: HeatRise = 0.003f; break;
 		default: break;
 		}
 		Exposure->RecordExertionHeat(HeatRise);

@@ -32,6 +32,8 @@ bool FSurvivalActionCostDeterminismTest::RunTest(const FString& Parameters)
 		USurvivalExcavationAdapter::CalculateEffectiveCost(ESurvivalExcavationAction::ToolSwing, -1.0f, 0.0f, 37.0f, false, InvalidCost));
 	TestFalse(TEXT("Non-finite costs fail closed"),
 		USurvivalExcavationAdapter::CalculateEffectiveCost(ESurvivalExcavationAction::ToolSwing, TNumericLimits<float>::QuietNaN(), 0.0f, 37.0f, false, InvalidCost));
+	TestFalse(TEXT("Body temperature outside the component range fails closed"),
+		USurvivalExcavationAdapter::CalculateEffectiveCost(ESurvivalExcavationAction::ToolSwing, 8.0f, 0.0f, 100.0f, false, InvalidCost));
 	return true;
 }
 
