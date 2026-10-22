@@ -46,6 +46,10 @@ bool UWorldPersistenceAdapter::SaveWorldToSlot(const FString& SlotName, int32 Us
         Record.Transform = Piece->GetActorTransform();
         Record.DimensionsCm = Piece->DimensionsCm;
         Record.StructuralHealth = Piece->StructuralHealth;
+        Record.bHasVoxelAnchor = Piece->bHasVoxelAnchor;
+        Record.SupportAnchorWorldCm = Piece->SupportAnchorWorldCm;
+        Record.SupportNormal = Piece->SupportNormal;
+        Record.RequiredAnchorIds = Piece->RequiredAnchorIds;
         SaveObject->ShoringPieces.Add(Record);
     }
 
@@ -96,7 +100,13 @@ bool UWorldPersistenceAdapter::LoadWorldFromSlot(const FString& SlotName, int32 
             || !FMath::IsFinite(Record.DimensionsCm.Y)
             || !FMath::IsFinite(Record.DimensionsCm.Z)
             || Record.DimensionsCm.X <= 0.0f || Record.DimensionsCm.Y <= 0.0f || Record.DimensionsCm.Z <= 0.0f
-            || !FMath::IsFinite(Record.StructuralHealth))
+            || !FMath::IsFinite(Record.StructuralHealth)
+            || !FMath::IsFinite(Record.SupportAnchorWorldCm.X)
+            || !FMath::IsFinite(Record.SupportAnchorWorldCm.Y)
+            || !FMath::IsFinite(Record.SupportAnchorWorldCm.Z)
+            || !FMath::IsFinite(Record.SupportNormal.X)
+            || !FMath::IsFinite(Record.SupportNormal.Y)
+            || !FMath::IsFinite(Record.SupportNormal.Z))
         {
             OutFailure = TEXT("Save contains an invalid shoring piece record.");
             return false;
@@ -133,7 +143,8 @@ bool UWorldPersistenceAdapter::LoadWorldFromSlot(const FString& SlotName, int32 
         }
         if (Piece->PieceMesh) Piece->PieceMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         Piece->InitializeFromSavedState(Record.PieceType, Record.PieceGuid, Record.AnchorId,
-            Record.Transform, Record.DimensionsCm, Record.StructuralHealth);
+            Record.Transform, Record.DimensionsCm, Record.StructuralHealth,
+            Record.bHasVoxelAnchor, Record.SupportAnchorWorldCm, Record.SupportNormal, Record.RequiredAnchorIds);
         NewPieces.Add(Piece);
     }
 
