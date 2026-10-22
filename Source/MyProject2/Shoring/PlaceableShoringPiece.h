@@ -36,7 +36,6 @@ public:
     UFUNCTION(BlueprintPure, Category = "Shoring")
     EShoringPieceState GetPieceState() const { return PieceState; }
 
-    UFUNCTION(BlueprintPure, Category = "Shoring")
     uint64 GetSourceDensityRevision() const { return SupportAnchor.SourceDensityRevision; }
 
     const FShoringSupportAnchor& GetSupportAnchor() const { return SupportAnchor; }
