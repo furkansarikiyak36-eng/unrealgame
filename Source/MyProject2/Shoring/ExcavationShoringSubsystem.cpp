@@ -1289,7 +1289,11 @@ bool UExcavationShoringSubsystem::ImportSnapshot(
 void UExcavationShoringSubsystem::GetCommittedPlanIds(TArray<FGuid>& OutPlanIds) const
 {
     OutPlanIds.Reset();
-    CommittedPlanIds.GenerateKeyArray(OutPlanIds);
+    OutPlanIds.Reserve(CommittedPlanIds.Num());
+    for (const FGuid& PlanId : CommittedPlanIds)
+    {
+        OutPlanIds.Add(PlanId);
+    }
     OutPlanIds.Sort([](const FGuid& A, const FGuid& B)
     {
         return A.ToString() < B.ToString();
