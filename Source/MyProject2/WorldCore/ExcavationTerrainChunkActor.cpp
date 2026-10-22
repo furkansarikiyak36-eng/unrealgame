@@ -271,12 +271,6 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
         return false;
     }
 
-    if (IsValid(RegisteredSubsystem) && RegisteredSubsystem->IsRuntimeReady())
-    {
-        DynamicMeshComponent->bUseAsyncCooking =
-            RegisteredSubsystem->GetRuntimeSettings().bAllowAsyncCollision;
-    }
-
     FWorldDensityChunkSnapshot Snapshot;
     if (!Excavation->BuildChunkSnapshot(ChunkCoordinate, Snapshot))
     {
@@ -294,15 +288,50 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
         return false;
     }
 
-    // Do not publish a result if the authoritative density changed while a snapshot
-    // was being processed. The subsystem will enqueue this chunk again if necessary.
-    if (Excavation->GetDensityRevision() != Snapshot.SourceRevision)
+    return PublishVoxelMeshData(MeshData, MesherError);
+}
+
+bool AExcavationTerrainChunkActor::PublishVoxelMeshData(
+    const FWorldVoxelMeshData& MeshData,
+    FString& OutError)
+{
+    OutError.Reset();
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Excavation =
+        World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    if (!DynamicMeshComponent || !IsValid(Excavation) || !RefreshChunkWorldTransform())
     {
+        OutError = TEXT("Voxel chunk cannot publish without its component, world, and density owner.");
+        return false;
+    }
+
+    if (MeshData.ChunkCoordinate != ChunkCoordinate)
+    {
+        OutError = TEXT("Voxel mesh output belongs to a different chunk coordinate.");
+        return false;
+    }
+
+    if (Excavation->GetDensityRevision() != MeshData.SourceRevision)
+    {
+        OutError = TEXT("Discarded stale voxel mesh; the authoritative density revision changed.");
         if (IsValid(RegisteredSubsystem))
         {
             RegisteredSubsystem->QueueChunkRebuild(ChunkCoordinate);
         }
         return false;
+    }
+
+    if (!MeshData.IsTopologyValid()
+        || MeshData.TriangleIndices.Num() / 3 > FMath::Clamp(MaxGeneratedTriangles, 1000, 1000000))
+    {
+        OutError = TEXT("CPU voxel mesh output failed topology or triangle-budget validation.");
+        return false;
+    }
+
+    if (IsValid(RegisteredSubsystem) && RegisteredSubsystem->IsRuntimeReady())
+    {
+        DynamicMeshComponent->bUseAsyncCooking =
+            RegisteredSubsystem->GetRuntimeSettings().bAllowAsyncCollision;
     }
 
     TMap<int32, int32> MaterialSlotByBaseId;
@@ -327,10 +356,14 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
     FString ConversionError;
     if (!ConvertMeshDataToDynamicMesh(MeshData, MaterialSlotByBaseId, CandidateMesh, ConversionError))
     {
-        ClearMeshAndCollision();
+        OutError = ConversionError.IsEmpty()
+            ? TEXT("Unable to convert CPU voxel mesh to GeometryCore dynamic mesh.")
+            : ConversionError;
         return false;
     }
 
+    // All work before this point is a local candidate. Publish atomically once
+    // structure, attributes, bounds and density revision have been checked.
     DynamicMeshComponent->SetMesh(MoveTemp(CandidateMesh));
     DynamicMeshComponent->ValidateMaterialSlots(true, false);
     if (DynamicMeshComponent->GetMesh() && DynamicMeshComponent->GetMesh()->TriangleCount() > 0)
