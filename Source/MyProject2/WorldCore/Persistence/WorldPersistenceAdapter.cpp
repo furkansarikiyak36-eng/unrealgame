@@ -2,6 +2,7 @@
 
 #include "WorldCore/Persistence/WorldRuntimeSaveGame.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
+#include "WorldCore/Events/WorldMechanicEventSubsystem.h"
 #include "Shoring/PlaceableShoringPiece.h"
 #include "Shoring/ExcavationShoringSubsystem.h"
 #include "Components/StaticMeshComponent.h"
@@ -69,6 +70,16 @@ bool UWorldPersistenceAdapter::SaveWorldToSlot(const FString& SlotName, int32 Us
     {
         OutFailure = TEXT("SaveGameToSlot failed.");
         return false;
+    }
+
+    if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+    {
+        FWorldMechanicEvent Event;
+        Event.Type = EWorldMechanicEventType::WorldSaveCompleted;
+        Event.ScalarValue = static_cast<float>(SaveObject->ExcavationSnapshot.Overrides.Num());
+        Event.SecondaryValue = static_cast<float>(SaveObject->ShoringPieces.Num());
+        Event.SourceTag = FName(*SlotName);
+        Events->EnqueueEvent(MoveTemp(Event));
     }
     return true;
 }
@@ -179,10 +190,25 @@ bool UWorldPersistenceAdapter::LoadWorldFromSlot(const FString& SlotName, int32 
             {
                 if (USurvivalComponent* Survival = Player->FindComponentByClass<USurvivalComponent>())
                 {
-                    Survival->ImportState(SaveObject->SurvivalState);
+                    if (!Survival->ImportState(SaveObject->SurvivalState))
+                    {
+                        OutFailure = TEXT("Survival state failed validation after world restore.");
+                        return false;
+                    }
                 }
             }
         }
+    }
+
+    if (UWorldMechanicEventSubsystem* Events = World->GetSubsystem<UWorldMechanicEventSubsystem>())
+    {
+        FWorldMechanicEvent Event;
+        Event.Type = EWorldMechanicEventType::WorldLoadCompleted;
+        Event.ScalarValue = static_cast<float>(SaveObject->ExcavationSnapshot.Overrides.Num());
+        Event.SecondaryValue = static_cast<float>(SaveObject->ShoringPieces.Num());
+        Event.SourceTag = FName(*SlotName);
+        Event.bHighPriority = true;
+        Events->EnqueueEvent(MoveTemp(Event));
     }
     return true;
 }
