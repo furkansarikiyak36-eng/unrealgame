@@ -4,6 +4,7 @@
 #include "WorldCore/Classification/LandscapeBuilderSubsystem.h"
 #include "WorldCore/Excavation/VoxelEditService.h"
 #include "WorldCore/VoxelRuntime/VoxelChunkMeshSubsystem.h"
+#include "WorldCore/Persistence/WorldPersistenceAdapter.h"
 #include "Shoring/ShoringLayoutPlannerSubsystem.h"
 #include "Shoring/PlaceableShoringPiece.h"
 
@@ -130,4 +131,29 @@ bool AVoxelPrototypeDirector::CommitLastTrenchPlan(AActor* ActorToIgnore, FStrin
 void AVoxelPrototypeDirector::ClearLastTrenchPlan()
 {
     LastTrenchPlan.Reset();
+}
+
+
+bool AVoxelPrototypeDirector::SavePrototypeWorld(const FString& SlotName, FString& OutFailure)
+{
+    UWorld* World = GetWorld();
+    UWorldPersistenceAdapter* Persistence = World ? World->GetSubsystem<UWorldPersistenceAdapter>() : nullptr;
+    if (!Persistence)
+    {
+        OutFailure = TEXT("World persistence adapter is unavailable.");
+        return false;
+    }
+    return Persistence->SaveWorldToSlot(SlotName, 0, OutFailure);
+}
+
+bool AVoxelPrototypeDirector::LoadPrototypeWorld(const FString& SlotName, FString& OutFailure)
+{
+    UWorld* World = GetWorld();
+    UWorldPersistenceAdapter* Persistence = World ? World->GetSubsystem<UWorldPersistenceAdapter>() : nullptr;
+    if (!Persistence)
+    {
+        OutFailure = TEXT("World persistence adapter is unavailable.");
+        return false;
+    }
+    return Persistence->LoadWorldFromSlot(SlotName, 0, OutFailure);
 }
