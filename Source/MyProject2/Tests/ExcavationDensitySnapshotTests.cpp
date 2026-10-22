@@ -61,6 +61,8 @@ bool FExcavationDensitySnapshotRevisionTest::RunTest(const FString& Parameters)
         TEXT("A chunk snapshot should sample the configured base density"),
         Excavation->BuildChunkSnapshot(FIntVector::ZeroValue, Before));
     TestTrue(TEXT("Snapshot storage should match its metadata"), Before.HasValidSampleStorage());
+    TestEqual(TEXT("Snapshot includes one base material ID per density sample"),
+        Before.MaterialIds.Num(), Before.DensitySamples.Num());
     TestEqual(TEXT("LOW_MID chunk uses 32 cells per axis"), Before.CellsPerChunkAxis, 32);
     TestEqual(TEXT("Snapshot contains one-cell mesh borders"), Before.BorderCells, 1);
     TestEqual(TEXT("32 cells plus boundary/border planes gives 35 samples per axis"),
