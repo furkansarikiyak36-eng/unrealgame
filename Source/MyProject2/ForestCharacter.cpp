@@ -40,9 +40,9 @@
 #include "StructureManager.h"
 #include "SurvivalComponent.h"
 #include "Survival/ExcavationSurvivalAdapterComponent.h"
-#include "WorldCore/Excavation/VoxelExcavationToolComponent.h"
 #include "WorldPhaseW1_Chunk/ChunkManager.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
+#include "WorldCore/Excavation/VoxelEditService.h"
 #include "WorldCore/ExcavationTerrainChunkActor.h"
 #include "CableComponent.h"
 #include "Camera/CameraComponent.h"
@@ -111,7 +111,6 @@ AForestCharacter::AForestCharacter()
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
     ExcavationSurvivalAdapter = CreateDefaultSubobject<UExcavationSurvivalAdapterComponent>(TEXT("ExcavationSurvivalAdapter"));
-    VoxelExcavationTool = CreateDefaultSubobject<UVoxelExcavationToolComponent>(TEXT("VoxelExcavationTool"));
 	WorldChunks = CreateDefaultSubobject<UChunkManager>(TEXT("WorldChunks"));
 	WorldChunks->ActivationRadius = 256.f; // metres: 4 chunks (64 m) each way
 	CoreInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("CoreInventory"));
@@ -658,51 +657,95 @@ void AForestCharacter::ToggleShovel()
 
 FString AForestCharacter::ShovelStroke(const FVector& Point, const FVector& Normal, bool bFill)
 {
-	UExcavationVolumeSubsystem* Excavation = GetWorld() ? GetWorld()->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
-	if (!Excavation)
-	{
-		return TEXT("Burası kazılamaz");
-	}
-	const FVector Out = Normal.IsNearlyZero() ? FVector::UpVector : Normal.GetSafeNormal();
-	const double Cell = Excavation->CellSizeCm / 100.0;
-	const float CellM3 = static_cast<float>(Cell * Cell * Cell);
-	constexpr float Swell = 1.25f; // dug soil is looser than the ground it came from
-	FExcavationEditRecord Record;
-	if (!bFill)
-	{
-		if (LooseSoilM3 >= MaxLooseSoilM3 - 0.01f)
-		{
-			return TEXT("Toprak çuvalı dolu  —  [Sağ tık] ile bir yere dök");
-		}
-		if (!Excavation->ApplySphereEdit(Point - Out * 20.f, ShovelRadiusCm, EExcavationEditType::Carve, Record))
-		{
-			return Record.BlockedCellCount > 0 ? TEXT("Kaya  —  kürek taşı kazamaz") : TEXT("Burada kazılacak toprak yok");
-		}
-		const float Gained = Record.MovedCellCount * CellM3 * Swell;
-		LooseSoilM3 = FMath::Min(MaxLooseSoilM3, LooseSoilM3 + Gained);
-		return FString::Printf(TEXT("Toprak kazıldı +%.2f m³  (çuval %.2f / %.1f m³)%s"), Gained, LooseSoilM3, MaxLooseSoilM3,
-			Record.BlockedCellCount > 0 ? TEXT("  —  altı kaya") : TEXT(""));
-	}
-	if (LooseSoilM3 < CellM3 * Swell * 0.5f)
-	{
-		return TEXT("Çuvalda toprak yok  —  önce kaz");
-	}
-	const FVector Center = Point + Out * 20.f;
-	const UCapsuleComponent* Capsule = GetCapsuleComponent();
-	if (FVector::Dist2D(Center, GetActorLocation()) < ShovelRadiusCm + Capsule->GetScaledCapsuleRadius()
-		&& Center.Z > GetActorLocation().Z - Capsule->GetScaledCapsuleHalfHeight() - ShovelRadiusCm)
-	{
-		return TEXT("Çok yakın  —  ayağının dibine dökemezsin");
-	}
-	if (!Excavation->ApplySphereEdit(Center, ShovelRadiusCm, EExcavationEditType::Fill, Record))
-	{
-		return TEXT("Burası zaten dolu");
-	}
-	const float Used = FMath::Min(LooseSoilM3, Record.MovedCellCount * CellM3 * Swell);
-	LooseSoilM3 = FMath::Max(0.f, LooseSoilM3 - Used);
-	return FString::Printf(TEXT("Toprak döküldü −%.2f m³  (çuval %.2f / %.1f m³)"), Used, LooseSoilM3, MaxLooseSoilM3);
-}
+    UWorld* World = GetWorld();
+    UExcavationVolumeSubsystem* Excavation = World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+    UVoxelEditService* EditService = World ? World->GetSubsystem<UVoxelEditService>() : nullptr;
+    if (!Excavation || !EditService)
+    {
+        return TEXT("Kazı servisi hazır değil");
+    }
 
+    const FVector Out = Normal.IsNearlyZero() ? FVector::UpVector : Normal.GetSafeNormal();
+    const double Cell = Excavation->CellSizeCm / 100.0;
+    const float CellM3 = static_cast<float>(Cell * Cell * Cell);
+    constexpr float Swell = 1.25f; // dug soil is looser than the ground it came from
+    FExcavationEditRecord Record;
+    FString EditFailure;
+
+    auto PayWorkOrRollback = [this, Excavation, &Record](float Cost, FString& OutFailure)
+    {
+        if (!ExcavationSurvivalAdapter)
+        {
+            Excavation->RollbackEdit(Record);
+            OutFailure = TEXT("Hayatta kalma/dayanıklılık adaptörü bulunamadı; işlem geri alındı.");
+            return false;
+        }
+        if (ExcavationSurvivalAdapter->TryPayWorkCost(Cost, OutFailure))
+        {
+            return true;
+        }
+        Excavation->RollbackEdit(Record);
+        OutFailure += TEXT(" İşlem geri alındı.");
+        return false;
+    };
+
+    if (!bFill)
+    {
+        if (LooseSoilM3 >= MaxLooseSoilM3 - 0.01f)
+        {
+            return TEXT("Toprak çuvalı dolu — [Sağ tık] ile bir yere dök");
+        }
+
+        if (!EditService->CarveSphere(Point - Out * 20.f, ShovelRadiusCm, Record, EditFailure))
+        {
+            if (EditFailure.Contains(TEXT("static")) || EditFailure.Contains(TEXT("not been classified")))
+            {
+                return TEXT("Kaya veya sınıflandırılmamış alan — kürek yalnızca kazılabilir voxel zeminde çalışır");
+            }
+            return EditFailure.IsEmpty() ? TEXT("Burada kazılacak toprak yok") : EditFailure;
+        }
+
+        FString StaminaFailure;
+        if (!PayWorkOrRollback(ShovelStaminaCost, StaminaFailure))
+        {
+            return StaminaFailure;
+        }
+
+        const float Gained = Record.MovedCellCount * CellM3 * Swell;
+        LooseSoilM3 = FMath::Min(MaxLooseSoilM3, LooseSoilM3 + Gained);
+        return FString::Printf(TEXT("Toprak kazıldı +%.2f m³ (çuval %.2f / %.1f m³)"),
+            Gained, LooseSoilM3, MaxLooseSoilM3);
+    }
+
+    if (LooseSoilM3 < CellM3 * Swell * 0.5f)
+    {
+        return TEXT("Çuvalda toprak yok — önce kaz");
+    }
+
+    const FVector Center = Point + Out * 20.f;
+    const UCapsuleComponent* Capsule = GetCapsuleComponent();
+    if (FVector::Dist2D(Center, GetActorLocation()) < ShovelRadiusCm + Capsule->GetScaledCapsuleRadius()
+        && Center.Z > GetActorLocation().Z - Capsule->GetScaledCapsuleHalfHeight() - ShovelRadiusCm)
+    {
+        return TEXT("Çok yakın — ayağının dibine dökemezsin");
+    }
+
+    if (!EditService->FillSphere(Center, ShovelRadiusCm, Record, EditFailure))
+    {
+        return EditFailure.IsEmpty() ? TEXT("Burası doldurulamaz") : EditFailure;
+    }
+
+    FString StaminaFailure;
+    if (!PayWorkOrRollback(ShovelStaminaCost * ShovelFillStaminaMultiplier, StaminaFailure))
+    {
+        return StaminaFailure;
+    }
+
+    const float Used = FMath::Min(LooseSoilM3, Record.MovedCellCount * CellM3 * Swell);
+    LooseSoilM3 = FMath::Max(0.f, LooseSoilM3 - Used);
+    return FString::Printf(TEXT("Toprak döküldü −%.2f m³ (çuval %.2f / %.1f m³)"),
+        Used, LooseSoilM3, MaxLooseSoilM3);
+}
 FString AForestCharacter::TestBuildWall(int32 LengthCm, int32 Courses)
 {
 	UStaticMesh* LogMesh = LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/UnrealExport/Meshes/SM_RawLog_%d.SM_RawLog_%d"), LengthCm, LengthCm));
