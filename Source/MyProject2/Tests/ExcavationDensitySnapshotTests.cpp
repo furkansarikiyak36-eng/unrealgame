@@ -56,6 +56,14 @@ bool FExcavationDensitySnapshotRevisionTest::RunTest(const FString& Parameters)
         Excavation->ConfigureGridForRuntimeProfile(25.0f, 32, Error));
     TestTrue(TEXT("Successful grid configuration should clear errors"), Error.IsEmpty());
 
+    const float LockedCellSizeCm = Excavation->CellSizeCm;
+    Excavation->CellSizeCm = 50.0f;
+    FWorldDensityChunkSnapshot InvalidGridSnapshot;
+    TestFalse(
+        TEXT("Direct runtime property edits must not reinterpret the locked density grid"),
+        Excavation->BuildChunkSnapshot(FIntVector(0, 0, -1), InvalidGridSnapshot));
+    Excavation->CellSizeCm = LockedCellSizeCm;
+
     FWorldDensityChunkSnapshot Before;
     TestTrue(
         TEXT("A chunk snapshot should sample the configured base density"),
