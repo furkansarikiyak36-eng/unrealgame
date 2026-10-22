@@ -245,6 +245,13 @@ int32 UExcavationLandscapeDensitySource::SampleBaseMaterialIdAtWorld_Implementat
             continue;
         }
 
+        const TOptional<float> ProxySurfaceHeight =
+            Proxy->GetHeightAtLocation(SurfacePosition, EHeightfieldSource::Simple);
+        if (!ProxySurfaceHeight.IsSet())
+        {
+            continue;
+        }
+
         const UPhysicalMaterial* PhysicalMaterial =
             Proxy->GetPhysicalMaterialAtLocation(SurfacePosition, EHeightfieldSource::Simple);
         if (!IsValid(PhysicalMaterial))
