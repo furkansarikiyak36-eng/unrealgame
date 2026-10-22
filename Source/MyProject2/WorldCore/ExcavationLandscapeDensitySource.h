@@ -32,12 +32,19 @@ public:
     /** Returns true when the set of Landscape proxies changed. */
     bool SetLandscapeProxies(const TArray<ALandscapeProxy*>& InProxies);
     bool SetMaterialMappings(const TArray<FExcavationLandscapeMaterialMapping>& InMappings);
+    bool SetDensityTransitionWidthCm(float NewWidthCm);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Excavation|Density", meta = (ClampMin = "1.0"))
+    float DensityTransitionWidthCm = 25.0f;
 
     virtual float SampleBaseDensityAtWorld_Implementation(const FVector& WorldPositionCm) const override;
     virtual int32 SampleBaseMaterialIdAtWorld_Implementation(const FVector& WorldPositionCm) const override;
 
 private:
+    bool TryGetSurfaceHeight(float WorldXcm, float WorldYcm, float& OutHeightCm) const;
+
     TArray<TWeakObjectPtr<ALandscapeProxy>> LandscapeProxies;
+    mutable TMap<FIntPoint, float> SurfaceHeightCache;
 
     UPROPERTY(Transient)
     TArray<FExcavationLandscapeMaterialMapping> MaterialMappings;
