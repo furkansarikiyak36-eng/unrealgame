@@ -2,6 +2,7 @@
 
 #include "DynamicMesh/DynamicMesh3.h"
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
+#include "WorldCore/WorldVoxelMesher.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
 #include "WorldCore/ExcavationVolumeSubsystem.h"
@@ -11,187 +12,103 @@
 
 namespace
 {
-    constexpr float SurfaceIsoLevel = 0.5f;
     constexpr int32 MaxSupportedChunkCellsPerAxis = 64;
 
-    // Cube corners, ordered consistently across adjacent cubes so shared faces use matching diagonals.
-    const int32 CubeCornerOffsets[8][3] =
-    {
-        {0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0},
-        {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1}
-    };
-
-    // Six tetrahedra share the 0-to-6 cube diagonal (marching tetrahedra).
-    const int32 CubeTetrahedra[6][4] =
-    {
-        {0, 5, 1, 6},
-        {0, 1, 2, 6},
-        {0, 2, 3, 6},
-        {0, 3, 7, 6},
-        {0, 7, 4, 6},
-        {0, 4, 5, 6}
-    };
-
-    int32 GridIndex(int32 X, int32 Y, int32 Z, int32 Side)
-    {
-        return (Z * Side + Y) * Side + X;
-    }
-
-    FVector3d InterpolateIsoSurface(
-        int32 A,
-        int32 B,
-        const TArray<float>& Densities,
-        const TArray<FVector3d>& Positions)
-    {
-        const double DensityA = Densities[A];
-        const double DensityB = Densities[B];
-        const double Denominator = DensityB - DensityA;
-        if (FMath::Abs(Denominator) <= SMALL_NUMBER)
-        {
-            return (Positions[A] + Positions[B]) * 0.5;
-        }
-
-        const double Alpha = FMath::Clamp((static_cast<double>(SurfaceIsoLevel) - DensityA) / Denominator, 0.0, 1.0);
-        return Positions[A] + (Positions[B] - Positions[A]) * Alpha;
-    }
-
-    void AddOrientedTriangle(
-        UE::Geometry::FDynamicMesh3& Mesh,
-        const FVector3d& A,
-        const FVector3d& B,
-        const FVector3d& C,
-        const FVector3d& SolidCentroid,
-        const FVector3d& EmptyCentroid,
-        int32 MaterialSlotId,
-        int32 TriangleLimit,
-        bool& bExceededTriangleLimit)
-    {
-        if (bExceededTriangleLimit)
-        {
-            return;
-        }
-
-        if (Mesh.TriangleCount() >= TriangleLimit)
-        {
-            bExceededTriangleLimit = true;
-            return;
-        }
-
-        FVector3d P0 = A;
-        FVector3d P1 = B;
-        FVector3d P2 = C;
-        const FVector3d Normal = FVector3d::CrossProduct(P1 - P0, P2 - P0);
-        const FVector3d Outward = EmptyCentroid - SolidCentroid;
-        if (FVector3d::DotProduct(Normal, Outward) < 0.0)
-        {
-            Swap(P1, P2);
-        }
-
-        const int32 V0 = Mesh.AppendVertex(P0);
-        const int32 V1 = Mesh.AppendVertex(P1);
-        const int32 V2 = Mesh.AppendVertex(P2);
-        if (V0 == UE::Geometry::FDynamicMesh3::InvalidID
-            || V1 == UE::Geometry::FDynamicMesh3::InvalidID
-            || V2 == UE::Geometry::FDynamicMesh3::InvalidID)
-        {
-            bExceededTriangleLimit = true;
-            return;
-        }
-
-        const int32 TriangleId = Mesh.AppendTriangle(V0, V1, V2, 0);
-        if (TriangleId < 0)
-        {
-            // Vertices are unique per triangle; a rejected primitive indicates the candidate is unusable.
-            bExceededTriangleLimit = true;
-            return;
-        }
-
-        if (Mesh.Attributes() && Mesh.Attributes()->HasMaterialID())
-        {
-            Mesh.Attributes()->GetMaterialID()->SetValue(TriangleId, MaterialSlotId);
-        }
-    }
-
-    bool PolygonizeTetrahedron(
-        UE::Geometry::FDynamicMesh3& Mesh,
-        const int32 TetraNodeIds[4],
-        const TArray<float>& Densities,
-        const TArray<FVector3d>& Positions,
-        const FVector3d& WorldOrigin,
-        const UExcavationVolumeSubsystem* Excavation,
+    bool ConvertMeshDataToDynamicMesh(
+        const FWorldVoxelMeshData& Source,
         const TMap<int32, int32>& MaterialSlotByBaseId,
-        int32 TriangleLimit,
-        bool& bExceededTriangleLimit)
+        UE::Geometry::FDynamicMesh3& OutMesh,
+        FString& OutError)
     {
-        int32 SolidNodes[4];
-        int32 EmptyNodes[4];
-        int32 SolidCount = 0;
-        int32 EmptyCount = 0;
-        FVector3d SolidCentroid(0.0, 0.0, 0.0);
-        FVector3d EmptyCentroid(0.0, 0.0, 0.0);
-
-        for (int32 I = 0; I < 4; ++I)
+        OutError.Reset();
+        OutMesh = UE::Geometry::FDynamicMesh3();
+        if (!Source.IsTopologyValid())
         {
-            const int32 Node = TetraNodeIds[I];
-            if (Densities[Node] >= SurfaceIsoLevel)
+            OutError = TEXT("CPU voxel mesh data failed topology validation.");
+            return false;
+        }
+
+        OutMesh.EnableAttributes();
+        OutMesh.Attributes()->EnableMaterialID();
+        UE::Geometry::FDynamicMeshNormalOverlay* NormalOverlay = OutMesh.Attributes()->PrimaryNormals();
+        UE::Geometry::FDynamicMeshUVOverlay* UVOverlay = OutMesh.Attributes()->PrimaryUV();
+        if (!NormalOverlay || !UVOverlay || !OutMesh.Attributes()->GetMaterialID())
+        {
+            OutError = TEXT("Dynamic mesh attributes could not be initialized.");
+            return false;
+        }
+
+        TArray<int32> VertexIds;
+        TArray<int32> NormalIds;
+        TArray<int32> UVIds;
+        VertexIds.Reserve(Source.Vertices.Num());
+        NormalIds.Reserve(Source.Vertices.Num());
+        UVIds.Reserve(Source.Vertices.Num());
+
+        for (int32 Index = 0; Index < Source.Vertices.Num(); ++Index)
+        {
+            const FVector& Position = Source.Vertices[Index];
+            const FVector& Normal = Source.Normals[Index];
+            const FVector2D& UV = Source.UV0.IsEmpty() ? FVector2D::ZeroVector : Source.UV0[Index];
+            const int32 VertexId = OutMesh.AppendVertex(FVector3d(Position));
+            if (VertexId == UE::Geometry::FDynamicMesh3::InvalidID)
             {
-                SolidNodes[SolidCount++] = Node;
-                SolidCentroid += Positions[Node];
+                OutError = TEXT("Dynamic mesh rejected a generated vertex.");
+                return false;
             }
-            else
+
+            const int32 NormalId = NormalOverlay->AppendElement(FVector3f(Normal), VertexId);
+            const int32 UVId = UVOverlay->AppendElement(FVector2f(UV), VertexId);
+            if (NormalId < 0 || UVId < 0)
             {
-                EmptyNodes[EmptyCount++] = Node;
-                EmptyCentroid += Positions[Node];
+                OutError = TEXT("Dynamic mesh rejected a normal or UV overlay element.");
+                return false;
             }
+
+            VertexIds.Add(VertexId);
+            NormalIds.Add(NormalId);
+            UVIds.Add(UVId);
         }
 
-        if (SolidCount == 0 || EmptyCount == 0)
+        for (int32 Triangle = 0; Triangle < Source.TriangleIndices.Num() / 3; ++Triangle)
         {
-            return true;
-        }
-
-        SolidCentroid /= static_cast<double>(SolidCount);
-        EmptyCentroid /= static_cast<double>(EmptyCount);
-
-        int32 MaterialSlotId = 0;
-        int32 BaseMaterialId = 0;
-        if (Excavation
-            && Excavation->TrySampleBaseMaterialIdAtWorld(FVector(WorldOrigin + SolidCentroid), BaseMaterialId))
-        {
-            if (const int32* ResolvedSlot = MaterialSlotByBaseId.Find(BaseMaterialId))
+            const int32 SourceIndex = Triangle * 3;
+            const int32 SourceV0 = Source.TriangleIndices[SourceIndex];
+            const int32 SourceV1 = Source.TriangleIndices[SourceIndex + 1];
+            const int32 SourceV2 = Source.TriangleIndices[SourceIndex + 2];
+            const int32 TriangleId = OutMesh.AppendTriangle(
+                VertexIds[SourceV0], VertexIds[SourceV1], VertexIds[SourceV2], 0);
+            if (TriangleId < 0)
             {
-                MaterialSlotId = *ResolvedSlot;
+                OutError = TEXT("Dynamic mesh rejected a generated triangle.");
+                return false;
             }
+
+            NormalOverlay->SetTriangle(
+                TriangleId,
+                FIndex3i(NormalIds[SourceV0], NormalIds[SourceV1], NormalIds[SourceV2]),
+                false);
+            UVOverlay->SetTriangle(
+                TriangleId,
+                FIndex3i(UVIds[SourceV0], UVIds[SourceV1], UVIds[SourceV2]),
+                false);
+
+            const int32 BaseMaterialId = Source.TriangleMaterialIds.IsEmpty()
+                ? 0
+                : Source.TriangleMaterialIds[Triangle];
+            const int32* MaterialSlot = MaterialSlotByBaseId.Find(BaseMaterialId);
+            OutMesh.Attributes()->GetMaterialID()->SetValue(
+                TriangleId, MaterialSlot ? *MaterialSlot : 0);
         }
 
-        if (SolidCount == 1)
+        if (!OutMesh.CheckValidity(UE::Geometry::EValidityCheckFailMode::ReturnOnly))
         {
-            const FVector3d A = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[0], Densities, Positions);
-            const FVector3d B = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[1], Densities, Positions);
-            const FVector3d C = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[2], Densities, Positions);
-            AddOrientedTriangle(Mesh, A, B, C, SolidCentroid, EmptyCentroid, MaterialSlotId, TriangleLimit, bExceededTriangleLimit);
+            OutError = TEXT("Converted dynamic mesh failed GeometryCore structural validation.");
+            return false;
         }
-        else if (SolidCount == 3)
-        {
-            const FVector3d A = InterpolateIsoSurface(EmptyNodes[0], SolidNodes[0], Densities, Positions);
-            const FVector3d B = InterpolateIsoSurface(EmptyNodes[0], SolidNodes[1], Densities, Positions);
-            const FVector3d C = InterpolateIsoSurface(EmptyNodes[0], SolidNodes[2], Densities, Positions);
-            AddOrientedTriangle(Mesh, A, B, C, SolidCentroid, EmptyCentroid, MaterialSlotId, TriangleLimit, bExceededTriangleLimit);
-        }
-        else
-        {
-            const FVector3d P00 = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[0], Densities, Positions);
-            const FVector3d P01 = InterpolateIsoSurface(SolidNodes[0], EmptyNodes[1], Densities, Positions);
-            const FVector3d P10 = InterpolateIsoSurface(SolidNodes[1], EmptyNodes[0], Densities, Positions);
-            const FVector3d P11 = InterpolateIsoSurface(SolidNodes[1], EmptyNodes[1], Densities, Positions);
-            AddOrientedTriangle(Mesh, P00, P01, P11, SolidCentroid, EmptyCentroid, MaterialSlotId, TriangleLimit, bExceededTriangleLimit);
-            AddOrientedTriangle(Mesh, P00, P11, P10, SolidCentroid, EmptyCentroid, MaterialSlotId, TriangleLimit, bExceededTriangleLimit);
-        }
-
-        return !bExceededTriangleLimit;
+        return true;
     }
 }
-
 AExcavationTerrainChunkActor::AExcavationTerrainChunkActor()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -202,7 +119,9 @@ AExcavationTerrainChunkActor::AExcavationTerrainChunkActor()
     DynamicMeshComponent->SetCollisionObjectType(ECC_WorldStatic);
     DynamicMeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
     DynamicMeshComponent->SetComplexAsSimpleCollisionEnabled(true, false);
+    DynamicMeshComponent->SetDeferredCollisionUpdatesEnabled(true, false);
     DynamicMeshComponent->bUseAsyncCooking = true;
+    Tags.AddUnique(FName(TEXT("World.Object.VoxelSurface")));
     DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     DynamicMeshComponent->SetCanEverAffectNavigation(true);
     DynamicMeshComponent->SetMaterial(0, UMaterial::GetDefaultMaterial(MD_Surface));
@@ -341,19 +260,45 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
     UWorld* World = GetWorld();
     UExcavationVolumeSubsystem* Excavation =
         World ? World->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
-
-    FIntVector BaseCell;
-    if (!DynamicMeshComponent || !RefreshChunkWorldTransform()
-        || !TryGetChunkBaseCell(Excavation, BaseCell))
+    if (!DynamicMeshComponent || !IsValid(Excavation) || !RefreshChunkWorldTransform())
     {
         ClearMeshAndCollision();
         return false;
     }
 
-    DynamicMeshComponent->SetMaterial(0, SurfaceMaterial ? SurfaceMaterial.Get() : UMaterial::GetDefaultMaterial(MD_Surface));
+    FWorldDensityChunkSnapshot Snapshot;
+    if (!Excavation->BuildChunkSnapshot(ChunkCoordinate, Snapshot))
+    {
+        ClearMeshAndCollision();
+        return false;
+    }
+
+    FWorldVoxelMeshData MeshData;
+    FString MesherError;
+    const FWorldMarchingTetrahedraMesher Mesher;
+    if (!Mesher.BuildMesh(Snapshot, MeshData, MesherError)
+        || MeshData.TriangleIndices.Num() / 3 > FMath::Clamp(MaxGeneratedTriangles, 1000, 1000000))
+    {
+        ClearMeshAndCollision();
+        return false;
+    }
+
+    // Do not publish a result if the authoritative density changed while a snapshot
+    // was being processed. The subsystem will enqueue this chunk again if necessary.
+    if (Excavation->GetDensityRevision() != Snapshot.SourceRevision)
+    {
+        if (IsValid(RegisteredSubsystem))
+        {
+            RegisteredSubsystem->QueueChunkRebuild(ChunkCoordinate);
+        }
+        return false;
+    }
 
     TMap<int32, int32> MaterialSlotByBaseId;
     MaterialSlotByBaseId.Add(0, 0);
+    DynamicMeshComponent->SetMaterial(
+        0, SurfaceMaterial ? SurfaceMaterial.Get() : UMaterial::GetDefaultMaterial(MD_Surface));
+
     int32 NextMaterialSlot = 1;
     for (const FExcavationTerrainMaterialLayer& Layer : StratifiedMaterialLayers)
     {
@@ -362,100 +307,21 @@ bool AExcavationTerrainChunkActor::RebuildTerrainChunk()
         {
             continue;
         }
-
         MaterialSlotByBaseId.Add(Layer.BaseMaterialId, NextMaterialSlot);
         DynamicMeshComponent->SetMaterial(NextMaterialSlot, Layer.Material);
         ++NextMaterialSlot;
     }
 
-    const int32 Cells = Excavation->CellsPerChunkAxis;
-    const int32 Side = Cells + 1;
-    const int32 SampleCount = Side * Side * Side;
-    const double CellSize = Excavation->CellSizeCm;
-    const double HalfCell = CellSize * 0.5;
-
-    TArray<float> Densities;
-    TArray<FVector3d> Positions;
-    Densities.SetNumUninitialized(SampleCount);
-    Positions.SetNumUninitialized(SampleCount);
-
-    for (int32 Z = 0; Z < Side; ++Z)
-    {
-        for (int32 Y = 0; Y < Side; ++Y)
-        {
-            for (int32 X = 0; X < Side; ++X)
-            {
-                const int32 Sample = GridIndex(X, Y, Z, Side);
-                Positions[Sample] = FVector3d(
-                    (static_cast<double>(X) * CellSize) + HalfCell,
-                    (static_cast<double>(Y) * CellSize) + HalfCell,
-                    (static_cast<double>(Z) * CellSize) + HalfCell);
-
-                const FVector WorldSample(
-                    (static_cast<double>(BaseCell.X + X) * CellSize) + HalfCell,
-                    (static_cast<double>(BaseCell.Y + Y) * CellSize) + HalfCell,
-                    (static_cast<double>(BaseCell.Z + Z) * CellSize) + HalfCell);
-
-                if (!Excavation->TrySampleDensityAtWorld(WorldSample, Densities[Sample]))
-                {
-                    ClearMeshAndCollision();
-                    return false;
-                }
-            }
-        }
-    }
-
     UE::Geometry::FDynamicMesh3 CandidateMesh;
-    CandidateMesh.EnableAttributes();
-    CandidateMesh.Attributes()->EnableMaterialID();
-    bool bExceededTriangleLimit = false;
-
-    for (int32 Z = 0; Z < Cells && !bExceededTriangleLimit; ++Z)
-    {
-        for (int32 Y = 0; Y < Cells && !bExceededTriangleLimit; ++Y)
-        {
-            for (int32 X = 0; X < Cells && !bExceededTriangleLimit; ++X)
-            {
-                int32 CubeNodes[8];
-                for (int32 Corner = 0; Corner < 8; ++Corner)
-                {
-                    CubeNodes[Corner] = GridIndex(
-                        X + CubeCornerOffsets[Corner][0],
-                        Y + CubeCornerOffsets[Corner][1],
-                        Z + CubeCornerOffsets[Corner][2],
-                        Side);
-                }
-
-                for (int32 Tetra = 0; Tetra < 6 && !bExceededTriangleLimit; ++Tetra)
-                {
-                    int32 TetraNodes[4];
-                    for (int32 Corner = 0; Corner < 4; ++Corner)
-                    {
-                        TetraNodes[Corner] = CubeNodes[CubeTetrahedra[Tetra][Corner]];
-                    }
-
-                    PolygonizeTetrahedron(
-                        CandidateMesh,
-                        TetraNodes,
-                        Densities,
-                        Positions,
-                        FVector3d(GetActorLocation()),
-                        Excavation,
-                        MaterialSlotByBaseId,
-                        FMath::Max(1000, MaxGeneratedTriangles),
-                        bExceededTriangleLimit);
-                }
-            }
-        }
-    }
-
-    if (bExceededTriangleLimit)
+    FString ConversionError;
+    if (!ConvertMeshDataToDynamicMesh(MeshData, MaterialSlotByBaseId, CandidateMesh, ConversionError))
     {
         ClearMeshAndCollision();
         return false;
     }
 
     DynamicMeshComponent->SetMesh(MoveTemp(CandidateMesh));
+    DynamicMeshComponent->ValidateMaterialSlots(true, false);
     if (DynamicMeshComponent->GetMesh() && DynamicMeshComponent->GetMesh()->TriangleCount() > 0)
     {
         DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
