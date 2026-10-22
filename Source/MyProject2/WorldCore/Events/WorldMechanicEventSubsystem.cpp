@@ -37,18 +37,6 @@ bool UWorldMechanicEventSubsystem::EnqueueEvent(FWorldMechanicEvent Event)
         Event.EventId = FGuid::NewGuid();
     }
 
-    if (Event.Type == EWorldMechanicEventType::VoxelEditCommitted
-        || Event.Type == EWorldMechanicEventType::VoxelEditRolledBack
-        || Event.Type == EWorldMechanicEventType::VoxelWorldReset
-        || Event.Type == EWorldMechanicEventType::PlacementCommitted
-        || Event.Type == EWorldMechanicEventType::ShoringPlanCommitted
-        || Event.Type == EWorldMechanicEventType::StructureBroken
-        || Event.Type == EWorldMechanicEventType::WorldLoadCompleted)
-    {
-        ++WorldVersion;
-    }
-    Event.WorldVersion = WorldVersion;
-
     const int32 QueueLimit = FMath::Clamp(MaxQueuedEvents, 64, 65536);
     if (PendingEvents.Num() >= QueueLimit)
     {
@@ -65,6 +53,21 @@ bool UWorldMechanicEventSubsystem::EnqueueEvent(FWorldMechanicEvent Event)
         }
         PendingEvents.RemoveAt(ReplaceIndex, 1, EAllowShrinking::No);
     }
+
+    const bool bChangesWorldVersion =
+        Event.Type == EWorldMechanicEventType::VoxelEditCommitted
+        || Event.Type == EWorldMechanicEventType::VoxelEditRolledBack
+        || Event.Type == EWorldMechanicEventType::VoxelWorldReset
+        || Event.Type == EWorldMechanicEventType::PlacementCommitted
+        || Event.Type == EWorldMechanicEventType::ShoringPlanCommitted
+        || Event.Type == EWorldMechanicEventType::StructureBroken
+        || Event.Type == EWorldMechanicEventType::WorldLoadCompleted;
+
+    if (bChangesWorldVersion)
+    {
+        ++WorldVersion;
+    }
+    Event.WorldVersion = WorldVersion;
 
     if (Event.bHighPriority)
     {
@@ -84,6 +87,16 @@ bool UWorldMechanicEventSubsystem::PublishImmediate(FWorldMechanicEvent Event)
         return false;
     }
     if (!Event.EventId.IsValid()) Event.EventId = FGuid::NewGuid();
+    if (Event.Type == EWorldMechanicEventType::VoxelEditCommitted
+        || Event.Type == EWorldMechanicEventType::VoxelEditRolledBack
+        || Event.Type == EWorldMechanicEventType::VoxelWorldReset
+        || Event.Type == EWorldMechanicEventType::PlacementCommitted
+        || Event.Type == EWorldMechanicEventType::ShoringPlanCommitted
+        || Event.Type == EWorldMechanicEventType::StructureBroken
+        || Event.Type == EWorldMechanicEventType::WorldLoadCompleted)
+    {
+        ++WorldVersion;
+    }
     Event.WorldVersion = WorldVersion;
     Dispatch(Event);
     return true;
