@@ -29,7 +29,8 @@ enum class EWorldMechanicEventType : uint8
     WaterStateChanged,
     SoilStateChanged,
     WorldSaveCompleted,
-    WorldLoadCompleted
+    WorldLoadCompleted,
+    SurvivalEnvironmentChanged
 };
 
 /** Common envelope for cross-system world events; payload interpretation is determined by Type. */
@@ -54,6 +55,12 @@ struct MYPROJECT2_API FWorldMechanicEvent
     float ScalarValue = 0.0f;
 
     UPROPERTY(BlueprintReadOnly, Category = "World Event")
+    float SecondaryValue = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "World Event")
+    float TertiaryValue = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "World Event")
     FName SourceTag = NAME_None;
 
     UPROPERTY(BlueprintReadOnly, Category = "World Event")
@@ -73,6 +80,7 @@ struct MYPROJECT2_API FWorldMechanicEvent
         return Type != EWorldMechanicEventType::None
             && FMath::IsFinite(PositionCm.X) && FMath::IsFinite(PositionCm.Y) && FMath::IsFinite(PositionCm.Z)
             && FMath::IsFinite(ExtentCm.X) && FMath::IsFinite(ExtentCm.Y) && FMath::IsFinite(ExtentCm.Z)
-            && FMath::IsFinite(ScalarValue);
+            && FMath::IsFinite(ScalarValue)
+            && FMath::IsFinite(SecondaryValue) && FMath::IsFinite(TertiaryValue);
     }
 };
