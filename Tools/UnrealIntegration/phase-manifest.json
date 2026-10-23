@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "targetEngine": "Unreal Engine 5.8",
+  "purpose": "Generate one runtime plugin at a time from the portable Modules/ source tree. These packages compile the engine-neutral algorithms; they do not implement the final Unreal Actor/component adapters.",
+  "phases": [
+    {
+      "phase": 0,
+      "pluginName": "WM00_Core",
+      "moduleName": "WMCoreRuntime",
+      "friendlyName": "World Mechanics 00 - Core",
+      "description": "Shared IDs, revisions, math contracts, and runtime profiles.",
+      "portableModules": ["CoreContracts", "RuntimeProfiles"],
+      "requiresPlugins": [],
+      "moduleDependencies": []
+    },
+    {
+      "phase": 1,
+      "pluginName": "WM01_WorldQuery",
+      "moduleName": "WMWorldQueryRuntime",
+      "friendlyName": "World Mechanics 01 - World Query",
+      "description": "Portable world-scan contracts and region classification.",
+      "portableModules": ["WorldScan", "WorldClassification"],
+      "requiresPlugins": ["WM00_Core"],
+      "moduleDependencies": ["WMCoreRuntime"]
+    },
+    {
+      "phase": 2,
+      "pluginName": "WM02_Terrain",
+      "moduleName": "WMTerrainRuntime",
+      "friendlyName": "World Mechanics 02 - Terrain",
+      "description": "Density terrain, derived mesh data, revision/dirty queues, and placement snap rules.",
+      "portableModules": ["TerrainVoxel", "MeshCollision", "PlacementSnap"],
+      "requiresPlugins": ["WM00_Core", "WM01_WorldQuery"],
+      "moduleDependencies": ["WMCoreRuntime", "WMWorldQueryRuntime"]
+    },
+    {
+      "phase": 3,
+      "pluginName": "WM03_Construction",
+      "moduleName": "WMConstructionRuntime",
+      "friendlyName": "World Mechanics 03 - Construction",
+      "description": "Excavation preflight, shoring plans, and structural integrity decisions.",
+      "portableModules": ["Excavation", "Shoring", "StructuralIntegrity"],
+      "requiresPlugins": ["WM00_Core", "WM01_WorldQuery", "WM02_Terrain"],
+      "moduleDependencies": ["WMCoreRuntime", "WMWorldQueryRuntime", "WMTerrainRuntime"]
+    },
+    {
+      "phase": 4,
+      "pluginName": "WM04_Environment",
+      "moduleName": "WMEnvironmentRuntime",
+      "friendlyName": "World Mechanics 04 - Environment",
+      "description": "Water/soil/fire simulation and survival exposure calculations.",
+      "portableModules": ["WorldEnvironment", "Survival"],
+      "requiresPlugins": ["WM00_Core", "WM03_Construction"],
+      "moduleDependencies": ["WMCoreRuntime", "WMConstructionRuntime"]
+    },
+    {
+      "phase": 5,
+      "pluginName": "WM05_PersistenceGameplay",
+      "moduleName": "WMIntegrationRuntime",
+      "friendlyName": "World Mechanics 05 - Persistence and Gameplay",
+      "description": "Versioned density persistence, restore staging, raid/spawn decisions, work scheduling, material rules, plant/animal models, and crafting preflight.",
+      "portableModules": ["Persistence", "GameplayIntegration"],
+      "requiresPlugins": ["WM00_Core", "WM01_WorldQuery", "WM02_Terrain", "WM03_Construction", "WM04_Environment"],
+      "moduleDependencies": ["WMCoreRuntime", "WMWorldQueryRuntime", "WMTerrainRuntime", "WMConstructionRuntime", "WMEnvironmentRuntime"]
+    }
+  ]
+}
