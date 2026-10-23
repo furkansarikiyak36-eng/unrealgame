@@ -67,6 +67,7 @@ Targets: TerrainVoxel, MeshCollision, PlacementSnap, Shoring, StructuralIntegrit
 - CPU surface meshing rejects density grids over an explicit input-sample cap before scanning all samples or constructing the edge cache.
 - Degenerate triangles are skipped before consuming triangle budget; mixed-material tetrahedra use a deterministic majority-material policy with lowest-ID tie break.
 - Placement snapping bounds candidate count, validates dot-threshold ranges, uses strict deterministic distance ordering and checks region permission again at commit time.
+- Adds a separate opt-in 20 cm plank-grid helper so the plank grid does not implicitly alter log/socket or terrain-tool placement.
 - Structural assessment aggregates dependent loads upstream over active support edges, splits load deterministically across multiple incoming supports, and exposes the aggregate demand/ratio in assessment output.
 
 **Remaining:** local UE Dynamic Mesh/collision/navigation publication and stale-product rejection at the engine adapter; actual oriented-volume overlap provider; physical shoring anchors, connected assembly coverage and region-local invalidation. CI for the current source commit must pass before this batch is treated as portable-code verified.
