@@ -13,7 +13,7 @@
 - Ratings are code-quality assessments, not test-count ratings. Do not assign four stars merely because tests pass.
 
 ## Phase 1 — State integrity and atomic transactions
-**Status: IN PROGRESS — wood-cut output staging started.**
+**Status: IN PROGRESS — wood-cut output staging and staged inventory restore implemented; UE validation pending.**
 
 Targets: wood cutting; inventory restore/drop/crafting; world persistence and density snapshots; runtime grid/profile identity.
 
@@ -92,4 +92,15 @@ Changes:
 - Preserve source transform, collision and velocities for rollback/commit handling.
 - Document `ReshapeVisual` as a visual-only callback to avoid gameplay side effects during the transaction.
 
-Remaining in Phase 1: inventory restore/drop/crafting and persistence are not yet changed. The new code has not been verified with UE 5.8 UBT/UHT or in-editor/PIE; do not treat this patch as a passing Unreal build until that verification is run.
+### Patch 2 — Inventory restore
+File changed:
+- `Source/MyProject2/InventoryCore/InventoryComponent.cpp`
+
+Changes:
+- Build restored slot state in a temporary array; do not clear or partially fill the live inventory during validation.
+- Preserve locked slot contents and slot flags as the old clear behavior intended.
+- Validate item IDs/counts, stack limits, finite non-negative weights and total resulting weight.
+- Pack stacks against staged state, then replace live slots in one assignment.
+- Emit one inventory-changed notification only after commit, rather than exposing intermediate clear/add states.
+
+Remaining in Phase 1: world-item drop/crafting transaction coordination, persistence staged replacement/atomic file save, and runtime grid/profile identity are not yet changed. The code has not been verified with UE 5.8 UBT/UHT or in-editor/PIE; do not treat this patch as a passing Unreal build until that verification is run.
