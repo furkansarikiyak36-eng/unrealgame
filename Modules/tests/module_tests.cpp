@@ -76,7 +76,10 @@ bool TestProfilesAndCoordinates() {
   auto low=wm::RuntimeProfile::LowMid(), high=wm::RuntimeProfile::HighEnd();
   CHECK(low.Validate()); CHECK(high.Validate());
   CHECK(wm::FloorDiv(-1,32)==-1); CHECK(wm::FloorDiv(-32,32)==-1); CHECK(wm::FloorDiv(-33,32)==-2);
-  wm::ProfileSessionLock lock; CHECK(lock.Lock(low)); CHECK(!lock.Lock(high));
+  wm::ProfileSessionLock lock; CHECK(lock.Lock(low));
+  auto budgetTuned=low; budgetTuned.maxQueryResults=32;
+  CHECK(lock.Lock(budgetTuned)); CHECK(lock.Get().maxQueryResults==32);
+  CHECK(!lock.Lock(high));
   return true;
 }
 bool TestScanAndClassification() {
@@ -85,6 +88,10 @@ bool TestScanAndClassification() {
   CHECK(hit); CHECK(hit.value.hit); CHECK(std::abs(provider.lastDirection.x-1.0)<1e-9);
   auto bad=scan.Ray({{0,0,0},{0,0,0},5,{}});
   CHECK(!bad&&bad.error==wm::ErrorCode::InvalidArgument);
+  auto ignored=scan.Ray({{0,0,0},{1,0,0},5,{42}});
+  CHECK(ignored&&!ignored.value.hit);
+  auto duplicateIgnore=scan.Ray({{0,0,0},{1,0,0},5,{42,42}});
+  CHECK(!duplicateIgnore&&duplicateIgnore.error==wm::ErrorCode::Conflict);
   std::vector<wm::ClassificationEvidence> evidence{
     {wm::RegionKind::EditableVoxel,wm::EvidenceSource::GeometryFallback,false,90,"inferred soil"},
     {wm::RegionKind::StaticGeometry,wm::EvidenceSource::ExplicitTag,true,10,"authored deny"}
@@ -99,6 +106,15 @@ bool TestClassificationMapAndQueryBudgets() {
   wm::ShapeSweepRequest sweep; sweep.bounds={{-1,-1,-1},{1,1,1}}; sweep.start={0,0,0}; sweep.end={1,0,0};
   sweep.maxDistanceM=2; sweep.maxResults=1;
   auto hits=scan.ShapeSweep(sweep); CHECK(hits); CHECK(hits.value.size()==1); CHECK(hits.value.front().targetId==42);
+  auto ignoredSweep=sweep; ignoredSweep.ignored={42};
+  auto filteredHits=scan.ShapeSweep(ignoredSweep);
+  CHECK(filteredHits); CHECK(filteredHits.value.size()==1); CHECK(filteredHits.value.front().targetId==43);
+  auto duplicateSweep=sweep; duplicateSweep.ignored={42,42};
+  auto duplicateSweepResult=scan.ShapeSweep(duplicateSweep);
+  CHECK(!duplicateSweepResult&&duplicateSweepResult.error==wm::ErrorCode::Conflict);
+  auto oversizedSweep=sweep; oversizedSweep.maxResults=65;
+  auto oversizedSweepResult=scan.ShapeSweep(oversizedSweep);
+  CHECK(!oversizedSweepResult&&oversizedSweepResult.error==wm::ErrorCode::BudgetExceeded);
   auto samples=scan.SampleSurface({{-1,-1,-1},{1,1,1}},3); CHECK(samples); CHECK(samples.value.size()==1);
   auto tooMany=scan.SampleSurface({{-1,-1,-1},{1,1,1}},6); CHECK(!tooMany);
 
@@ -130,6 +146,22 @@ bool TestClassificationMapAndQueryBudgets() {
   auto failedBatch=wm::LandscapeBuilder::BuildDirtyCells(map,{{3,0,0},{99,0,0}},probe,10);
   CHECK(!failedBatch); CHECK(map.GetRevision()==beforeFailedBatch);
   auto untouched=map.ClassifyAt({25,1,1}); CHECK(untouched); CHECK(untouched.value.kind==wm::RegionKind::Unknown);
+
+  wm::ClassificationMap boundedMap({0,0,0},8.0);
+  CHECK(boundedMap.SetCellEvidence({0,0,0},{{wm::RegionKind::EditableVoxel,wm::EvidenceSource::ExistingCell,false,1,"a"}}));
+  CHECK(boundedMap.SetCellEvidence({1,0,0},{{wm::RegionKind::StaticGeometry,wm::EvidenceSource::ExistingCell,false,2,"b"}}));
+  auto updateExisting=boundedMap.UpsertCells({{{0,0,0},{{wm::RegionKind::Water,wm::EvidenceSource::LayerMarker,false,3,"updated a"}}}},2);
+  CHECK(updateExisting); CHECK(boundedMap.CellCount()==2);
+  const auto revisionAtCap=boundedMap.GetRevision();
+  auto overCap=boundedMap.UpsertCells({{{2,0,0},{{wm::RegionKind::Water,wm::EvidenceSource::LayerMarker,false,4,"new c"}}}},2);
+  CHECK(!overCap&&overCap.error==wm::ErrorCode::BudgetExceeded);
+  CHECK(boundedMap.GetRevision()==revisionAtCap); CHECK(boundedMap.CellCount()==2);
+  auto duplicateDirty=boundedMap.UpsertCells({
+    {{0,0,0},{{wm::RegionKind::Water,wm::EvidenceSource::LayerMarker,false,3,"one"}}},
+    {{0,0,0},{{wm::RegionKind::StaticGeometry,wm::EvidenceSource::LayerMarker,false,4,"two"}}}
+  },2);
+  CHECK(!duplicateDirty&&duplicateDirty.error==wm::ErrorCode::Conflict);
+  CHECK(boundedMap.GetRevision()==revisionAtCap);
   return true;
 }
 bool TestCpuMesherAndRevisionGate() {
@@ -196,6 +228,8 @@ bool TestSnapAndExcavation() {
   wm::DensityVolume terrain(wm::RuntimeProfile::LowMid());
   wm::ExcavationService dig(terrain,[](const wm::Vec3&){
     wm::ClassificationResult c; c.kind=wm::RegionKind::EditableVoxel; c.canDig=true; c.mapRevision=5; return c;
+  },[](const wm::RawHit& observed){
+    return wm::Result<wm::RawHit>::Success(observed);
   });
   wm::ExcavationRequest req; req.operationId="dig-live"; req.intendedTargetId=42;
   req.observation={true,42,{0,0,0},{0,0,1},1.0,3}; req.expectedClassificationRevision=5;
@@ -204,10 +238,24 @@ bool TestSnapAndExcavation() {
   wm::DensityVolume blockedTerrain(wm::RuntimeProfile::LowMid());
   wm::ExcavationService blocked(blockedTerrain,[](const wm::Vec3&){
     wm::ClassificationResult c; c.kind=wm::RegionKind::StaticGeometry; c.mapRevision=5; return c;
+  },[](const wm::RawHit& observed){
+    return wm::Result<wm::RawHit>::Success(observed);
   });
   req.operationId="blocked-dig"; req.edit.expectedRevision=blockedTerrain.GetRevision();
   auto denied=blocked.Execute(req); CHECK(!denied&&denied.error==wm::ErrorCode::Unsupported);
   CHECK(blockedTerrain.GetRevision()==1);
+
+  wm::DensityVolume staleTerrain(wm::RuntimeProfile::LowMid());
+  wm::ExcavationService staleDig(staleTerrain,[](const wm::Vec3&){
+    wm::ClassificationResult c; c.kind=wm::RegionKind::EditableVoxel; c.canDig=true; c.mapRevision=5; return c;
+  },[](const wm::RawHit& observed){
+    wm::RawHit newer=observed; ++newer.sourceRevision;
+    return wm::Result<wm::RawHit>::Success(newer);
+  });
+  req.operationId="stale-target-dig"; req.edit.expectedRevision=staleTerrain.GetRevision();
+  auto staleTarget=staleDig.Execute(req);
+  CHECK(!staleTarget&&staleTarget.error==wm::ErrorCode::StaleRevision);
+  CHECK(staleTerrain.GetRevision()==1);
   return true;
 }
 bool TestShoringPlanner() {
