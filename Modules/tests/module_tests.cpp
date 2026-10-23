@@ -250,6 +250,14 @@ bool TestSnapAndExcavation() {
   auto badThresholdResult=wm::PlacementSnapResolver::Resolve(badThreshold,{candidate});
   CHECK(!badThresholdResult&&badThresholdResult.error==wm::ErrorCode::InvalidArgument);
 
+  auto plankGrid=wm::PlacementSnapResolver::SnapPlankPositionToGrid({0.29,-0.31,1.1},{0,0,0});
+  CHECK(plankGrid);
+  CHECK(std::abs(plankGrid.value.x-0.2)<1e-9);
+  CHECK(std::abs(plankGrid.value.y+0.4)<1e-9);
+  CHECK(std::abs(plankGrid.value.z-1.2)<1e-9);
+  auto invalidPlankGrid=wm::PlacementSnapResolver::SnapPlankPositionToGrid({0,0,0},{0,0,0},0);
+  CHECK(!invalidPlankGrid&&invalidPlankGrid.error==wm::ErrorCode::InvalidArgument);
+
   wm::DensityVolume terrain(wm::RuntimeProfile::LowMid());
   wm::ExcavationService dig(terrain,[](const wm::Vec3&){
     wm::ClassificationResult c; c.kind=wm::RegionKind::EditableVoxel; c.canDig=true; c.mapRevision=5; return c;
