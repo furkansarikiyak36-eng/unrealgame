@@ -5,9 +5,7 @@ param(
     [int]$Phase,
 
     [Parameter(Mandatory = $true)]
-    [string]$ProjectRoot,
-
-    [switch]$ReplaceExisting
+    [string]$ProjectRoot
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,6 +19,14 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path, $Content, $encoding)
 }
 
+function Get-RelativePortablePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$FullPath
+    )
+    return $FullPath.Substring($Root.Length).TrimStart([char[]]@('\', '/')).Replace('\', '/')
+}
+
 $resolvedProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 $uprojectFiles = @(Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter "*.uproject" -File)
 if ($uprojectFiles.Count -eq 0) {
@@ -29,8 +35,8 @@ if ($uprojectFiles.Count -eq 0) {
 
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $manifestPath = Join-Path $PSScriptRoot "phase-manifest.json"
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-$phaseData = @($manifest.phases | Where-Object { [int]$_.phase -eq $Phase }) | Select-Object -First 1
+$sourceManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+$phaseData = @($sourceManifest.phases | Where-Object { [int]$_.phase -eq $Phase }) | Select-Object -First 1
 if ($null -eq $phaseData) {
     throw "Phase $Phase is not defined in $manifestPath"
 }
@@ -40,87 +46,50 @@ if (-not (Test-Path -LiteralPath $pluginRoot -PathType Container)) {
     New-Item -ItemType Directory -Path $pluginRoot | Out-Null
 }
 
-# Require the dependency chain to exist before adding a higher phase.
-foreach ($requiredPlugin in @($phaseData.requiresPlugins)) {
-    $requiredDescriptor = Join-Path (Join-Path $pluginRoot ([string]$requiredPlugin)) ([string]$requiredPlugin + ".uplugin")
-    if (-not (Test-Path -LiteralPath $requiredDescriptor -PathType Leaf)) {
-        throw "Missing dependency plugin '$requiredPlugin'. Add phases in order (0, 1, 2, 3, 4, 5) before adding phase $Phase."
+$pluginName = [string]$sourceManifest.pluginName
+$moduleName = [string]$sourceManifest.runtimeModuleName
+$pluginDestination = Join-Path $pluginRoot $pluginName
+$descriptorPath = Join-Path $pluginDestination ($pluginName + ".uplugin")
+$integrationManifestPath = Join-Path $pluginDestination "WorldMechanicsIntegration.json"
+$existingIntegration = $null
+
+if ($Phase -eq 0) {
+    if (Test-Path -LiteralPath $pluginDestination) {
+        throw "The plugin folder already exists: $pluginDestination. Back it up and remove it manually only if you intend to start a new integration."
+    }
+}
+else {
+    if (-not (Test-Path -LiteralPath $descriptorPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $integrationManifestPath -PathType Leaf)) {
+        throw "WorldMechanics phase 0 is missing. Export and build phase 0 first."
+    }
+
+    $existingIntegration = Get-Content -LiteralPath $integrationManifestPath -Raw | ConvertFrom-Json
+    $installedPhases = @($existingIntegration.integratedPhases)
+    if ($installedPhases.Count -ne $Phase) {
+        throw "Expected phases 0 through $($Phase - 1) before adding phase $Phase. Current manifest contains $($installedPhases.Count) phase(s)."
+    }
+    for ($i = 0; $i -lt $Phase; $i++) {
+        if ([int]$installedPhases[$i] -ne $i) {
+            throw "Phases must be integrated in strict order. Phase $i is missing or out of order."
+        }
     }
 }
 
-$destinationPlugin = Join-Path $pluginRoot ([string]$phaseData.pluginName)
-if (Test-Path -LiteralPath $destinationPlugin) {
-    if (-not $ReplaceExisting) {
-        throw "Plugin folder already exists: $destinationPlugin. Back it up first; use -ReplaceExisting only if you intend to replace the entire generated plugin folder."
-    }
-}
-
-# Stage beside the target so the final directory move stays on the same volume.
+# Stage only this phase. Existing plugin code and user-authored adapters are never deleted.
 $tempRoot = Join-Path $pluginRoot (".wm-stage-" + [Guid]::NewGuid().ToString("N"))
-$stagedPlugin = Join-Path $tempRoot ([string]$phaseData.pluginName)
-New-Item -ItemType Directory -Path $stagedPlugin -Force | Out-Null
+$stagedPlugin = Join-Path $tempRoot $pluginName
+$stagedModuleRoot = Join-Path (Join-Path $stagedPlugin "Source") $moduleName
+$publicRoot = Join-Path $stagedModuleRoot "Public"
+$privateRoot = Join-Path $stagedModuleRoot "Private"
+New-Item -ItemType Directory -Path $publicRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $privateRoot -Force | Out-Null
+
+$portableFilePaths = New-Object System.Collections.Generic.List[string]
 $headerCount = 0
 $sourceCount = 0
 
 try {
-    $descriptorDependencies = @(
-        @($phaseData.requiresPlugins) | ForEach-Object {
-            [ordered]@{ Name = [string]$_; Enabled = $true }
-        }
-    )
-    $descriptor = [ordered]@{
-        FileVersion = 3
-        Version = 1
-        VersionName = "0.1.0"
-        FriendlyName = [string]$phaseData.friendlyName
-        Description = [string]$phaseData.description
-        Category = "Gameplay"
-        CanContainContent = $false
-        IsBetaVersion = $true
-        Modules = @(
-            [ordered]@{
-                Name = [string]$phaseData.moduleName
-                Type = "Runtime"
-                LoadingPhase = "Default"
-            }
-        )
-        Plugins = $descriptorDependencies
-    }
-
-    Write-Utf8NoBom -Path (Join-Path $stagedPlugin ([string]$phaseData.pluginName + ".uplugin")) -Content ($descriptor | ConvertTo-Json -Depth 10)
-    
-    $sourceModuleName = [string]$phaseData.moduleName
-    $moduleRoot = Join-Path (Join-Path $stagedPlugin "Source") $sourceModuleName
-    $publicRoot = Join-Path $moduleRoot "Public"
-    $privateRoot = Join-Path $moduleRoot "Private"
-    New-Item -ItemType Directory -Path $publicRoot -Force | Out-Null
-    New-Item -ItemType Directory -Path $privateRoot -Force | Out-Null
-
-    $moduleDependencies = @("Core") + @($phaseData.moduleDependencies)
-    $moduleDependencyText = ($moduleDependencies | ForEach-Object { '"' + [string]$_ + '"' }) -join ", "
-    $buildRules = @"
-using UnrealBuildTool;
-
-public class $sourceModuleName : ModuleRules
-{
-    public $sourceModuleName(ReadOnlyTargetRules Target) : base(Target)
-    {
-        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-        CppStandard = CppStandardVersion.Cpp17;
-        bUseUnity = false;
-        PublicDependencyModuleNames.AddRange(new string[] { $moduleDependencyText });
-    }
-}
-"@
-    Write-Utf8NoBom -Path (Join-Path $moduleRoot ($sourceModuleName + ".Build.cs")) -Content $buildRules
-
-    $moduleEntry = @"
-#include "Modules/ModuleManager.h"
-
-IMPLEMENT_MODULE(FDefaultModuleImpl, $sourceModuleName)
-"@
-    Write-Utf8NoBom -Path (Join-Path $privateRoot ($sourceModuleName + "Module.cpp")) -Content $moduleEntry
-
     foreach ($portableModule in @($phaseData.portableModules)) {
         $portableRoot = Join-Path (Join-Path $repositoryRoot "Modules") ([string]$portableModule)
         if (-not (Test-Path -LiteralPath $portableRoot -PathType Container)) {
@@ -130,14 +99,15 @@ IMPLEMENT_MODULE(FDefaultModuleImpl, $sourceModuleName)
         $includeRoot = Join-Path $portableRoot "include"
         if (Test-Path -LiteralPath $includeRoot -PathType Container) {
             foreach ($header in @(Get-ChildItem -LiteralPath $includeRoot -Filter "*.hpp" -File -Recurse)) {
-                $relativePath = $header.FullName.Substring($includeRoot.Length).TrimStart([char[]]@('\', '/'))
-                $targetPath = Join-Path $publicRoot $relativePath
+                $relativePath = Get-RelativePortablePath -Root $includeRoot -FullPath $header.FullName
+                $targetPath = Join-Path $publicRoot ($relativePath.Replace('/', [IO.Path]::DirectorySeparatorChar))
                 $targetDirectory = Split-Path -Parent $targetPath
                 New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
                 if (Test-Path -LiteralPath $targetPath) {
-                    throw "Header name collision in this phase: $targetPath"
+                    throw "Duplicate header in this phase: $relativePath"
                 }
                 Copy-Item -LiteralPath $header.FullName -Destination $targetPath
+                $portableFilePaths.Add(("Source/{0}/Public/{1}" -f $moduleName, $relativePath))
                 $headerCount++
             }
         }
@@ -145,14 +115,15 @@ IMPLEMENT_MODULE(FDefaultModuleImpl, $sourceModuleName)
         $sourceRoot = Join-Path $portableRoot "src"
         if (Test-Path -LiteralPath $sourceRoot -PathType Container) {
             foreach ($source in @(Get-ChildItem -LiteralPath $sourceRoot -Filter "*.cpp" -File -Recurse)) {
-                $relativePath = $source.FullName.Substring($sourceRoot.Length).TrimStart([char[]]@('\', '/'))
-                $targetPath = Join-Path $privateRoot $relativePath
+                $relativePath = Get-RelativePortablePath -Root $sourceRoot -FullPath $source.FullName
+                $targetPath = Join-Path $privateRoot ($relativePath.Replace('/', [IO.Path]::DirectorySeparatorChar))
                 $targetDirectory = Split-Path -Parent $targetPath
                 New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
                 if (Test-Path -LiteralPath $targetPath) {
-                    throw "Source filename collision in this phase: $targetPath"
+                    throw "Duplicate source filename in this phase: $relativePath"
                 }
                 Copy-Item -LiteralPath $source.FullName -Destination $targetPath
+                $portableFilePaths.Add(("Source/{0}/Private/{1}" -f $moduleName, $relativePath))
                 $sourceCount++
             }
         }
@@ -162,34 +133,118 @@ IMPLEMENT_MODULE(FDefaultModuleImpl, $sourceModuleName)
         throw "No portable headers were copied for phase $Phase."
     }
 
-    $packageReadme = @"
-# $($phaseData.friendlyName)
-
-Generated by \`Tools/UnrealIntegration/Export-Phase.ps1\`.
-
-- Portable headers copied: $headerCount
-- Portable .cpp files copied: $sourceCount
-- C++ standard: C++17
-- Engine-specific Actor, UObject, subsystem, navigation, rendering and editor adapters: **not included yet**
-
-This package exposes the existing engine-neutral \`wm\` algorithms as an Unreal runtime module. It is an integration starting point, not a claim that every mechanic is already wired to the live game world. Run Unreal Build Tool first, then implement and test the adapters described in \`Docs/UNREAL_INCREMENTAL_INTEGRATION.md\`.
-"@
-    Write-Utf8NoBom -Path (Join-Path $stagedPlugin "README.md") -Content $packageReadme
-
-    if (Test-Path -LiteralPath $destinationPlugin) {
-        if (-not $ReplaceExisting) {
-            throw "Plugin folder already exists: $destinationPlugin"
+    if ($Phase -eq 0) {
+        $descriptor = [ordered]@{
+            FileVersion = 3
+            Version = 1
+            VersionName = "0.1.0"
+            FriendlyName = "World Mechanics"
+            Description = "Incrementally integrated, engine-neutral world mechanics algorithms."
+            Category = "Gameplay"
+            CanContainContent = $false
+            IsBetaVersion = $true
+            Modules = @(
+                [ordered]@{
+                    Name = $moduleName
+                    Type = "Runtime"
+                    LoadingPhase = "Default"
+                }
+            )
         }
-        Remove-Item -LiteralPath $destinationPlugin -Recurse -Force
+        Write-Utf8NoBom -Path (Join-Path $stagedPlugin ($pluginName + ".uplugin")) -Content ($descriptor | ConvertTo-Json -Depth 10)
+
+        $buildRules = @"
+using UnrealBuildTool;
+
+public class $moduleName : ModuleRules
+{
+    public $moduleName(ReadOnlyTargetRules Target) : base(Target)
+    {
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+        CppStandard = CppStandardVersion.Cpp17;
+        bUseUnity = false;
+        PublicDependencyModuleNames.AddRange(new string[] { "Core" });
+    }
+}
+"@
+        Write-Utf8NoBom -Path (Join-Path $stagedModuleRoot ($moduleName + ".Build.cs")) -Content $buildRules
+
+        $moduleEntry = @"
+#include "Modules/ModuleManager.h"
+
+IMPLEMENT_MODULE(FDefaultModuleImpl, $moduleName)
+"@
+        Write-Utf8NoBom -Path (Join-Path $privateRoot ($moduleName + "Module.cpp")) -Content $moduleEntry
+
+        $packageReadme = @"
+# World Mechanics Unreal Plugin
+
+This plugin is assembled phase-by-phase by Tools/UnrealIntegration/Export-Phase.ps1.
+
+The plugin compiles portable, engine-neutral C++ algorithms in one runtime module. Engine-specific Actor, UObject, subsystem, navigation, rendering, collision-publication, inventory-component and Editor adapters are not supplied by this package yet.
+
+See Docs/UNREAL_INCREMENTAL_INTEGRATION.md in the source repository before wiring these algorithms to the live game world.
+"@
+        Write-Utf8NoBom -Path (Join-Path $stagedPlugin "README.md") -Content $packageReadme
+
+        $integrationRecord = [ordered]@{
+            schemaVersion = 1
+            targetEngine = "Unreal Engine 5.8"
+            pluginName = $pluginName
+            moduleName = $moduleName
+            integratedPhases = @($Phase)
+            exportedFiles = @($portableFilePaths.ToArray())
+        }
+        Write-Utf8NoBom -Path (Join-Path $stagedPlugin "WorldMechanicsIntegration.json") -Content ($integrationRecord | ConvertTo-Json -Depth 10)
+    }
+    else {
+        # Detect name collisions before touching the project plugin.
+        foreach ($stagedFile in @(Get-ChildItem -LiteralPath $stagedPlugin -File -Recurse)) {
+            $relativeToPlugin = Get-RelativePortablePath -Root $stagedPlugin -FullPath $stagedFile.FullName
+            $destination = Join-Path $pluginDestination ($relativeToPlugin.Replace('/', [IO.Path]::DirectorySeparatorChar))
+            if (Test-Path -LiteralPath $destination) {
+                $existingHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash
+                $stagedHash = (Get-FileHash -LiteralPath $stagedFile.FullName -Algorithm SHA256).Hash
+                if ($existingHash -ne $stagedHash) {
+                    throw "Existing plugin file differs from the portable source: $destination. Nothing was overwritten; review and merge the file manually."
+                }
+            }
+        }
+
+        foreach ($stagedFile in @(Get-ChildItem -LiteralPath $stagedPlugin -File -Recurse)) {
+            $relativeToPlugin = Get-RelativePortablePath -Root $stagedPlugin -FullPath $stagedFile.FullName
+            $destination = Join-Path $pluginDestination ($relativeToPlugin.Replace('/', [IO.Path]::DirectorySeparatorChar))
+            if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) {
+                $destinationDirectory = Split-Path -Parent $destination
+                New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
+                Copy-Item -LiteralPath $stagedFile.FullName -Destination $destination
+            }
+        }
+
+        $allPhases = @($installedPhases) + @($Phase)
+        $allFiles = @($existingIntegration.exportedFiles) + @($portableFilePaths.ToArray())
+        $integrationRecord = [ordered]@{
+            schemaVersion = 1
+            targetEngine = "Unreal Engine 5.8"
+            pluginName = $pluginName
+            moduleName = $moduleName
+            integratedPhases = @($allPhases)
+            exportedFiles = @($allFiles | Select-Object -Unique)
+        }
+        # Record the phase only after all portable files are copied successfully.
+        Write-Utf8NoBom -Path $integrationManifestPath -Content ($integrationRecord | ConvertTo-Json -Depth 10)
     }
 
-    Move-Item -LiteralPath $stagedPlugin -Destination $destinationPlugin
-    Write-Output "Created phase $Phase plugin: $destinationPlugin"
-    Write-Output "Plugin: $($phaseData.pluginName)"
-    Write-Output "Runtime module: $sourceModuleName"
-    Write-Output "Headers copied: $headerCount"
-    Write-Output "Sources copied: $sourceCount"
-    Write-Output "Next: regenerate project files / build in Unreal Engine 5.8 before adding the next phase."
+    if ($Phase -eq 0) {
+        Move-Item -LiteralPath $stagedPlugin -Destination $pluginDestination
+    }
+
+    Write-Output "Integrated World Mechanics phase $Phase ($($phaseData.name))."
+    Write-Output "Plugin: $pluginDestination"
+    Write-Output "Runtime module: $moduleName"
+    Write-Output "Portable headers added: $headerCount"
+    Write-Output "Portable .cpp files added: $sourceCount"
+    Write-Output "Next: regenerate project files and build in Unreal Engine 5.8. Only then export the next phase."
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) {
