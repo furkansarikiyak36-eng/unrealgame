@@ -28,7 +28,7 @@ The test executable now defines eleven test groups, including two new groups for
 - `environment hydrology/budgets`: internal transfer conservation, multi-call fixed-step backlog, backlog cap, water overflow/runoff accounting, invalid endpoints/time, infiltration, evaporation, drainage and nutrient leaching.
 - `environment fire/survival`: fuel moisture gating, ignition, heat propagation to a linked dry cell, fuel consumption, environment sample validation and survival exposure integration.
 
-**Verification level:** the source and test cases are committed to this feature branch, but the Phase 4 GitHub Actions run must be observed before stating that its build and tests passed. Unreal Engine 5.8 UBT/UHT, Automation, Editor/PIE and Unreal Insights are not claimed as run.
+**Verification level:** GitHub Actions runs [#39883152996](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/39883152996) and [#39883156798](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/39883156798) passed CMake Configure, C++ Build and CTest for commit `f7aad75aefcef9925494cb2fb7c29a80d8dc1f2d`. Unreal Engine 5.8 UBT/UHT, Automation, Editor/PIE and Unreal Insights are not claimed as run.
 
 ## Not covered yet
 
@@ -41,9 +41,9 @@ The test executable now defines eleven test groups, including two new groups for
 
 ## Phase 4 acceptance gate
 
-- [ ] CMake configure/build passes.
-- [ ] All eleven CTest test groups pass.
-- [ ] Water ledger residual remains within test tolerance for transfer, runoff, infiltration, evaporation and drainage scenarios.
-- [ ] Accumulated time is retained, not silently dropped; excess backlog is rejected without mutation.
-- [ ] Moisture blocks ignition; connected dry fuel can ignite deterministically from transferred heat.
+- [x] CMake configure/build passes on the recorded Phase 4 commit.
+- [x] All eleven CTest test groups pass.
+- [x] Water ledger residual remains within test tolerance for transfer, runoff, infiltration, evaporation and drainage scenarios.
+- [x] Accumulated time is retained, not silently dropped; excess backlog is rejected without mutation.
+- [x] Moisture blocks ignition; connected dry fuel can ignite deterministically from transferred heat.
 - [ ] Engine-facing integration remains a separate gate until UE 5.8 build and Editor/PIE evidence exists.
