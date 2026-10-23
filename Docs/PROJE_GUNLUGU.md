@@ -1238,4 +1238,19 @@ Kullanıcı: "bize snap noktları daha düzenli ve çok laızm log dikey koysak 
   - `MyProject2.uproject` içerisine `WorldMechanics` eklentisi eklendi.
   - UBT `Build.bat` ile derlendi: `WorldMechanicsRuntimeModule` ve 11 kaynak dosya (`classification_map`, `cpu_surface_mesher`, `density_snapshot_codec`, `environment_simulation`, `excavation`, `gameplay_quality`, `landscape_builder`, `shoring`, `structural_integrity`, `survival`, `terrain_voxel`) sıfır hata ile derlendi ve `UnrealEditor-WorldMechanicsRuntime.dll` üretildi (`Result: Succeeded`).
 
-
+### 2026-10-23 — Otomatik Spawn ve Sahne Karışması / Mükerrer Yapı İzolasyonu
+- Kullanıcı: "unreal daki şuanki soruna odaklanırsak saheer karışmışmekaik ve sistemler sorun önce düzeldikten sonraki iki farklı yapı aynı anda sahende 5x mesh shnee diyorum k bunu hava kaldı 15x yap 5x de 15x de sahnede aynı anda gibi örnek verdim alaksı olmayan rakamlakrla".
+- Teşhis:
+  1. `ForestGameMode::bSpawnDemoShowcase` varsayılan olarak `true` idi ve `StartPlay()` sırasında `SetupDemoShowcase()` çağrılarak PlayerStart önüne otomatik 5 test istasyonu (kuru taş duvar, ALogWallBlueprint kütük duvar, hayalet duvar, pencere/kapı kasaları, çöküş test standı, 6 kütük ve 4 taş) spawn ediliyordu.
+  2. `ScenarioSubsystem::OnWorldBeginPlay()` filtresi genel test haritalarını kapsamıyordu; vahşi doğa senaryosu (yanık kulübe, nehir, 9 metrelik uçurum bloğu, hayvanlar, 10 ağaç, 6 kaya, 17 hammadde) test haritalarına da dökülüyordu.
+  3. `ConvertHarvestables()` test sahnelerindeki statik mesh'leri gizleyip aktörlere çeviriyordu.
+  4. Editörde bir aktör havaya kaldırıldığında veya scriptle (`setup_testkits_scene.py`) harita kurulurken temizleme prefix filtresi Unreal'ın varsayılan `StaticMeshActor_...` aktörlerini atladığı için hem eski mesh'ler hem yeni mesh'ler aynı anda sahnede üst üste kalıyordu.
+- Yapılanlar:
+  - `Source/MyProject2/ForestGameMode.h`: `bSpawnDemoShowcase` varsayılanı `false` yapıldı.
+  - `Source/MyProject2/ForestGameMode.cpp`:
+    - `bSpawnDemoShowcase` varsayılanı `false` yapıldı.
+    - `bIsTestOrStageMap` kontrolü eklendi; TestKits, Snap, Showcase, Demo haritalarında `ConvertHarvestables()` ve otomatik `SetupDemoShowcase()` engellendi. Açıkça `-DemoShowcase` komut satırı verilmedikçe sahneye mühendislik istasyonları spawn edilmiyor.
+  - `Source/MyProject2/ScenarioSubsystem.cpp`:
+    - `LayOut()` çağrısı yalnızca tam hayatta kalma haritalarıyla (`PerfTest`, `Main`) sınırlandırıldı; küçük test/kit sahnelerine vahşi doğa senaryosu kurulması engellendi.
+  - `Scripts/setup_testkits_scene.py`:
+    - Aktör temizleme filtresi etiket önekine bağlı olmaktan çıkarıldı; ışık, sis, gökyüzü, Floor ve PlayerStart dışındaki tüm yabancı ve eski aktörleri sıfırlayacak şekilde güncellendi.

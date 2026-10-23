@@ -26,16 +26,24 @@ AForestGameMode::AForestGameMode()
 {
 	DefaultPawnClass = AForestCharacter::StaticClass();
 	HUDClass = AForestHUD::StaticClass();
-	bSpawnDemoShowcase = true;
+	bSpawnDemoShowcase = false;
 }
 
 void AForestGameMode::StartPlay()
 {
-	ConvertHarvestables();
+	const FString MapName = GetWorld() ? GetWorld()->GetMapName() : FString();
+	const bool bIsTestOrStageMap = MapName.Contains(TEXT("TestKits")) || MapName.Contains(TEXT("Snap"))
+		|| MapName.Contains(TEXT("Showcase")) || MapName.Contains(TEXT("Demo"));
 
-	// The wood chain demo level keeps its stage clear of the building stations.
-	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) || TActorIterator<ALogShowcase>(GetWorld());
-	if (bSpawnDemoShowcase && !bDemoLevel)
+	if (!bIsTestOrStageMap)
+	{
+		ConvertHarvestables();
+	}
+
+	// The wood chain demo level and test kit stages keep their stage clear of the building stations.
+	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) || TActorIterator<ALogShowcase>(GetWorld()) || bIsTestOrStageMap;
+	const bool bExplicitDemo = FParse::Param(FCommandLine::Get(), TEXT("DemoShowcase"));
+	if ((bSpawnDemoShowcase || bExplicitDemo) && !bDemoLevel)
 	{
 		SetupDemoShowcase();
 	}

@@ -92,8 +92,9 @@ void UScenarioSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	{
 		return;
 	}
-	// Small demo stages lay themselves out: the scenario's river and cliff would not fit on them.
-	if (InWorld.GetMapName().Contains(TEXT("Demo_RawMaterials")) || InWorld.GetMapName().Contains(TEXT("LogShowcase")))
+	// Small demo and test stages keep their stage clear: the scenario's river, cliff and wildlife only belong in the full survival world (PerfTest, Main).
+	const FString MapName = InWorld.GetMapName();
+	if (!MapName.Contains(TEXT("PerfTest")) && !MapName.Contains(TEXT("Main")))
 	{
 		return;
 	}
