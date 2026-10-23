@@ -14,8 +14,10 @@
 #include "world_mechanics/structural_integrity.hpp"
 #include "world_mechanics/survival.hpp"
 #include "world_mechanics/world_environment_simulation.hpp"
+#include "world_mechanics/gameplay_quality.hpp"
 #include "world_mechanics/persistence_transaction.hpp"
 #include "world_mechanics/density_snapshot_codec.hpp"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -563,6 +565,328 @@ bool TestEnvironmentFireAndSurvival() {
   return true;
 }
 
+
+bool TestRaidTargetingAndSpawnOutcomes() {
+  std::vector<wm::RaidTargetCandidate> targets{
+    {10,7,1.0,0.2,0.2,0.2,100.0,true,true,true},
+    {20,7,0.5,1.0,1.0,1.0,10.0,true,true,true},
+    {30,6,1.0,1.0,1.0,1.0,0.0,true,true,true},
+    {40,7,1.0,1.0,1.0,1.0,0.0,false,true,true}
+  };
+  auto target = wm::RaidTargetScorer::Choose(targets,7);
+  CHECK(target);
+  CHECK(target.value.targetId == 20);
+  CHECK(target.value.eligibleCandidates == 2);
+  CHECK(target.value.worldRevision == 7);
+
+  std::vector<wm::RaidTargetCandidate> tie{
+    {9,3,0.5,0.5,0.5,0.5,10.0,true,true,true},
+    {4,3,0.5,0.5,0.5,0.5,10.0,true,true,true}
+  };
+  auto tieResult = wm::RaidTargetScorer::Choose(tie,3);
+  CHECK(tieResult);
+  CHECK(tieResult.value.targetId == 4);
+
+  auto none = wm::RaidTargetScorer::Choose({{1,3,1,1,1,1,1,true,false,true}},3);
+  CHECK(!none && none.error == wm::ErrorCode::NotFound);
+  auto duplicate = wm::RaidTargetScorer::Choose({tie[0],tie[0]},3);
+  CHECK(!duplicate && duplicate.error == wm::ErrorCode::Conflict);
+  auto badFeature = tie;
+  badFeature[0].threat01 = 2.0;
+  CHECK(!wm::RaidTargetScorer::Choose(badFeature,3));
+
+  wm::SpawnRequest request{501,9,4};
+  std::vector<wm::SpawnCandidate> candidates{
+    {1,9,{1,0,0},0.9,true,false,true},
+    {2,9,{2,0,0},0.7,true,true,true},
+    {3,8,{3,0,0},1.0,true,true,true}
+  };
+  auto spawn = wm::SpawnDecisionPipeline::Choose(request,candidates,4);
+  CHECK(spawn);
+  CHECK(spawn.value.disposition == wm::SpawnDisposition::Approved);
+  CHECK(spawn.value.candidateId == 2);
+  CHECK(spawn.value.attemptsUsed == 3);
+
+  auto noAttempts = wm::SpawnDecisionPipeline::Choose(request,candidates,0);
+  CHECK(noAttempts);
+  CHECK(noAttempts.value.disposition == wm::SpawnDisposition::AttemptBudgetExhausted);
+
+  auto noNavigation = wm::SpawnDecisionPipeline::Choose(
+      request,{{1,9,{0,0,0},1.0,false,true,true}},4);
+  CHECK(noNavigation);
+  CHECK(noNavigation.value.disposition == wm::SpawnDisposition::NavigationUnavailable);
+
+  auto blocked = wm::SpawnDecisionPipeline::Choose(
+      request,{{1,9,{0,0,0},1.0,true,false,false}},4);
+  CHECK(blocked);
+  CHECK(blocked.value.disposition == wm::SpawnDisposition::AllCandidatesBlocked);
+
+  auto attemptCap = wm::SpawnDecisionPipeline::Choose(
+      request,{{1,9,{0,0,0},0.9,true,false,true},
+               {2,9,{1,0,0},0.8,true,true,true}},1);
+  CHECK(attemptCap);
+  CHECK(attemptCap.value.disposition == wm::SpawnDisposition::AttemptBudgetExhausted);
+  CHECK(attemptCap.value.attemptsUsed == 1);
+  return true;
+}
+
+bool TestChunkSchedulerFairnessAndStaleWork() {
+  wm::ChunkSchedulerConfig cfg;
+  cfg.maxQueuedJobs = 16;
+  cfg.maxJobCostUnits = 8;
+  cfg.maxCostPerDrain = 8;
+  cfg.maxJobsPerDrain = 1;
+  cfg.maxExaminedPerDrain = 16;
+  wm::ChunkWorkScheduler scheduler(cfg);
+  const wm::ChunkCoord a{0,0,0};
+  const wm::ChunkCoord b{1,0,0};
+
+  CHECK(scheduler.Schedule({1,a,wm::ChunkWorkKind::SnapshotRead,1,1}));
+  CHECK(scheduler.Schedule({2,a,wm::ChunkWorkKind::MeshBuild,1,1}));
+  CHECK(scheduler.Schedule({3,b,wm::ChunkWorkKind::Classification,1,1}));
+  CHECK(scheduler.QueuedCount() == 3);
+
+  const std::map<wm::ChunkCoord,wm::Revision> current{{a,1},{b,1}};
+  auto first = scheduler.Drain(current);
+  CHECK(first);
+  CHECK(first.value.ready.size() == 1);
+  CHECK(first.value.ready.front().chunk == a);
+  auto second = scheduler.Drain(current);
+  CHECK(second);
+  CHECK(second.value.ready.size() == 1);
+  CHECK(second.value.ready.front().chunk == b);
+  CHECK(scheduler.QueuedCount() == 1);
+
+  wm::ChunkWorkScheduler coalescing(cfg);
+  CHECK(coalescing.Schedule({10,a,wm::ChunkWorkKind::MeshBuild,4,2}));
+  const auto before = coalescing.QueuedCount();
+  auto old = coalescing.Schedule({11,a,wm::ChunkWorkKind::MeshBuild,3,2});
+  CHECK(!old && old.error == wm::ErrorCode::StaleRevision);
+  CHECK(coalescing.Schedule({12,a,wm::ChunkWorkKind::MeshBuild,5,3}));
+  CHECK(coalescing.QueuedCount() == before);
+  auto batch = coalescing.Drain({{a,5}});
+  CHECK(batch);
+  CHECK(batch.value.ready.size() == 1);
+  CHECK(batch.value.ready.front().workId == 12);
+  CHECK(batch.value.ready.front().sourceRevision == 5);
+
+  wm::ChunkWorkScheduler staleScheduler(cfg);
+  CHECK(staleScheduler.Schedule({20,a,wm::ChunkWorkKind::DensityEdit,2,2}));
+  auto staleBatch = staleScheduler.Drain({{a,3}});
+  CHECK(staleBatch);
+  CHECK(staleBatch.value.ready.empty());
+  CHECK(staleBatch.value.staleDiscarded == 1);
+  CHECK(staleScheduler.QueuedCount() == 0);
+
+  wm::ChunkWorkScheduler budgetScheduler(cfg);
+  for (wm::Id i=1;i<=16;++i)
+    CHECK(budgetScheduler.Schedule({100+i,{static_cast<std::int64_t>(i),0,0},
+        wm::ChunkWorkKind::SnapshotRead,1,1}));
+  auto full = budgetScheduler.Schedule({999,{99,0,0},wm::ChunkWorkKind::SnapshotRead,1,1});
+  CHECK(!full && full.error == wm::ErrorCode::BudgetExceeded);
+  auto badCost = budgetScheduler.Schedule({1000,{99,0,0},wm::ChunkWorkKind::MeshBuild,1,9});
+  CHECK(!badCost && badCost.error == wm::ErrorCode::BudgetExceeded);
+  return true;
+}
+
+bool TestMaterialRulePrecedenceAndInvalidation() {
+  wm::MaterialRuleResolver resolver(16);
+  wm::MaterialInteractionRule global;
+  global.ruleId=1; global.scope=wm::MaterialRuleScope::Global;
+  global.interaction=wm::MaterialInteraction::Fire;
+  global.minObservedValue=-1000; global.maxObservedValue=1000;
+  global.durabilityDelta=-1;
+  CHECK(resolver.UpsertRule(global));
+
+  wm::MaterialInteractionRule definition=global;
+  definition.ruleId=2; definition.scope=wm::MaterialRuleScope::Definition;
+  definition.materialId=7; definition.durabilityDelta=-2; definition.priority=1;
+  CHECK(resolver.UpsertRule(definition));
+
+  wm::MaterialInteractionRule composite=definition;
+  composite.ruleId=3; composite.scope=wm::MaterialRuleScope::Composite;
+  composite.contextId=80; composite.durabilityDelta=-3;
+  CHECK(resolver.UpsertRule(composite));
+
+  wm::MaterialInteractionRule instance=definition;
+  instance.ruleId=4; instance.scope=wm::MaterialRuleScope::Instance;
+  instance.contextId=900; instance.durabilityDelta=-4;
+  CHECK(resolver.UpsertRule(instance));
+
+  const auto initialRevision=resolver.GetRevision();
+  auto exact=resolver.Resolve(7,80,900,wm::MaterialInteraction::Fire,150);
+  CHECK(exact);
+  CHECK(exact.value.ruleId==4);
+  CHECK(exact.value.durabilityDelta==-4);
+  CHECK(exact.value.registryRevision==initialRevision);
+  CHECK(resolver.CachedQueryCount()==1);
+
+  instance.minObservedValue=200;
+  instance.maxObservedValue=300;
+  instance.durabilityDelta=-9;
+  CHECK(resolver.UpsertRule(instance));
+  CHECK(resolver.CachedQueryCount()==0);
+  auto fallsBack=resolver.Resolve(7,80,900,wm::MaterialInteraction::Fire,150);
+  CHECK(fallsBack);
+  CHECK(fallsBack.value.ruleId==3);
+  CHECK(fallsBack.value.durabilityDelta==-3);
+
+  auto unrelated = resolver.Resolve(7,0,0,wm::MaterialInteraction::Fire,150);
+  CHECK(unrelated);
+  CHECK(unrelated.value.ruleId==2);
+  auto missing = resolver.Resolve(99,0,0,wm::MaterialInteraction::Fire,150);
+  CHECK(missing);
+  CHECK(missing.value.ruleId==1);
+
+  auto invalid=global;
+  invalid.ruleId=5;
+  invalid.materialId=10;
+  CHECK(!resolver.UpsertRule(invalid));
+  auto removed=resolver.RemoveRule(4);
+  CHECK(removed);
+  CHECK(resolver.GetRevision()>initialRevision);
+  auto missingRule=resolver.RemoveRule(999);
+  CHECK(!missingRule && missingRule.error==wm::ErrorCode::NotFound);
+  return true;
+}
+
+bool TestPlantAndAnimalDeterminism() {
+  wm::PlantGrowthDefinition plantDef;
+  plantDef.definitionId=101;
+  plantDef.growthRatePerDay=0.1;
+  plantDef.minimumTemperatureC=0;
+  plantDef.optimalTemperatureC=20;
+  plantDef.maximumTemperatureC=40;
+  plantDef.idealLight01=0.5;
+  plantDef.waterNeedM3PerDay=0.1;
+  plantDef.nitrogenNeedKgPerDay=0.01;
+  plantDef.phosphorusNeedKgPerDay=0.002;
+  plantDef.potassiumNeedKgPerDay=0.005;
+
+  wm::PlantGrowthState plant{501,101,2.0,0.5,3};
+  wm::PlantGrowthInput ideal{1.0,20.0,0.5,0.1,0.01,0.002,0.005};
+  auto grown=wm::PlantGrowthModel::Advance(plantDef,plant,ideal);
+  CHECK(grown);
+  CHECK(grown.value.stepsProcessed==4);
+  CHECK(std::abs(grown.value.nextState.growth01-0.6)<1e-9);
+  CHECK(std::abs(grown.value.nextState.ageDays-3.0)<1e-9);
+  CHECK(std::abs(grown.value.waterConsumedM3-0.1)<1e-9);
+  CHECK(grown.value.nextState.revision==4);
+
+  auto dryInput=ideal;
+  dryInput.waterAvailableM3=0.0;
+  auto dry=wm::PlantGrowthModel::Advance(plantDef,plant,dryInput);
+  CHECK(dry);
+  CHECK(std::abs(dry.value.nextState.growth01-plant.growth01)<1e-9);
+  CHECK(dry.value.waterConsumedM3==0.0);
+
+  auto invalidPlant=plant;
+  invalidPlant.definitionId=999;
+  CHECK(!wm::PlantGrowthModel::Advance(plantDef,invalidPlant,ideal));
+
+  wm::AnimalCareDefinition animalDef;
+  animalDef.definitionId=201;
+  animalDef.speciesId=55;
+  animalDef.feedNeedKgPerDay=1.0;
+  animalDef.waterNeedLitersPerDay=2.0;
+  animalDef.growthRatePerDay=0.1;
+  animalDef.productionUnitsPerDay=2.0;
+  animalDef.maturityGrowth01=0.5;
+  animalDef.starvationHealthLossPerDay=0.1;
+  animalDef.recoveryPerDay=0.02;
+  animalDef.reproductionHealthMinimum01=0.6;
+  animalDef.reproductionReadyDaysRequired=1.0;
+  wm::AnimalCareState animal{601,201,10.0,0.7,0.8,0.0,7};
+  wm::AnimalCareInput adequate{2.0,2.0,4.0};
+  auto cared=wm::AnimalCareModel::Advance(animalDef,animal,adequate);
+  CHECK(cared);
+  CHECK(cared.value.feedConsumedKg==2.0);
+  CHECK(cared.value.waterConsumedLiters==4.0);
+  CHECK(cared.value.productionUnits>0.0);
+  CHECK(cared.value.nextState.health01>=animal.health01);
+  CHECK(cared.value.reproductionReady);
+
+  wm::AnimalCareInput hungry{2.0,0.0,0.0};
+  auto starved=wm::AnimalCareModel::Advance(animalDef,animal,hungry);
+  CHECK(starved);
+  CHECK(starved.value.nextState.health01<animal.health01);
+  CHECK(starved.value.nextState.growth01<cared.value.nextState.growth01);
+  CHECK(starved.value.productionUnits==0.0);
+
+  std::vector<wm::AnimalReproductionCandidate> herd{
+    {9,55,false,true,true,true},
+    {8,55,true,true,true,true},
+    {2,55,true,true,true,true},
+    {4,55,false,true,true,true},
+    {1,55,true,false,true,true},
+    {3,99,false,true,true,true}
+  };
+  auto pairsA=wm::AnimalReproductionPlanner::BuildPairs(herd);
+  CHECK(pairsA);
+  CHECK(pairsA.value.size()==2);
+  CHECK(pairsA.value[0].speciesId==55);
+  CHECK(pairsA.value[0].femaleId==2 && pairsA.value[0].maleId==4);
+  CHECK(pairsA.value[1].femaleId==8 && pairsA.value[1].maleId==9);
+  std::reverse(herd.begin(),herd.end());
+  auto pairsB=wm::AnimalReproductionPlanner::BuildPairs(herd);
+  CHECK(pairsB);
+  CHECK(pairsB.value.size()==pairsA.value.size());
+  for(std::size_t i=0;i<pairsA.value.size();++i) {
+    CHECK(pairsA.value[i].speciesId==pairsB.value[i].speciesId);
+    CHECK(pairsA.value[i].femaleId==pairsB.value[i].femaleId);
+    CHECK(pairsA.value[i].maleId==pairsB.value[i].maleId);
+  }
+  return true;
+}
+
+bool TestCraftingTransactionPlanner() {
+  wm::CraftingInventorySnapshot inventory;
+  inventory.revision=5;
+  inventory.slotCapacity=5;
+  inventory.weightLimitKg=10.0;
+  inventory.slots={{1,3,10,0.5},{2,2,10,1.0}};
+
+  const std::vector<wm::CraftIngredient> ingredients{{1,2},{2,1}};
+  const std::vector<wm::CraftOutput> outputs{{2,2,10,1.0},{3,5,2,0.25}};
+  const auto beforeSlots=inventory.slots;
+  auto plan=wm::CraftingTransactionPlanner::Build(inventory,ingredients,outputs);
+  CHECK(plan);
+  CHECK(plan.value.expectedInventoryRevision==5);
+  CHECK(plan.value.baseFingerprint!=0);
+  CHECK(plan.value.resultingSlots.size()==5);
+  CHECK(std::abs(plan.value.resultingWeightKg-4.75)<1e-9);
+  CHECK(inventory.slots.size()==beforeSlots.size());
+  CHECK(inventory.slots[0].count==beforeSlots[0].count);
+  CHECK(inventory.slots[1].count==beforeSlots[1].count);
+
+  auto valid=wm::CraftingTransactionPlanner::Revalidate(plan.value,inventory);
+  CHECK(valid);
+  auto staleInventory=inventory;
+  staleInventory.revision=6;
+  auto stale=wm::CraftingTransactionPlanner::Revalidate(plan.value,staleInventory);
+  CHECK(!stale && stale.error==wm::ErrorCode::StaleRevision);
+
+  auto sameRevMutation=inventory;
+  sameRevMutation.slots[0].count=2;
+  auto fingerprintMismatch=wm::CraftingTransactionPlanner::Revalidate(plan.value,sameRevMutation);
+  CHECK(!fingerprintMismatch && fingerprintMismatch.error==wm::ErrorCode::Conflict);
+
+  auto insufficient=wm::CraftingTransactionPlanner::Build(
+      inventory,{{1,999}},{{3,1,1,0.1}});
+  CHECK(!insufficient && insufficient.error==wm::ErrorCode::OutOfRange);
+
+  auto fullInventory=inventory;
+  fullInventory.slotCapacity=2;
+  auto noSlots=wm::CraftingTransactionPlanner::Build(fullInventory,ingredients,outputs);
+  CHECK(!noSlots && noSlots.error==wm::ErrorCode::BudgetExceeded);
+
+  auto overweight=inventory;
+  overweight.weightLimitKg=4.0;
+  auto tooHeavy=wm::CraftingTransactionPlanner::Build(overweight,ingredients,outputs);
+  CHECK(!tooHeavy && tooHeavy.error==wm::ErrorCode::BudgetExceeded);
+  return true;
+}
+
 bool TestSurvivalAndRestoreTransaction() {
   wm::SurvivalExposure survival;
   wm::EnvironmentSample sample; sample.sourceRevision=1; sample.sampledAtSeconds=1;
@@ -596,6 +920,11 @@ int main() {
     {"structural integrity",TestStructuralIntegrity},
     {"environment hydrology/budgets",TestEnvironmentHydrologyAndBudgets},
     {"environment fire/survival",TestEnvironmentFireAndSurvival},
+    {"raid targeting/spawn outcomes",TestRaidTargetingAndSpawnOutcomes},
+    {"chunk scheduler fairness/stale work",TestChunkSchedulerFairnessAndStaleWork},
+    {"material rule precedence/cache",TestMaterialRulePrecedenceAndInvalidation},
+    {"plant/animal determinism",TestPlantAndAnimalDeterminism},
+    {"crafting transaction planner",TestCraftingTransactionPlanner},
     {"survival/restore transaction",TestSurvivalAndRestoreTransaction}
   };
   unsigned passed=0;
