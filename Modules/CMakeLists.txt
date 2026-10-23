@@ -12,6 +12,7 @@ add_library(world_mechanics
   Persistence/src/density_snapshot_codec.cpp
   StructuralIntegrity/src/structural_integrity.cpp
   Survival/src/survival.cpp
+  WorldEnvironment/src/environment_simulation.cpp
 )
 target_compile_features(world_mechanics PUBLIC cxx_std_17)
 target_include_directories(world_mechanics PUBLIC
