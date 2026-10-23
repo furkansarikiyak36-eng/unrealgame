@@ -30,7 +30,7 @@ Implementation order:
 
 **Status: portable-module hardening implemented; engine-provider integration remains open.**
 
-The first implementation batch is on the separate `modules/mechanics-pre-unreal` branch in [PR #19](https://github.com/furkansarikiyak36-eng/unrealgame/pull/19), commit `ad77410246f046c865fb1d2a70b13901ac54f6d1`. Its portable CMake build and CTest pass. Because PR #19 is not merged into `main`, these module changes are not yet part of the main branch.
+The first implementation batch is on the separate `modules/mechanics-pre-unreal` branch in [PR #19](https://github.com/furkansarikiyak36-eng/unrealgame/pull/19), commit `89fd0a626859dd9846465deddaf5ca62842a816f`. [Its portable CMake build and CTest pass](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/39881334477). Because PR #19 is not merged into `main`, these module changes are not yet part of the main branch.
 
 Targets: WorldScan, WorldClassification, Excavation.
 
