@@ -19,7 +19,7 @@
 | Survival | Bounded exposure update and action effort costs | Canonical character-stat adapter and broader exposure rules |
 | GameplayIntegration | Raid feature scoring, typed spawn preflight, fair bounded chunk scheduler, M1–M6 rule resolver/cache, plant/animal care decisions and staged crafting planner | Unreal navigation/overlap/spawn adapters, live raid telemetry, worker execution, material-state application, crop/livestock actors and atomic inventory/world-output commit |
 | Persistence | Staged multi-participant restore transaction contract | Portable density-snapshot codec now exists; whole-world schema/migration, module participants, durable storage and actor/player adapters remain |
-| Validation | Phase 4 has eleven passing portable test groups; Phase 5 adds five groups (sixteen total) and its CI acceptance is pending | Broader property/stress/performance coverage and Unreal verification remain open |
+| Validation | Sixteen portable test groups; Phase 5 GitHub Actions Configure/Build/Test passed for commit `20036d9cbeb87df5bd663b281a554eaf85bcc157` | Broader property/stress/performance coverage and Unreal verification remain open |
 
 ## Evidence state
 - Portable C++ source covers bounded algorithms, including a CPU mesher, classification map/dirty-cell builder, shoring lifecycle and density snapshot codec. This remains a partial mechanics prototype, not a complete game.
@@ -34,4 +34,4 @@
 
 Do not mark a module complete on the basis of a design document, source presence or a matching list of test names. Use the actual execution log as evidence.
 
-- Phase 5 introduces an engine-neutral GameplayIntegration decision/preflight module. Its live branch needs successful CMake/build/CTest evidence before it is marked portable-test verified; this module does not replace or claim to verify Unreal Actor/component adapters.
+- Phase 5's engine-neutral GameplayIntegration suite is portable-test verified: GitHub Actions run [#39883905906](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/39883905906) passed Configure, Build and Test for commit `20036d9cbeb87df5bd663b281a554eaf85bcc157`. This does not replace or verify Unreal Actor/component adapters.
