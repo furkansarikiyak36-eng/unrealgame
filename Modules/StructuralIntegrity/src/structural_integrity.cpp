@@ -158,3 +158,4 @@ Result<GraphAssessment> StructuralGraph::Assess() const {
   }
   return Result<GraphAssessment>::Success(std::move(assessment));
 }
+} // namespace wm
