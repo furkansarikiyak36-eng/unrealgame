@@ -48,9 +48,17 @@ class ProfileSessionLock {
  public:
   bool Lock(const RuntimeProfile& profile) {
     if(!profile.Validate()) return false;
-    if(locked_) return profile.tier==profile_.tier &&
-      profile.densitySpacingM==profile_.densitySpacingM &&
-      profile.chunkEdgeM==profile_.chunkEdgeM && profile.cellsPerAxis==profile_.cellsPerAxis;
+    if(locked_) {
+      const bool sameGrid =
+        profile.densitySpacingM==profile_.densitySpacingM &&
+        profile.chunkEdgeM==profile_.chunkEdgeM &&
+        profile.cellsPerAxis==profile_.cellsPerAxis;
+      if(!sameGrid) return false;
+      // Grid identity remains fixed for this session, while valid execution
+      // budgets (query limits, jobs, queues) may be tuned without rebuilding it.
+      profile_=profile;
+      return true;
+    }
     profile_=profile; locked_=true; return true;
   }
   bool IsLocked() const noexcept { return locked_; }
