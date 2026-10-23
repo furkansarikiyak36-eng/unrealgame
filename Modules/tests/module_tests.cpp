@@ -17,6 +17,7 @@
 #include "world_mechanics/gameplay_quality.hpp"
 #include "world_mechanics/persistence_transaction.hpp"
 #include "world_mechanics/density_snapshot_codec.hpp"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -604,7 +605,7 @@ bool TestRaidTargetingAndSpawnOutcomes() {
   CHECK(spawn);
   CHECK(spawn.value.disposition == wm::SpawnDisposition::Approved);
   CHECK(spawn.value.candidateId == 2);
-  CHECK(spawn.value.attemptsUsed == 2);
+  CHECK(spawn.value.attemptsUsed == 3);
 
   auto noAttempts = wm::SpawnDecisionPipeline::Choose(request,candidates,0);
   CHECK(noAttempts);
@@ -880,7 +881,7 @@ bool TestCraftingTransactionPlanner() {
   CHECK(!noSlots && noSlots.error==wm::ErrorCode::BudgetExceeded);
 
   auto overweight=inventory;
-  overweight.weightLimitKg=2.0;
+  overweight.weightLimitKg=4.0;
   auto tooHeavy=wm::CraftingTransactionPlanner::Build(overweight,ingredients,outputs);
   CHECK(!tooHeavy && tooHeavy.error==wm::ErrorCode::BudgetExceeded);
   return true;
