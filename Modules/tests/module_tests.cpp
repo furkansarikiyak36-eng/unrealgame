@@ -198,6 +198,9 @@ bool TestCpuMesherAndRevisionGate() {
   CHECK(mesh); CHECK(!mesh.value.indices.empty()); CHECK(mesh.value.indices.size()%3==0);
   CHECK(mesh.value.triangleMaterialIds.size()==mesh.value.indices.size()/3);
   CHECK(mesh.value.Validate(settings.maxTriangles));
+  auto limitedSettings=settings; limitedSettings.maxInputSamples=26;
+  auto overBudgetMesh=wm::CpuSurfaceMesher::Build(snapshot,limitedSettings);
+  CHECK(!overBudgetMesh&&overBudgetMesh.error==wm::ErrorCode::BudgetExceeded);
   CHECK(wm::DerivedRevisionGate::MayPublish({{},4,17},4,17));
   CHECK(!wm::DerivedRevisionGate::MayPublish({{},3,17},4,17));
   wm::DensityGridSnapshot invalid=snapshot; invalid.density.pop_back();
@@ -234,8 +237,18 @@ bool TestSnapAndExcavation() {
   candidate.surfaceNormal={0,0,1}; candidate.distanceM=0.2; candidate.explicitSocket=true;
   candidate.regionAllowed=true; candidate.overlapFree=true; candidate.surfaceRevision=3; candidate.classificationRevision=7;
   auto chosen=wm::PlacementSnapResolver::Resolve(sr,{candidate}); CHECK(chosen); CHECK(chosen.value.candidateId==11);
-  auto stale=wm::PlacementSnapResolver::ValidateCommit(chosen.value,4,7,true);
+  auto stale=wm::PlacementSnapResolver::ValidateCommit(chosen.value,4,7,true,true);
   CHECK(!stale&&stale.error==wm::ErrorCode::StaleRevision);
+  auto regionDenied=wm::PlacementSnapResolver::ValidateCommit(chosen.value,3,7,false,true);
+  CHECK(!regionDenied&&regionDenied.error==wm::ErrorCode::Unsupported);
+  auto overlapDenied=wm::PlacementSnapResolver::ValidateCommit(chosen.value,3,7,true,false);
+  CHECK(!overlapDenied&&overlapDenied.error==wm::ErrorCode::Conflict);
+  wm::SnapRequest boundedRequest=sr; boundedRequest.maxCandidates=1;
+  auto tooManyCandidates=wm::PlacementSnapResolver::Resolve(boundedRequest,{candidate,candidate});
+  CHECK(!tooManyCandidates&&tooManyCandidates.error==wm::ErrorCode::BudgetExceeded);
+  wm::SnapRequest badThreshold=sr; badThreshold.minimumNormalDot=1.5;
+  auto badThresholdResult=wm::PlacementSnapResolver::Resolve(badThreshold,{candidate});
+  CHECK(!badThresholdResult&&badThresholdResult.error==wm::ErrorCode::InvalidArgument);
 
   wm::DensityVolume terrain(wm::RuntimeProfile::LowMid());
   wm::ExcavationService dig(terrain,[](const wm::Vec3&){
@@ -329,6 +342,20 @@ bool TestStructuralIntegrity() {
   CHECK(graph.LatchCollapse(2));
   auto once=graph.LatchCollapse(2); CHECK(once&&!once.value);
   CHECK(!graph.Repair(2,5));
+
+  // Two individual dependents fit under 50 each, but their combined load does not.
+  wm::StructuralGraph sharedSupport;
+  CHECK(sharedSupport.AddNode({1,true,true,0,50,50,50,false}));
+  CHECK(sharedSupport.AddNode({2,false,true,30,100,100,100,false}));
+  CHECK(sharedSupport.AddNode({3,false,true,30,100,100,100,false}));
+  CHECK(sharedSupport.AddEdge({21,1,2,30,true}));
+  CHECK(sharedSupport.AddEdge({22,1,3,30,true}));
+  auto combined=sharedSupport.Assess(); CHECK(combined);
+  CHECK(combined.value.nodes.size()==3);
+  CHECK(combined.value.nodes[0].nodeId==1);
+  CHECK(combined.value.nodes[0].state==wm::SupportState::Overloaded);
+  CHECK(std::abs(combined.value.nodes[0].aggregateDemand-60.0)<1e-9);
+  CHECK(std::abs(combined.value.nodes[0].demandCapacityRatio-1.2)<1e-9);
   return true;
 }
 bool TestSurvivalAndRestoreTransaction() {
