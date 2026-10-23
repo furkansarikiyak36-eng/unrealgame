@@ -24,6 +24,9 @@ Existing Unreal code remains in `Source/MyProject2/` as a reference/implementati
 14. `GameplayIntegration` — raid targeting, typed spawn decisions, fair chunk-work scheduling, material-rule precedence/cache, plant growth, animal care/reproduction and staged crafting transactions.
 15. `Validation` — actual tests and evidence gates.
 
+## Unreal Engine 5.8 incremental import
+The portable source is exported into one cumulative plugin, one phase at a time. Do not copy the entire `Modules/` tree into `Source/MyProject2/`. Follow [the staged integration guide](../Docs/UNREAL_INCREMENTAL_INTEGRATION.md) and use the [phase exporter](../Tools/UnrealIntegration/Export-Phase.ps1).
+
 ## Documents
 - [Complete mechanic catalog](MECHANICS_CATALOG.md)
 - [Manifest/dependencies](ModuleManifest.json)
