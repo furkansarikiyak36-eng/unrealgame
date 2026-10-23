@@ -48,9 +48,9 @@ Targets: WorldScan, WorldClassification, Excavation.
 
 ## Phase 3 — Geometry, placement, and structural systems
 
-**Status: portable mesh/placement/structural changes implemented; CI verification pending.**
+**Status: portable mesh/placement/structural changes implemented; CMake build and CTest passed. UE integration remains open.**
 
-The current Phase 3 source changes are being developed on `modules/mechanics-pre-unreal` under [PR #19](https://github.com/furkansarikiyak36-eng/unrealgame/pull/19). The roadmap branch remains separate from that module branch; this document records scope and status only.
+The current Phase 3 source changes are being developed on `modules/mechanics-pre-unreal` under [PR #19](https://github.com/furkansarikiyak36-eng/unrealgame/pull/19). [The portable C++ CI run passed](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/39882032360). The roadmap branch remains separate from that module branch; this document records scope and status only.
 
 Targets: TerrainVoxel, MeshCollision, PlacementSnap, Shoring, StructuralIntegrity, wood-structure analysis.
 
@@ -70,7 +70,7 @@ Targets: TerrainVoxel, MeshCollision, PlacementSnap, Shoring, StructuralIntegrit
 - Adds a separate opt-in 20 cm plank-grid helper so the plank grid does not implicitly alter log/socket or terrain-tool placement.
 - Structural assessment aggregates dependent loads upstream over active support edges, splits load deterministically across multiple incoming supports, and exposes the aggregate demand/ratio in assessment output.
 
-**Remaining:** local UE Dynamic Mesh/collision/navigation publication and stale-product rejection at the engine adapter; actual oriented-volume overlap provider; physical shoring anchors, connected assembly coverage and region-local invalidation. CI for the current source commit must pass before this batch is treated as portable-code verified.
+**Remaining:** local UE Dynamic Mesh/collision/navigation publication and stale-product rejection at the engine adapter; actual oriented-volume overlap provider; physical shoring anchors, connected assembly coverage and region-local invalidation. Portable source verification is green, but these engine-facing integrations are not verified by CMake/CTest.
 
 ## Phase 4 — Environment, water, soil, fire, and survival
 
