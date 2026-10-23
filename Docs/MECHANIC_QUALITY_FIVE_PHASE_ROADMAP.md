@@ -28,6 +28,10 @@ Implementation order:
 
 ## Phase 2 — Observation, classification, and world edits
 
+**Status: portable-module hardening implemented; engine-provider integration remains open.**
+
+The first implementation batch is on the separate `modules/mechanics-pre-unreal` branch in [PR #19](https://github.com/furkansarikiyak36-eng/unrealgame/pull/19), commit `ad77410246f046c865fb1d2a70b13901ac54f6d1`. Its portable CMake build and CTest pass. Because PR #19 is not merged into `main`, these module changes are not yet part of the main branch.
+
 Targets: WorldScan, WorldClassification, Excavation.
 
 - Unify finite-value, normalized-direction, range, shape, ignore-filter, query-channel, result-count and runtime-budget validation.
@@ -37,6 +41,10 @@ Targets: WorldScan, WorldClassification, Excavation.
 - Make multi-step terrain edits idempotent and rollback-safe.
 
 **Exit gate:** a stale observation cannot authorize a world edit; a failed probe/edit does not partially publish classification or terrain state.
+
+**Current batch completed:** WorldScan now uses common query budgets, validates hit revision/normal data, applies ignored-target filters consistently, and orders hits deterministically. Classification upserts stage the dirty batch and use a touched-cell rollback path instead of copying the whole map. Excavation requires a live observation-validation callback and rejects source-revision drift before changing density. Regression coverage was added for query caps, ignored targets, classification storage limits, and stale excavation hits.
+
+**Still open before Phase 2 is fully closed:** implement/connect the actual Unreal query provider and Landscape/physical-material evidence provider; integrate a real current-target requery at the UE gameplay boundary; run UE5.8 UBT/UHT and Editor/PIE checks. Passing the portable-module CI alone does not close those engine-integration items.
 
 ## Phase 3 — Geometry, placement, and structural systems
 
