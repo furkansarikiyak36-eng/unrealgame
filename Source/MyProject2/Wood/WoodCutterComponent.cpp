@@ -287,10 +287,28 @@ bool UWoodCutterComponent::Finish(const FWoodCutResult& Result, const TArray<FWo
 	}
 
 	// Commit: kaynak parçanın değişimi ancak bütün yeni parçalar hazır olduğunda yapılır.
-	Piece->PieceData = Result.Pieces[0];
 	const FTransform SelfXf = MakeSliceTransform(OldData, OldXf, Slices[0]);
+	Piece->PieceData = Result.Pieces[0];
 	Prim->SetWorldTransform(SelfXf, false, nullptr, ETeleportType::TeleportPhysics);
 	ReshapeVisual(Piece, Result.Pieces[0], Slices[0]);
+
+	auto RestoreSource = [&]()
+	{
+		if (!IsValid(Piece) || !IsValid(Prim))
+		{
+			return;
+		}
+		Piece->PieceData = OldData;
+		Prim->SetWorldTransform(OldXf, false, nullptr, ETeleportType::TeleportPhysics);
+		ReshapeVisual(Piece, OldData, FWoodSlice{});
+		Prim->SetCollisionEnabled(OldCollision);
+		Prim->SetSimulatePhysics(bWasSimulating);
+		if (bWasSimulating)
+		{
+			Prim->SetPhysicsLinearVelocity(OldLinearVelocity);
+			Prim->SetPhysicsAngularVelocityInRadians(OldAngularVelocity);
+		}
+	};
 
 	Prim->SetCollisionEnabled(OldCollision);
 	Prim->SetSimulatePhysics(bWasSimulating);
@@ -304,13 +322,16 @@ bool UWoodCutterComponent::Finish(const FWoodCutResult& Result, const TArray<FWo
 	// ayarı korunur, yeni fizik yalnızca ayar açıksa ve kaynak simüle oluyorsa açılır.
 	for (AActor* StagedActor : StagedActors)
 	{
-		UWoodPieceComponent* NewPiece = StagedActor->FindComponentByClass<UWoodPieceComponent>();
+		UWoodPieceComponent* NewPiece = IsValid(StagedActor)
+			? StagedActor->FindComponentByClass<UWoodPieceComponent>() : nullptr;
 		UPrimitiveComponent* NewPrim = NewPiece ? NewPiece->GetPrimitive() : nullptr;
 		if (!IsValid(NewPiece) || !IsValid(NewPrim))
 		{
-			// Buraya ulaşmak olağan akışta mümkün olmamalı: callback sözleşmesi
-			// görsel-only olmalıdır. Kaynak commit sonrası sessiz başarı vermiyoruz.
-			return FailCut(TEXT("Kesim commit sonrası hata: hazırlanmış bir parçanın bileşeni geçersizleşti."));
+			// Beklenmeyen Blueprint yan etkisi commit sonrası bir parçayı bozduysa,
+			// kaynak parçayı eski veriye döndür ve hazırlanan çıktıların hepsini temizle.
+			RestoreSource();
+			RollbackStagedActors();
+			return FailCut(TEXT("Kesim geri alındı: commit sırasında hazırlanan parçalardan biri geçersizleşti."));
 		}
 
 		NewPrim->SetCollisionEnabled(OldCollision);
