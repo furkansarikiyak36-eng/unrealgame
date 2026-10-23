@@ -26,6 +26,27 @@ struct SnapRequest {
 };
 class PlacementSnapResolver {
  public:
+  // Plank-only metric grid helper. Log sockets and terrain tools must not use
+  // this policy implicitly; callers opt into the 20 cm plank grid explicitly.
+  static Result<Vec3> SnapPlankPositionToGrid(const Vec3& desiredPosition,
+                                             const Vec3& gridOrigin,
+                                             double spacingM=0.20) {
+    if(!desiredPosition.IsFinite()||!gridOrigin.IsFinite()||
+       !std::isfinite(spacingM)||spacingM<=0.0)
+      return Result<Vec3>::Failure(ErrorCode::InvalidArgument,"invalid plank grid position, origin or spacing");
+    const Vec3 relative=desiredPosition-gridOrigin;
+    const Vec3 cells{relative.x/spacingM,relative.y/spacingM,relative.z/spacingM};
+    if(!cells.IsFinite())
+      return Result<Vec3>::Failure(ErrorCode::OutOfRange,"plank grid coordinate exceeds numeric range");
+    const Vec3 snapped=gridOrigin+Vec3{
+      std::round(cells.x)*spacingM,
+      std::round(cells.y)*spacingM,
+      std::round(cells.z)*spacingM
+    };
+    if(!snapped.IsFinite())
+      return Result<Vec3>::Failure(ErrorCode::OutOfRange,"snapped plank position is not finite");
+    return Result<Vec3>::Success(snapped);
+  }
   static Result<SnapCandidate> Resolve(const SnapRequest& req,const std::vector<SnapCandidate>& candidates) {
     if(!req.desiredNormal.IsFinite()||!req.desiredAxis.IsFinite()||
        LengthSquared(req.desiredNormal)<1e-12||LengthSquared(req.desiredAxis)<1e-12||
