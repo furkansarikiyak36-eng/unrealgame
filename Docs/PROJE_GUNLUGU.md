@@ -1249,7 +1249,8 @@ Kullanıcı: "bize snap noktları daha düzenli ve çok laızm log dikey koysak 
   - `Source/MyProject2/ForestGameMode.h`: `bSpawnDemoShowcase` varsayılanı `false` yapıldı.
   - `Source/MyProject2/ForestGameMode.cpp`:
     - `bSpawnDemoShowcase` varsayılanı `false` yapıldı.
-    - `bIsTestOrStageMap` kontrolü eklendi; TestKits, Snap, Showcase, Demo haritalarında `ConvertHarvestables()` ve otomatik `SetupDemoShowcase()` engellendi. Açıkça `-DemoShowcase` komut satırı verilmedikçe sahneye mühendislik istasyonları spawn edilmiyor.
+    - `bIsTestOrStageMap` kontrolü eklendi; TestKits, Snap, Showcase, Demo haritalarında otomatik `SetupDemoShowcase()` istasyonları engellendi. Açıkça `-DemoShowcase` komut satırı verilmedikçe sahneye mühendislik istasyonları spawn edilmiyor.
+    - `ConvertHarvestables()` içine `SM_RawLog_*`, `SM_GB_RawLog_*` ve küçük taş mesh dönüşümleri eklendi; sahnede elle veya grid ile dizilen statik kütük ve taşlar oyunda otomatik olarak tam etkileşimli, [E] ile alınıp omza konabilen, kesilebilen ve snap edilebilen `ACarvableLog` ve `APickupItem` aktörlerine dönüştürülüyor; placeholder mesh gizlenip çarpışması kapatılarak sahne temizliği korunuyor.
   - `Source/MyProject2/ScenarioSubsystem.cpp`:
     - `LayOut()` çağrısı yalnızca tam hayatta kalma haritalarıyla (`PerfTest`, `Main`) sınırlandırıldı; küçük test/kit sahnelerine vahşi doğa senaryosu kurulması engellendi.
   - `Scripts/setup_testkits_scene.py`:

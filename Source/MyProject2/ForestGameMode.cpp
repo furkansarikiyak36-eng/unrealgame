@@ -31,16 +31,12 @@ AForestGameMode::AForestGameMode()
 
 void AForestGameMode::StartPlay()
 {
+	ConvertHarvestables();
+
+	// The wood chain demo level and test kit stages keep their stage clear of the building stations.
 	const FString MapName = GetWorld() ? GetWorld()->GetMapName() : FString();
 	const bool bIsTestOrStageMap = MapName.Contains(TEXT("TestKits")) || MapName.Contains(TEXT("Snap"))
 		|| MapName.Contains(TEXT("Showcase")) || MapName.Contains(TEXT("Demo"));
-
-	if (!bIsTestOrStageMap)
-	{
-		ConvertHarvestables();
-	}
-
-	// The wood chain demo level and test kit stages keep their stage clear of the building stations.
 	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) || TActorIterator<ALogShowcase>(GetWorld()) || bIsTestOrStageMap;
 	const bool bExplicitDemo = FParse::Param(FCommandLine::Get(), TEXT("DemoShowcase"));
 	if ((bSpawnDemoShowcase || bExplicitDemo) && !bDemoLevel)
@@ -90,6 +86,28 @@ void AForestGameMode::ConvertHarvestables()
 		else if (Name.StartsWith(TEXT("SM_GB_Rock")) && Source->GetActorScale3D().GetMax() <= MaxRockScale)
 		{
 			Type = EHarvestType::Rock;
+		}
+		else if (Name.StartsWith(TEXT("SM_RawLog")) || Name.StartsWith(TEXT("SM_GB_RawLog")))
+		{
+			// Convert placed raw log meshes directly into interactive CarvableLogs so they can be picked up, carried, carved, and snapped!
+			ACarvableLog* Carvable = ACarvableLog::SpawnFromStaticMesh(World, const_cast<UStaticMesh*>(StaticMesh), Source->GetActorTransform());
+			if (Carvable)
+			{
+				Source->SetActorHiddenInGame(true);
+				Source->SetActorEnableCollision(false);
+			}
+			continue;
+		}
+		else if (Name.StartsWith(TEXT("vcljbb1iw")) || Name.StartsWith(TEXT("vdjkbfmiw")) || Name.Contains(TEXT("Small_Stones")))
+		{
+			// Convert placed small stones into pickup items!
+			APickupItem* Pickup = APickupItem::Spawn(World, EForestItem::Stone, 1, Source->GetActorTransform(), FVector::ZeroVector);
+			if (Pickup)
+			{
+				Source->SetActorHiddenInGame(true);
+				Source->SetActorEnableCollision(false);
+			}
+			continue;
 		}
 		else
 		{
