@@ -16,6 +16,9 @@ struct RuntimeProfile {
   std::uint32_t maxSurfaceSamplesPerAxis{5};
   std::uint32_t maxActiveEditableChunks{32};
   std::uint64_t maxEditCells{32768};
+  // Query-output and ignore-list caps are execution budgets, not grid identity.
+  std::uint32_t maxQueryResults{64};
+  std::uint32_t maxIgnoredTargets{128};
 
   static RuntimeProfile LowMid() { return {}; }
   static RuntimeProfile HighEnd() {
@@ -23,7 +26,7 @@ struct RuntimeProfile {
     p.cellsPerAxis=64; p.maxConcurrentMeshJobs=3; p.maxQueuedChunks=32;
     p.maxMeshPublishesPerFrame=2; p.maxCollisionUpdatesPerFrame=2;
     p.maxSurfaceSamplesPerAxis=9; p.maxActiveEditableChunks=96;
-    p.maxEditCells=262144; return p;
+    p.maxEditCells=262144; p.maxQueryResults=256; p.maxIgnoredTargets=512; return p;
   }
   bool Validate(std::string* reason=nullptr) const {
     auto fail=[&](const char* msg){ if(reason) *reason=msg; return false; };
@@ -31,7 +34,8 @@ struct RuntimeProfile {
     if(!std::isfinite(chunkEdgeM)||chunkEdgeM<=0) return fail("chunkEdgeM must be finite and positive");
     if(cellsPerAxis<2||maxConcurrentMeshJobs==0||maxQueuedChunks==0||
        maxMeshPublishesPerFrame==0||maxCollisionUpdatesPerFrame==0||
-       maxSurfaceSamplesPerAxis<2||maxActiveEditableChunks==0||maxEditCells==0)
+       maxSurfaceSamplesPerAxis<2||maxActiveEditableChunks==0||maxEditCells==0||
+       maxQueryResults==0||maxIgnoredTargets==0)
       return fail("profile budget or dimension is invalid");
     const double expected=densitySpacingM*static_cast<double>(cellsPerAxis);
     if(std::abs(expected-chunkEdgeM)>std::max(1e-6,chunkEdgeM*0.02))
