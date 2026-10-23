@@ -49,10 +49,14 @@ Result<TriangleMeshData> CpuSurfaceMesher::Build(const DensityGridSnapshot& s,co
   if(!s.origin.IsFinite()||!std::isfinite(s.spacingM)||s.spacingM<=0||
      s.sizeX<2||s.sizeY<2||s.sizeZ<2||s.sourceRevision==0||
      !std::isfinite(settings.isoLevel)||settings.isoLevel<0||settings.isoLevel>1||
-     settings.maxTriangles==0)
+     settings.maxTriangles==0||settings.maxInputSamples==0)
     return Result<TriangleMeshData>::Failure(ErrorCode::InvalidArgument,"invalid density-grid snapshot or mesher settings");
   const auto count=Count(s);
-  if(count==0||s.density.size()!=count||(!s.materialIds.empty()&&s.materialIds.size()!=count))
+  if(count==0)
+    return Result<TriangleMeshData>::Failure(ErrorCode::CorruptData,"density-grid dimensions overflow supported sample count");
+  if(static_cast<std::uint64_t>(count)>settings.maxInputSamples)
+    return Result<TriangleMeshData>::Failure(ErrorCode::BudgetExceeded,"density-grid exceeds configured input-sample budget");
+  if(s.density.size()!=count||(!s.materialIds.empty()&&s.materialIds.size()!=count))
     return Result<TriangleMeshData>::Failure(ErrorCode::CorruptData,"density/material grid sizes do not match dimensions");
   for(double d:s.density) if(!std::isfinite(d)||d<0||d>1)
     return Result<TriangleMeshData>::Failure(ErrorCode::CorruptData,"density sample outside [0,1]");
