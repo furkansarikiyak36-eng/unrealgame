@@ -1175,3 +1175,67 @@ Kullanıcı: "bana log house kurar mısın" → ardından "weekly limit bitmek �
 - Group/distance/normal/axis filtresi, ayrık hata durumları ve kararlı eşitlik bozma davranışı için otomasyon testi kaynakları eklendi.
 - Doğrulama: UE 5.8 UBT, Editor/PIE ve otomasyon testleri bu oturumda çalıştırılmadı. `Scripts/update_docs.py` GitHub API bağlantısından çalıştırılamadığı için otomatik `KOD_HARITASI.md` ve `TEST_DURUMU.md` yenilenmedi.
 - Sonraki kontrol: yerel UE 5.8 derlemesi, `WorldSnap.Resolver.*` testleri; gerçek log mesh/collision üzerinde üst yüz ve uç snap denemeleri. Bu PR scanner-to-snap köprüsünü sağlar, ancak ForestCharacter'ın preview/commit akışını henüz yeniden yönlendirmez; final placement ve structural-support kararı mevcut gameplay katmanında kalır.
+
+### 2026-10-22 — Kütük üstüne kütük (Stack) destek ve snap hedefi düzeltmesi (CC)
+Kullanıcı: "snap sisteminde sorun var log üstüne log koyrken destek laızm diyor".
+- Teşhis:
+  1. `StructureLink::Installed`: Yalnızca `IsAnchored()` kütükleri topluyordu. Yere bırakılan (`Lay`) veya ağaçtan kesilip yerde duran kütükler `bAnchored = false` olduğu için yapı grafiğinde yok sayılıyordu. Bu yüzden yerdeki kütüğün üstüne paralel kütük konurken (`ECarryPlace::Stack`), alt kütük bulunamadığı için parça havada desteksiz kalıyor ve yerleştirme engelleniyordu.
+  2. `AForestCharacter::PlaceCarried`: `switch (CarryPlace)` içinde `case ECarryPlace::Lay:` eksikti; default'a düşüp `bAnchorIt = false` ile bırakılıyordu.
+  3. `Stack`, `Socket`, `Stand`, `Slope`, `Floor`: Üzerine parça konulan alt kütük (`PlaceTarget` / `StandBase` / `Beam`) `Anchor()` ile yapıya dahil edilmiyordu.
+  4. `UpdateCarryPlacementAt`: `SnapAimPoint` değişkeni, `Sockets.Init()` öncesinde eski `SelectedSnapPointId` değeriyle hesaplandığı için her zaman `Hit.ImpactPoint` değerinde kalıyordu.
+- Düzeltmeler:
+  - `Source/MyProject2/StructureLink.cpp`: `IsLogGrounded(World, Log)` yardımcı fonksiyonu eklendi; `Installed()` artık `bAnchored` VEYA zemine temas eden (`IsLogGrounded`) tüm kütükleri yapı grafiğine temel olarak dahil ediyor.
+  - `Source/MyProject2/ForestCharacter.cpp`:
+    - `UpdateCarryPlacementAt`: `SnapAimPoint` ataması `Sockets.Init()` sonrasına alındı; üst yüzey soket seçildiğinde `SocketChosen` doğru şekilde atandı.
+    - `PlaceCarried`: `case ECarryPlace::Lay:` eklendi (`/*bAnchorIt*/ true` ile yere yatırılan kütükler yapıya temel olarak sabitleniyor).
+    - `case ECarryPlace::Stack:`, `Socket`, `Stand`, `Slope`, `Floor`: Alt kütüğün (`PlaceTarget` / `StandBase` / `Beam`) `Anchor()` fonksiyonu çağrılarak yapıya dahil edilmesi sağlandı.
+
+### 2026-10-22 — Dikey ve yatay kütüklerde modüler snap noktaları (600/300/150/75 cm = 8/4/2/1 + 2 uç)
+Kullanıcı: "bize snap noktları daha düzenli ve çok laızm log dikey koysak 600-300-150-75=uçlara sap uzunluk için her 75 cm 1 snap mesela 600 cm 8 snap noktası 300 cm 4 snap noktası 150 cm 2 snap oktası 75 cm 1 snap noktası bunlara ek 2 uç var".
+- Teşhis:
+  1. `LogSnapSystem::BuildPoints` ve `FLogSockets::Init`: `FMath::Abs(Axis.Z) > 0.3f` kontrolü nedeniyle dikey kütüklerin (direklerin) tüm snap noktaları reddediliyordu; dikey kütüğe yalnızca en üstten kiriş konabiliyordu, gövdesine çit, ray, T veya 45° bağlantı yapılamıyordu.
+  2. Eski kod `GetModuleLines` üzerinden iç kesim çizgilerini alıyordu; bu sebeple son modül sınırı eleniyor (600 cm 7 nokta, 300 cm 3 nokta, 150 cm 1 nokta, 75 cm 0 nokta) ve düzensiz dağılıyordu.
+- Düzeltmeler:
+  - `Source/MyProject2/LogSnapSystem.cpp`:
+    - Hem dikey (`Axis.Z > 0.7f`) hem yatay kütükler desteklendi.
+    - Dikey kütükler için `Side1` (Y ekseni) ve `Side2` (vektörel çarpım) ile 4 yatay yan yüz normali (Front, Back, Top, Bottom) ve 2 uç (EndA = alt taban, EndB = tepe) oluşturuldu.
+    - Boyutlarına göre modüler snap adımları uygulandı: Kütük boyu `L / 75` adet modüle ayrıldı. Her yan yüzde tam 600 cm -> 8, 300 cm -> 4, 150 cm -> 2, 75 cm -> 1 snap noktası ve kütük başlarında 2 uç noktası üretildi.
+  - `Source/MyProject2/ForestCharacter.cpp`:
+    - `FLogSockets::Init`: Dikey kütük desteği eklendi (`bTargetVertical`); 8, 4, 2, 1 modüler çizgi hesaplandı.
+    - `FLogSockets::FaceNormal`: Dikey kütüklerde 4 yan yüz için yatay normalleri, alt ve üst için dikey eksen normallerini döndürüyor.
+    - `UpdateCarryPlacementAt`:
+      - Direk tepesi kontrolü (`bAimingAtTop`) ile direk tepesine bakıldığında kiriş/brace mantığı korunurken, direğin gövdesine bakıldığında modular socket snap'e geçiş sağlandı.
+      - Dikey kütüğün yan snap noktalarında (75, 150, 225, 300 cm vb.): Dik (T), paralel/teğet (çit/ray), 45° açılı bağlantı veya yanına direk yerleştirme eklendi.
+      - Dikey kütüğün uç snap noktalarında (EndB): Direk üstüne direk ekleme veya tepeye kiriş oturtma eklendi.
+  - `Source/MyProject2/Tests/LogSnapSystemTests.cpp`:
+
+## 2026-10-22 — TestKits / TestKitsV2 Haritası İzolasyonu ve Temiz Mesh Dizilimi
+- Sorun: `TestKits` haritasında Play (PIE) yapıldığında, haritanın editördeki haliyle oyun hali iç içe geçiyor, sahne karmaşık ve bozuk görünüyordu.
+- Neden:
+  1. `ForestGameMode::StartPlay` içinde `SetupDemoShowcase()` çağrısı yalnızca `LogShowcase` ve `AMechanicsDemo` haritalarında engellenmişti; `TestKits` haritasında çalışarak `PlayerStart` önüne otomatik 5 adet demo istasyonu (kütük duvar, hayalet duvar, kapı/pencere kasaları, taş duvar vb.) spawn ediyordu.
+  2. `ScenarioSubsystem::OnWorldBeginPlay` içinde `LayOut()` çağrısı `TestKits` için filtrelenmemişti; vahşi doğa senaryosu (nehir şeridi, yanık kulübe, uçurum, ağaçlar, kayalar, hayvanlar, voksel zemin) otomatik kuruluyordu.
+  3. Editördeki 50 log, 50 stone, 25 cobble, 25 wall bu otomatik yapılarla çarpışıyordu.
+- Yapılanlar:
+  - `Source/MyProject2/ForestGameMode.cpp`: Harita adı `TestKits` içeren dünyalarda `SetupDemoShowcase()` devre dışı bırakıldı.
+  - `Source/MyProject2/ScenarioSubsystem.cpp`: Harita adı `TestKits` içeren dünyalarda `LayOut()` devre dışı bırakıldı.
+  - C++ projesi `Build.bat` ile baştan derlendi ve editör güncellendi.
+  - `Content/Maps/TestKitsV2.umap` oluşturuldu ve editörde açıldı.
+  - Sahneye 50 Raw Log (2 sıra x 25), 50 Small Stone (2 sıra x 25), 25 Cobblestone ve 25 StoneWall Y=0 merkezli düzenli aralıklarla yerleştirildi.
+  - `Floor` aktörüne `NoDiggableGround` etiketi ve `BlockAll` profili verildi; `PlayerStart` (-600, 0, -210) konumuna hizalandı. Harita kaydedildi. Artık Play öncesi ve sonrası birebir aynıdır.
+
+### 2026-10-23 — Taşınabilir Mekanik Modüllerinin Unreal Eklentisi Olarak Entegrasyonu (WorldMechanics Plugin)
+- Kullanıcı: "github da azı geliştirmeler ekledim buu unreal ekelr misin tamamen bağlama dosya olarak ekle".
+- Yapılanlar:
+  - GitHub `mechanics-quality/unreal-incremental-plugin-packages` dalındaki taşınabilir modüller (`Modules/`), dışa aktarma aracı (`Tools/UnrealIntegration/`) ve entegrasyon dokümantasyonu yerel depoya alındı.
+  - Oyun aktörlerine bağlanmadan, bağımsız bir C++ Unreal Plugin mimarisi olarak `Tools/UnrealIntegration/Export-Phase.ps1` çalıştırıldı; Faz 0'dan Faz 5'e kadar olan 14 modül `Plugins/WorldMechanics/` içine derlenebilir tek bir çalışma zamanı modülü (`WorldMechanicsRuntime`) olarak aktarıldı:
+    - Faz 0 (Core): CoreContracts, RuntimeProfiles
+    - Faz 1 (WorldQuery): WorldScan, WorldClassification
+    - Faz 2 (Terrain): TerrainVoxel, MeshCollision, PlacementSnap
+    - Faz 3 (Construction): Excavation, Shoring, StructuralIntegrity
+    - Faz 4 (Environment): WorldEnvironment, Survival
+    - Faz 5 (Persistence/Gameplay): Persistence, GameplayIntegration
+  - UE 5.8 uyumluluğu için `WorldMechanicsRuntime.Build.cs` ve `Export-Phase.ps1` şablonundaki `CppStandard` C++17'den C++20'ye güncellendi (`CppStandardVersion.Cpp20`).
+  - `MyProject2.uproject` içerisine `WorldMechanics` eklentisi eklendi.
+  - UBT `Build.bat` ile derlendi: `WorldMechanicsRuntimeModule` ve 11 kaynak dosya (`classification_map`, `cpu_surface_mesher`, `density_snapshot_codec`, `environment_simulation`, `excavation`, `gameplay_quality`, `landscape_builder`, `shoring`, `structural_integrity`, `survival`, `terrain_voxel`) sıfır hata ile derlendi ve `UnrealEditor-WorldMechanicsRuntime.dll` üretildi (`Result: Succeeded`).
+
+

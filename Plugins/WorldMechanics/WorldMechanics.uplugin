@@ -1,0 +1,17 @@
+{
+    "FileVersion":  3,
+    "Version":  1,
+    "VersionName":  "0.1.0",
+    "FriendlyName":  "World Mechanics",
+    "Description":  "Incrementally integrated, engine-neutral world mechanics algorithms.",
+    "Category":  "Gameplay",
+    "CanContainContent":  false,
+    "IsBetaVersion":  true,
+    "Modules":  [
+                    {
+                        "Name":  "WorldMechanicsRuntime",
+                        "Type":  "Runtime",
+                        "LoadingPhase":  "Default"
+                    }
+                ]
+}

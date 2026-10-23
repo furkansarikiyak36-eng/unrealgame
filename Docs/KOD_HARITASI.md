@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (21 October 2026 17:59) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (23 October 2026 05:14) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -200,7 +200,10 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsHelpOpen() const` — [F1]: the full list of controls.
 - `void TestLight(AActor* Target, float Seconds)` — For the mechanics test: the lighter held on Target for Seconds.
 - `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
-- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetLogPlacementResult`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
+
+**FLogPlacementResult** (struct) — One snapshot shared by the ghost preview, support validation and placement commit.
+
 
 ## ForestOutline.h
 
@@ -297,6 +300,12 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 - `FString BuildAll()` — Builds every station now (also called by itself shortly after play starts). Returns the report.
 - Ayrıca (açıklamasız): `ALogShowcase`
+
+## LogSnapSystem.h
+
+**LogSnapSystem** (namespace) — Deterministic snap-point generation and selection. Raycasts acquire a target; this module selects a predefined point.
+
+- Ayrıca (açıklamasız): `BuildPoints`, `Resolve`, `FoldAxisYawDelta`, `NearestSector`
 
 ## LogWallBlueprint.h
 
@@ -436,6 +445,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `FString NameOf(EWoodFeatureKind Kind)` — Turkish name of a kind of structure.
 - `FString DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log)` — What Log is part of, e.g. "Platform, Korkuluk" (empty if it stands alone).
 - `void MarkChanged()` — Something in the structure changed: the next Features() works it out afresh.
+- `int32 Version()` — Monotonic version incremented whenever the structural graph is invalidated.
 - `FString Describe(UWorld* World)` — Every standing piece with its role, whether it rests on the ground, and what holds it: for reading what the graph sees.
 - `int32 Settle(UWorld* World)` — Lets every anchored piece that has no path to the ground fall. Returns how many fell.
 - `bool WouldBeSupported(UWorld* World, const ACarvableLog* Piece, const FTransform& Transform)` — Would Piece, anchored at Transform among the pieces already standing, be held up?
@@ -597,6 +607,46 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 - Ayrıca (açıklamasız): `ACliffBlock`, `Spawn`, `GetTopZ`
 
+## WorldScanSystem.h
+
+**WorldScanSystem** (namespace) — Shared world sensing primitives. Query methods acquire raw engine data; analysis methods normalize it. Expensive multi-sample or mesh-level work is explicit and …
+
+- `bool ExecuteScanPlan(UWorld* World, const FWorldScanRequest& Request, const AActor* ActorToIgnore, const AActor* TargetActorOverri …` — Execute only the methods enabled in the request; raycast hit supplies a default target for bounds/physics.
+- `bool Trace(UWorld* World, const FVector& Start, const FVector& End, const AActor* ActorToIgnore, FScanResult& OutResult, ECollisio …` — Method 1: line trace.
+- `bool ShapeTrace(UWorld* World, const FVector& Start, const FVector& End, const FShapeTraceRequest& Request, const AActor* ActorToI …` — Method 2: swept sphere/box/capsule. Multi-hit is optional to avoid accidental result explosions.
+- `bool OverlapSphere(UWorld* World, const FVector& Center, float RadiusCm, const AActor* ActorToIgnore, FOverlapScanResult& OutResul …` — Method 3: collect overlaps in a sphere or oriented box.
+- `bool SampleSurface(UWorld* World, const FVector& Center, const FGeometrySampleSettings& Settings, const AActor* ActorToIgnore, FGe …` — Method 4: grid-sample a terrain/surface patch using downward traces.
+- `bool AnalyzeBounds(const AActor* Actor, const UPrimitiveComponent* PreferredComponent, FBoundsAnalysis& OutAnalysis)` — Method 5: read cheap component/actor bounds; does not iterate every mesh triangle.
+- `bool QueryPhysicsState(const AActor* Actor, const UPrimitiveComponent* PreferredComponent, FPhysicsStateAnalysis& OutAnalysis)` — Method 6: inspect current physics state. This is a snapshot, not historical motion tracking.
+- `bool AnalyzeHit(const FScanResult& Scan, FWorldAnalysis& OutAnalysis)` — Stage 2: normalize a successful line-trace hit.
+- Ayrıca (açıklamasız): `ENUM_CLASS_FLAGS`, `OverlapBox`, `ClassifyObject`, `ClassifySurface`, `ClassifyPhysicalState`, `InferCapabilities`, `HasWorldTag`
+
+**FWorldAnalysis** (struct)
+
+- Ayrıca (açıklamasız): `HasCapability`
+
+**FShapeTraceRequest** (struct)
+
+- Ayrıca (açıklamasız): `FVector`
+
+**FGeometrySampleSettings** (struct)
+
+- Ayrıca (açıklamasız): `FVector2D`
+
+**FBoundsAnalysis** (struct)
+
+- Ayrıca (açıklamasız): `FBox`
+
+**FWorldScanRequest** (struct) — Selective orchestration request. Disabled methods do no work.
+
+- Ayrıca (açıklamasız): `FVector`
+
+## WorldSnapScanBridge.h
+
+**WorldSnapScanBridge** (namespace) — Adapter between the world-scan result contract and the reusable WorldSnap plugin. Game/actor-specific point generation stays here; the plugin remains actor-agnostic.
+
+- `bool ResolveLogSnap(const WorldScanSystem::FWorldScanBundle& Scan, const FLogSnapSettings& Settings, FResolvedLogSnap& OutResult)` — Resolves a log snap only from an executed scanner raycast bundle; it does not commit placement.
+
 ## Açıklaması eksik fonksiyonlar
 
-203 / 511 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+220 / 538 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

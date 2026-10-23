@@ -16,6 +16,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "WorldMechanics",
+			"Enabled": true
+		},
+		{
 			"Name": "ModelingToolsEditorMode",
 			"Enabled": true,
 			"TargetAllowList": [
