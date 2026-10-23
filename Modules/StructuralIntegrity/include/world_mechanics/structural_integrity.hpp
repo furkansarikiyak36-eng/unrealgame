@@ -24,6 +24,7 @@ enum class SupportState { Supported, Overloaded, Unsupported, Inactive };
 struct NodeAssessment {
   Id nodeId{0};
   SupportState state{SupportState::Unsupported};
+  double aggregateDemand{0};
   double demandCapacityRatio{0};
   bool collapseCandidate{false};
   std::string reason;
