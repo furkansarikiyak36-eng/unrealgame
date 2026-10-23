@@ -28,6 +28,8 @@ struct TriangleMeshData {
 struct MesherSettings {
   double isoLevel{0.5};
   std::uint64_t maxTriangles{200000};
+  // Reject oversized grids before scanning samples or allocating edge caches.
+  std::uint64_t maxInputSamples{1000000};
 };
 class CpuSurfaceMesher {
  public:
