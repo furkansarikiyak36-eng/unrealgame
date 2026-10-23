@@ -13,6 +13,7 @@
 #include "world_mechanics/shoring.hpp"
 #include "world_mechanics/structural_integrity.hpp"
 #include "world_mechanics/survival.hpp"
+#include "world_mechanics/world_environment_simulation.hpp"
 #include "world_mechanics/persistence_transaction.hpp"
 #include "world_mechanics/density_snapshot_codec.hpp"
 #include <cmath>
@@ -366,6 +367,202 @@ bool TestStructuralIntegrity() {
   CHECK(std::abs(combined.value.nodes[0].demandCapacityRatio-1.2)<1e-9);
   return true;
 }
+
+bool TestEnvironmentHydrologyAndBudgets() {
+  wm::EnvironmentSimulationConfig config;
+  config.fixedStepSeconds = 0.1;
+  config.maxSubstepsPerCall = 2;
+  config.maxQueuedSeconds = 1.0;
+  config.maxCells = 8;
+  config.maxConnections = 8;
+  config.maxWaterTransferFractionPerStep = 0.25;
+  config.infiltrationRateMPerSecond = 0.0;
+  config.evaporationRateMPerSecond = 0.0;
+  config.deepDrainageRateMPerSecond = 0.0;
+  config.nutrientLeachFractionPerSecond = 0.0;
+  config.temperatureRelaxationPerSecond = 0.0;
+  config.fireHeatCPerSecond = 0.0;
+  config.fireBurnRateKgPerSecond = 0.0;
+  wm::WorldEnvironmentSimulation water(config);
+
+  wm::EnvironmentCellState source;
+  source.cellId = 1;
+  source.surfaceWaterM3 = 1.0;
+  source.surfaceWaterCapacityM3 = 2.0;
+  source.soilWaterCapacityM3 = 0.0;
+  wm::EnvironmentCellState target;
+  target.cellId = 2;
+  target.positionM = {1,0,0};
+  target.surfaceWaterCapacityM3 = 2.0;
+  target.soilWaterCapacityM3 = 0.0;
+
+  CHECK(water.AddCell(source));
+  CHECK(water.AddCell(target));
+  auto duplicate = water.AddCell(target);
+  CHECK(!duplicate && duplicate.error == wm::ErrorCode::Conflict);
+  CHECK(water.Connect({1,2,0.5,0.0}));
+  auto duplicateConnection = water.Connect({2,1,0.5,0.0});
+  CHECK(!duplicateConnection && duplicateConnection.error == wm::ErrorCode::Conflict);
+  CHECK(water.TotalWaterM3() == 1.0);
+
+  auto stepped = water.Step(0.5,20.0);
+  CHECK(stepped);
+  CHECK(stepped.value.completedSubsteps == 2);
+  CHECK(std::abs(stepped.value.simulatedSeconds - 0.2) < 1e-9);
+  CHECK(std::abs(stepped.value.pendingTimeSeconds - 0.3) < 1e-9);
+  CHECK(std::abs(water.TotalWaterM3() - 1.0) < 1e-9);
+  CHECK(std::abs(water.WaterBalanceErrorM3()) < 1e-9);
+
+  auto backlogOne = water.Step(0.0,20.0);
+  CHECK(backlogOne);
+  CHECK(backlogOne.value.completedSubsteps == 2);
+  CHECK(std::abs(backlogOne.value.pendingTimeSeconds - 0.1) < 1e-9);
+  auto backlogTwo = water.Step(0.0,20.0);
+  CHECK(backlogTwo);
+  CHECK(backlogTwo.value.completedSubsteps == 1);
+  CHECK(backlogTwo.value.pendingTimeSeconds < 1e-9);
+
+  const double pendingBeforeReject = water.GetPendingTimeSeconds();
+  const double elapsedBeforeReject = water.GetElapsedSimulationSeconds();
+  auto excessiveDelta = water.Step(2.0,20.0);
+  CHECK(!excessiveDelta && excessiveDelta.error == wm::ErrorCode::BudgetExceeded);
+  CHECK(std::abs(water.GetPendingTimeSeconds() - pendingBeforeReject) < 1e-9);
+  CHECK(std::abs(water.GetElapsedSimulationSeconds() - elapsedBeforeReject) < 1e-9);
+
+  const auto waterIn = water.AddSurfaceWater(2,3.0);
+  CHECK(waterIn);
+  CHECK(std::abs(waterIn.value.requestedM3 - 3.0) < 1e-9);
+  CHECK(waterIn.value.acceptedM3 > 0.0);
+  CHECK(waterIn.value.runoffM3 > 0.0);
+  CHECK(std::abs(waterIn.value.acceptedM3 + waterIn.value.runoffM3 - 3.0) < 1e-9);
+  CHECK(std::abs(water.WaterBalanceErrorM3()) < 1e-8);
+
+  auto unknownWaterTarget = water.AddSurfaceWater(999,0.5);
+  CHECK(!unknownWaterTarget && unknownWaterTarget.error == wm::ErrorCode::NotFound);
+  auto missingLink = water.Connect({1,999,0.1,0.1});
+  CHECK(!missingLink && missingLink.error == wm::ErrorCode::NotFound);
+  auto badTime = water.Step(-0.1,20.0);
+  CHECK(!badTime && badTime.error == wm::ErrorCode::InvalidArgument);
+
+  // The soil submodel accounts for infiltration, evaporation and deep drainage as
+  // explicit sinks, so the cumulative water-balance ledger remains closed.
+  wm::EnvironmentSimulationConfig soilConfig;
+  soilConfig.fixedStepSeconds = 0.1;
+  soilConfig.maxSubstepsPerCall = 10;
+  soilConfig.maxQueuedSeconds = 1.0;
+  soilConfig.infiltrationRateMPerSecond = 0.5;
+  soilConfig.evaporationRateMPerSecond = 0.05;
+  soilConfig.deepDrainageRateMPerSecond = 0.1;
+  soilConfig.nutrientLeachFractionPerSecond = 0.5;
+  soilConfig.temperatureRelaxationPerSecond = 0.0;
+  soilConfig.fireHeatCPerSecond = 0.0;
+  soilConfig.fireBurnRateKgPerSecond = 0.0;
+  wm::WorldEnvironmentSimulation soil(soilConfig);
+  wm::EnvironmentCellState soilCell;
+  soilCell.cellId = 7;
+  soilCell.surfaceWaterM3 = 0.5;
+  soilCell.surfaceWaterCapacityM3 = 1.0;
+  soilCell.soilWaterM3 = 0.25;
+  soilCell.soilWaterCapacityM3 = 1.0;
+  soilCell.nitrogenKg = 10.0;
+  soilCell.phosphorusKg = 5.0;
+  soilCell.potassiumKg = 2.0;
+  CHECK(soil.AddCell(soilCell));
+  auto soilStep = soil.Step(0.5,20.0);
+  CHECK(soilStep);
+  CHECK(soilStep.value.completedSubsteps == 5);
+  CHECK(soilStep.value.evaporationThisCallM3 > 0.0);
+  CHECK(soilStep.value.drainageThisCallM3 > 0.0);
+  CHECK(std::abs(soilStep.value.waterBalanceErrorM3) < 1e-8);
+  auto afterSoil = soil.GetCell(7);
+  CHECK(afterSoil);
+  CHECK(afterSoil.value.nitrogenKg < 10.0);
+  CHECK(afterSoil.value.phosphorusKg < 5.0);
+  CHECK(afterSoil.value.potassiumKg < 2.0);
+  return true;
+}
+
+bool TestEnvironmentFireAndSurvival() {
+  wm::EnvironmentSimulationConfig config;
+  config.fixedStepSeconds = 0.1;
+  config.maxSubstepsPerCall = 4;
+  config.maxQueuedSeconds = 5.0;
+  config.maxCells = 8;
+  config.maxConnections = 8;
+  config.infiltrationRateMPerSecond = 0.0;
+  config.evaporationRateMPerSecond = 0.0;
+  config.deepDrainageRateMPerSecond = 0.0;
+  config.nutrientLeachFractionPerSecond = 0.0;
+  config.temperatureRelaxationPerSecond = 0.0;
+  config.fireHeatCPerSecond = 1000.0;
+  config.fireBurnRateKgPerSecond = 0.1;
+  config.autoIgnitionTemperatureC = 80.0;
+  config.maximumFuelMoisture01 = 0.65;
+  config.windHeatBoost = 2.0;
+  wm::WorldEnvironmentSimulation environment(config);
+
+  wm::EnvironmentCellState fireSource;
+  fireSource.cellId = 10;
+  fireSource.fuelKg = 5.0;
+  fireSource.fuelMoisture01 = 0.0;
+  fireSource.soilWaterCapacityM3 = 0.0;
+  wm::EnvironmentCellState dryNeighbor = fireSource;
+  dryNeighbor.cellId = 20;
+  dryNeighbor.positionM = {1,0,0};
+  wm::EnvironmentCellState wetCell = fireSource;
+  wetCell.cellId = 30;
+  wetCell.positionM = {2,0,0};
+  wetCell.soilWaterCapacityM3 = 1.0;
+  wetCell.soilWaterM3 = 1.0;
+
+  CHECK(environment.AddCell(fireSource));
+  CHECK(environment.AddCell(dryNeighbor));
+  CHECK(environment.AddCell(wetCell));
+  CHECK(environment.Connect({10,20,0.0,1.0}));
+
+  auto wetIgnite = environment.Ignite(30);
+  CHECK(!wetIgnite && wetIgnite.error == wm::ErrorCode::Unsupported);
+  CHECK(environment.Ignite(10));
+  auto alreadyBurning = environment.Ignite(10);
+  CHECK(!alreadyBurning && alreadyBurning.error == wm::ErrorCode::Conflict);
+
+  auto fireStep = environment.Step(0.5,20.0,{1,0,0});
+  CHECK(fireStep);
+  CHECK(fireStep.value.completedSubsteps == 4);
+  CHECK(fireStep.value.newIgnitions >= 1);
+  CHECK(fireStep.value.fuelBurnedThisCallKg > 0.0);
+
+  auto neighbor = environment.GetCell(20);
+  CHECK(neighbor);
+  CHECK(neighbor.value.burning);
+  CHECK(neighbor.value.temperatureC >= config.autoIgnitionTemperatureC);
+
+  auto hotSample = environment.Sample(10,environment.GetElapsedSimulationSeconds());
+  CHECK(hotSample);
+  CHECK(hotSample.value.Validate());
+  wm::SurvivalExposure survival;
+  auto exposure = survival.Update({},hotSample.value,0.1);
+  CHECK(exposure);
+  CHECK(exposure.value.thermalStress > 0.0);
+
+  auto wetSample = environment.Sample(30,environment.GetElapsedSimulationSeconds());
+  CHECK(wetSample);
+  CHECK(wetSample.value.Validate());
+  CHECK(wetSample.value.wetness01.has_value());
+  CHECK(*wetSample.value.wetness01 > 0.99);
+
+  const auto elapsedBeforeReject = environment.GetElapsedSimulationSeconds();
+  auto queueOverflow = environment.Step(6.0,20.0);
+  CHECK(!queueOverflow && queueOverflow.error == wm::ErrorCode::BudgetExceeded);
+  CHECK(std::abs(environment.GetElapsedSimulationSeconds() - elapsedBeforeReject) < 1e-9);
+
+  CHECK(environment.Extinguish(20));
+  auto extinguished = environment.GetCell(20);
+  CHECK(extinguished);
+  CHECK(!extinguished.value.burning);
+  return true;
+}
+
 bool TestSurvivalAndRestoreTransaction() {
   wm::SurvivalExposure survival;
   wm::EnvironmentSample sample; sample.sourceRevision=1; sample.sampledAtSeconds=1;
@@ -397,6 +594,8 @@ int main() {
     {"snap/excavation",TestSnapAndExcavation},
     {"shoring planner",TestShoringPlanner},
     {"structural integrity",TestStructuralIntegrity},
+    {"environment hydrology/budgets",TestEnvironmentHydrologyAndBudgets},
+    {"environment fire/survival",TestEnvironmentFireAndSurvival},
     {"survival/restore transaction",TestSurvivalAndRestoreTransaction}
   };
   unsigned passed=0;
