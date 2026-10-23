@@ -34,6 +34,12 @@ class FakeQuery final : public wm::IWorldQueryProvider {
       {true,42,{1,0,0},{0,0,1},1.0,3}
     });
   }
+  wm::Result<std::vector<wm::RawHit>> Overlap(const wm::OverlapRequest&) const override {
+    return wm::Result<std::vector<wm::RawHit>>::Success({
+      {true,42,{1,0,0},{0,0,1},0.0,3},
+      {true,43,{2,0,0},{0,0,1},0.0,4}
+    });
+  }
   wm::Result<std::vector<wm::SurfaceSample>> SampleSurface(const wm::Aabb&,std::uint32_t) const override {
     return wm::Result<std::vector<wm::SurfaceSample>>::Success({{{0,0,0},{0,0,1},0.0,true}});
   }
@@ -112,6 +118,12 @@ bool TestClassificationMapAndQueryBudgets() {
   auto duplicateSweep=sweep; duplicateSweep.ignored={42,42};
   auto duplicateSweepResult=scan.ShapeSweep(duplicateSweep);
   CHECK(!duplicateSweepResult&&duplicateSweepResult.error==wm::ErrorCode::Conflict);
+  wm::OverlapRequest overlap; overlap.bounds={{-1,-1,-1},{3,3,3}}; overlap.maxResults=2; overlap.ignored={42};
+  auto overlapHits=scan.Overlap(overlap);
+  CHECK(overlapHits); CHECK(overlapHits.value.size()==1); CHECK(overlapHits.value.front().targetId==43);
+  auto oversizedOverlap=overlap; oversizedOverlap.maxResults=65;
+  auto oversizedOverlapResult=scan.Overlap(oversizedOverlap);
+  CHECK(!oversizedOverlapResult&&oversizedOverlapResult.error==wm::ErrorCode::BudgetExceeded);
   auto oversizedSweep=sweep; oversizedSweep.maxResults=65;
   auto oversizedSweepResult=scan.ShapeSweep(oversizedSweep);
   CHECK(!oversizedSweepResult&&oversizedSweepResult.error==wm::ErrorCode::BudgetExceeded);
@@ -256,6 +268,27 @@ bool TestSnapAndExcavation() {
   auto staleTarget=staleDig.Execute(req);
   CHECK(!staleTarget&&staleTarget.error==wm::ErrorCode::StaleRevision);
   CHECK(staleTerrain.GetRevision()==1);
+
+  wm::DensityVolume movedTerrain(wm::RuntimeProfile::LowMid());
+  wm::ExcavationService movedDig(movedTerrain,[](const wm::Vec3&){
+    wm::ClassificationResult c; c.kind=wm::RegionKind::EditableVoxel; c.canDig=true; c.mapRevision=5; return c;
+  },[](const wm::RawHit& observed){
+    wm::RawHit moved=observed; moved.point.x+=0.2;
+    return wm::Result<wm::RawHit>::Success(moved);
+  });
+  req.operationId="moved-target-dig"; req.edit.expectedRevision=movedTerrain.GetRevision();
+  auto movedTarget=movedDig.Execute(req);
+  CHECK(!movedTarget&&movedTarget.error==wm::ErrorCode::StaleRevision);
+  CHECK(movedTerrain.GetRevision()==1);
+
+  wm::DensityVolume noValidatorTerrain(wm::RuntimeProfile::LowMid());
+  wm::ExcavationService noValidator(noValidatorTerrain,[](const wm::Vec3&){
+    wm::ClassificationResult c; c.kind=wm::RegionKind::EditableVoxel; c.canDig=true; c.mapRevision=5; return c;
+  },{});
+  req.operationId="no-validator-dig"; req.edit.expectedRevision=noValidatorTerrain.GetRevision();
+  auto missingValidator=noValidator.Execute(req);
+  CHECK(!missingValidator&&missingValidator.error==wm::ErrorCode::MissingDependency);
+  CHECK(noValidatorTerrain.GetRevision()==1);
   return true;
 }
 bool TestShoringPlanner() {
