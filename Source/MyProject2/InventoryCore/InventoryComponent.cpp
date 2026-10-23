@@ -101,12 +101,148 @@ void UInventoryComponent::SortByRarity() { Slots.Sort([](const FInventorySlot&A,
 void UInventoryComponent::ClearAll() { for(int32 i=0;i<Slots.Num();++i){ if(!Slots[i].bLocked){Slots[i].Item=FInventoryItem();Slots[i].SlotIndex=i;} } BroadcastChanged(); }
 bool UInventoryComponent::RestoreFromSavedItems(const TArray<FInventoryItem>& Saved)
 {
-    ClearAll();
-    float Weight=0; int32 Needed=0;
-    for(const FInventoryItem& I:Saved){if(I.IsEmpty())continue; Weight+=I.Weight*I.Count; Needed+=FMath::DivideAndRoundUp(I.Count,FMath::Max(1,I.MaxStack));}
-    int32 Free=0;for(const FInventorySlot&S:Slots)if(!S.bLocked&&!S.IsOccupied())++Free;
-    if(Needed>Free || (!bIgnoreWeight&&Weight>MaxWeight+KINDA_SMALL_NUMBER)){ClearAll();return false;}
-    for(const FInventoryItem& I:Saved){if(I.IsEmpty())continue;const EInventoryResult R=AddItemData(I);if(R!=EInventoryResult::Success){ClearAll();return false;}}
-    BroadcastChanged();return true;
+	if (MaxSlots <= 0 || Slots.Num() != MaxSlots || !FMath::IsFinite(MaxWeight) || MaxWeight < 0.f)
+	{
+		return false;
+	}
+
+	// Build the restored inventory off to the side. Locked slots retain their
+	// existing contents and flags, matching ClearAll's established behavior.
+	TArray<FInventorySlot> StagedSlots = Slots;
+	for (int32 Index = 0; Index < StagedSlots.Num(); ++Index)
+	{
+		if (!StagedSlots[Index].bLocked)
+		{
+			StagedSlots[Index].Item = FInventoryItem();
+			StagedSlots[Index].SlotIndex = Index;
+		}
+	}
+
+	// Reject invalid locked records before treating them as the baseline.
+	for (const FInventorySlot& Slot : StagedSlots)
+	{
+		if (!Slot.bLocked || !Slot.IsOccupied())
+		{
+			continue;
+		}
+		const FInventoryItem& Item = Slot.Item;
+		if (Item.ItemID.IsNone() || Item.Count <= 0 || Item.MaxStack <= 0 ||
+			Item.Count > Item.MaxStack || !FMath::IsFinite(Item.Weight) || Item.Weight < 0.f)
+		{
+			return false;
+		}
+	}
+
+	for (const FInventoryItem& SavedItem : Saved)
+	{
+		// Empty serialized slots are allowed; a positive count without an ID is not.
+		if (SavedItem.Count < 0 || (SavedItem.Count > 0 && SavedItem.ItemID.IsNone()))
+		{
+			return false;
+		}
+		if (SavedItem.IsEmpty())
+		{
+			continue;
+		}
+		if (SavedItem.MaxStack <= 0 || !FMath::IsFinite(SavedItem.Weight) || SavedItem.Weight < 0.f)
+		{
+			return false;
+		}
+
+		UInventoryItemData* Definition = GetItemData(SavedItem.ItemID);
+		FInventoryItem Prototype = Definition ? Definition->ToInventoryItem(1) : SavedItem;
+		if (Prototype.ItemID.IsNone() || Prototype.MaxStack <= 0 ||
+			!FMath::IsFinite(Prototype.Weight) || Prototype.Weight < 0.f)
+		{
+			return false;
+		}
+		Prototype.Count = 0;
+
+		int32 Remaining = SavedItem.Count;
+		while (Remaining > 0)
+		{
+			int32 SlotIndex = INDEX_NONE;
+			if (Prototype.MaxStack > 1)
+			{
+				for (int32 Index = 0; Index < MaxSlots; ++Index)
+				{
+					const FInventorySlot& Slot = StagedSlots[Index];
+					if (!Slot.bLocked && Slot.IsOccupied() &&
+						Slot.Item.ItemID == Prototype.ItemID &&
+						Slot.Item.Count < Slot.Item.MaxStack)
+					{
+						SlotIndex = Index;
+						break;
+					}
+				}
+			}
+
+			if (SlotIndex == INDEX_NONE)
+			{
+				for (int32 Index = 0; Index < MaxSlots; ++Index)
+				{
+					if (!StagedSlots[Index].bLocked && !StagedSlots[Index].IsOccupied())
+					{
+						SlotIndex = Index;
+						break;
+					}
+				}
+			}
+
+			if (SlotIndex == INDEX_NONE)
+			{
+				return false;
+			}
+
+			FInventorySlot& TargetSlot = StagedSlots[SlotIndex];
+			if (!TargetSlot.IsOccupied())
+			{
+				TargetSlot.Item = Prototype;
+				TargetSlot.SlotIndex = SlotIndex;
+			}
+
+			const int32 StackCapacity = FMath::Max(1, TargetSlot.Item.MaxStack);
+			const int32 Space = FMath::Max(0, StackCapacity - TargetSlot.Item.Count);
+			const int32 AmountToAdd = FMath::Min(Space, Remaining);
+			if (AmountToAdd <= 0)
+			{
+				return false;
+			}
+
+			TargetSlot.Item.Count += AmountToAdd;
+			Remaining -= AmountToAdd;
+		}
+	}
+
+	double TotalWeight = 0.0;
+	for (const FInventorySlot& Slot : StagedSlots)
+	{
+		if (!Slot.IsOccupied())
+		{
+			continue;
+		}
+		const FInventoryItem& Item = Slot.Item;
+		if (Item.Count <= 0 || Item.ItemID.IsNone() || Item.MaxStack <= 0 ||
+			Item.Count > Item.MaxStack || !FMath::IsFinite(Item.Weight) || Item.Weight < 0.f)
+		{
+			return false;
+		}
+		TotalWeight += static_cast<double>(Item.Weight) * static_cast<double>(Item.Count);
+		if (!FMath::IsFinite(TotalWeight))
+		{
+			return false;
+		}
+	}
+
+	if (!bIgnoreWeight && TotalWeight > static_cast<double>(MaxWeight) + static_cast<double>(KINDA_SMALL_NUMBER))
+	{
+		return false;
+	}
+
+	// Single state commit. No broadcast/delegate can observe a partial restore.
+	Slots = MoveTemp(StagedSlots);
+	NormalizeSlotIndexes();
+	BroadcastChanged();
+	return true;
 }
 void UInventoryComponent::BroadcastChanged() { if(OnInventoryChanged.IsBound()) OnInventoryChanged.Broadcast(this); }
