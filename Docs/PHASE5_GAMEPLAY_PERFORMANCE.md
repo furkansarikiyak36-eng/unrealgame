@@ -30,7 +30,7 @@ Yeni beş test grubu:
 - Plant/animal kaynak tüketimi, yetersiz beslenme ve girdi sırasından bağımsız reproduction pair'leri.
 - Crafting preflight, slot/ağırlık limiti, yetersiz malzeme, stale revision ve fingerprint uyuşmazlığı.
 
-Toplam portable suite: **16 test grubu**. Son kabul, bu dalın GitHub Actions Configure/Build/Test sonucuna bağlıdır.
+Toplam portable suite: **16 test grubu**. GitHub Actions run [#39883905906](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/39883905906) commit `20036d9cbeb87df5bd663b281a554eaf85bcc157` için Configure, Build ve Test adımlarını başarıyla tamamladı.
 
 ## Açık kalan Unreal entegrasyonu
 
@@ -44,11 +44,11 @@ Toplam portable suite: **16 test grubu**. Son kabul, bu dalın GitHub Actions Co
 
 ## Faz 5 kabul kapısı
 
-- [ ] Taşınabilir CMake configure/build başarılı.
-- [ ] On altı test grubu başarılı.
-- [ ] Raid/spawn kararlı ve bütçeli.
-- [ ] Chunk scheduler adil, stale işlere karşı korumalı ve bounded.
-- [ ] Material rule cache değişiklikle birlikte invalidated.
-- [ ] Plant/animal sonuçları deterministik ve kaynak tüketimi sınırlı.
-- [ ] Craft planı yalnızca revision ve snapshot eşleştiğinde commit için kabul ediliyor.
-- [ ] Unreal motor entegrasyonu ayrı bir kabul aşaması olarak kaydediliyor.
+- [x] Taşınabilir CMake configure/build başarılı.
+- [x] On altı test grubu başarılı.
+- [x] Raid/spawn kararlı ve bütçeli.
+- [x] Chunk scheduler adil, stale işlere karşı korumalı ve bounded.
+- [x] Material rule cache değişiklikle birlikte invalidated.
+- [x] Plant/animal sonuçları deterministik ve kaynak tüketimi sınırlı.
+- [x] Craft planı yalnızca revision ve snapshot eşleştiğinde commit için kabul ediliyor.
+- [x] Unreal motor entegrasyonu ayrı bir kabul aşaması olarak kaydediliyor.
