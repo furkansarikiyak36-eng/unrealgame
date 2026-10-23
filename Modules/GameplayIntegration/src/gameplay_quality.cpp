@@ -84,12 +84,6 @@ std::uint64_t InventoryFingerprint(const CraftingInventorySnapshot& inventory) {
   return hash;
 }
 
-bool SameStackDefinition(const InventoryStack& lhs, const InventoryStack& rhs) {
-  return lhs.itemDefinitionId == rhs.itemDefinitionId &&
-         lhs.maxStack == rhs.maxStack &&
-         std::abs(lhs.unitWeightKg - rhs.unitWeightKg) <= kEpsilon;
-}
-
 }  // namespace
 
 // --------------------------- Raid targeting --------------------------------
@@ -172,7 +166,7 @@ Result<RaidTargetDecision> RaidTargetScorer::Choose(
                                                 "no live, visible, reachable target matches the current revision");
 
   std::sort(scored.begin(), scored.end(), [](const auto& lhs, const auto& rhs) {
-    if (std::abs(lhs.score - rhs.score) > kEpsilon) return lhs.score > rhs.score;
+    if (lhs.score != rhs.score) return lhs.score > rhs.score;
     return lhs.id < rhs.id;
   });
   return Result<RaidTargetDecision>::Success({
@@ -222,7 +216,7 @@ Result<SpawnDecision> SpawnDecisionPipeline::Choose(
                                             "duplicate spawn candidate ID");
   }
   std::sort(ordered.begin(), ordered.end(), [](const auto& lhs, const auto& rhs) {
-    if (std::abs(lhs.utility - rhs.utility) > kEpsilon) return lhs.utility > rhs.utility;
+    if (lhs.utility != rhs.utility) return lhs.utility > rhs.utility;
     return lhs.candidateId < rhs.candidateId;
   });
 
@@ -492,6 +486,8 @@ bool MaterialRuleResolver::ValidateRule(
 Result<bool> MaterialRuleResolver::UpsertRule(
     const MaterialInteractionRule& rule) {
   std::string reason;
+  if (maxRules_ == 0 || maxRules_ > kHardMaterialRuleLimit)
+    return Result<bool>::Failure(ErrorCode::InvalidArgument, "material rule cap is outside supported bounds");
   if (!ValidateRule(rule, &reason))
     return Result<bool>::Failure(ErrorCode::InvalidArgument, reason);
   const auto existing = rules_.find(rule.ruleId);
@@ -1025,6 +1021,13 @@ Result<CraftingPlan> CraftingTransactionPlanner::Build(
 Result<CraftingPlan> CraftingTransactionPlanner::Revalidate(
     const CraftingPlan& plan,
     const CraftingInventorySnapshot& liveInventory) {
+  if (liveInventory.slotCapacity == 0 ||
+      liveInventory.slotCapacity > kHardInventorySlotsLimit ||
+      liveInventory.slots.size() > liveInventory.slotCapacity ||
+      liveInventory.slots.size() > kHardInventorySlotsLimit ||
+      !NonNegativeFinite(liveInventory.weightLimitKg))
+    return Result<CraftingPlan>::Failure(ErrorCode::InvalidArgument,
+                                          "live inventory bounds are invalid");
   if (plan.expectedInventoryRevision == 0 ||
       liveInventory.revision != plan.expectedInventoryRevision)
     return Result<CraftingPlan>::Failure(ErrorCode::StaleRevision,
