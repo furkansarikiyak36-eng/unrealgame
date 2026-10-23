@@ -1,5 +1,6 @@
 #pragma once
 #include "world_mechanics/core.hpp"
+#include <cmath>
 #include <vector>
 
 namespace wm {
