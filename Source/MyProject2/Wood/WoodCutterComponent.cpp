@@ -89,62 +89,157 @@ FTransform UWoodCutterComponent::MakeSliceTransform(const FWoodPieceData& OldDat
 	return Result;
 }
 
+namespace
+{
+	bool IsValidSlice(const FWoodSlice& Slice)
+	{
+		const bool bFinite =
+			FMath::IsFinite(Slice.S0) && FMath::IsFinite(Slice.S1) &&
+			FMath::IsFinite(Slice.L0) && FMath::IsFinite(Slice.L1) &&
+			FMath::IsFinite(Slice.V0) && FMath::IsFinite(Slice.V1);
+
+		if (!bFinite)
+		{
+			return false;
+		}
+
+		constexpr float Epsilon = KINDA_SMALL_NUMBER;
+		return Slice.S0 >= 0.f && Slice.S1 <= 1.f &&
+			Slice.S1 - Slice.S0 > Epsilon &&
+			Slice.L0 >= -0.5f && Slice.L1 <= 0.5f &&
+			Slice.L1 - Slice.L0 > Epsilon &&
+			Slice.V0 >= -0.5f && Slice.V1 <= 0.5f &&
+			Slice.V1 - Slice.V0 > Epsilon;
+	}
+
+	bool IsValidPieceData(const FWoodPieceData& Data)
+	{
+		return Data.LengthModules >= 1 && Data.LengthModules <= 6 &&
+			FMath::IsFinite(Data.SourceTreeHeightCm) && Data.SourceTreeHeightCm >= 0.f &&
+			FMath::IsFinite(Data.DiameterCm) && Data.DiameterCm > 0.f &&
+			FMath::IsFinite(Data.FullLogLengthCm) && Data.FullLogLengthCm > 0.f &&
+			FMath::IsFinite(Data.DamageFraction) &&
+			Data.DamageFraction >= 0.f && Data.DamageFraction <= 1.f;
+	}
+}
+
 bool UWoodCutterComponent::Finish(const FWoodCutResult& Result, const TArray<FWoodSlice>& Slices, const TCHAR* OperationName)
 {
+	auto FailCut = [this](const FString& Reason)
+	{
+		OnCutFailed.Broadcast(Reason);
+		return false;
+	};
+
 	if (!Result.bSuccess)
 	{
-		OnCutFailed.Broadcast(Result.Reason);
-		return false;
+		return FailCut(Result.Reason);
 	}
 
 	AActor* Owner = GetOwner();
+	UWorld* World = GetWorld();
 	UWoodPieceComponent* Piece = GetPiece();
 	UPrimitiveComponent* Prim = Piece ? Piece->GetPrimitive() : nullptr;
-	if (!Owner || !Piece || !Prim || Result.Pieces.Num() != Slices.Num() || Result.Pieces.Num() == 0)
+	if (!IsValid(Owner) || !IsValid(World) || !IsValid(Piece) || !IsValid(Prim) ||
+		!OperationName || Result.Pieces.Num() != Slices.Num() || Result.Pieces.Num() == 0)
 	{
-		OnCutFailed.Broadcast(TEXT("Kesim uygulanamadı: eksik bileşen."));
-		return false;
+		return FailCut(TEXT("Kesim uygulanamadı: eksik bileşen veya uyumsuz kesim çıktısı."));
 	}
 
 	if (Piece->GetState() == EWoodState::Installed)
 	{
-		OnCutFailed.Broadcast(TEXT("Yapıya bağlı parça kesilemez; önce sök."));
-		return false;
+		return FailCut(TEXT("Yapıya bağlı parça kesilemez; önce sök."));
+	}
+
+	// Preflight: doğrulama bitmeden aktör veya kaynak parça değiştirilmez.
+	for (int32 Index = 0; Index < Result.Pieces.Num(); ++Index)
+	{
+		if (!IsValidPieceData(Result.Pieces[Index]) || !IsValidSlice(Slices[Index]))
+		{
+			return FailCut(TEXT("Kesim uygulanamadı: geçersiz parça verisi veya dilim sınırları."));
+		}
 	}
 
 	const FWoodPieceData OldData = Piece->PieceData;
 	const FTransform OldXf = Prim->GetComponentTransform();
 	const bool bWasSimulating = Prim->IsSimulatingPhysics();
+	const ECollisionEnabled::Type OldCollision = Prim->GetCollisionEnabled();
+	const FVector OldLinearVelocity = Prim->GetPhysicsLinearVelocity();
+	const FVector OldAngularVelocity = Prim->GetPhysicsAngularVelocityInRadians();
+
 	UStaticMesh* OldStaticMesh = nullptr;
 	if (const UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(Prim))
 	{
 		OldStaticMesh = SMC->GetStaticMesh();
 	}
 
-	// Yeni parçalar önce, sonra kesilen parça kendi yerine geçer.
-	for (int32 i = 1; i < Result.Pieces.Num(); ++i)
+	// Yeni aktörler staged tutulur: tümü hazır değilse kaynak parça değişmeden
+	// temizlenirler. ReshapeVisual'un görsel oluşturması ve oyun durumunu değiştirmemesi
+	// bu transaction'ın sözleşmesidir.
+	TArray<AActor*> StagedActors;
+	StagedActors.Reserve(FMath::Max(0, Result.Pieces.Num() - 1));
+
+	auto RollbackStagedActors = [&StagedActors]()
 	{
-		const FTransform NewXf = MakeSliceTransform(OldData, OldXf, Slices[i]);
-
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		Params.Instigator = Owner->GetInstigator();
-
-		AActor* NewActor = GetWorld() ? GetWorld()->SpawnActor<AActor>(Owner->GetClass(), NewXf, Params) : nullptr;
-		if (!NewActor)
+		for (int32 Index = StagedActors.Num() - 1; Index >= 0; --Index)
 		{
-			continue;
+			if (IsValid(StagedActors[Index]))
+			{
+				StagedActors[Index]->Destroy();
+			}
 		}
+		StagedActors.Reset();
+	};
+
+	auto FailAndRollback = [&FailCut, &RollbackStagedActors](const FString& Reason)
+	{
+		RollbackStagedActors();
+		return FailCut(Reason);
+	};
+
+	for (int32 Index = 1; Index < Result.Pieces.Num(); ++Index)
+	{
+		const FTransform NewXf = MakeSliceTransform(OldData, OldXf, Slices[Index]);
+
+		// Deferred spawn, parça verisini construction/BeginPlay başlamadan önce
+		// hazırlamaya izin verir. Yeni parçalar commit anına dek fizik ve çarpışma dışıdır.
+		AActor* NewActor = World->SpawnActorDeferred<AActor>(
+			Owner->GetClass(),
+			NewXf,
+			nullptr,
+			Owner->GetInstigator(),
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+
+		if (!IsValid(NewActor))
+		{
+			return FailAndRollback(TEXT("Kesim uygulanamadı: yeni parça aktörü oluşturulamadı."));
+		}
+		StagedActors.Add(NewActor);
+
+		if (UWoodPieceComponent* DeferredPiece = NewActor->FindComponentByClass<UWoodPieceComponent>())
+		{
+			DeferredPiece->PieceData = Result.Pieces[Index];
+			DeferredPiece->Role = Piece->Role;
+			if (UPrimitiveComponent* DeferredPrim = DeferredPiece->GetPrimitive())
+			{
+				DeferredPrim->SetSimulatePhysics(false);
+				DeferredPrim->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			}
+		}
+
+		NewActor->FinishSpawning(NewXf);
 
 		UWoodPieceComponent* NewPiece = NewActor->FindComponentByClass<UWoodPieceComponent>();
 		UPrimitiveComponent* NewPrim = NewPiece ? NewPiece->GetPrimitive() : nullptr;
-		if (!NewPiece || !NewPrim)
+		if (!IsValid(NewPiece) || !IsValid(NewPrim))
 		{
-			continue;
+			return FailAndRollback(TEXT("Kesim uygulanamadı: yeni aktörde gerekli WoodPiece/Primitive bileşeni yok."));
 		}
 
-		NewPiece->PieceData = Result.Pieces[i];
+		NewPiece->PieceData = Result.Pieces[Index];
 		NewPiece->Role = Piece->Role;
+		NewPrim->SetSimulatePhysics(false);
+		NewPrim->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 		if (UStaticMeshComponent* NewSMC = Cast<UStaticMeshComponent>(NewPrim))
 		{
@@ -155,24 +250,99 @@ bool UWoodCutterComponent::Finish(const FWoodCutResult& Result, const TArray<FWo
 		}
 
 		NewPrim->SetWorldTransform(NewXf, false, nullptr, ETeleportType::TeleportPhysics);
-		if (bCopySimulationToNewPieces && bWasSimulating)
-		{
-			NewPrim->SetSimulatePhysics(true);
-		}
 
 		if (UWoodCutterComponent* NewCutter = NewActor->FindComponentByClass<UWoodCutterComponent>())
 		{
 			NewCutter->LocalLengthAxis = LocalLengthAxis;
 			NewCutter->LocalLateralAxis = LocalLateralAxis;
-			NewCutter->ReshapeVisual(NewPiece, Result.Pieces[i], Slices[i]);
+			NewCutter->ReshapeVisual(NewPiece, Result.Pieces[Index], Slices[Index]);
+		}
+
+		// Görsel callback'i component durumunu değiştirmiş olsa dahi staged parça,
+		// bütün çıktılar doğrulanana kadar simülasyona katılamaz.
+		NewPrim = IsValid(NewPiece) ? NewPiece->GetPrimitive() : nullptr;
+		if (!IsValid(NewPrim))
+		{
+			return FailAndRollback(TEXT("Kesim uygulanamadı: görsel hazırlık sonrasında Primitive bileşeni kayboldu."));
+		}
+		NewPrim->SetSimulatePhysics(false);
+		NewPrim->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	// Son commit öncesi bir tur daha doğrula. Kaynak parça hâlâ aynı sahibi ve
+	// geçerli primitive ile duruyorsa artık kaynak durumunu değiştirmeye geçebiliriz.
+	if (!IsValid(Owner) || !IsValid(Piece) || !IsValid(Prim) ||
+		Piece->GetOwner() != Owner || Piece->GetState() == EWoodState::Installed)
+	{
+		return FailAndRollback(TEXT("Kesim uygulanamadı: kaynak parça hazırlık sırasında değişti."));
+	}
+	for (AActor* StagedActor : StagedActors)
+	{
+		UWoodPieceComponent* StagedPiece = IsValid(StagedActor)
+			? StagedActor->FindComponentByClass<UWoodPieceComponent>() : nullptr;
+		if (!IsValid(StagedPiece) || !IsValid(StagedPiece->GetPrimitive()))
+		{
+			return FailAndRollback(TEXT("Kesim uygulanamadı: hazırlanan parçalardan biri artık geçerli değil."));
 		}
 	}
 
-	// Kesilen parçanın kendisi
-	Piece->PieceData = Result.Pieces[0];
+	// Commit: kaynak parçanın değişimi ancak bütün yeni parçalar hazır olduğunda yapılır.
 	const FTransform SelfXf = MakeSliceTransform(OldData, OldXf, Slices[0]);
+	Piece->PieceData = Result.Pieces[0];
 	Prim->SetWorldTransform(SelfXf, false, nullptr, ETeleportType::TeleportPhysics);
 	ReshapeVisual(Piece, Result.Pieces[0], Slices[0]);
+
+	auto RestoreSource = [&]()
+	{
+		if (!IsValid(Piece) || !IsValid(Prim))
+		{
+			return;
+		}
+		Piece->PieceData = OldData;
+		Prim->SetWorldTransform(OldXf, false, nullptr, ETeleportType::TeleportPhysics);
+		ReshapeVisual(Piece, OldData, FWoodSlice{});
+		Prim->SetCollisionEnabled(OldCollision);
+		Prim->SetSimulatePhysics(bWasSimulating);
+		if (bWasSimulating)
+		{
+			Prim->SetPhysicsLinearVelocity(OldLinearVelocity);
+			Prim->SetPhysicsAngularVelocityInRadians(OldAngularVelocity);
+		}
+	};
+
+	Prim->SetCollisionEnabled(OldCollision);
+	Prim->SetSimulatePhysics(bWasSimulating);
+	if (bWasSimulating)
+	{
+		Prim->SetPhysicsLinearVelocity(OldLinearVelocity);
+		Prim->SetPhysicsAngularVelocityInRadians(OldAngularVelocity);
+	}
+
+	// Bütün staged parçaları görünür/fiziksel duruma geçir; source collision
+	// ayarı korunur, yeni fizik yalnızca ayar açıksa ve kaynak simüle oluyorsa açılır.
+	for (AActor* StagedActor : StagedActors)
+	{
+		UWoodPieceComponent* NewPiece = IsValid(StagedActor)
+			? StagedActor->FindComponentByClass<UWoodPieceComponent>() : nullptr;
+		UPrimitiveComponent* NewPrim = NewPiece ? NewPiece->GetPrimitive() : nullptr;
+		if (!IsValid(NewPiece) || !IsValid(NewPrim))
+		{
+			// Beklenmeyen Blueprint yan etkisi commit sonrası bir parçayı bozduysa,
+			// kaynak parçayı eski veriye döndür ve hazırlanan çıktıların hepsini temizle.
+			RestoreSource();
+			RollbackStagedActors();
+			return FailCut(TEXT("Kesim geri alındı: commit sırasında hazırlanan parçalardan biri geçersizleşti."));
+		}
+
+		NewPrim->SetCollisionEnabled(OldCollision);
+		const bool bEnableNewPhysics = bCopySimulationToNewPieces && bWasSimulating;
+		NewPrim->SetSimulatePhysics(bEnableNewPhysics);
+		if (bEnableNewPhysics)
+		{
+			NewPrim->SetPhysicsLinearVelocity(OldLinearVelocity);
+			NewPrim->SetPhysicsAngularVelocityInRadians(OldAngularVelocity);
+		}
+	}
 
 	OnCutDone.Broadcast(FString(OperationName));
 	return true;
