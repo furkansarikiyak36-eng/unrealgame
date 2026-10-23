@@ -1,6 +1,7 @@
 #include "world_mechanics/classification_map.hpp"
 #include <algorithm>
 #include <limits>
+#include <new>
 
 namespace wm {
 std::size_t RegionCellCoordHash::operator()(const RegionCellCoord& c) const noexcept {
@@ -63,17 +64,21 @@ Result<bool> ClassificationMap::UpsertCells(const std::vector<RegionCellSample>&
   // Validate and stage only the dirty batch. Local work should scale with
   // changed cells rather than copying the complete world classification map.
   std::unordered_map<RegionCellCoord,std::vector<ClassificationEvidence>,RegionCellCoordHash> changes;
-  changes.reserve(samples.size());
-  for(const auto& sample:samples) {
-    if(sample.evidence.empty())
-      return Result<bool>::Failure(ErrorCode::InvalidArgument,"classification update contains an evidence-free cell");
-    for(const auto& e:sample.evidence) {
-      if(static_cast<int>(e.source)<1||static_cast<int>(e.source)>5||
-         static_cast<int>(e.kind)<0||static_cast<int>(e.kind)>static_cast<int>(RegionKind::Water))
-        return Result<bool>::Failure(ErrorCode::InvalidArgument,"classification update contains invalid enum");
+  try {
+    changes.reserve(samples.size());
+    for(const auto& sample:samples) {
+      if(sample.evidence.empty())
+        return Result<bool>::Failure(ErrorCode::InvalidArgument,"classification update contains an evidence-free cell");
+      for(const auto& e:sample.evidence) {
+        if(static_cast<int>(e.source)<1||static_cast<int>(e.source)>5||
+           static_cast<int>(e.kind)<0||static_cast<int>(e.kind)>static_cast<int>(RegionKind::Water))
+          return Result<bool>::Failure(ErrorCode::InvalidArgument,"classification update contains invalid enum");
+      }
+      if(!changes.emplace(sample.cell,sample.evidence).second)
+        return Result<bool>::Failure(ErrorCode::Conflict,"classification update contains duplicate cell key");
     }
-    if(!changes.emplace(sample.cell,sample.evidence).second)
-      return Result<bool>::Failure(ErrorCode::Conflict,"classification update contains duplicate cell key");
+  } catch(const std::bad_alloc&) {
+    return Result<bool>::Failure(ErrorCode::BudgetExceeded,"unable to stage classification update memory");
   }
 
   std::size_t newCellCount=0;
