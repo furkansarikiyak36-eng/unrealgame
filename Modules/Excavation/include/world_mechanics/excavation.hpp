@@ -12,6 +12,7 @@ struct ExcavationRequest {
   Revision expectedClassificationRevision{0};
   double maxTargetDistanceM{5.0};
   double allowedEditOffsetM{0.75};
+  double maxObservationDriftM{0.15};
   EditRequest edit{};
 };
 struct ExcavationCommit {
@@ -21,11 +22,16 @@ struct ExcavationCommit {
 class ExcavationService {
  public:
   using ClassifyAt = std::function<ClassificationResult(const Vec3&)>;
-  ExcavationService(DensityVolume& terrain,ClassifyAt classify)
-    : terrain_(terrain),classify_(std::move(classify)) {}
+  using ValidateObservation = std::function<Result<RawHit>(const RawHit&)>;
+
+  ExcavationService(DensityVolume& terrain,ClassifyAt classify,ValidateObservation validateObservation)
+    : terrain_(terrain),classify_(std::move(classify)),
+      validateObservation_(std::move(validateObservation)) {}
+
   Result<ExcavationCommit> Execute(const ExcavationRequest& request);
  private:
   DensityVolume& terrain_;
   ClassifyAt classify_;
+  ValidateObservation validateObservation_;
 };
 } // namespace wm
