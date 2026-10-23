@@ -48,6 +48,10 @@ Targets: WorldScan, WorldClassification, Excavation.
 
 ## Phase 3 — Geometry, placement, and structural systems
 
+**Status: portable mesh/placement/structural changes implemented; CI verification pending.**
+
+The current Phase 3 source changes are being developed on `modules/mechanics-pre-unreal` under [PR #19](https://github.com/furkansarikiyak36-eng/unrealgame/pull/19). The roadmap branch remains separate from that module branch; this document records scope and status only.
+
 Targets: TerrainVoxel, MeshCollision, PlacementSnap, Shoring, StructuralIntegrity, wood-structure analysis.
 
 - Cap sample counts, mesh input size, triangle output and queued work; reject malformed dimensions before allocation.
@@ -58,6 +62,14 @@ Targets: TerrainVoxel, MeshCollision, PlacementSnap, Shoring, StructuralIntegrit
 - Replace avoidable all-pairs geometry scans with spatial broad-phase filtering, then exact narrow-phase checks.
 
 **Exit gate:** geometry publishes only from current source revisions; placement is atomic; structural capacity includes aggregated loads; costs have documented limits.
+
+**Implemented in the current Phase 3 batch:**
+- CPU surface meshing rejects density grids over an explicit input-sample cap before scanning all samples or constructing the edge cache.
+- Degenerate triangles are skipped before consuming triangle budget; mixed-material tetrahedra use a deterministic majority-material policy with lowest-ID tie break.
+- Placement snapping bounds candidate count, validates dot-threshold ranges, uses strict deterministic distance ordering and checks region permission again at commit time.
+- Structural assessment aggregates dependent loads upstream over active support edges, splits load deterministically across multiple incoming supports, and exposes the aggregate demand/ratio in assessment output.
+
+**Remaining:** local UE Dynamic Mesh/collision/navigation publication and stale-product rejection at the engine adapter; actual oriented-volume overlap provider; physical shoring anchors, connected assembly coverage and region-local invalidation. CI for the current source commit must pass before this batch is treated as portable-code verified.
 
 ## Phase 4 — Environment, water, soil, fire, and survival
 
