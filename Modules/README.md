@@ -18,7 +18,7 @@ Existing Unreal code remains in `Source/MyProject2/` as a reference/implementati
 8. `Excavation` — authorized dig/fill operations and edit orchestration.
 9. `Shoring` — physical support-piece families and trench planning.
 10. `StructuralIntegrity` — support graph, damage, repair and collapse decisions.
-11. `WorldEnvironment` — time/weather/water/moisture/light input contracts.
+11. `WorldEnvironment` — water/soil/heat/fire simulation and validated environment samples.
 12. `Survival` — effort costs and underground exposure integration.
 13. `Persistence` — versioned density snapshot codec, save coordination, restore staging and rollback.
 14. `GameplayIntegration` — raid targeting, typed spawn decisions, fair chunk-work scheduling, material-rule precedence/cache, plant growth, animal care/reproduction and staged crafting transactions.
@@ -32,6 +32,8 @@ Existing Unreal code remains in `Source/MyProject2/` as a reference/implementati
 - [Test/acceptance matrix](TEST_MATRIX.md)
 - [Adjacent existing mechanics](RELATED_MECHANICS.md)
 - [Current implementation status](INTEGRATION_STATUS.md)
+- [GameplayIntegration specification](GameplayIntegration/SPEC.md)
+- [Phase 5 gameplay/performance gates](../Docs/PHASE5_GAMEPLAY_PERFORMANCE.md)
 
 ## Status rules
 This tree contains a **partial portable C++ prototype** for bounded algorithms plus full specifications. The new GameplayIntegration module is still an engine-neutral decision/preflight layer; it does not spawn Unreal Actors or replace the existing in-game component adapters. A CPU surface mesher, revision gate, bounded dirty-chunk queue, versioned region map and provider-driven dirty-cell builder have source code. Unreal world-probe providers, background scheduling, render/collision/navigation publishing, universal physical-actor adapters and broad validation remain incomplete. No Unreal integration is claimed.
