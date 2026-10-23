@@ -22,6 +22,7 @@ struct SnapRequest {
   double minimumAxisDot{0.8660254038};
   Revision expectedSurfaceRevision{0};
   Revision expectedClassificationRevision{0};
+  std::size_t maxCandidates{512};
 };
 class PlacementSnapResolver {
  public:
@@ -29,8 +30,12 @@ class PlacementSnapResolver {
     if(!req.desiredNormal.IsFinite()||!req.desiredAxis.IsFinite()||
        LengthSquared(req.desiredNormal)<1e-12||LengthSquared(req.desiredAxis)<1e-12||
        !std::isfinite(req.maxDistanceM)||req.maxDistanceM<=0||
-       !std::isfinite(req.minimumNormalDot)||!std::isfinite(req.minimumAxisDot))
+       !std::isfinite(req.minimumNormalDot)||req.minimumNormalDot<0||req.minimumNormalDot>1||
+       !std::isfinite(req.minimumAxisDot)||req.minimumAxisDot<0||req.minimumAxisDot>1||
+       req.maxCandidates==0)
       return Result<SnapCandidate>::Failure(ErrorCode::InvalidArgument,"invalid snap request");
+    if(candidates.size()>req.maxCandidates)
+      return Result<SnapCandidate>::Failure(ErrorCode::BudgetExceeded,"snap candidate set exceeds configured budget");
     std::vector<SnapCandidate> eligible;
     const Vec3 normal=Normalize(req.desiredNormal), axis=Normalize(req.desiredAxis);
     for(const auto& c:candidates) {
@@ -47,17 +52,24 @@ class PlacementSnapResolver {
     if(eligible.empty()) return Result<SnapCandidate>::Failure(ErrorCode::NotFound,"no candidate passed snap filters");
     std::sort(eligible.begin(),eligible.end(),[](const auto& a,const auto& b){
       if(a.explicitSocket!=b.explicitSocket) return a.explicitSocket>b.explicitSocket;
-      if(std::abs(a.distanceM-b.distanceM)>1e-9) return a.distanceM<b.distanceM;
+      // Exact total ordering avoids epsilon-based comparators that can violate
+      // strict-weak-ordering for three close distances.
+      if(a.distanceM!=b.distanceM) return a.distanceM<b.distanceM;
       return a.candidateId<b.candidateId;
     });
     return Result<SnapCandidate>::Success(eligible.front());
   }
   static Result<bool> ValidateCommit(const SnapCandidate& c,Revision currentSurfaceRevision,
-                                     Revision currentClassificationRevision,bool overlapStillFree) {
-    if(c.candidateId==0) return Result<bool>::Failure(ErrorCode::InvalidArgument,"candidate ID is missing");
+                                     Revision currentClassificationRevision,bool regionStillAllowed,
+                                     bool overlapStillFree) {
+    if(c.candidateId==0||!c.transform.IsFinite()||!c.regionAllowed||!c.overlapFree)
+      return Result<bool>::Failure(ErrorCode::InvalidArgument,"candidate is missing or failed preview authorization");
     if(c.surfaceRevision!=currentSurfaceRevision||c.classificationRevision!=currentClassificationRevision)
       return Result<bool>::Failure(ErrorCode::StaleRevision,"surface or classification changed after preview");
-    if(!overlapStillFree) return Result<bool>::Failure(ErrorCode::Conflict,"candidate volume is now obstructed");
+    if(!regionStillAllowed)
+      return Result<bool>::Failure(ErrorCode::Unsupported,"placement region is no longer allowed");
+    if(!overlapStillFree)
+      return Result<bool>::Failure(ErrorCode::Conflict,"candidate volume is now obstructed");
     return Result<bool>::Success(true);
   }
 };
