@@ -4,6 +4,7 @@ on:
     branches:
       - modules/mechanics-pre-unreal
       - mechanics-quality/phase-4-environment-simulation
+      - mechanics-quality/phase-5-gameplay-performance
   pull_request:
     paths:
       - 'Modules/**'
