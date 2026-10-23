@@ -91,12 +91,18 @@ Result<TriangleMeshData> CpuSurfaceMesher::Build(const DensityGridSnapshot& s,co
     return Result<std::uint32_t>::Success(index);
   };
   auto triangle=[&](std::uint32_t a,std::uint32_t b,std::uint32_t c,std::uint16_t material)->bool {
+    const Vec3 ab=mesh.vertices[b]-mesh.vertices[a];
+    const Vec3 ac=mesh.vertices[c]-mesh.vertices[a];
+    const Vec3 cross{
+      ab.y*ac.z-ab.z*ac.y,
+      ab.z*ac.x-ab.x*ac.z,
+      ab.x*ac.y-ab.y*ac.x
+    };
+    // Ignore degenerate triangles before checking the output budget. They do
+    // not consume a triangle slot and should not cause a false budget failure.
+    if(LengthSquared(cross)<=1e-20) return true;
     if(mesh.indices.size()/3>=settings.maxTriangles) return false;
-    const Vec3 face=Normalize(Vec3{
-      (mesh.vertices[b].y-mesh.vertices[a].y)*(mesh.vertices[c].z-mesh.vertices[a].z)-(mesh.vertices[b].z-mesh.vertices[a].z)*(mesh.vertices[c].y-mesh.vertices[a].y),
-      (mesh.vertices[b].z-mesh.vertices[a].z)*(mesh.vertices[c].x-mesh.vertices[a].x)-(mesh.vertices[b].x-mesh.vertices[a].x)*(mesh.vertices[c].z-mesh.vertices[a].z),
-      (mesh.vertices[b].x-mesh.vertices[a].x)*(mesh.vertices[c].y-mesh.vertices[a].y)-(mesh.vertices[b].y-mesh.vertices[a].y)*(mesh.vertices[c].x-mesh.vertices[a].x)
-    });
+    const Vec3 face=Normalize(cross);
     const Vec3 average=Normalize(mesh.normals[a]+mesh.normals[b]+mesh.normals[c]);
     if(Dot(face,average)<0) std::swap(b,c);
     mesh.indices.insert(mesh.indices.end(),{a,b,c});
@@ -108,7 +114,19 @@ Result<TriangleMeshData> CpuSurfaceMesher::Build(const DensityGridSnapshot& s,co
     std::vector<int> inside,outside;
     for(int i=0;i<4;++i) (values[i]>=settings.isoLevel?inside:outside).push_back(i);
     if(inside.empty()||inside.size()==4) return true;
-    const std::uint16_t material=materials[inside.front()];
+    // Material policy: majority among inside vertices; ties resolve to the
+    // lowest material ID. This is deterministic and avoids arbitrary first
+    // vertex selection on mixed-material tetrahedra.
+    std::uint16_t material=std::numeric_limits<std::uint16_t>::max();
+    unsigned bestCount=0;
+    for(const int index:inside) {
+      unsigned count=0;
+      for(const int other:inside) if(materials[other]==materials[index]) ++count;
+      if(count>bestCount||(count==bestCount&&materials[index]<material)) {
+        bestCount=count;
+        material=materials[index];
+      }
+    }
     auto edge=[&](int a,int b)->Result<std::uint32_t>{return interpolate(points[a],points[b],values[a],values[b]);};
     if(inside.size()==1||inside.size()==3) {
       const bool oneInside=inside.size()==1;
