@@ -59,10 +59,14 @@ Result<bool> ClassificationMap::RebuildCells(const std::vector<RegionCellSample>
 Result<bool> ClassificationMap::UpsertCells(const std::vector<RegionCellSample>& samples,std::size_t maxCellCount) {
   if(maxCellCount==0||samples.size()>maxCellCount)
     return Result<bool>::Failure(ErrorCode::BudgetExceeded,"classification update exceeds cell budget");
+
+  // Validate and stage only the dirty batch. Local work should scale with
+  // changed cells rather than copying the complete world classification map.
   std::unordered_map<RegionCellCoord,std::vector<ClassificationEvidence>,RegionCellCoordHash> changes;
   changes.reserve(samples.size());
   for(const auto& sample:samples) {
-    if(sample.evidence.empty()) return Result<bool>::Failure(ErrorCode::InvalidArgument,"classification update contains an evidence-free cell");
+    if(sample.evidence.empty())
+      return Result<bool>::Failure(ErrorCode::InvalidArgument,"classification update contains an evidence-free cell");
     for(const auto& e:sample.evidence) {
       if(static_cast<int>(e.source)<1||static_cast<int>(e.source)>5||
          static_cast<int>(e.kind)<0||static_cast<int>(e.kind)>static_cast<int>(RegionKind::Water))
@@ -71,11 +75,62 @@ Result<bool> ClassificationMap::UpsertCells(const std::vector<RegionCellSample>&
     if(!changes.emplace(sample.cell,sample.evidence).second)
       return Result<bool>::Failure(ErrorCode::Conflict,"classification update contains duplicate cell key");
   }
-  auto staged=cells_;
-  for(auto& pair:changes) staged[pair.first]=std::move(pair.second);
-  if(staged.size()>maxCellCount*8ULL)
-    return Result<bool>::Failure(ErrorCode::BudgetExceeded,"updated classification map exceeds storage cap");
-  cells_.swap(staged); ++revision_;
+
+  std::size_t newCellCount=0;
+  for(const auto& pair:changes) {
+    if(cells_.find(pair.first)==cells_.end()) ++newCellCount;
+  }
+  if(cells_.size()>maxCellCount||newCellCount>maxCellCount-cells_.size())
+    return Result<bool>::Failure(ErrorCode::BudgetExceeded,"updated classification map exceeds total cell cap");
+
+  struct RollbackEntry {
+    RegionCellCoord cell{};
+    std::vector<ClassificationEvidence> previousEvidence;
+    bool inserted{false};
+  };
+  std::vector<RollbackEntry> rollback;
+  try {
+    rollback.reserve(changes.size());
+    cells_.reserve(cells_.size()+newCellCount);
+  } catch(const std::bad_alloc&) {
+    return Result<bool>::Failure(ErrorCode::BudgetExceeded,"unable to reserve classification update memory");
+  }
+
+  auto Rollback = [&]() noexcept {
+    for(auto it=rollback.rbegin();it!=rollback.rend();++it) {
+      if(it->inserted) {
+        cells_.erase(it->cell);
+      } else {
+        auto found=cells_.find(it->cell);
+        if(found!=cells_.end()) found->second=std::move(it->previousEvidence);
+      }
+    }
+  };
+
+  try {
+    for(auto& pair:changes) {
+      auto existing=cells_.find(pair.first);
+      if(existing!=cells_.end()) {
+        rollback.push_back({pair.first,std::move(existing->second),false});
+        existing->second=std::move(pair.second);
+      } else {
+        const auto inserted=cells_.emplace(pair.first,std::move(pair.second));
+        if(!inserted.second) {
+          Rollback();
+          return Result<bool>::Failure(ErrorCode::Conflict,"classification cell changed during staged update");
+        }
+        rollback.push_back({pair.first,{},true});
+      }
+    }
+  } catch(const std::bad_alloc&) {
+    Rollback();
+    return Result<bool>::Failure(ErrorCode::BudgetExceeded,"classification update ran out of memory; prior state restored");
+  } catch(...) {
+    Rollback();
+    return Result<bool>::Failure(ErrorCode::Failed,"classification update failed; prior state restored");
+  }
+
+  ++revision_;
   return Result<bool>::Success(true);
 }
 
