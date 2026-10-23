@@ -69,6 +69,10 @@ public:
 	/**
 	 * Her sonuç parçası için çağrılır (kesilen parçanın kendisi dahil).
 	 * Gerçek geometriyi burada üret; varsayılan implementasyon boştur.
+	 *
+	 * Kesim transaction güvenliği için bu callback yalnızca görsel/geometri
+	 * hazırlığı yapmalıdır: aktörleri yok etmemeli, inventory/dünya durumunu
+	 * değiştirmemeli ve başka gameplay işlemleri başlatmamalıdır.
 	 */
 	UFUNCTION(BlueprintNativeEvent, Category = "Wood|Cut")
 	void ReshapeVisual(UWoodPieceComponent* Piece, const FWoodPieceData& NewData, const FWoodSlice& Slice);
