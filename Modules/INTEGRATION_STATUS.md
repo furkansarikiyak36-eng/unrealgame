@@ -15,15 +15,15 @@
 | Excavation | Classification-authorized orchestration over density edit transaction | Capability/tool contracts, full event bus, integration tests |
 | Shoring | Deterministic trench layout proposal plus logical assembly lifecycle (validate/install/revalidate/damage/repair/remove) | Unreal actor spawn/anchors/coverage, carry/replace, resource rollback adapters |
 | StructuralIntegrity | Deterministic DAG support assessment, damage, repair, collapse latch | More complete load distribution, replace/link lifecycle and stress tests |
-| WorldEnvironment | Timestamped sample contract plus bounded portable water/soil/heat/fire simulation, fixed-step backlog and water-balance ledger | Unreal Landscape/weather/query adapter, chunk-boundary exchange, region streaming/scheduler, durable environment persistence and gameplay tuning |
+| WorldEnvironment | Bounded portable water/soil/heat/fire simulation, fixed-step backlog and water-balance ledger; eleven-group CMake/CTest suite passes on Phase 4 branch | Unreal Landscape/weather/query adapter, chunk-boundary exchange, region streaming/scheduler, durable environment persistence and gameplay tuning |
 | Survival | Bounded exposure update and action effort costs | Canonical character-stat adapter and broader exposure rules |
 | Persistence | Staged multi-participant restore transaction contract | Portable density-snapshot codec now exists; whole-world schema/migration, module participants, durable storage and actor/player adapters remain |
-| Validation | Eleven portable test groups defined; Phase 4 hydrology, backlog, soil ledger, fire and survival integration regressions added | Phase 4 branch CI must run before claiming the new tests pass; broader property/stress/performance coverage and Unreal verification remain open |
+| Validation | Eleven portable test groups; GitHub Actions Configure/Build/Test passed for Phase 4 commit `f7aad75aefcef9925494cb2fb7c29a80d8dc1f2d` | Broader property/stress/performance coverage and Unreal verification remain open |
 
 ## Evidence state
 - Portable C++ source covers bounded algorithms, including a CPU mesher, classification map/dirty-cell builder, shoring lifecycle and density snapshot codec. This remains a partial mechanics prototype, not a complete game.
 - Historical GitHub Actions for commit `2a4852ce43622ed54485c495d4dbcb6b2eb41138` completed successfully: CMake configure/build and CTest passed with nine portable test groups. That is not UE validation.
-- Phase 4 added two additional portable regression groups. Its own CMake/build/CTest run must pass before this branch can be marked portable-test verified.
+- Phase 4 added two portable regression groups. GitHub Actions runs [#39883152996](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/39883152996) and [#39883156798](https://github.com/furkansarikiyak36-eng/unrealgame/actions/runs/39883156798) for commit `f7aad75aefcef9925494cb2fb7c29a80d8dc1f2d` completed successfully; Configure, Build and Test all passed. This is portable C++ evidence, not Unreal Engine validation.
 - Existing `Source/MyProject2/` is still the Unreal implementation/reference area; migration parity has not been established.
 - Unreal Engine 5.8 UBT/UHT, Automation, Editor/PIE and Unreal Insights have not been run as part of this module work.
 - Schema v2/v3 stone persistence does not cover every carried/dragged tree/log/stone/rope/vehicle actor family.
