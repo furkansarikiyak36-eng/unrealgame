@@ -50,51 +50,111 @@ Result<bool> StructuralGraph::LatchCollapse(Id id) {
 Result<GraphAssessment> StructuralGraph::Assess() const {
   std::unordered_map<Id,std::uint32_t> indegree;
   std::unordered_map<Id,std::vector<const SupportEdge*>> outgoing,incoming;
-  for(const auto& pair:nodes_) indegree[pair.first]=0;
+  std::unordered_map<Id,double> aggregateDemand;
+
+  for(const auto& pair:nodes_) {
+    indegree[pair.first]=0;
+    aggregateDemand[pair.first]=pair.second.demand;
+  }
   for(const auto& pair:edges_) {
     const auto& e=pair.second;
     if(!nodes_.count(e.supporterId)||!nodes_.count(e.dependentId))
       return Result<GraphAssessment>::Failure(ErrorCode::CorruptData,"support graph contains dangling reference");
-    if(e.active) { outgoing[e.supporterId].push_back(&e); incoming[e.dependentId].push_back(&e); ++indegree[e.dependentId]; }
+    if(e.active) {
+      outgoing[e.supporterId].push_back(&e);
+      incoming[e.dependentId].push_back(&e);
+      ++indegree[e.dependentId];
+    }
   }
+
+  // Stable edge order makes load distribution and its floating-point summation
+  // deterministic even though the backing node/edge registries are unordered.
+  auto byEdgeId=[](const SupportEdge* a,const SupportEdge* b){return a->id<b->id;};
+  for(auto& pair:outgoing) std::sort(pair.second.begin(),pair.second.end(),byEdgeId);
+  for(auto& pair:incoming) std::sort(pair.second.begin(),pair.second.end(),byEdgeId);
+
   std::priority_queue<Id,std::vector<Id>,std::greater<Id>> ready;
   for(const auto& item:indegree) if(item.second==0) ready.push(item.first);
   std::vector<Id> order; order.reserve(nodes_.size());
   while(!ready.empty()) {
-    Id id=ready.top(); ready.pop(); order.push_back(id);
+    const Id id=ready.top(); ready.pop(); order.push_back(id);
     for(const auto* e:outgoing[id]) if(--indegree[e->dependentId]==0) ready.push(e->dependentId);
   }
   if(order.size()!=nodes_.size())
     return Result<GraphAssessment>::Failure(ErrorCode::Conflict,"active support graph contains a cycle");
-  GraphAssessment a; a.graphRevision=revision_;
+
+  // Load pass: send each dependent's total load upstream in equal shares over
+  // its active support edges. This is an explicit conservative game model,
+  // not an engineering stiffness solver. A single-support parent receives the
+  // full load; multiple supports split the incoming load deterministically.
+  std::unordered_map<Id,double> loadShareByEdge;
+  for(auto it=order.rbegin();it!=order.rend();++it) {
+    const Id dependentId=*it;
+    const auto found=incoming.find(dependentId);
+    if(found==incoming.end()||found->second.empty()) continue;
+    const double share=aggregateDemand[dependentId]/static_cast<double>(found->second.size());
+    if(!std::isfinite(share)||share<0)
+      return Result<GraphAssessment>::Failure(ErrorCode::CorruptData,"aggregate support load overflowed");
+    for(const SupportEdge* edge:found->second) {
+      loadShareByEdge[edge->id]=share;
+      double& parentLoad=aggregateDemand[edge->supporterId];
+      parentLoad+=share;
+      if(!std::isfinite(parentLoad))
+        return Result<GraphAssessment>::Failure(ErrorCode::CorruptData,"aggregate support load overflowed");
+    }
+  }
+
+  GraphAssessment assessment;
+  assessment.graphRevision=revision_;
   std::unordered_map<Id,NodeAssessment> states;
-  for(Id id:order) {
-    const auto& n=nodes_.at(id); NodeAssessment result; result.nodeId=id;
-    if(!n.active||n.collapseLatched||n.health<=0) {
-      result.state=SupportState::Inactive; result.reason="node inactive, destroyed or collapse-latched";
+  for(const Id id:order) {
+    const auto& node=nodes_.at(id);
+    NodeAssessment result;
+    result.nodeId=id;
+    result.aggregateDemand=aggregateDemand[id];
+
+    if(!node.active||node.collapseLatched||node.health<=0) {
+      result.state=SupportState::Inactive;
+      result.reason="node inactive, destroyed or collapse-latched";
     } else {
-      const double fraction=n.maxHealth>0?n.health/n.maxHealth:0;
-      const double effective=std::max(0.0,n.capacity*fraction);
-      result.demandCapacityRatio=effective>1e-12?n.demand/effective:(n.demand>0?std::numeric_limits<double>::infinity():0);
-      bool supported=n.grounded;
-      const bool overloaded=n.demand>effective;
-      if(!n.grounded) {
-        for(const auto* e:incoming[id]) {
-          const auto parent=states.find(e->supporterId);
-          const auto& parentNode=nodes_.at(e->supporterId);
-          if(parent!=states.end()&&parent->second.state==SupportState::Supported&&
-             e->capacity>=n.demand&&parentNode.capacity*(parentNode.health/parentNode.maxHealth)>=n.demand) {
-            supported=true; break;
+      const double healthFraction=node.maxHealth>0?node.health/node.maxHealth:0;
+      const double effectiveCapacity=std::max(0.0,node.capacity*healthFraction);
+      result.demandCapacityRatio=effectiveCapacity>1e-12
+        ? result.aggregateDemand/effectiveCapacity
+        : (result.aggregateDemand>0?std::numeric_limits<double>::infinity():0.0);
+
+      bool supported=node.grounded;
+      const bool overloaded=result.aggregateDemand>effectiveCapacity;
+      if(!node.grounded) {
+        const auto parentEdges=incoming.find(id);
+        if(parentEdges!=incoming.end()) {
+          for(const SupportEdge* edge:parentEdges->second) {
+            const auto parentState=states.find(edge->supporterId);
+            const auto share=loadShareByEdge.find(edge->id);
+            if(parentState!=states.end()&&share!=loadShareByEdge.end()&&
+               parentState->second.state==SupportState::Supported&&
+               edge->capacity>=share->second) {
+              supported=true;
+              break;
+            }
           }
         }
       }
-      if(!supported) { result.state=SupportState::Unsupported; result.reason="no valid active path to grounded support"; }
-      else if(overloaded) { result.state=SupportState::Overloaded; result.reason="demand exceeds effective capacity"; }
-      else { result.state=SupportState::Supported; result.reason="valid support path and demand within capacity"; }
+
+      if(!supported) {
+        result.state=SupportState::Unsupported;
+        result.reason="no valid active path to grounded support";
+      } else if(overloaded) {
+        result.state=SupportState::Overloaded;
+        result.reason="aggregate dependent load exceeds effective capacity";
+      } else {
+        result.state=SupportState::Supported;
+        result.reason="valid support path and aggregate load within capacity";
+      }
     }
-    result.collapseCandidate=(result.state==SupportState::Unsupported||result.state==SupportState::Overloaded)&&!n.collapseLatched;
-    states[id]=result; a.nodes.push_back(result);
+    result.collapseCandidate=(result.state==SupportState::Unsupported||result.state==SupportState::Overloaded)&&!node.collapseLatched;
+    states[id]=result;
+    assessment.nodes.push_back(result);
   }
-  return Result<GraphAssessment>::Success(std::move(a));
+  return Result<GraphAssessment>::Success(std::move(assessment));
 }
-} // namespace wm
