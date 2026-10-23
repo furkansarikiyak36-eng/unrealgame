@@ -400,6 +400,7 @@ struct CraftingInventorySnapshot {
 
 struct CraftingPlan {
   Revision expectedInventoryRevision{0};
+  std::uint64_t baseFingerprint{0};
   std::vector<InventoryStack> resultingSlots;
   double resultingWeightKg{0.0};
 };
