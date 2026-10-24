@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestCharacter.h"
+#include "Phase7_Integration/SaveGameSubsystem.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
 #include "LogConstructionActor.h"
@@ -242,6 +243,13 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	Input->BindAction(CancelAction, ETriggerEvent::Started, this, &AForestCharacter::CancelBuild);
 
 #if !UE_BUILD_SHIPPING
+	UInputAction* SaveDilimAction = MakeAction(TEXT("IA_SaveDilim"), EInputActionValueType::Boolean);
+	UInputAction* LoadDilimAction = MakeAction(TEXT("IA_LoadDilim"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(SaveDilimAction, EKeys::F5);
+	MappingContext->MapKey(LoadDilimAction, EKeys::F9);
+	Input->BindAction(SaveDilimAction, ETriggerEvent::Started, this, &AForestCharacter::SaveDilim);
+	Input->BindAction(LoadDilimAction, ETriggerEvent::Started, this, &AForestCharacter::LoadDilim);
+
 	UInputAction* DebugGiveAction = MakeAction(TEXT("IA_DebugGive"), EInputActionValueType::Boolean);
 	UInputAction* DebugRoomAction = MakeAction(TEXT("IA_DebugRoom"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(DebugGiveAction, EKeys::G);
@@ -1749,6 +1757,71 @@ void AForestCharacter::Interact()
 	FocusedPickup = nullptr;
 }
 
+void AForestCharacter::ExportInventorySaveData(TArray<uint8>& OutItemIds, TArray<int32>& OutCounts) const
+{
+	OutItemIds.Reset();
+	OutCounts.Reset();
+	for (const EForestItem Item : ForestItems::GetAllItems())
+	{
+		const int32 Count = GetItemCount(Item);
+		if (Count > 0 && !ForestItems::IsCarriedItem(Item))
+		{
+			OutItemIds.Add(static_cast<uint8>(Item));
+			OutCounts.Add(Count);
+		}
+	}
+}
+
+bool AForestCharacter::ValidateInventorySaveData(const TArray<uint8>& ItemIds, const TArray<int32>& Counts, FString& OutError)
+{
+	OutError.Reset();
+	if (ItemIds.Num() != Counts.Num() || ItemIds.Num() > InventorySlots)
+	{
+		OutError = TEXT("Inventory save data has mismatched arrays or too many item rows.");
+		return false;
+	}
+
+	TSet<uint8> SeenItems;
+	int32 UsedSlots = 0;
+	for (int32 Index = 0; Index < ItemIds.Num(); ++Index)
+	{
+		const uint8 ItemId = ItemIds[Index];
+		const int32 Count = Counts[Index];
+		if (ItemId == static_cast<uint8>(EForestItem::None)
+			|| ItemId > static_cast<uint8>(EForestItem::DoorBuck)
+			|| Count <= 0 || Count > InventorySlots * StackSize
+			|| SeenItems.Contains(ItemId))
+		{
+			OutError = TEXT("Inventory save data contains an invalid item id, count or duplicate item row.");
+			return false;
+		}
+		SeenItems.Add(ItemId);
+		UsedSlots += (Count + StackSize - 1) / StackSize;
+		if (UsedSlots > InventorySlots)
+		{
+			OutError = TEXT("Inventory save data exceeds the backpack slot limit.");
+			return false;
+		}
+	}
+	return true;
+}
+
+bool AForestCharacter::ImportInventorySaveData(const TArray<uint8>& ItemIds, const TArray<int32>& Counts, FString& OutError)
+{
+	if (!ValidateInventorySaveData(ItemIds, Counts, OutError))
+	{
+		return false;
+	}
+
+	TMap<EForestItem, int32> RestoredInventory;
+	for (int32 Index = 0; Index < ItemIds.Num(); ++Index)
+	{
+		RestoredInventory.Add(static_cast<EForestItem>(ItemIds[Index]), Counts[Index]);
+	}
+	Inventory = MoveTemp(RestoredInventory);
+	return true;
+}
+
 int32 AForestCharacter::GetItemCount(EForestItem Item) const
 {
 	if (ForestItems::IsCarriedItem(Item))
@@ -1840,6 +1913,47 @@ void AForestCharacter::GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutS
 void AForestCharacter::ToggleInventory()
 {
 	bInventoryOpen = !bInventoryOpen;
+}
+
+void AForestCharacter::SaveDilim()
+{
+	if (GetCarriedItem() != EForestItem::None)
+	{
+		ShowMessage(TEXT("Kayıt engellendi: önce taşıdığın parçayı bırak."));
+		return;
+	}
+	USaveGameSubsystem* SaveSubsystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<USaveGameSubsystem>() : nullptr;
+	if (!SaveSubsystem)
+	{
+		ShowMessage(TEXT("Kayıt sistemi bulunamadı."));
+		return;
+	}
+	if (SaveSubsystem->SaveWorld(TEXT("Dilim")))
+	{
+		ShowMessage(TEXT("Dilim kaydedildi (F5)."));
+	}
+	else
+	{
+		ShowMessage(FString::Printf(TEXT("Kayıt başarısız: %s"), *SaveSubsystem->GetLastOperationError()));
+	}
+}
+
+void AForestCharacter::LoadDilim()
+{
+	USaveGameSubsystem* SaveSubsystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<USaveGameSubsystem>() : nullptr;
+	if (!SaveSubsystem)
+	{
+		ShowMessage(TEXT("Kayıt sistemi bulunamadı."));
+		return;
+	}
+	if (SaveSubsystem->LoadWorld(TEXT("Dilim")))
+	{
+		ShowMessage(TEXT("Dilim yüklendi (F9)."));
+	}
+	else
+	{
+		ShowMessage(FString::Printf(TEXT("Yükleme başarısız: %s"), *SaveSubsystem->GetLastOperationError()));
+	}
 }
 
 bool AForestCharacter::RemoveItem(EForestItem Item, int32 Count)
