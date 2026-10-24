@@ -53,6 +53,10 @@ void AStoneActor::ApplyShape(EStoneShape NewShape, FVector NewDimensions)
 {
     UStoneDefinition* ShapeBase = BaseDefinition ? BaseDefinition : Definition;
     if (!ShapeBase || NewDimensions.X <= 0 || NewDimensions.Y <= 0 || NewDimensions.Z <= 0) return;
+    if (!BaseDefinition)
+    {
+        BaseDefinition = ShapeBase;
+    }
     UStoneDefinition* NewDef = DuplicateObject<UStoneDefinition>(ShapeBase, this);
     NewDef->Shape = NewShape;
     NewDef->Dimensions = NewDimensions;
