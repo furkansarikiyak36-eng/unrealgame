@@ -53,6 +53,55 @@ void AStoneMasonryActor::InitializeStone(EMasonryType InType, bool bWithThroughS
 	}
 }
 
+UStaticMesh* AStoneMasonryActor::GetStoneMeshForSave() const
+{
+	return StoneMeshComponent ? StoneMeshComponent->GetStaticMesh() : nullptr;
+}
+
+bool AStoneMasonryActor::RestorePersistentState(UStaticMesh* SavedMesh, EMasonryType SavedType,
+	bool bSavedThroughStones, bool bSavedHearting, float SavedBatterRatio, bool bSavedCrossingJoints,
+	float SavedCompressiveStrengthMPa, float SavedStructuralHealth, float SavedSelfWeight,
+	float SavedCompressiveCapacityKN, bool bSavedGrounded, FString& OutError)
+{
+	OutError.Reset();
+	if (!SavedMesh
+		|| (SavedType != EMasonryType::DryStone && SavedType != EMasonryType::MortaredStone)
+		|| !FMath::IsFinite(SavedBatterRatio) || SavedBatterRatio < 0.0f || SavedBatterRatio > 1.0f
+		|| !FMath::IsFinite(SavedCompressiveStrengthMPa) || SavedCompressiveStrengthMPa <= 0.0f
+		|| !FMath::IsFinite(SavedStructuralHealth) || SavedStructuralHealth <= 0.0f || SavedStructuralHealth > 300.0f
+		|| !FMath::IsFinite(SavedSelfWeight) || SavedSelfWeight <= 0.0f
+		|| !FMath::IsFinite(SavedCompressiveCapacityKN) || SavedCompressiveCapacityKN <= 0.0f)
+	{
+		OutError = TEXT("Stone masonry persistence record contains an invalid mesh, masonry type or structural value.");
+		return false;
+	}
+
+	if (!StoneMeshComponent)
+	{
+		OutError = TEXT("Stone masonry actor has no mesh component.");
+		return false;
+	}
+
+	MasonryType = SavedType;
+	bHasThroughStones = bSavedThroughStones;
+	bHasHearting = bSavedHearting;
+	BatterRatio = SavedBatterRatio;
+	bHasCrossingJoints = bSavedCrossingJoints;
+	CompressiveStrengthMPa = SavedCompressiveStrengthMPa;
+	StructuralHealth = SavedStructuralHealth;
+	SelfWeight = SavedSelfWeight;
+	CompressiveCapacityKN = SavedCompressiveCapacityKN;
+	bIsGrounded = bSavedGrounded;
+	bIsCollapsed = false;
+
+	StoneMeshComponent->SetStaticMesh(SavedMesh);
+	StoneMeshComponent->SetSimulatePhysics(false);
+	StoneMeshComponent->SetEnableGravity(false);
+	StoneMeshComponent->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	UpdateVisualColor();
+	return true;
+}
+
 void AStoneMasonryActor::ApplyMortar()
 {
 	MasonryType = EMasonryType::MortaredStone;
