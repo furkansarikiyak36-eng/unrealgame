@@ -89,6 +89,18 @@ Bu kararlar tüm oyunun mimarisini baştan tasarlama amacı taşımaz. İlk roun
 
 **Kritik not:** Faz 9 teknik belgesi, mevcut legacy log payload'ının `ALogActor` kapsadığını ve bütün aktif `ACarvableLog`/ağaç/taşıma aktörlerini kapsamadığını açıkça belirtir. Bu nedenle testin ilk beklenen çıktısı PASS olmak zorunda değildir; öncelikli amaç gerçek kapsamı görünür kılmaktır.
 
+## 3A. Kayıt kodunun statik inceleme sonucu
+
+İnceleme dalı: `feature/phase-09-vertical-slice-stone-persistence`. Bu bölüm **kaynak kodu incelemesidir; Unreal çalıştırma testi değildir**.
+
+- `Phase7_Integration/SaveGameSubsystem.cpp` içindeki `CaptureLogActors` / `StageLogs` yalnızca `ALogActor` örneklerini tarar ve yeniden oluşturur. `ACarvableLog` kapsamda değildir.
+- Aynı dosyadaki `CaptureStoneActors` / `StageStoneActors` yalnızca `AStoneActor` sınıfını işler. `AStoneMasonryActor` kayıt/geri yükleme yoluna dahil edilmemiştir.
+- `ACarvableLog` mevcut biçimiyle çalışma anında `UDynamicMesh` üzerinde kesim/yarma/oyuk işlemleri üretir. Sadece transform veya kaynak Static Mesh'i kaydetmek, oyuncunun kestiği biçimi tek başına geri getirmez. Kalıcılık tasarımı geometriyi saklamalı ya da aynı sonucu üreten doğrulanabilir bir kesim geçmişini yeniden oynatmalıdır.
+- Kod `UWorldSaveGame::SaveSchemaVersion = 3` yazar ve yükleyicide 2/3 sürümlerini kabul eder; `Docs/PHASE_09_VERTICAL_SLICE.md` içindeki “version-2” açıklaması bu nedenle kodla tutarsızdır. Şema değişikliğinden önce belge/gerçek sürüm tekleştirilmeli.
+- `Scripts/run_phase9_tests.sh` 31 otomasyon testi adını ve log sonuçlarını kontrol eder. Bu listede voxel snapshot ve taş kayıt doğrulama testleri var; ancak `ACarvableLog` veya `AStoneMasonryActor` için gerçek dünya aktörü round-trip testi yok. Test adının bulunması, çalıştırmanın geçtiğini veya PIE davranışının doğrulandığını kanıtlamaz.
+
+**Sonuç:** Mevcut koddan yalnızca “SaveWorld çağrısı başarılı” sonucu almak dilimi kapatmaz. Aktif kütük ve taş yapı sınıfı kapsam dışı kaldığı için ilk kabul denemesi şu an **PASS kabul edilemez**; bu aktörler için kalıcılık adapter'ı ve round-trip doğrulaması eklenmelidir.
+
 ## 4. İlk çalışma sırası
 
 1. Bu listedeki her istasyonun gerçekten mevcut olduğunu ve doğru aktörü sınadığını kontrol edin.
