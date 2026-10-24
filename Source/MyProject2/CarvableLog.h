@@ -153,6 +153,12 @@ public:
 	void AddDamage(float Amount);
 	void SetDamage(float Value);
 
+	/** True only when the current geometry can be reconstructed from SourceMesh without losing runtime cuts. */
+	bool IsReadyShapedForPersistence() const;
+
+	/** Restores non-geometric state for a clean, asset-backed log. Returns false if the state is invalid. */
+	bool RestorePersistentState(float SavedDamage, bool bSavedAnchored, bool bSavedTemporary);
+
 	// --- Fire. Any piece of wood burns. It takes heat to catch (thin pieces quickly, thick ones slowly), burns for as long as
 	// the wood it holds (see ACampfire::FuelSecondsOf) taking damage all the while, and ends up charred. Burning pieces
 	// heat the wood around them and light fires (UBurnSubsystem drives all of it). ---
@@ -387,6 +393,10 @@ private:
 
 	float Damage = 0.f;
 	bool bTemporary = false;
+	/** Suppresses runtime-edit tracking while copying the original asset mesh into the dynamic mesh. */
+	bool bLoadingSourceGeometry = false;
+	/** Runtime geometry operations make SourceMesh alone insufficient for save/restore. */
+	bool bHasRuntimeGeometryEdits = false;
 	TArray<FJointCut> JointCuts;
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> DamageMaterial;
