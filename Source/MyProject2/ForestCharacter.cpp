@@ -1788,8 +1788,10 @@ bool AForestCharacter::ValidateInventorySaveData(const TArray<uint8>& ItemIds, c
 	{
 		const uint8 ItemId = ItemIds[Index];
 		const int32 Count = Counts[Index];
+		const EForestItem Item = static_cast<EForestItem>(ItemId);
 		if (ItemId == static_cast<uint8>(EForestItem::None)
 			|| ItemId > static_cast<uint8>(EForestItem::DoorBuck)
+			|| ForestItems::IsCarriedItem(Item)
 			|| Count <= 0 || Count > InventorySlots * StackSize
 			|| SeenItems.Contains(ItemId))
 		{
