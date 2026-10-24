@@ -45,6 +45,9 @@ public:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 	int32 GetItemCount(EForestItem Item) const;
+	void ExportInventorySaveData(TArray<uint8>& OutItemIds, TArray<int32>& OutCounts) const;
+	static bool ValidateInventorySaveData(const TArray<uint8>& ItemIds, const TArray<int32>& Counts, FString& OutError);
+	bool ImportInventorySaveData(const TArray<uint8>& ItemIds, const TArray<int32>& Counts, FString& OutError);
 
 	/** Backpack (GDD 6.3): 24 slots, stacks of 20. */
 	static constexpr int32 InventorySlots = 24;
@@ -239,6 +242,8 @@ private:
 	/** Would Count of Item fit, after Freed of FreedItem left the backpack? */
 	bool CanAddItem(EForestItem Item, int32 Count, EForestItem FreedItem = EForestItem::None, int32 Freed = 0) const;
 	void ToggleInventory();
+	void SaveDilim();
+	void LoadDilim();
 	bool RemoveItem(EForestItem Item, int32 Count);
 	void Craft(EForestItem Input, int32 InputCount, EForestItem Output, int32 OutputCount);
 	void ShowMessage(const FString& Text);
