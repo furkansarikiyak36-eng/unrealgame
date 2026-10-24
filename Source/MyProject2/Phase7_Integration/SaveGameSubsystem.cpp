@@ -531,7 +531,7 @@ bool USaveGameSubsystem::LoadWorld(const FString& SlotName)
     if (Save->bHasPlayerState)
     {
         FString InventoryError;
-        if (!Player || !IsFiniteTransform(Save->PlayerTransform)
+        if (!Player || Player->GetCarriedItem() != EForestItem::None || !IsFiniteTransform(Save->PlayerTransform)
             || !AForestCharacter::ValidateInventorySaveData(Save->InventoryItemIds, Save->InventoryCounts, InventoryError))
         {
             LastOperationError = !Player
