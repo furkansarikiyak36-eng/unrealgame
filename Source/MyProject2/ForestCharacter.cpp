@@ -1943,6 +1943,11 @@ void AForestCharacter::SaveDilim()
 
 void AForestCharacter::LoadDilim()
 {
+	if (GetCarriedItem() != EForestItem::None)
+	{
+		ShowMessage(TEXT("Yükleme engellendi: önce taşıdığın parçayı bırak."));
+		return;
+	}
 	USaveGameSubsystem* SaveSubsystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<USaveGameSubsystem>() : nullptr;
 	if (!SaveSubsystem)
 	{
