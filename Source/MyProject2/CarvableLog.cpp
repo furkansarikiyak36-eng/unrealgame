@@ -497,6 +497,7 @@ void ACarvableLog::LoadSource()
 	{
 		return;
 	}
+	bLoadingSourceGeometry = true;
 	FGeometryScriptMeshReadLOD ReadLOD;
 #if WITH_EDITOR
 	ReadLOD.LODType = EGeometryScriptLODType::SourceModel;
@@ -515,6 +516,7 @@ void ACarvableLog::LoadSource()
 		MeshComponent->SetMaterial(1, SourceMesh->GetMaterial(1));
 	}
 	FinishEdit();
+	bLoadingSourceGeometry = false;
 }
 
 void ACarvableLog::OnConstruction(const FTransform& Transform)
@@ -539,6 +541,8 @@ ACarvableLog* ACarvableLog::SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh
 	{
 		return nullptr;
 	}
+	Log->SourceMesh = Mesh;
+	Log->bLoadingSourceGeometry = true;
 
 	FGeometryScriptMeshReadLOD ReadLOD;
 #if WITH_EDITOR
@@ -555,6 +559,7 @@ ACarvableLog* ACarvableLog::SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh
 	Log->Radius = Box.GetSize().Z * 0.5f;
 	Log->SetMaterials(Mesh->GetMaterial(0));
 	Log->FinishEdit();
+	Log->bLoadingSourceGeometry = false;
 	Log->FinishSpawning(Transform);
 	return Log;
 }
@@ -601,6 +606,37 @@ void ACarvableLog::SetMaterials(UMaterialInterface* Bark)
 int32 ACarvableLog::GetTriangleCount() const
 {
 	return MeshComponent->GetDynamicMesh()->GetTriangleCount();
+}
+
+bool ACarvableLog::IsReadyShapedForPersistence() const
+{
+	return SourceMesh != nullptr
+		&& !bHasRuntimeGeometryEdits
+		&& !bCarried
+		&& BurnState == EBurnState::Intact
+		&& MeshComponent != nullptr
+		&& !MeshComponent->IsSimulatingPhysics();
+}
+
+bool ACarvableLog::RestorePersistentState(float SavedDamage, bool bSavedAnchored, bool bSavedTemporary)
+{
+	if (!FMath::IsFinite(SavedDamage) || SavedDamage < 0.0f || SavedDamage > 1.0f
+		|| !SourceMesh || bHasRuntimeGeometryEdits || bCarried || BurnState != EBurnState::Intact)
+	{
+		return false;
+	}
+
+	SetDamage(SavedDamage);
+	SetTemporary(bSavedTemporary);
+	if (bSavedAnchored)
+	{
+		Anchor();
+	}
+	else
+	{
+		Release();
+	}
+	return true;
 }
 
 bool ACarvableLog::IsSpanFree(float X0, float X1) const
@@ -1469,6 +1505,10 @@ void ACarvableLog::SubtractHalfSpace(UDynamicMesh* Target, const FVector& Normal
 
 void ACarvableLog::FinishEdit()
 {
+	if (!bLoadingSourceGeometry)
+	{
+		bHasRuntimeGeometryEdits = true;
+	}
 	UDynamicMesh* Mesh = MeshComponent->GetDynamicMesh();
 
 	FGeometryScriptSplitNormalsOptions SplitOptions;
