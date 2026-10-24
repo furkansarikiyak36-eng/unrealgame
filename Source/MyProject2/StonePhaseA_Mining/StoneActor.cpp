@@ -20,6 +20,7 @@ AStoneActor::AStoneActor()
 void AStoneActor::InitializeFromDefinition(UStoneDefinition* Def)
 {
     if (!Def) return;
+    BaseDefinition = Def;
     Definition = Def;
     MaxHealth = FMath::Max(1.0f, Def->CompressiveStrength * 0.5f);
     Health = MaxHealth;
@@ -50,8 +51,9 @@ bool AStoneActor::IsGrounded_Implementation() const
 
 void AStoneActor::ApplyShape(EStoneShape NewShape, FVector NewDimensions)
 {
-    if (!Definition || NewDimensions.X <= 0 || NewDimensions.Y <= 0 || NewDimensions.Z <= 0) return;
-    UStoneDefinition* NewDef = DuplicateObject<UStoneDefinition>(Definition, this);
+    UStoneDefinition* ShapeBase = BaseDefinition ? BaseDefinition : Definition;
+    if (!ShapeBase || NewDimensions.X <= 0 || NewDimensions.Y <= 0 || NewDimensions.Z <= 0) return;
+    UStoneDefinition* NewDef = DuplicateObject<UStoneDefinition>(ShapeBase, this);
     NewDef->Shape = NewShape;
     NewDef->Dimensions = NewDimensions;
     NewDef->Volume = NewDef->GetVolumeFromDimensions();
@@ -60,6 +62,38 @@ void AStoneActor::ApplyShape(EStoneShape NewShape, FVector NewDimensions)
     const float ScaleZ = NewDimensions.Z / 20.0f;
     Definition = NewDef;
     MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
+}
+
+bool AStoneActor::RestorePersistentState(UStoneDefinition* SavedBaseDefinition, EStoneShape SavedShape,
+    const FVector& SavedDimensions, float SavedHealth, EStructuralNodeState SavedState, FString& OutError)
+{
+    OutError.Reset();
+    if (!SavedBaseDefinition || !FMath::IsFinite(SavedHealth) || SavedHealth <= 0.0f
+        || SavedHealth > FMath::Max(1.0f, SavedBaseDefinition->CompressiveStrength * 0.5f)
+        || !FMath::IsFinite(SavedDimensions.X) || !FMath::IsFinite(SavedDimensions.Y) || !FMath::IsFinite(SavedDimensions.Z)
+        || SavedDimensions.X <= 0.0f || SavedDimensions.Y <= 0.0f || SavedDimensions.Z <= 0.0f
+        || (SavedState != EStructuralNodeState::Loose && SavedState != EStructuralNodeState::Installed))
+    {
+        OutError = TEXT("Stone persistence record has invalid definition, health, dimensions or state.");
+        return false;
+    }
+
+    InitializeFromDefinition(SavedBaseDefinition);
+    ApplyShape(SavedShape, SavedDimensions);
+    Health = SavedHealth;
+
+    if (!StateMachine)
+    {
+        OutError = TEXT("Stone has no state machine after initialization.");
+        return false;
+    }
+    const EStructuralNodeState CurrentState = StateMachine->GetState();
+    if (CurrentState != SavedState && !SetStructuralState_Implementation(SavedState))
+    {
+        OutError = TEXT("Stone state machine rejected the saved structural state.");
+        return false;
+    }
+    return true;
 }
 
 void AStoneActor::ApplyDamage(float Amount)
