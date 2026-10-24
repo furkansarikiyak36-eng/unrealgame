@@ -57,6 +57,15 @@ public:
 	EMasonryType GetMasonryType() const { return MasonryType; }
 	bool HasThroughStones() const { return bHasThroughStones; }
 	bool HasHearting() const { return bHasHearting; }
+	bool HasCrossingJoints() const { return bHasCrossingJoints; }
+	float GetBatterRatio() const { return BatterRatio; }
+	float GetCompressiveStrengthMPa() const { return CompressiveStrengthMPa; }
+	float GetStructuralHealthForSave() const { return StructuralHealth; }
+	UStaticMesh* GetStoneMeshForSave() const;
+	bool RestorePersistentState(UStaticMesh* SavedMesh, EMasonryType SavedType,
+		bool bSavedThroughStones, bool bSavedHearting, float SavedBatterRatio, bool bSavedCrossingJoints,
+		float SavedCompressiveStrengthMPa, float SavedStructuralHealth, float SavedSelfWeight,
+		float SavedCompressiveCapacityKN, bool bSavedGrounded, FString& OutError);
 
 protected:
 	virtual void BeginPlay() override;
