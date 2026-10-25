@@ -43,7 +43,7 @@ struct TwoAnchorSnapRequest {
   Revision expectedClassificationRevision{0};
   Revision expectedSupportRevision{0};
   std::size_t maxCandidateAnchors{128};
-  std::size_t maxPairsToEvaluate{8192};
+  std::size_t maxPairsToEvaluate{16384};
 };
 
 struct TwoAnchorPlacementDecision {
