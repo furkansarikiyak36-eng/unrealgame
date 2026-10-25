@@ -34,8 +34,22 @@ struct TrapLifecycleSnapshot {
   TrapLifecycleState state{TrapLifecycleState::Armed};
   Id lastEventId{0};
   Id lastInstigatorId{0};
+  bool hasTriggered{false};
   Seconds lastTriggerTime{-1.0};
   Seconds cooldownEndsAt{0.0};
+  std::uint64_t triggerCount{0};
+};
+
+struct TrapLifecycleSaveRecord {
+  std::uint32_t schemaVersion{1};
+  Id trapId{0};
+  Revision savedStateRevision{1};
+  TrapLifecycleState state{TrapLifecycleState::Armed};
+  Id lastEventId{0};
+  Id lastInstigatorId{0};
+  bool hasTriggered{false};
+  Seconds secondsSinceLastTrigger{0.0};
+  Seconds remainingCooldownSeconds{0.0};
   std::uint64_t triggerCount{0};
 };
 
@@ -69,6 +83,9 @@ class TrapLifecycle {
   Result<bool> Disarm(Revision expectedStateRevision);
   Result<TrapTriggerDecision> TryTrigger(const TrapTriggerRequest& request);
   Result<bool> Advance(Seconds nowSeconds, Revision expectedStateRevision);
+  Result<TrapLifecycleSaveRecord> CreateSaveRecord(Seconds nowSeconds) const;
+  Result<bool> RestoreFromSaveRecord(const TrapLifecycleSaveRecord& record,
+                                     Seconds newWorldTimeSeconds);
 
   TrapLifecycleSnapshot Snapshot() const;
   Revision GetRevision() const noexcept { return stateRevision_; }
@@ -81,6 +98,7 @@ class TrapLifecycle {
   TrapLifecycleState state_{TrapLifecycleState::Armed};
   Id lastEventId_{0};
   Id lastInstigatorId_{0};
+  bool hasTriggered_{false};
   Seconds lastTriggerTime_{-1.0};
   Seconds cooldownEndsAt_{0.0};
   std::uint64_t triggerCount_{0};
