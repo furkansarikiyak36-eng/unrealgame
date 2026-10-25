@@ -39,6 +39,9 @@ public:
 	void Disarm();
 	UFUNCTION(BlueprintCallable, Category = "Trap")
 	bool Trigger(AActor* Victim);
+	/** Trigger only if the incoming signal matches the configured pressure/tripwire/proximity/manual mode. */
+	UFUNCTION(BlueprintCallable, Category = "Trap")
+	bool TriggerFrom(AActor* Victim, ETrapTriggerType SourceType);
 
 	UFUNCTION(BlueprintPure, Category = "Trap")
 	bool IsArmed() const { return bArmed; }
