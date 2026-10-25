@@ -992,6 +992,24 @@ bool TestStoneFireplaceLifecycle() {
   CHECK(std::abs(tick.value.fuelRemaining-27.0)<1e-9);
   CHECK(std::abs(tick.value.heatOutput-135.0)<1e-9);
 
+  auto savedFire=fireplace.CreateSaveRecord();
+  CHECK(savedFire && savedFire.value.wasBurning && savedFire.value.hasCookingPot);
+  wm::StoneFireplaceLifecycle restoredFire;
+  CHECK(restoredFire.RestoreFromSaveRecord(savedFire.value));
+  CHECK(restoredFire.Snapshot().state==wm::StoneFireplaceState::NotBuilt);
+  CHECK(restoredFire.Snapshot().heatOutput==0.0);
+  CHECK(std::abs(restoredFire.Snapshot().fuelUnits-27.0)<1e-9);
+  auto ringAfterRestore=restoredFire.ReassessRing(stones,0,0,0,5);
+  CHECK(ringAfterRestore && ringAfterRestore.value.recognized);
+  CHECK(restoredFire.Snapshot().state==wm::StoneFireplaceState::Burning);
+  CHECK(std::abs(restoredFire.Snapshot().heatOutput-135.0)<1e-9);
+  const auto restoredFireRevision=restoredFire.GetRevision();
+  auto corruptFireSave=savedFire.value;
+  corruptFireSave.fuelUnits=1000.0;
+  auto invalidFireRestore=restoredFire.RestoreFromSaveRecord(corruptFireSave);
+  CHECK(!invalidFireRestore);
+  CHECK(restoredFire.GetRevision()==restoredFireRevision);
+
   auto brokenRing=stones;
   brokenRing[0].active=false;
   brokenRing[1].active=false;
@@ -1027,12 +1045,40 @@ bool TestTrapLifecycle() {
   auto firedAgain=trap.TryTrigger({2,43,wm::TrapTriggerSource::Pressure,11.0,trap.GetRevision()});
   CHECK(firedAgain && trap.Snapshot().triggerCount==2);
 
+  auto trapSave=trap.CreateSaveRecord(11.2);
+  CHECK(trapSave && trapSave.value.hasTriggered);
+  CHECK(std::abs(trapSave.value.secondsSinceLastTrigger-0.2)<1e-9);
+  CHECK(std::abs(trapSave.value.remainingCooldownSeconds-0.8)<1e-9);
+  wm::TrapLifecycle restoredTrap({700,wm::TrapTriggerSource::Pressure,1.0,0.01,40.0,false,3600.0});
+  CHECK(restoredTrap.RestoreFromSaveRecord(trapSave.value,2.0));
+  CHECK(restoredTrap.Snapshot().state==wm::TrapLifecycleState::CoolingDown);
+  CHECK(std::abs(restoredTrap.Snapshot().cooldownEndsAt-2.8)<1e-9);
+  auto duplicateAfterRestore=restoredTrap.TryTrigger({2,43,wm::TrapTriggerSource::Pressure,2.1,restoredTrap.GetRevision()});
+  CHECK(!duplicateAfterRestore && duplicateAfterRestore.error==wm::ErrorCode::Conflict);
+  auto restoreEarly=restoredTrap.Advance(2.79,restoredTrap.GetRevision());
+  CHECK(restoreEarly && !restoreEarly.value);
+  auto restoreReady=restoredTrap.Advance(2.8,restoredTrap.GetRevision());
+  CHECK(restoreReady && restoreReady.value);
+  auto postRestoreTrigger=restoredTrap.TryTrigger({3,44,wm::TrapTriggerSource::Pressure,2.8,restoredTrap.GetRevision()});
+  CHECK(postRestoreTrigger && restoredTrap.Snapshot().triggerCount==3);
+  const auto restoredTrapRevision=restoredTrap.GetRevision();
+  auto wrongTrapSave=trapSave.value;
+  wrongTrapSave.trapId=9999;
+  auto rejectWrongTrap=restoredTrap.RestoreFromSaveRecord(wrongTrapSave,50.0);
+  CHECK(!rejectWrongTrap && restoredTrap.GetRevision()==restoredTrapRevision);
+
   wm::TrapLifecycle oneShot({701,wm::TrapTriggerSource::Manual,0.0,0.01,0.0,true,3600.0});
   auto consumed=oneShot.TryTrigger({1,0,wm::TrapTriggerSource::Manual,1.0,oneShot.GetRevision()});
   CHECK(consumed && !consumed.value.applyDamage);
   CHECK(consumed.value.resultingState==wm::TrapLifecycleState::Consumed);
   auto cannotRearm=oneShot.Arm(oneShot.GetRevision());
   CHECK(!cannotRearm && cannotRearm.error==wm::ErrorCode::Unsupported);
+  auto consumedSave=oneShot.CreateSaveRecord(1.5);
+  CHECK(consumedSave && consumedSave.value.state==wm::TrapLifecycleState::Consumed);
+  wm::TrapLifecycle restoredOneShot({701,wm::TrapTriggerSource::Manual,0.0,0.01,0.0,true,3600.0});
+  CHECK(restoredOneShot.RestoreFromSaveRecord(consumedSave.value,100.0));
+  CHECK(restoredOneShot.Snapshot().state==wm::TrapLifecycleState::Consumed);
+  CHECK(!restoredOneShot.Arm(restoredOneShot.GetRevision()));
   return true;
 }
 
