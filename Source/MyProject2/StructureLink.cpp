@@ -81,9 +81,11 @@ namespace
 				Parts.Add(Stone);
 			}
 		}
-		Parts.Sort([](const AActor& A, const AActor& B)
+		Parts.Sort([](const AActor* A, const AActor* B)
 		{
-			return A.GetPathName() < B.GetPathName();
+			if (!A) return B != nullptr;
+			if (!B) return false;
+			return A->GetPathName() < B->GetPathName();
 		});
 		return Parts;
 	}
@@ -422,25 +424,34 @@ FString StructureLink::DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log
 
 FString StructureLink::Describe(UWorld* World)
 {
-	const TArray<ACarvableLog*> Logs = Installed(World);
+	const TArray<AActor*> Parts = InstalledStructuralParts(World);
 	TArray<WoodStructure::FNode> Nodes;
-	for (int32 Index = 0; Index < Logs.Num(); ++Index)
+	Nodes.Reserve(Parts.Num());
+	for (int32 Index = 0; Index < Parts.Num(); ++Index)
 	{
-		Nodes.Add(MakeNode(Logs[Index], Index));
+		Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 	}
+
 	const TArray<WoodStructure::FEdge> Edges = Connect(Nodes);
 	TMap<int32, float> Snaps;
 	FString Text;
 	const TSet<int32> Supported = Evaluate(Nodes, Edges, &Snaps, &Text);
 	for (const WoodStructure::FNode& Node : Nodes)
 	{
-		Text += FString::Printf(TEXT("\n    #%d %s (%.0f,%.0f,%.0f) rol %d zemin %d notches %d %s"), Node.Id, *Logs[Node.Id]->GetName(),
-			Logs[Node.Id]->GetActorLocation().X, Logs[Node.Id]->GetActorLocation().Y, Logs[Node.Id]->GetActorLocation().Z,
-			static_cast<int32>(Node.Role), Node.bGrounded ? 1 : 0, Node.Notches.Num(), Supported.Contains(Node.Id) ? TEXT("destekli") : TEXT("DESTEKSİZ"));
+		const AActor* Part = Parts.IsValidIndex(Node.Id) ? Parts[Node.Id] : nullptr;
+		if (!IsValid(Part))
+		{
+			continue;
+		}
+		Text += FString::Printf(TEXT("\n    #%d %s (%.0f,%.0f,%.0f) role %d grounded %d notches %d %s"),
+			Node.Id, *Part->GetName(), Part->GetActorLocation().X, Part->GetActorLocation().Y,
+			Part->GetActorLocation().Z, static_cast<int32>(Node.Role), Node.bGrounded ? 1 : 0,
+			Node.Notches.Num(), Supported.Contains(Node.Id) ? TEXT("supported") : TEXT("UNSUPPORTED"));
 	}
 	for (const WoodStructure::FEdge& Edge : Edges)
 	{
-		Text += FString::Printf(TEXT("\n    bağ #%d -> #%d tür %d %s"), Edge.A, Edge.B, static_cast<int32>(Edge.Kind), Edge.bOneWay ? TEXT("tek yön") : TEXT("çift yön"));
+		Text += FString::Printf(TEXT("\n    edge #%d -> #%d kind %d %s"), Edge.A, Edge.B,
+			static_cast<int32>(Edge.Kind), Edge.bOneWay ? TEXT("one-way") : TEXT("two-way"));
 	}
 	return Text;
 }
@@ -453,40 +464,58 @@ int32 StructureLink::Settle(UWorld* World)
 	}
 	MarkChanged();
 	int32 Fallen = 0;
-	// A piece that falls can take others with it: repeat until everything left standing is held up.
+	// Rebuild the mixed wood/stone graph after each failure: falling pieces are removed from the next installed pass.
 	for (int32 Pass = 0; Pass < 16; ++Pass)
 	{
-		const TArray<ACarvableLog*> Logs = Installed(World);
+		const TArray<AActor*> Parts = InstalledStructuralParts(World);
 		TArray<WoodStructure::FNode> Nodes;
-		for (int32 Index = 0; Index < Logs.Num(); ++Index)
+		Nodes.Reserve(Parts.Num());
+		for (int32 Index = 0; Index < Parts.Num(); ++Index)
 		{
-			Nodes.Add(MakeNode(Logs[Index], Index));
+			Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 		}
+
 		TMap<int32, float> Snaps;
 		const TSet<int32> Supported = StructureLink::Evaluate(Nodes, Connect(Nodes), &Snaps);
 		int32 FellNow = 0;
-		for (int32 Index = 0; Index < Logs.Num(); ++Index)
+		for (int32 Index = 0; Index < Parts.Num(); ++Index)
 		{
 			if (Supported.Contains(Index))
 			{
 				continue;
 			}
+
+			AActor* Part = Parts[Index];
+			if (!IsValid(Part))
+			{
+				continue;
+			}
 			if (bLogFalls)
 			{
-				UE_LOG(LogTemp, Display, TEXT("[Structure] %s %s%s"), *Logs[Index]->GetName(), Snaps.Contains(Index) ? TEXT("kırıldı: açıklık ya da taşma sınırı aşıldı") : TEXT("desteksiz kaldı"),
+				UE_LOG(LogTemp, Display, TEXT("[Structure] %s %s%s"), *Part->GetName(),
+					Snaps.Contains(Index) ? TEXT("failed span / overhang limit") : TEXT("lost support"),
 					*StructureLink::Describe(World));
 			}
-			// A beam that failed on its span snaps; anything else just loses its hold.
-			if (const float* Where = Snaps.Find(Index))
+
+			if (ACarvableLog* Log = Cast<ACarvableLog>(Part))
 			{
-				Logs[Index]->SnapAt(Logs[Index]->GetMinX() + *Where);
+				if (const float* Where = Snaps.Find(Index))
+				{
+					Log->SnapAt(Log->GetMinX() + *Where);
+				}
+				else
+				{
+					Log->LetFall();
+				}
 			}
-			else
+			else if (AStoneActor* Stone = Cast<AStoneActor>(Part))
 			{
-				Logs[Index]->LetFall();
+				// Stone blocks do not auto-snap into two pieces; an unsupported one returns to rigid-body physics.
+				Stone->SetStructuralState_Implementation(EStructuralNodeState::Falling);
 			}
 			++FellNow;
 		}
+
 		Fallen += FellNow;
 		if (FellNow == 0)
 		{
@@ -502,11 +531,12 @@ bool StructureLink::WouldBeSupported(UWorld* World, const ACarvableLog* Piece, c
 	{
 		return false;
 	}
-	const TArray<ACarvableLog*> Logs = Installed(World, Piece);
+	const TArray<AActor*> Parts = InstalledStructuralParts(World, Piece);
 	TArray<WoodStructure::FNode> Nodes;
-	for (int32 Index = 0; Index < Logs.Num(); ++Index)
+	Nodes.Reserve(Parts.Num() + 1);
+	for (int32 Index = 0; Index < Parts.Num(); ++Index)
 	{
-		Nodes.Add(MakeNode(Logs[Index], Index));
+		Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 	}
 	const int32 PieceId = Nodes.Num();
 	Nodes.Add(MakeNode(Piece, PieceId, &Transform));
