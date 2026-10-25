@@ -6,6 +6,7 @@
 #include "StoneCore/StoneDefinition.h"
 #include "StoneCore/StoneConnectionGraph.h"
 #include "Core/StructuralGraph.h"
+#include "StructureLink.h"
 #include "Core/StructuralNode.h"
 #include "Components/SceneComponent.h"
 #include "Components/PrimitiveComponent.h"
@@ -641,6 +642,10 @@ bool UStonePlacementComponent::ConfirmPlacement()
     OriginalAttachComponent.Reset();
     OriginalAttachSocket = NAME_None;
 
+    // A stone placement changes the same world support graph used by the log construction system.
+    StructureLink::MarkChanged();
+    StructureLink::Settle(GetWorld());
+
     // Pattern recognition is event-driven: evaluate the newly committed stone, not every frame.
     if (UStoneShapeRecognitionSubsystem* Recognition = GetWorld()->GetSubsystem<UStoneShapeRecognitionSubsystem>())
     {
@@ -656,8 +661,34 @@ bool UStonePlacementComponent::UndoLastPlacement()
         return false;
     }
 
-    AStoneActor* Last = PlacementHistory.Pop().Get();
-    return Last && Last->SetStructuralState_Implementation(EStructuralNodeState::Loose);
+    AStoneActor* Last = PlacementHistory.Last().Get();
+    if (!IsValid(Last))
+    {
+        PlacementHistory.Pop();
+        return false;
+    }
+
+    // Undo removes both sides of every structural edge before the stone returns to a loose rigid body.
+    if (UStructuralGraph* Graph = Last->FindComponentByClass<UStructuralGraph>())
+    {
+        const TArray<AActor*> Connected = Graph->GetConnectedNodes();
+        for (AActor* Other : Connected)
+        {
+            if (IsValid(Other))
+            {
+                Graph->DisconnectFrom(Other);
+            }
+        }
+    }
+    if (!Last->SetStructuralState_Implementation(EStructuralNodeState::Loose))
+    {
+        return false;
+    }
+
+    PlacementHistory.Pop();
+    StructureLink::MarkChanged();
+    StructureLink::Settle(GetWorld());
+    return true;
 }
 
 void UStonePlacementComponent::TickComponent(
