@@ -7,6 +7,7 @@
 class UBoxComponent;
 class UTrapMechanismComponent;
 class UPrimitiveComponent;
+class ACarvableLog;
 
 UENUM(BlueprintType)
 enum class ETrapType : uint8
@@ -26,7 +27,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Trap")
 	void Trigger(AActor* Victim);
-
 	UFUNCTION(BlueprintCallable, Category = "Trap")
 	void Arm();
 	UFUNCTION(BlueprintCallable, Category = "Trap")
@@ -42,10 +42,24 @@ public:
 	float Damage = 50.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
 	float Cooldown = 5.f;
+	/** Physical payload for rolling/falling-log traps. The trap never fabricates a log if this is unset. */
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Trap")
+	TObjectPtr<ACarvableLog> PayloadLog = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
+	float PayloadImpulse = 5000.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
+	float SpikeLaunchVelocity = 500.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap")
+	bool bConsumeAfterPayloadRelease = true;
 
 protected:
 	UFUNCTION()
 	void HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep,
 		const FHitResult& SweepResult);
+	UFUNCTION()
+	void HandleMechanismTriggered(AActor* Victim);
+
+private:
+	bool bPayloadReleased = false;
 };
