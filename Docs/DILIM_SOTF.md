@@ -1,5 +1,7 @@
 # Sons of the Forest dilimi — log, taş, çubuk: plan v2
 
+> Genişletilmiş mekanik kapsamı ve uygulama sırası: [SOTF_MECHANICS_EXPANSION_PLAN.md](SOTF_MECHANICS_EXPANSION_PLAN.md). Bu ek plan, mevcut kabul matrisini ve önceki ölçüm durumlarını silmeden genişletir.
+
 **Amaç:** SotF'ın serbest (elle) inşa tarafındaki tekil oyuncu davranışlarını kendi sistemimizde ölçülebilir kabul hedefleri yapmak. Referans bir hedef listesi, zorunlu özellik listesi değil: her ID sonradan "alıyoruz / almıyoruz" diye işaretlenir. Kapsam dışı: combat, düşman AI, hikâye, rehber kitabı ve hayalet şablonları (bizde montaj elle).
 
 **Kabul aracı:** `Scripts/probe_showcase.sh`. MechanicsTest'in Play oturumunda geçici bir `ALogShowcase` kurar; istasyonları oyuncunun gerçek koduyla (`PlaceForShowcase` vb.) çalıştırır; harita kaydedilmez. Her kontrol bir ID'ye bağlanır ve **PASS / FAIL / BLOCKED** sonucu, tarih ve commit ile `Docs/DILIM_SONUC.md`'ye yazılır. Unreal içinde koşulmayan satır PASS sayılmaz. Şu anki ölçüm: 14 istasyon, 178/180 yerleştirme.
