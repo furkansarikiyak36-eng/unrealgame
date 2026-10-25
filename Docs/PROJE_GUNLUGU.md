@@ -1373,3 +1373,10 @@ Kullanıcı: "bize snap noktları daha düzenli ve çok laızm log dikey koysak 
 - Sebep (günlükle bulundu: "lost support"): `WoodStructure::ComputeSupport` yatay taşıyıcıları (kiriş, döşeme, çatı) **en az iki destek noktası** olmadan desteksiz sayıyordu (`RequiredSupports` = 2). Düzeltme: 1. Taşma sınırı da kalktı (`MaxOverhangModules` 8): tek destekle tutan parça kırılmıyor.
 - Sonuç: istasyon 15 tamam; vitrin **200/201** (kalan: -45 dik çapraz köşe). Destek sökülünce bağlı parça yine düşüyor (kontrol istasyonda).
 - Not: Wood birim testleri iki destek şartını bekliyorsa güncellenmeli (çalıştırılmadı).
+
+## 2026-10-25 — Boşta kalan uç yere sarkar, yan log direğe gömülür, mekanikler her boyla
+- Kullanıcı: tek direkte tutan kirişin boşta ucu havada kalmamalı, yere düşmeli; elde yatay log direğe 45° ya da dik konurken "destek yok" diyor, direğin içine yerleşmeli; mekanikler yalnız 300 cm ile sınanmamalı, her boyla olmalı.
+- `StructureLink::Evaluate` artık tek taraftan asılı kirişi (destekten > 75 cm taşan tek uç) `FDroop` olarak bildiriyor; `Settle` bu ucu destek noktasında döndürüp zemine (ya da altındakine) oturtuyor. Zemine yetmeyen kısa log olduğu yerde kalıyor. Eğik logun üst ucunu tutan destek sökülürse log düşüyor (daha önce tutulmuş olması şartıyla).
+- `ForestCharacter`: direğe T ve 45° bağlanan logun ucu direğe `JointSeatDepth` kadar gömülüyor; direk üstüne kiriş artık 75 cm'lik parçalara da açık (eskiden ≥ 225).
+- Vitrin: istasyon 15 (direk ve kiriş; boşta ucun yere indiği ve direk alınınca kirişin düştüğü ölçülüyor) ve **istasyon 16 "Boy matrisi"** (75/150/300/600 cm: yüz yan yana/T/45°/uca uç/direk, üst üste, direk üstü kiriş, direğe dik ve 45° log, yaslanan log; hepsi yerinde kalıyor mu). Toplam **314/315** (kalan: -45 dik çapraz).
+- `record_dilim.py` eşlemesi genişletildi (ASM-02/03/05/06/07 artık matrisi de sayıyor; yeni SUP-14/15). Bundan sonra her mekanik için kabul tek boyla değil dört boyla ölçülür.

@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (25 October 2026 08:23) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (25 October 2026 08:50) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -447,7 +447,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 - `WoodStructure::FNode MakeNode(const ACarvableLog* Log, int32 Id, const FTransform* Transform = nullptr)` — The graph node for Log, as it is or as it would be at Transform.
 - `WoodStructure::FNode MakeNode(const AStoneActor* Stone, int32 Id)` — A placed stone represented by its oriented bounds in the same support graph as logs.
-- `TSet<int32> Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges, TMap<int32, float>* OutSnaps  …` — Support with the beam rules on top of the graph: a beam that is not lying on the ground holds only if its supports (posts, braces, the logs under it) are not further …
+- `TSet<int32> Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges, TMap<int32, float>* OutSnaps  …` — OutDroops gets each beam that hangs from one support (see MaxOverhangModules); they stay supported, the caller lowers them.
 - `const TArray<FFeatureInfo>& Features(UWorld* World)` — What the standing pieces make up. Worked out again only after the structure has changed (Settle, damage, new pieces).
 - `FString NameOf(EWoodFeatureKind Kind)` — Turkish name of a kind of structure.
 - `FString DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log)` — What Log is part of, e.g. "Platform, Korkuluk" (empty if it stands alone).
@@ -457,6 +457,9 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `FString Describe(UWorld* World)` — Every standing piece with its role, whether it rests on the ground, and what holds it: for reading what the graph sees.
 - `int32 Settle(UWorld* World)` — Lets every anchored piece that has no path to the ground fall. Returns how many fell.
 - `bool WouldBeSupported(UWorld* World, const ACarvableLog* Piece, const FTransform& Transform)` — Would Piece, anchored at Transform among the pieces already standing, be held up?
+
+**FDroop** (struct) — A beam hanging from one support: where it pivots (cm from its A end) and which end is free.
+
 
 **FFeatureInfo** (struct) — A walls, platform, door frame... the standing pieces make up (see WoodStructure::AnalyzeStructure).
 

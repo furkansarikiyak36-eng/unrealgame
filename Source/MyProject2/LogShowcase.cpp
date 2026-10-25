@@ -247,6 +247,7 @@ FString ALogShowcase::BuildAll()
 	StationUnderSockets();
 	StationLogHouse();
 	StationPostBeams();
+	StationLengthMatrix();
 
 	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
 	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
@@ -294,7 +295,8 @@ FString ALogShowcase::BuildStation(int32 Index)
 	case 11: StationFaceSockets(); break;
 	case 12: StationUnderSockets(); break;
 	case 13: StationLogHouse(); break;
-	default: StationPostBeams(); break;
+	case 14: StationPostBeams(); break;
+	default: StationLengthMatrix(); break;
 	}
 	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
 	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
@@ -918,6 +920,14 @@ void ALogShowcase::StationPostBeams()
 	LayAt(Mesh(150), O + R * 300.f, FYaw, TEXT("üçüncü parça, yeniden değerlendirme"));
 	Stays(TEXT("direk A yerinde kaldı"), PostA, P(EPlace::Stand));
 	Stays(TEXT("kiriş yerinde kaldı"), BeamA, P(EPlace::Beam));
+	{
+		FVector BC, BA;
+		float BR, BH;
+		const bool bGot = BeamA && ACarvableLog::GetLogAxis(BeamA, BC, BA, BR, BH);
+		const float LowEnd = bGot ? FMath::Min(BC.Z + BA.Z * BH, BC.Z - BA.Z * BH) - O.Z : 999.f;
+		Report += FString::Printf(TEXT("      kirişin boşta ucu: yerden %.0f cm (yarıçap %.0f)\n"), LowEnd, bGot ? BR : 0.f);
+		Note(TEXT("kirişin boşta ucu yere indi"), bGot && LowEnd < BR + 12.f ? P(EPlace::Beam) : P(EPlace::None), P(EPlace::Beam));
+	}
 	Stays(TEXT("direk B yerinde kaldı"), PostB, P(EPlace::Stand));
 	Stays(TEXT("yan log yerinde kaldı"), SideB, P(EPlace::Socket));
 	// D. Taking the post away: what it held falls, what it did not hold stays.
@@ -927,5 +937,91 @@ void ALogShowcase::StationPostBeams()
 		Note(TEXT("başka direğin yan logu etkilenmedi"), SideB->IsAnchored() ? P(EPlace::Socket) : P(EPlace::None), P(EPlace::Socket));
 	}
 	StructureLink::bLogFalls = false;
+	EndStation();
+}
+
+// 16. The same mechanics with every length (75, 150, 300, 600): a mechanic works with any log, not with one chosen length.
+void ALogShowcase::StationLengthMatrix()
+{
+	BeginStation(15, TEXT("Boy matrisi: her mekanik 75, 150, 300 ve 600 cm ile"));
+	const int32 Lengths[] = { 75, 150, 300, 600 };
+	auto Stays = [this](const FString& What, const ACarvableLog* Piece, uint8 Kind)
+	{
+		Note(*What, Piece && Piece->IsAnchored() ? Kind : P(EPlace::None), Kind);
+	};
+	for (int32 K = 0; K < 4; ++K)
+	{
+		const int32 L = Lengths[K];
+		const FVector P0 = O + F * (K * 1500.f);
+		// A. Beside, across, diagonal and end to end of a 600 base.
+		ACarvableLog* Base = LayAt(Mesh(600), P0, FYaw + 90.f, *FString::Printf(TEXT("%d: hedef 600"), L));
+		FVector C, A;
+		float Radius, Half;
+		if (Base && ACarvableLog::GetLogAxis(Base, C, A, Radius, Half))
+		{
+			A = FVector(A.X, A.Y, 0.f).GetSafeNormal();
+			const FVector Side = FVector::CrossProduct(FVector::UpVector, A);
+			const float AxisYaw = A.Rotation().Yaw;
+			struct FCase { const TCHAR* Name; FVector Normal; float Along; float PieceAngle; EHold Hold; };
+			const FCase Cases[] = {
+				{ TEXT("ön yüz, yan yana"),   Side, -150.f,   0.f, EHold::Lay },
+				{ TEXT("arka yüz, dik (T)"), -Side,    0.f,  90.f, EHold::Lay },
+				{ TEXT("arka yüz, 45°"),     -Side,  150.f,  45.f, EHold::Lay },
+				{ TEXT("uç B, uca uç"),       A,       0.f,   0.f, EHold::Lay },
+				{ TEXT("uç A, ucuna dik (T)"), -A,     0.f,  90.f, EHold::Lay },
+				{ TEXT("uç B, 45°"),          A,       0.f,  45.f, EHold::Lay },
+				{ TEXT("ön yüz, yanına direk"), Side,  225.f,  0.f, EHold::Stand },
+			};
+			for (const FCase& Case : Cases)
+			{
+				const bool bEnd = FMath::Abs(FVector::DotProduct(Case.Normal, A)) > 0.7f;
+				const FVector Aim = bEnd ? C + Case.Normal * Half : C + A * Case.Along + Case.Normal * Radius;
+				const float ViewYaw = AxisYaw + Case.PieceAngle - 90.f;
+				Player->SetActorLocation(Aim + Case.Normal * 200.f + FVector(0.f, 0.f, 80.f), false, nullptr, ETeleportType::TeleportPhysics);
+				ACarvableLog* Piece = Spawn(Mesh(L));
+				const uint8 Got = Piece ? P(Player->PlaceForShowcase(Piece, Base, Aim, Case.Normal, ViewYaw, Case.Hold)) : P(EPlace::None);
+				Note(*FString::Printf(TEXT("%d: %s"), L, Case.Name), Got, P(EPlace::Socket));
+				Stays(FString::Printf(TEXT("%d: %s, yerinde kaldı"), L, Case.Name), Piece, P(EPlace::Socket));
+			}
+		}
+		// B. Stacking: a course of the same length on top.
+		ACarvableLog* Low = LayAt(Mesh(L), P0 - R * 1000.f, FYaw, *FString::Printf(TEXT("%d: alt sıra"), L));
+		ACarvableLog* Up = Low ? OnLog(Mesh(L), Low, 0.f, FYaw + 90.f, static_cast<uint8>(EHold::Lay), 0.f, *FString::Printf(TEXT("%d: üst sıra"), L), P(EPlace::Stack)) : nullptr;
+		Stays(FString::Printf(TEXT("%d: üst sıra yerinde kaldı"), L), Up, P(EPlace::Stack));
+		// C. A post, a beam of this length on it, a log on its side (T and 45 degrees), a leaning log.
+		const FVector PostAt = P0 + R * 1000.f;
+		ACarvableLog* Post = StandAt(Mesh(300), PostAt, FYaw, *FString::Printf(TEXT("%d: direk (300)"), L));
+		ACarvableLog* BeamOn = Post ? OnPostTop(Mesh(L), Post, FYaw, *FString::Printf(TEXT("%d: direk üstüne kiriş"), L), P(EPlace::Beam)) : nullptr;
+		ACarvableLog* PostB = StandAt(Mesh(300), PostAt + F * 700.f, FYaw, *FString::Printf(TEXT("%d: direk B (300)"), L));
+		ACarvableLog* SideT = nullptr;
+		ACarvableLog* Side45 = nullptr;
+		if (PostB && ACarvableLog::GetLogAxis(PostB, C, A, Radius, Half))
+		{
+			const FVector AimFront = C - F * Radius;
+			Player->SetActorLocation(AimFront - F * 220.f, false, nullptr, ETeleportType::TeleportPhysics);
+			SideT = Spawn(Mesh(L));
+			Note(*FString::Printf(TEXT("%d: direğe yatay log, dik"), L), SideT ? P(Player->PlaceForShowcase(SideT, PostB, AimFront, -F, FYaw, EHold::Lay)) : P(EPlace::None), P(EPlace::Socket));
+			Player->SetActorLocation(AimFront - F * 220.f + FVector(0.f, 0.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Side45 = Spawn(Mesh(L));
+			Note(*FString::Printf(TEXT("%d: direğe yatay log, 45°"), L), Side45 ? P(Player->PlaceForShowcase(Side45, PostB, C + R * Radius, R, FYaw + 45.f, EHold::Lay)) : P(EPlace::None), P(EPlace::Socket));
+		}
+		// A log can only lean on a post lower than itself: the post is half its length (nothing shorter than 75 exists).
+		ACarvableLog* PostC = L >= 150 ? StandAt(Mesh(L / 2), PostAt + F * 1400.f, FYaw, *FString::Printf(TEXT("%d: direk C (%d)"), L, L / 2)) : nullptr;
+		ACarvableLog* Lean = nullptr;
+		if (PostC && ACarvableLog::GetLogAxis(PostC, C, A, Radius, Half))
+		{
+			const FVector Top = C + FVector(0.f, 0.f, Half);
+			Lean = Spawn(Mesh(L));
+			Player->SetActorLocation(Top - F * 250.f + FVector(0.f, 0.f, -60.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Note(*FString::Printf(TEXT("%d: direğe yaslanan log"), L), Lean ? P(Player->PlaceForShowcase(Lean, PostC, Top, FVector::UpVector, FYaw, EHold::Slope, 45.f)) : P(EPlace::None), P(EPlace::Slope));
+		}
+		Stays(FString::Printf(TEXT("%d: direk üstü kiriş yerinde kaldı"), L), BeamOn, P(EPlace::Beam));
+		Stays(FString::Printf(TEXT("%d: direğe dik log yerinde kaldı"), L), SideT, P(EPlace::Socket));
+		Stays(FString::Printf(TEXT("%d: direğe 45° log yerinde kaldı"), L), Side45, P(EPlace::Socket));
+		if (L >= 150)
+		{
+			Stays(FString::Printf(TEXT("%d: yaslanan log yerinde kaldı"), L), Lean, P(EPlace::Slope));
+		}
+	}
 	EndStation();
 }

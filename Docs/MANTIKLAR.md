@@ -54,13 +54,17 @@ Taşınan log için, baktığın şeye göre bu sırayla denenir (ilk tutan kaza
 - Uca uç: kesim yok, düz yüzler değer.
 - **Eksik:** uca uç için geçmeli eklem (bindirme istenmedi; kilitli uç fikri açık).
 
-## 6. Destek ve çökme (`StructureLink`)
+## 6. Destek ve çökme (`StructureLink`, `WoodStructure`)
 - Her yerleştirme ve sökmeden sonra yapı yeniden değerlendirilir; desteksiz kalan parçalar serbest kalıp düşer ("N parça düştü").
 - Zeminle temas, üstüne oturduğu log (yatak boyunca her modülde destek), direk, payanda destek sayılır.
-- Kiriş kuralı: destekler arası en çok **8 modül** (600 cm, pratikte sınır yok); son destekten en çok **2 modül** (150 cm) taşabilir, fazlası ortadan kırılır.
-- **Yerleştirme anında** taşma kırılmaz (ikinci direk sonra gelir); sökme ya da sonraki değerlendirmede kural işler. Önizleme "desteksiz, düşebilir" der ama koymaya izin verir.
+- **Bir sağlam destek yeter** (yatay kiriş/döşeme/çatı için de): diğer uç serbest kalabilir.
+- **Tek ucundan tutan kirişin boşta kalan ucu yere sarkar**: destekten 75 cm'den fazla taşan uç, destek noktasında dönerek zemine (ya da altındaki şeye) oturur ve orada kalır. Boy yere yetmiyorsa (kısa log, yüksek direk) olduğu yerde durur. İki yanı da taşıyorsa (ortadan dayanmış) dengededir, yerinde kalır.
+- Eğik yatan logun üst ucunu tutan şey (direk, kiriş) sökülürse log düşer. Hiç tutulmamış eğik log (oyuncu yere eğik koymuş) düşmez; altına destek konunca tutulu sayılır.
+- Yerleştirme anında kırma yok; önizleme "desteksiz" uyarısı verir ama koymaya izin verir.
 - Duvardan açıklık kesilince (2 modül) aradaki 75'lik parçalar düşer, kalanlar değerlendirilir.
-- **Eksik:** taş destek sayılmıyor (`StructureLink` taşı tanımıyor). Yük miktarı yok, sadece var/yok. Payandanın direk yerine geçmesi ölçülmedi. Çökme senaryolarının hiçbirinin testi yok.
+- Yan yana bağlanan yatay log'un ucu direğin içine girer (0,95 × küçük yarıçap), dik (T) ve 45° için.
+- **Her mekanik her boyla çalışır** (75, 150, 300, 600): vitrin istasyon 16 yüz bağlantıları, üst üste, direk, direk üstü kiriş, direğe dik/45° log ve yaslanma için dört boyu ayrı ayrı sınar.
+- **Eksik:** taş destek sayılmıyor (`StructureLink` taşı tanımıyor). Yük miktarı yok, sadece var/yok.
 
 ## 7. Hasar ve onarım
 - Log hasar alır (`AddDamage`); bağlantı belli hasarda gevşer ve destek vermez. Yanar → kömürleşir.

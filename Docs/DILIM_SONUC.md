@@ -2,10 +2,10 @@
 
 Üreten: `Scripts/probe_showcase.sh` (Scripts/record_dilim.py). Plan: [DILIM_SOTF.md](DILIM_SOTF.md).
 
-- Tarih: 2026-10-25 08:23
-- Dal: claude/sotf-expansion-build, commit: 34dbbf1 (kirli çalışma kopyası)
-- Çalışan istasyonlar: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
-- Toplam: PASS 9, KISMEN 13, FAIL 1, BLOCKED 101
+- Tarih: 2026-10-25 08:50
+- Dal: claude/sotf-expansion-build, commit: cb42dd7 (kirli çalışma kopyası)
+- Çalışan istasyonlar: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+- Toplam: PASS 11, KISMEN 12, FAIL 1, BLOCKED 100
 
 PASS: ölçen istasyon çalıştı, ilgili yerleştirmelerde XX yok ve ölçüt yalnız yerleştirmeyse. KISMEN: yerleştirme tamam, ölçütün geri kalanı (sayım, destek, yürüme...) henüz ölçülmüyor. FAIL: XX var. BLOCKED: ölçen istasyon yok ya da çalışmadı. Unreal içinde koşulmayan hiçbir satır PASS sayılmaz.
 
@@ -27,7 +27,8 @@ PASS: ölçen istasyon çalıştı, ilgili yerleştirmelerde XX yok ve ölçüt 
 | 12 | Yüz snap noktaları: ön, arka, iki uç (her 75 cm'de) | 12 | 0 |
 | 13 | Alt yüz: kirişin altına paralel kütük ve destek direği | 5 | 0 |
 | 14 | Kütük ev: 600'lük kütükler, 12 sıra köşe geçmeli, kapı, penc | 48 | 0 |
-| 15 | Direk ve kiriş: tek direkte kiriş, direğin ortasına yatay lo | 11 | 0 |
+| 15 | Direk ve kiriş: tek direkte kiriş, direğin ortasına yatay lo | 12 | 0 |
+| 16 | Boy matrisi: her mekanik 75, 150, 300 ve 600 cm ile | 113 | 0 |
 
 ## Kabul ID'leri
 
@@ -56,12 +57,12 @@ PASS: ölçen istasyon çalıştı, ilgili yerleştirmelerde XX yok ve ölçüt 
 | LOG-13 | Bağlantı yüzeyi işleme | **KISMEN** | istasyon 3,14: 34 yerleştirme istenen gibi; eksik: çentik/yuva geometrisi kontrolü |
 | LOG-14 | İşlenmiş parça bağımsız ve taşınabilir | **KISMEN** | istasyon 1: 12 yerleştirme istenen gibi; eksik: taşınabilirlik kontrolü |
 | ASM-01 | Yatay yerleştirme | **PASS** | istasyon 1: 12 yerleştirme istenen gibi |
-| ASM-02 | Dikey (direk) | **PASS** | istasyon 4,6: 16 yerleştirme istenen gibi |
-| ASM-03 | Mevcut loga bağlanma, noktalar görünür | **PASS** | istasyon 12,13: 17 yerleştirme istenen gibi |
+| ASM-02 | Dikey (direk) | **PASS** | istasyon 4,6,16: 43 yerleştirme istenen gibi |
+| ASM-03 | Mevcut loga bağlanma, noktalar görünür | **PASS** | istasyon 12,13,16: 130 yerleştirme istenen gibi |
 | ASM-04 | Köşe | **KISMEN** | istasyon 3,14: 32 yerleştirme istenen gibi; eksik: destek bağlantısı kontrolü |
-| ASM-05 | Üst üste duvar | **KISMEN** | istasyon 2,14: 42 yerleştirme istenen gibi; eksik: destek bağlantısı kontrolü |
+| ASM-05 | Üst üste duvar | **PASS** | istasyon 2,14,16: 54 yerleştirme istenen gibi |
 | ASM-06 | Açılı yerleştirme | **FAIL** | -45 (dik çapraz): köşe geçmesi  (istenen: köşe çaprazı) |
-| ASM-07 | Kiriş | **PASS** | istasyon 4: 4 yerleştirme istenen gibi |
+| ASM-07 | Kiriş | **PASS** | istasyon 4,15,16: 16 yerleştirme istenen gibi |
 | ASM-08 | Payanda | **PASS** | istasyon 4: 2 yerleştirme istenen gibi |
 | ASM-09 | Döşeme | **PASS** | istasyon 4,9: 11 yerleştirme istenen gibi |
 | ASM-10 | Çatı | **PASS** | istasyon 5,14: 22 yerleştirme istenen gibi |
@@ -153,7 +154,7 @@ PASS: ölçen istasyon çalıştı, ilgili yerleştirmelerde XX yok ve ölçüt 
 | FUNC-03 | Tarif ile elle kurulan aynı işleve ulaşır (`AStoneFireplace` | **BLOCKED** | bu ID'yi ölçen istasyon yok |
 | FUNC-04 | Tanınan şekil işlevini koşula bağlar: "Merdiven" adı verilen | **BLOCKED** | bu ID'yi ölçen istasyon yok |
 | FUNC-05 | Taşıyıcı + aralıklı basamak = merdiven; taşıyıcı + sürekli y | **BLOCKED** | bu ID'yi ölçen istasyon yok |
-| SUP-14 | Payanda doğru yerdeyse bir destek direği sökülebilir, yapı a | **BLOCKED** | bu ID'yi ölçen istasyon yok |
+| SUP-14 | Payanda doğru yerdeyse bir destek direği sökülebilir, yapı a | **PASS** | istasyon 15: 7 yerleştirme istenen gibi |
 | UI-01 | Hedef belli: bakılan nesne/yüz işleme uygun mu | **BLOCKED** | bu ID'yi ölçen istasyon yok |
 | UI-02 | Olası dönüşüm görünür: kesim çizgisi, bağlantı oku/noktası,  | **BLOCKED** | bu ID'yi ölçen istasyon yok |
 | UI-03 | Sonuç anlaşılır: yerleşince/kesilince dünya gerçekten değişi | **BLOCKED** | bu ID'yi ölçen istasyon yok |

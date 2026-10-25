@@ -1839,7 +1839,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			}
 			return;
 		}
-		if (bPost && bAimingAtTop && Piece->GetLength() >= 3.f * ACarvableLog::ModuleLength - 1.f)
+		if (bPost && bAimingAtTop && Piece->GetLength() >= ACarvableLog::ModuleLength - 1.f)
 		{
 			const FVector Top = PostCentre + PostAxis * (PostAxis.Z > 0.f ? PostHalf : -PostHalf);
 			const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
@@ -1947,8 +1947,9 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 						{
 							if (Sector == 90.f)
 							{
+								// The log's end is let into the post (a seat), not just touching it.
 								const FVector Dir = N;
-								const FVector C = SnapPos + Dir * (Lp * 0.5f);
+								const FVector C = SnapPos + Dir * (Lp * 0.5f - JointSeatDepth(Rt, Rp));
 								PlaceTransform = LyingAt(Piece, Dir, C);
 								What = TEXT("direğe dik (T)");
 							}
@@ -1962,7 +1963,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 							else
 							{
 								const FVector Dir = (N * UE_INV_SQRT_2 + Tangent * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
-								const FVector C = SnapPos + Dir * (Lp * 0.5f);
+								const FVector C = SnapPos + Dir * (Lp * 0.5f - JointSeatDepth(Rt, Rp));
 								PlaceTransform = LyingAt(Piece, Dir, C);
 								What = TEXT("direğe 45°");
 							}

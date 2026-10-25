@@ -118,7 +118,7 @@ namespace
 	}
 }
 
-TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges, TMap<int32, float>* OutSnaps, FString* OutNotes)
+TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges, TMap<int32, float>* OutSnaps, FString* OutNotes, TMap<int32, FDroop>* OutDroops)
 {
 	const float MaxGap = MaxSupportGapModules * ACarvableLog::ModuleLength;
 	const float MaxOverhang = MaxOverhangModules * ACarvableLog::ModuleLength + 5.f;
@@ -126,6 +126,10 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 	for (int32 Pass = 0; Pass <= Nodes.Num(); ++Pass)
 	{
 		ById.Reset();
+		if (OutDroops)
+		{
+			OutDroops->Reset();
+		}
 		for (const WoodStructure::FNode& Node : Nodes)
 		{
 			ById.Add(Node.Id, &Node);
@@ -188,13 +192,16 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 			// The spans along the beam: before the first support, between supports, after the last.
 			const float Length = static_cast<float>(Beam.Length());
 			float BreakAt = -1.f;
-			if (At[0] > MaxOverhang)
+			// Hanging from one side only: it pivots on the support and its free end comes down (the caller lowers it).
+			// Past the limit on both sides it balances on its supports and stays.
+			const bool bFreeA = At[0] > MaxOverhang;
+			const bool bFreeB = Length - At.Last() > MaxOverhang;
+			if (bFreeA != bFreeB && OutDroops)
 			{
-				BreakAt = At[0] * 0.5f;
-			}
-			if (Length - At.Last() > MaxOverhang)
-			{
-				BreakAt = (At.Last() + Length) * 0.5f;
+				FDroop Droop;
+				Droop.bFreeEndB = bFreeB;
+				Droop.PivotFromA = bFreeB ? At.Last() : At[0];
+				OutDroops->Add(Beam.Id, Droop);
 			}
 			for (int32 Index = 1; Index < At.Num(); ++Index)
 			{
@@ -504,7 +511,8 @@ int32 StructureLink::Settle(UWorld* World)
 		}
 
 		TMap<int32, float> Snaps;
-		const TSet<int32> Supported = StructureLink::Evaluate(Nodes, Connect(Nodes), &Snaps);
+		TMap<int32, FDroop> Droops;
+		const TSet<int32> Supported = StructureLink::Evaluate(Nodes, Connect(Nodes), &Snaps, nullptr, &Droops);
 		int32 FellNow = 0;
 		for (int32 Index = 0; Index < Parts.Num(); ++Index)
 		{
@@ -542,6 +550,81 @@ int32 StructureLink::Settle(UWorld* World)
 				Stone->SetStructuralState_Implementation(EStructuralNodeState::Falling);
 			}
 			++FellNow;
+		}
+
+		// A beam hanging from one support lowers its free end onto the ground (or what lies under it), pivoting on the support.
+		for (const TPair<int32, FDroop>& Pair : Droops)
+		{
+			ACarvableLog* Log = Parts.IsValidIndex(Pair.Key) ? Cast<ACarvableLog>(Parts[Pair.Key]) : nullptr;
+			if (!IsValid(Log) || !Supported.Contains(Pair.Key))
+			{
+				continue;
+			}
+			const WoodStructure::FNode& Node = Nodes[Pair.Key];
+			const FVector Dir = (Node.B - Node.A).GetSafeNormal();
+			const FVector Pivot = Node.A + Dir * Pair.Value.PivotFromA;
+			const FVector Free = Pair.Value.bFreeEndB ? Node.B : Node.A;
+			const float FreeLength = FVector::Dist(Pivot, Free);
+			FHitResult Under;
+			FCollisionQueryParams Query(SCENE_QUERY_STAT(StructureDroop), false, Log);
+			const bool bUnder = World->LineTraceSingleByChannel(Under, Free + FVector(0.f, 0.f, 40.f), Free - FVector(0.f, 0.f, 2000.f), ECC_Visibility, Query);
+			const float TargetZ = (bUnder ? Under.ImpactPoint.Z : 0.f) + Node.RadiusCm;
+			const float Rise = Pivot.Z - TargetZ;
+			if (FMath::Abs(Free.Z - TargetZ) < 6.f || Rise <= 1.f || FreeLength < 1.f)
+			{
+				continue;
+			}
+			if (Rise >= FreeLength * 0.98f)
+			{
+				// Too short to reach the ground from its support: it stays where it is put (nothing to come down to).
+				continue;
+			}
+			const FVector Flat = FVector(Free.X - Pivot.X, Free.Y - Pivot.Y, 0.f).GetSafeNormal();
+			const FVector NewFree = Pivot + Flat * FMath::Sqrt(FreeLength * FreeLength - Rise * Rise) + FVector(0.f, 0.f, -Rise);
+			const FQuat Turn = FQuat::FindBetweenNormals((Free - Pivot).GetSafeNormal(), (NewFree - Pivot).GetSafeNormal());
+			const FTransform Old = Log->GetActorTransform();
+			Log->PlaceAt(FTransform(Turn * Old.GetRotation(), Pivot + Turn.RotateVector(Old.GetLocation() - Pivot), Old.GetScale3D()), /*bAnchorIt*/ true);
+			++FellNow;
+		}
+
+		// A leaning log held only by the ground at its low end falls when nothing is left under its high end (the post it
+		// leaned on, the beam it was pinned to, was taken away).
+		for (int32 Index = 0; Index < Parts.Num(); ++Index)
+		{
+			ACarvableLog* Log = Cast<ACarvableLog>(Parts[Index]);
+			if (!IsValid(Log) || !Supported.Contains(Index) || Log->IsCarried())
+			{
+				continue;
+			}
+			const WoodStructure::FNode& Node = Nodes[Index];
+			const FVector Dir = (Node.B - Node.A).GetSafeNormal();
+			if (FMath::Abs(Dir.Z) < 0.2f || FMath::Abs(Dir.Z) > 0.9f)
+			{
+				continue;   // lying flat or standing: other rules
+			}
+			const FVector High = Node.A.Z > Node.B.Z ? Node.A : Node.B;
+			static TSet<TWeakObjectPtr<ACarvableLog>> WasHeldAtHighEnd;
+			bool bHeld = false;
+			for (int32 Other = 0; Other < Parts.Num() && !bHeld; ++Other)
+			{
+				if (Other == Index || !Supported.Contains(Other) || FellNow > 0 && !IsValid(Parts[Other]))
+				{
+					continue;
+				}
+				double T = 0.0;
+				bHeld = WoodStructure::Geo::DistToSegment(High, Nodes[Other].A, Nodes[Other].B, T) <= Nodes[Other].RadiusCm + Node.RadiusCm + 8.0;
+			}
+			// Only a log that was held up there (leaning on a post, pinned to a beam) falls when that goes; one the player laid
+			// slanted on the ground, never held, stays until something is put under its high end.
+			if (bHeld)
+			{
+				WasHeldAtHighEnd.Add(Log);
+			}
+			else if (WasHeldAtHighEnd.Remove(Log) > 0)
+			{
+				Log->LetFall();
+				++FellNow;
+			}
 		}
 
 		Fallen += FellNow;

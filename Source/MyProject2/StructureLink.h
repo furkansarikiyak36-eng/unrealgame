@@ -27,8 +27,11 @@ namespace StructureLink
 	/** How far apart the supports of a beam may be, and how far it may reach past the last one (modules). */
 	/** 8 modules = the longest log (600 cm): a log lying across two crossing logs at its ends (a cabin wall, 525 cm apart) holds. */
 	constexpr float MaxSupportGapModules = 8.f;
-	/** 8 modules = the longest log: one firm support is enough, the other end may hang free (a beam on one post, a log pinned to a post's side). */
-	constexpr float MaxOverhangModules = 8.f;
+	/**
+	 * One firm support is enough. A beam whose supports are all at one end and that reaches further than this past the last one
+	 * does not hang in the air: its free end drops until it rests on the ground (or whatever lies under it), pivoting on the support.
+	 */
+	constexpr float MaxOverhangModules = 1.f;
 
 	/**
 	 * Support with the beam rules on top of the graph: a beam that is not lying on the ground holds only if its supports
@@ -37,8 +40,16 @@ namespace StructureLink
 	 * Failed nodes get Damage 1 (this is how the Wood logic marks a piece that cannot hold). Returns the supported ids.
 	 * OutSnaps gets, for each beam that failed, how far from its A end it snaps: the middle of the gap or overhang that was too long.
 	 */
+	/** A beam hanging from one support: where it pivots (cm from its A end) and which end is free. */
+	struct FDroop
+	{
+		float PivotFromA = 0.f;
+		bool bFreeEndB = true;
+	};
+
+	/** OutDroops gets each beam that hangs from one support (see MaxOverhangModules); they stay supported, the caller lowers them. */
 	TSet<int32> Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges,
-		TMap<int32, float>* OutSnaps = nullptr, FString* OutNotes = nullptr);
+		TMap<int32, float>* OutSnaps = nullptr, FString* OutNotes = nullptr, TMap<int32, FDroop>* OutDroops = nullptr);
 
 	/** When set (the automatic mechanics test sets it), every piece that falls or snaps is logged with the structure graph at that moment. */
 	extern bool bLogFalls;
