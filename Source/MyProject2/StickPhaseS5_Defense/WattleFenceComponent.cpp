@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "Engine/CollisionProfile.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Math/RotationMatrix.h"
 
 UWattleFenceComponent::UWattleFenceComponent()
 {
@@ -82,13 +83,16 @@ bool UWattleFenceComponent::BuildFence(const TArray<FVector>& PostPositions, int
 	for (const FVector& Ground : PostPositions)
 	{
 		AStickActor* Post = SpawnFenceStick(
-			Ground + FVector(0.f, 0.f, FenceStickDefinition->Length * 0.5f),
+			Ground + FVector(0.f, 0.f, PostHeight * 0.5f),
 			VerticalRotation.Rotator());
 		if (!Post)
 		{
 			RollbackPieces(NewPieces);
 			return false;
 		}
+		FVector PostScale = Post->MeshComponent->GetRelativeScale3D();
+		PostScale.X *= PostHeight / FMath::Max(1.f, FenceStickDefinition->Length);
+		Post->MeshComponent->SetRelativeScale3D(PostScale);
 		Posts.Add(Post);
 	}
 
@@ -113,6 +117,9 @@ bool UWattleFenceComponent::BuildFence(const TArray<FVector>& PostPositions, int
 				RollbackPieces(NewPieces);
 				return false;
 			}
+			FVector RailScale = Rail->MeshComponent->GetRelativeScale3D();
+			RailScale.X *= Span / FMath::Max(1.f, FenceStickDefinition->Length);
+			Rail->MeshComponent->SetRelativeScale3D(RailScale);
 
 			UStickConnectionGraph* RailGraph = Rail->FindComponentByClass<UStickConnectionGraph>();
 			UStickConnectionGraph* LeftGraph = Posts[Segment]->FindComponentByClass<UStickConnectionGraph>();
@@ -130,7 +137,10 @@ bool UWattleFenceComponent::BuildFence(const TArray<FVector>& PostPositions, int
 	}
 
 	// Swap the complete new fence in only after all post and weave segments connected successfully.
-	RollbackPieces(TArray<AStickActor*>(BuiltPieces));
+	TArray<AStickActor*> PreviousPieces;
+	PreviousPieces.Reserve(BuiltPieces.Num());
+	for (AStickActor* Previous : BuiltPieces) PreviousPieces.Add(Previous);
+	RollbackPieces(PreviousPieces);
 	BuiltPieces.Reset();
 	for (AStickActor* Piece : NewPieces) BuiltPieces.Add(Piece);
 	ClayFillBySection.Reset();
@@ -157,12 +167,14 @@ bool UWattleFenceComponent::AddClayFill(AStickActor* FenceSection)
 	Fill->SetMobility(EComponentMobility::Movable);
 	Fill->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
 	Fill->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	FenceSection->AddInstanceComponent(Fill);
 	Fill->SetupAttachment(FenceSection->GetRootComponent());
 	Fill->RegisterComponent();
 
 	const FBox MeshBounds = FenceSection->MeshComponent->GetStaticMesh()->GetBoundingBox();
 	const FVector MeshScale = FenceSection->MeshComponent->GetRelativeScale3D();
-	const FVector Size = MeshBounds.GetSize() * MeshScale.GetAbs();
+	const FVector AbsScale(FMath::Abs(MeshScale.X), FMath::Abs(MeshScale.Y), FMath::Abs(MeshScale.Z));
+	const FVector Size = MeshBounds.GetSize() * AbsScale;
 	const float PanelHeight = FMath::Max(12.f, PostHeight * 0.65f);
 	Fill->SetRelativeLocation(FVector(
 		MeshBounds.GetCenter().X * MeshScale.X,
@@ -184,7 +196,6 @@ bool UWattleFenceComponent::AddClayFill(AStickActor* FenceSection)
 		}
 	}
 
-	FenceSection->AddInstanceComponent(Fill);
 	ClayFillBySection.Add(FenceSection, Fill);
 	return true;
 }
