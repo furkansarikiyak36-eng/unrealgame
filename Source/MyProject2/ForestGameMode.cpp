@@ -1,10 +1,15 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestGameMode.h"
+#include "LogShowcase.h"
+#include "WorldCore/ExcavationTerrainChunkSubsystem.h"
 #include "ForestCharacter.h"
 #include "ForestHUD.h"
 #include "HarvestableActor.h"
 #include "StoneMasonryActor.h"
+#include "LooseResources.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneTypes.h"
 #include "LogConstructionActor.h"
 #include "OpeningBuckActor.h"
 #include "LogWallBlueprint.h"
@@ -24,16 +29,20 @@ AForestGameMode::AForestGameMode()
 {
 	DefaultPawnClass = AForestCharacter::StaticClass();
 	HUDClass = AForestHUD::StaticClass();
-	bSpawnDemoShowcase = true;
+	bSpawnDemoShowcase = false;
 }
 
 void AForestGameMode::StartPlay()
 {
 	ConvertHarvestables();
 
-	// The wood chain demo level keeps its stage clear of the building stations.
-	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) ? true : false;
-	if (bSpawnDemoShowcase && !bDemoLevel)
+	// The wood chain demo level and test kit stages keep their stage clear of the building stations.
+	const FString MapName = GetWorld() ? GetWorld()->GetMapName() : FString();
+	const bool bIsTestOrStageMap = MapName.Contains(TEXT("TestKits")) || MapName.Contains(TEXT("Snap"))
+		|| MapName.Contains(TEXT("Showcase")) || MapName.Contains(TEXT("Demo")) || MapName.Contains(TEXT("MechanicsTest"));
+	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) || TActorIterator<ALogShowcase>(GetWorld()) || bIsTestOrStageMap;
+	const bool bExplicitDemo = FParse::Param(FCommandLine::Get(), TEXT("DemoShowcase"));
+	if ((bSpawnDemoShowcase || bExplicitDemo) && !bDemoLevel)
 	{
 		SetupDemoShowcase();
 	}
@@ -81,6 +90,51 @@ void AForestGameMode::ConvertHarvestables()
 		{
 			Type = EHarvestType::Rock;
 		}
+		else if (Name.StartsWith(TEXT("SM_RawLog")) || Name.StartsWith(TEXT("SM_GB_RawLog")))
+		{
+			// Convert placed raw log meshes directly into interactive CarvableLogs so they can be picked up, carried, carved, and snapped!
+			ACarvableLog* Carvable = ACarvableLog::SpawnFromStaticMesh(World, const_cast<UStaticMesh*>(StaticMesh), Source->GetActorTransform());
+			if (Carvable)
+			{
+				Source->SetActorHiddenInGame(true);
+				Source->SetActorEnableCollision(false);
+			}
+			continue;
+		}
+		else if (Name.StartsWith(TEXT("sdAta")) || Name.StartsWith(TEXT("xksldamqx")) || Name.StartsWith(TEXT("xkqmdhaqx")))
+		{
+			// A wall stone (Castle Wall Stone) or a cobblestone (grey / brown): a carryable stone, placed face to face into walls.
+			const bool bWallStone = Name.StartsWith(TEXT("sdAta"));
+			if (AStoneActor* Stone = LooseResources::SpawnStoneFromMesh(World, const_cast<UStaticMesh*>(StaticMesh), Source->GetActorTransform(),
+				bWallStone ? EStoneShape::Flat : EStoneShape::Carved))
+			{
+				Source->SetActorHiddenInGame(true);
+				Source->SetActorEnableCollision(false);
+			}
+			continue;
+		}
+		else if ((Name.StartsWith(TEXT("vcljbb1iw")) || Name.StartsWith(TEXT("vdjkbfmiw")) || Name.Contains(TEXT("Small_Stones")))
+			&& (StaticMesh->GetBoundingBox().GetSize() * Source->GetActorScale3D()).GetMax() >= 30.f)
+		{
+			// A rock of building-stone size (30 cm or more): carried in both hands and placed like a wall stone.
+			if (AStoneActor* Stone = LooseResources::SpawnStoneFromMesh(World, const_cast<UStaticMesh*>(StaticMesh), Source->GetActorTransform(), EStoneShape::Building))
+			{
+				Source->SetActorHiddenInGame(true);
+				Source->SetActorEnableCollision(false);
+			}
+			continue;
+		}
+		else if (Name.StartsWith(TEXT("vcljbb1iw")) || Name.StartsWith(TEXT("vdjkbfmiw")) || Name.Contains(TEXT("Small_Stones")))
+		{
+			// Convert placed small stones into pickup items!
+			APickupItem* Pickup = APickupItem::Spawn(World, EForestItem::Stone, 1, Source->GetActorTransform(), FVector::ZeroVector);
+			if (Pickup)
+			{
+				Source->SetActorHiddenInGame(true);
+				Source->SetActorEnableCollision(false);
+			}
+			continue;
+		}
 		else
 		{
 			continue;
@@ -118,6 +172,10 @@ void AForestGameMode::SetupDemoShowcase()
 
 	auto SnapToGround = [World](const FVector& Pos) -> FVector
 	{
+		if (UExcavationTerrainChunkSubsystem* Ground = World->GetSubsystem<UExcavationTerrainChunkSubsystem>())
+		{
+			Ground->EnsureGroundAt(FVector(Pos.X, Pos.Y, 0.f));
+		}
 		FHitResult Hit;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(DemoSnap), false);
 		if (World->LineTraceSingleByChannel(Hit, Pos + FVector(0, 0, 600.f), Pos - FVector(0, 0, 2000.f), ECC_Visibility, Params))

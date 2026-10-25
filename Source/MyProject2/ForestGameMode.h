@@ -31,7 +31,7 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Forest")
 	float MaxRockScale = 2.f;
 
-	/** Spawns the interactive engineering test demo area in front of the player on start */
+	/** Spawns the interactive engineering test demo area in front of the player on start (disabled by default to keep stages clean) */
 	UPROPERTY(EditAnywhere, Category = "Forest|Demo")
-	bool bSpawnDemoShowcase = true;
+	bool bSpawnDemoShowcase = false;
 };

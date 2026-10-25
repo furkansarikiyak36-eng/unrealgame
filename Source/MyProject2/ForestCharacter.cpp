@@ -1,6 +1,20 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestCharacter.h"
+#include "LogSnapSystem.h"
+#include "WorldSnapResolver.h"
+#include "WorldSnapTwoAnchorSolver.h"
+#include "Algo/Sort.h"
+#include "Wood/WoodStructureGeometry.h"
+#include "Engine/OverlapResult.h"
+#include "RawLogShapes.h"
+#include "InventoryCore/InventoryComponent.h"
+#include "InventoryCore/InventoryItem.h"
+#include "StickPhaseS1_Core/StickActor.h"
+#include "StickCore/StickDefinition.h"
+#include "StoneCore/StoneDefinition.h"
+#include "Core/StructuralMaterialTypes.h"
+#include "UObject/SoftObjectPath.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
 #include "LogConstructionActor.h"
@@ -9,14 +23,28 @@
 #include "PickupItem.h"
 #include "ForestOutline.h"
 #include "StructureLink.h"
+#include "Phase2_Transport/CarvableLogJackingComponent.h"
 #include "Campfire.h"
 #include "HaulCart.h"
 #include "FireStone.h"
 #include "RaidEnemy.h"
+#include "DayLoopSubsystem.h"
+#include "LooseResources.h"
+#include "StickStructure.h"
+#include "FarmKit.h"
+#include "RawMaterialNode.h"
+#include "WorldFeatures.h"
+#include "ScenarioSubsystem.h"
+#include "WorldCore/RegionLogisticsSubsystem.h"
+#include "PhaseT2_Plant/CropFieldActor.h"
+#include "PhaseT6_Animal/AnimalActor.h"
 #include "Components/LineBatchComponent.h"
 #include "MechanicsDemo.h"
 #include "StructureManager.h"
 #include "SurvivalComponent.h"
+#include "WorldPhaseW1_Chunk/ChunkManager.h"
+#include "WorldCore/ExcavationVolumeSubsystem.h"
+#include "WorldCore/ExcavationTerrainChunkActor.h"
 #include "CableComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -34,6 +62,10 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneDefinition.h"
+#include "StonePhaseB_Placement/StoneCarryComponent.h"
+#include "StonePhaseB_Placement/StonePlacementComponent.h"
 
 namespace
 {
@@ -79,6 +111,14 @@ AForestCharacter::AForestCharacter()
 	GetCharacterMovement()->AirControl = 0.3f;
 
 	Survival = CreateDefaultSubobject<USurvivalComponent>(TEXT("Survival"));
+	WorldChunks = CreateDefaultSubobject<UChunkManager>(TEXT("WorldChunks"));
+	WorldChunks->ActivationRadius = 256.f; // metres: 4 chunks (64 m) each way
+	CoreInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("CoreInventory"));
+	CoreInventory->MaxSlots = InventorySlots;
+	CoreInventory->bIgnoreWeight = true; // Preserve the playable character's existing 24-slot rule.
+	StoneCarry = CreateDefaultSubobject<UStoneCarryComponent>(TEXT("StoneCarry"));
+	StonePlacement = CreateDefaultSubobject<UStonePlacementComponent>(TEXT("StonePlacement"));
+	LogJacking = CreateDefaultSubobject<UCarvableLogJackingComponent>(TEXT("LogJacking"));
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
@@ -137,10 +177,15 @@ AForestCharacter::AForestCharacter()
 void AForestCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	InitializeCoreInventoryDefinitions();
 
 	Structures = GetWorld()->SpawnActor<AStructureManager>();
 	RespawnTransform = GetActorTransform();
 	Survival->OnDeath = [this]() { HandleDeath(); };
+	if (UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld()))
+	{
+		Loop->OnAnnouncement.AddUObject(this, &AForestCharacter::ShowMessage);
+	}
 	if (UMaterialInterface* Ghost = ForestItems::GetBuildGhostMaterial())
 	{
 		GhostMaterial = UMaterialInstanceDynamic::Create(Ghost, this);
@@ -156,6 +201,65 @@ void AForestCharacter::BeginPlay()
 		WallPreview->SetMaterial(Slot, GhostMaterial);
 	}
 	ShowMessage(TEXT("Ormana hoş geldin. Ağaçları kes, kayaları kır."));
+}
+
+void AForestCharacter::InitializeCoreInventoryDefinitions()
+{
+	if (!CoreInventory)
+	{
+		return;
+	}
+
+	for (const EForestItem Item : ForestItems::GetAllItems())
+	{
+		// Trunk, big-log and carried-log stages are physical actors, never stack entries.
+		if (Item == EForestItem::None || ForestItems::IsCarriedItem(Item))
+		{
+			continue;
+		}
+
+		const FName ItemID = ForestItems::GetInventoryID(Item);
+		if (ItemID.IsNone())
+		{
+			continue;
+		}
+
+		bool bHasDefinition = false;
+		for (UInventoryItemData* Existing : CoreInventory->ItemDefinitions)
+		{
+			if (Existing && Existing->ItemID == ItemID)
+			{
+				bHasDefinition = true; // Respect a project's configured definition.
+				break;
+			}
+		}
+		if (bHasDefinition)
+		{
+			continue;
+		}
+
+		const FName ObjectName(*FString::Printf(TEXT("RuntimeItem_%s"), *ItemID.ToString()));
+		UInventoryItemData* Definition = NewObject<UInventoryItemData>(CoreInventory, ObjectName);
+		if (!Definition)
+		{
+			continue;
+		}
+		Definition->ItemID = ItemID;
+		Definition->DisplayName = FText::FromString(ForestItems::GetDisplayName(Item));
+		Definition->Description = FText::FromString(FString::Printf(
+			TEXT("Stackable survival resource: %s"), *ForestItems::GetDisplayName(Item)));
+		Definition->Category = EInventoryCategory::Resource;
+		Definition->Rarity = EItemRarity::Common;
+		Definition->MaxStack = StackSize;
+		Definition->Weight = ForestItems::GetItemWeight(Item);
+		Definition->bCanBeDropped = true;
+		Definition->bStackable = true;
+		Definition->bCanBeIngredient = true;
+		CoreInventory->ItemDefinitions.Add(Definition);
+	}
+
+	// The component may have begun play before this actor populated its runtime definitions.
+	CoreInventory->InitializeRuntimeInventory();
 }
 
 UInputAction* AForestCharacter::MakeAction(const TCHAR* Name, EInputActionValueType Type)
@@ -206,9 +310,7 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	MappingContext->MapKey(SprintAction, EKeys::LeftShift);
 	MappingContext->MapKey(PrimaryInput, EKeys::LeftMouseButton);
 	MappingContext->MapKey(InteractAction, EKeys::E);
-	MappingContext->MapKey(CraftBlockAction, EKeys::Three);
 	MappingContext->MapKey(InventoryAction, EKeys::Tab);
-	MappingContext->MapKey(BuildAction, EKeys::B);
 	MappingContext->MapKey(RotateAction, EKeys::R);
 	MappingContext->MapKey(CycleAction, EKeys::MouseWheelAxis);
 	MappingContext->MapKey(CycleAction, EKeys::Q); // laptop friendly: next build option
@@ -231,21 +333,28 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	Input->BindAction(SprintAction, ETriggerEvent::Completed, this, &AForestCharacter::StopSprint);
 	Input->BindAction(PrimaryInput, ETriggerEvent::Started, this, &AForestCharacter::PrimaryAction);
 	Input->BindAction(InteractAction, ETriggerEvent::Started, this, &AForestCharacter::Interact);
-	Input->BindAction(CraftBlockAction, ETriggerEvent::Started, this, &AForestCharacter::CraftStoneBlock);
 	Input->BindAction(InventoryAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleInventory);
 	UInputAction* ToggleTrowelAction = MakeAction(TEXT("IA_ToggleTrowel"), EInputActionValueType::Boolean);
-	MappingContext->MapKey(ToggleTrowelAction, EKeys::T);
-	Input->BindAction(ToggleTrowelAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleTrowel);
-	Input->BindAction(BuildAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleBuildMode);
 	Input->BindAction(RotateAction, ETriggerEvent::Started, this, &AForestCharacter::RotateBuild);
 	Input->BindAction(CycleAction, ETriggerEvent::Started, this, &AForestCharacter::CycleBuildItem);
 	Input->BindAction(CancelAction, ETriggerEvent::Started, this, &AForestCharacter::CancelBuild);
+	UInputAction* JackEndAction = MakeAction(TEXT("IA_JackSelectEnd"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(JackEndAction, EKeys::F2);
+	Input->BindAction(JackEndAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleJackingEnd);
+	UInputAction* JackLiftAction = MakeAction(TEXT("IA_JackLiftEnd"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(JackLiftAction, EKeys::H);
+	Input->BindAction(JackLiftAction, ETriggerEvent::Started, this, &AForestCharacter::LiftSelectedEnd);
+	UInputAction* JackSupportAction = MakeAction(TEXT("IA_JackPlaceSupport"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(JackSupportAction, EKeys::T);
+	Input->BindAction(JackSupportAction, ETriggerEvent::Started, this, &AForestCharacter::SupportSelectedEnd);
+	UInputAction* ShovelAction = MakeAction(TEXT("IA_ToggleShovel"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(ShovelAction, EKeys::B);
+	Input->BindAction(ShovelAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleShovel);
 
 #if !UE_BUILD_SHIPPING
 	UInputAction* DebugGiveAction = MakeAction(TEXT("IA_DebugGive"), EInputActionValueType::Boolean);
 	UInputAction* DebugRoomAction = MakeAction(TEXT("IA_DebugRoom"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(DebugGiveAction, EKeys::G);
-	MappingContext->MapKey(DebugRoomAction, EKeys::H);
 	UInputAction* DebugHarvestAction = MakeAction(TEXT("IA_DebugHarvest"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(DebugHarvestAction, EKeys::J);
 	Input->BindAction(DebugHarvestAction, ETriggerEvent::Started, this, &AForestCharacter::DebugHarvestNearest);
@@ -275,6 +384,15 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UInputAction* FirePitAction = MakeAction(TEXT("IA_FirePit"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(FirePitAction, EKeys::C);
 	Input->BindAction(FirePitAction, ETriggerEvent::Started, this, &AForestCharacter::PlaceFireStone);
+	UInputAction* HelpAction = MakeAction(TEXT("IA_Help"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(HelpAction, EKeys::F1);
+	Input->BindAction(HelpAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleHelp);
+	UInputAction* EatAction = MakeAction(TEXT("IA_Eat"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(EatAction, EKeys::Eight);
+	Input->BindAction(EatAction, ETriggerEvent::Started, this, &AForestCharacter::EatFood);
+	UInputAction* StickAction = MakeAction(TEXT("IA_StickMode"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(StickAction, EKeys::I);
+	Input->BindAction(StickAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleStickMode);
 	UInputAction* TempAction = MakeAction(TEXT("IA_Temporary"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(TempAction, EKeys::V);
 	Input->BindAction(TempAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleTemporary);
@@ -287,6 +405,9 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UInputAction* RaidAction = MakeAction(TEXT("IA_DebugRaid"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(RaidAction, EKeys::Z);
 	Input->BindAction(RaidAction, ETriggerEvent::Started, this, &AForestCharacter::DebugRaid);
+	UInputAction* SkipAction = MakeAction(TEXT("IA_DebugSkipTime"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(SkipAction, EKeys::Nine);
+	Input->BindAction(SkipAction, ETriggerEvent::Started, this, &AForestCharacter::DebugSkipTime);
 	UInputAction* HaulerAction = MakeAction(TEXT("IA_DebugHaulers"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(HaulerAction, EKeys::U);
 	Input->BindAction(HaulerAction, ETriggerEvent::Started, this, &AForestCharacter::DebugHaulers);
@@ -308,6 +429,10 @@ void AForestCharacter::Tick(float DeltaSeconds)
 	DrawPreviewLines();
 
 	UpdateTool(DeltaSeconds);
+	if (const UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld()))
+	{
+		Survival->SetAmbientTemperature(Loop->GetTemperatureAt(GetActorLocation()).Total());
+	}
 	if (bLighterHeld && !bBuildMode)
 	{
 		FHitResult Aim;
@@ -324,6 +449,11 @@ void AForestCharacter::Tick(float DeltaSeconds)
 	Survival->SetSprinting(bSprinting);
 	GetCharacterMovement()->MaxWalkSpeed = bCarrying ? CarrySpeed() : (bSprinting ? SprintSpeed : WalkSpeed);
 	UpdateCarry(DeltaSeconds);
+	if (ARiverStrip::IsInWater(GetWorld(), GetActorLocation() - FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight())))
+	{
+		GetCharacterMovement()->MaxWalkSpeed *= ARiverStrip::WadeSpeedFactor;
+	}
+	UpdateRide(DeltaSeconds);
 
 	FOVPunch = FMath::FInterpTo(FOVPunch, 0.f, DeltaSeconds, 12.f);
 	Camera->SetFieldOfView(BaseFOV - FOVPunch);
@@ -333,6 +463,21 @@ void AForestCharacter::DrawPreviewLines()
 {
 	PreviewLines->Flush();
 	const FLinearColor PlanColor = bGhostValid ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
+
+	// Making: where a stake or a field would go.
+	if (bStickMode && !IsHandsBusy() && (StickBuildIndex == CraftStake || StickBuildIndex == CraftField))
+	{
+		FHitResult Spot;
+		if (StickBuildSpot(Spot))
+		{
+			const bool bStake = StickBuildIndex == CraftStake;
+			const bool bAfford = GetItemCount(EForestItem::Stick) >= (bStake ? 1 : 2);
+			const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+			const FVector Half = bStake ? FVector(AStickStructure::RadiusCm, AStickStructure::RadiusCm, AStickStructure::HeightCm * 0.5f) : FVector(100.f, 100.f, 5.f);
+			ForestOutline::DrawBox(PreviewLines, FTransform(Forward.Rotation(), Spot.ImpactPoint + FVector(0.f, 0.f, Half.Z)), FBox(-Half, Half),
+				bAfford ? ForestOutline::ValidColor() : ForestOutline::InvalidColor());
+		}
+	}
 
 	if (BuildPreview->IsVisible())
 	{
@@ -351,18 +496,45 @@ void AForestCharacter::DrawPreviewLines()
 	// Where the carried piece goes: its outline there, and for a crossing the saddle notch it will get.
 	if (const ACarvableLog* Piece = GetTopCarried(); Piece && CarryPlace != ECarryPlace::None)
 	{
-		const FTransform& Where = CarryPlace == ECarryPlace::Across ? CrossPlacement.Upper : PlaceTransform;
-		ForestOutline::DrawPieceBox(PreviewLines, Piece->IsSplit() ? EForestItem::HalfLog : EForestItem::Log, Piece->GetLocalBox(), Where,
-			bPlaceSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor());
-		if (CarryPlace == ECarryPlace::Across)
+		// A dashed outline of the piece where it will go: both end rings and four lines along it (green held, red unsupported).
+		const FLogPlacementResult Placement = GetLogPlacementResult();
+		const FTransform& Where = Placement.Transform;
+		const FBox Box = Piece->GetLocalBox();
+		const FLinearColor Color = Placement.bSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
+		const FVector Mid = Box.GetCenter();
+		const float RadiusY = Box.GetExtent().Y, RadiusZ = Box.GetExtent().Z;
+		for (const float X : { Box.Min.X, Box.Max.X })
 		{
-			TArray<TArray<FVector>> Rim;
-			TArray<bool> Closed;
-			ACarvableLog::GetCrossNotchGuide(CrossPlacement, Piece, Rim, Closed);
-			for (int32 Index = 0; Index < Rim.Num(); ++Index)
+			TArray<FVector> Ring;
+			for (int32 Step = 0; Step < 16; ++Step)
 			{
-				ForestOutline::DrawDashed(PreviewLines, CrossPlacement.Upper, Rim[Index], Closed[Index], ForestOutline::CutColor());
+				const float Angle = 2.f * PI * Step / 16.f;
+				Ring.Add(FVector(X, Mid.Y + RadiusY * FMath::Cos(Angle), Mid.Z + RadiusZ * FMath::Sin(Angle)));
 			}
+			ForestOutline::DrawDashed(PreviewLines, Where, Ring, true, Color);
+		}
+		for (int32 Side = 0; Side < 4; ++Side)
+		{
+			const float Angle = PI * 0.5f * Side;
+			const FVector Offset(0.f, RadiusY * FMath::Cos(Angle), RadiusZ * FMath::Sin(Angle));
+			ForestOutline::DrawDashed(PreviewLines, Where, { FVector(Box.Min.X, Mid.Y, Mid.Z) + Offset, FVector(Box.Max.X, Mid.Y, Mid.Z) + Offset }, false, Color);
+		}
+	}
+	// The snap points of the aimed face: small white crosses on its 75 cm lines, the chosen one larger and green.
+	if (GetTopCarried() && SocketMarkers.Num() > 0)
+	{
+		const FVector N = SocketNormal.GetSafeNormal();
+		const FVector U = FMath::Abs(N.Z) > 0.9f ? FVector::ForwardVector : FVector::UpVector;
+		const FVector V = FVector::CrossProduct(N, U).GetSafeNormal();
+		const FVector W = FVector::CrossProduct(N, V).GetSafeNormal();
+		for (const FVector& Marker : SocketMarkers)
+		{
+			const bool bChosen = FVector::DistSquared(Marker, SocketChosen) < 4.f;
+			const float Size = bChosen ? 9.f : 5.f;
+			const FLinearColor MarkColor = bChosen ? ForestOutline::ValidColor() : FLinearColor::White;
+			const FVector P = Marker + N * 1.5f;
+			PreviewLines->DrawLine(P - V * Size, P + V * Size, MarkColor, SDPG_World, bChosen ? 2.5f : 1.5f, 0.f);
+			PreviewLines->DrawLine(P - W * Size, P + W * Size, MarkColor, SDPG_World, bChosen ? 2.5f : 1.5f, 0.f);
 		}
 	}
 }
@@ -491,6 +663,297 @@ void AForestCharacter::ToggleTrowel()
 	}
 }
 
+void AForestCharacter::ToggleShovel()
+{
+	if (CurrentTool == EForestTool::Shovel)
+	{
+		EquipTool(EForestTool::Axe);
+		ShowMessage(TEXT("Balta kuşanıldı"));
+	}
+	else
+	{
+		EquipTool(EForestTool::Shovel);
+		ShowMessage(FString::Printf(TEXT("Kürek kuşanıldı  —  [Sol tık] kaz   [Sağ tık] toprak dök   (çuval %.2f / %.1f m³)"), LooseSoilM3, MaxLooseSoilM3));
+	}
+}
+
+FString AForestCharacter::ShovelStroke(const FVector& Point, const FVector& Normal, bool bFill)
+{
+	UExcavationVolumeSubsystem* Excavation = GetWorld() ? GetWorld()->GetSubsystem<UExcavationVolumeSubsystem>() : nullptr;
+	if (!Excavation)
+	{
+		return TEXT("Burası kazılamaz");
+	}
+	const FVector Out = Normal.IsNearlyZero() ? FVector::UpVector : Normal.GetSafeNormal();
+	const double Cell = Excavation->CellSizeCm / 100.0;
+	const float CellM3 = static_cast<float>(Cell * Cell * Cell);
+	constexpr float Swell = 1.25f; // dug soil is looser than the ground it came from
+	FExcavationEditRecord Record;
+	if (!bFill)
+	{
+		if (LooseSoilM3 >= MaxLooseSoilM3 - 0.01f)
+		{
+			return TEXT("Toprak çuvalı dolu  —  [Sağ tık] ile bir yere dök");
+		}
+		if (!Excavation->ApplySphereEdit(Point - Out * 20.f, ShovelRadiusCm, EExcavationEditType::Carve, Record))
+		{
+			return Record.BlockedCellCount > 0 ? TEXT("Kaya  —  kürek taşı kazamaz") : TEXT("Burada kazılacak toprak yok");
+		}
+		const float Gained = Record.MovedCellCount * CellM3 * Swell;
+		LooseSoilM3 = FMath::Min(MaxLooseSoilM3, LooseSoilM3 + Gained);
+		return FString::Printf(TEXT("Toprak kazıldı +%.2f m³  (çuval %.2f / %.1f m³)%s"), Gained, LooseSoilM3, MaxLooseSoilM3,
+			Record.BlockedCellCount > 0 ? TEXT("  —  altı kaya") : TEXT(""));
+	}
+	if (LooseSoilM3 < CellM3 * Swell * 0.5f)
+	{
+		return TEXT("Çuvalda toprak yok  —  önce kaz");
+	}
+	const FVector Center = Point + Out * 20.f;
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (FVector::Dist2D(Center, GetActorLocation()) < ShovelRadiusCm + Capsule->GetScaledCapsuleRadius()
+		&& Center.Z > GetActorLocation().Z - Capsule->GetScaledCapsuleHalfHeight() - ShovelRadiusCm)
+	{
+		return TEXT("Çok yakın  —  ayağının dibine dökemezsin");
+	}
+	if (!Excavation->ApplySphereEdit(Center, ShovelRadiusCm, EExcavationEditType::Fill, Record))
+	{
+		return TEXT("Burası zaten dolu");
+	}
+	const float Used = FMath::Min(LooseSoilM3, Record.MovedCellCount * CellM3 * Swell);
+	LooseSoilM3 = FMath::Max(0.f, LooseSoilM3 - Used);
+	return FString::Printf(TEXT("Toprak döküldü −%.2f m³  (çuval %.2f / %.1f m³)"), Used, LooseSoilM3, MaxLooseSoilM3);
+}
+
+FString AForestCharacter::TestBuildWall(int32 LengthCm, int32 Courses)
+{
+	UStaticMesh* LogMesh = LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/UnrealExport/Meshes/SM_RawLog_%d.SM_RawLog_%d"), LengthCm, LengthCm));
+	if (!LogMesh)
+	{
+		LogMesh = AHarvestableActor::LoadRawLog(LengthCm);
+	}
+	if (!LogMesh)
+	{
+		return TEXT("no log mesh");
+	}
+	const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	FHitResult Ground;
+	const FVector Ahead = GetActorLocation() + Facing * 300.f;
+	GetWorld()->LineTraceSingleByChannel(Ground, Ahead + FVector(0, 0, 200.f), Ahead - FVector(0, 0, 500.f), ECC_Visibility);
+	ACarvableLog* Base = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+	if (!Base)
+	{
+		return TEXT("spawn failed");
+	}
+	Base->PlaceAt(Base->GetLayTransform(Ground.ImpactPoint, Facing.Rotation().Yaw + 90.f), true);
+	FString Report = FString::Printf(TEXT("base z=%.0f yaw=%.0f"), Base->GetActorLocation().Z, Base->GetActorRotation().Yaw);
+	ACarvableLog* Top = Base;
+	auto PlaceOn = [&](ACarvableLog* Lower, const FVector& Aim) -> ACarvableLog*
+	{
+		ACarvableLog* Piece = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+		if (!Piece || !StartCarry(Piece))
+		{
+			Report += TEXT(" | carry failed");
+			return nullptr;
+		}
+		FHitResult Hit;
+		Hit.HitObjectHandle = FActorInstanceHandle(Lower);
+		Hit.ImpactPoint = Aim;
+		Hit.ImpactNormal = FVector::UpVector;
+		UpdateCarryPlacementAt(Hit, true);
+		const ECarryPlace Chosen = CarryPlace;
+		const bool bSupported = bPlaceSupported;
+		PlaceCarried();
+		Report += FString::Printf(TEXT(" | %s z=%.0f yaw=%.0f dXY=%.0f sup=%d"),
+			Chosen == ECarryPlace::Stack ? TEXT("STACK") : Chosen == ECarryPlace::Across ? TEXT("ACROSS") : TEXT("OTHER"),
+			Piece->GetActorLocation().Z, Piece->GetActorRotation().Yaw,
+			FVector::Dist2D(Piece->GetActorLocation(), Lower->GetActorLocation()), bSupported ? 1 : 0);
+		return Piece;
+	};
+	for (int32 Course = 0; Course < Courses && Top; ++Course)
+	{
+		if (ACarvableLog* Next = PlaceOn(Top, Top->GetActorLocation() + FVector(0, 0, Top->GetRadius())))
+		{
+			Top = Next;
+		}
+	}
+	// A corner: turn to look along the wall and put one over its end.
+	if (Top)
+	{
+		const FRotator Saved = GetActorRotation();
+		SetActorRotation(FRotator(0.f, Top->GetActorRotation().Yaw, 0.f));
+		FVector C, A;
+		float R, H;
+		ACarvableLog::GetLogAxis(Top, C, A, R, H);
+		PlaceOn(Top, C + A * (H - 40.f) + FVector(0, 0, R));
+		SetActorRotation(Saved);
+	}
+	ShowMessage(Report);
+	return Report;
+}
+
+FString AForestCharacter::TestSnapSectors(int32 LengthCm)
+{
+	UStaticMesh* LogMesh = AHarvestableActor::LoadRawLog(LengthCm);
+	if (!LogMesh)
+	{
+		return TEXT("no log mesh");
+	}
+	const FRotator Start = GetActorRotation();
+	const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	FHitResult Ground;
+	const FVector Ahead = GetActorLocation() + Facing * 300.f;
+	GetWorld()->LineTraceSingleByChannel(Ground, Ahead + FVector(0, 0, 200.f), Ahead - FVector(0, 0, 500.f), ECC_Visibility);
+	ACarvableLog* Base = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+	if (!Base)
+	{
+		return TEXT("spawn failed");
+	}
+	const float BaseYaw = FRotator::NormalizeAxis(Facing.Rotation().Yaw + 90.f);
+	Base->PlaceAt(Base->GetLayTransform(Ground.ImpactPoint, BaseYaw), true);
+	auto RelYaw = [BaseYaw](float Yaw)
+	{
+		float D = FMath::FindDeltaAngleDegrees(BaseYaw, Yaw);
+		if (D > 90.f) D -= 180.f;
+		if (D <= -90.f) D += 180.f;
+		return D;
+	};
+	auto ModeName = [](ECarryPlace P)
+	{
+		return P == ECarryPlace::Stack ? TEXT("S") : P == ECarryPlace::Diagonal ? TEXT("D") : P == ECarryPlace::Across ? TEXT("X") : P == ECarryPlace::Corner ? TEXT("C") : TEXT("-");
+	};
+	// Look from each offset: the carried piece lies across the view, so a view yaw of BaseYaw - 90 + Offset aims it at Offset.
+	ACarvableLog* Probe = ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+	FString Report = TEXT("sweep");
+	if (Probe && StartCarry(Probe))
+	{
+		for (int32 Offset = -90; Offset <= 90; Offset += 5)
+		{
+			SetActorRotation(FRotator(0.f, BaseYaw - 90.f + Offset, 0.f));
+			FHitResult Hit;
+			Hit.HitObjectHandle = FActorInstanceHandle(Base);
+			Hit.ImpactPoint = Base->GetActorLocation() + FVector(0, 0, Base->GetRadius());
+			Hit.ImpactNormal = FVector::UpVector;
+			UpdateCarryPlacementAt(Hit, true);
+			const FTransform& Where = CarryPlace == ECarryPlace::Stack ? PlaceTransform : CrossPlacement.Upper;
+			Report += FString::Printf(TEXT(" %d:%s%.0f"), Offset, ModeName(CarryPlace), CarryPlace == ECarryPlace::None ? 0.f : RelYaw(Where.Rotator().Yaw));
+		}
+	}
+	// The user's example: +45 on the base, four courses on it, then one square across on top: -45 to the base.
+	auto PlaceAt = [&](ACarvableLog* Lower, float ViewOffset) -> ACarvableLog*
+	{
+		ACarvableLog* Piece = CarriedLogs.Num() > 0 ? GetTopCarried() : ACarvableLog::SpawnFromStaticMesh(GetWorld(), LogMesh, FTransform(GetActorLocation() + FVector(0, 0, 300.f)));
+		if (!Piece || (!Piece->IsCarried() && !StartCarry(Piece)))
+		{
+			return nullptr;
+		}
+		FVector C, A;
+		float R, H;
+		ACarvableLog::GetLogAxis(Lower, C, A, R, H);
+		SetActorRotation(FRotator(0.f, FVector(A.X, A.Y, 0.f).Rotation().Yaw - 90.f + ViewOffset, 0.f));
+		FHitResult Hit;
+		Hit.HitObjectHandle = FActorInstanceHandle(Lower);
+		Hit.ImpactPoint = C + FVector(0, 0, R);
+		Hit.ImpactNormal = FVector::UpVector;
+		UpdateCarryPlacementAt(Hit, true);
+		const ECarryPlace Chosen = CarryPlace;
+		if (!PlaceCarried())
+		{
+			return nullptr;
+		}
+		Report += FString::Printf(TEXT(" | %s base%+.0f z=%.0f"), ModeName(Chosen), RelYaw(Piece->GetActorRotation().Yaw), Piece->GetActorLocation().Z);
+		return Piece;
+	};
+	Report += TEXT(" || build");
+	ACarvableLog* Top = PlaceAt(Base, 45.f);
+	for (int32 Course = 0; Course < 4 && Top; ++Course)
+	{
+		Top = PlaceAt(Top, 0.f);
+	}
+	if (Top)
+	{
+		PlaceAt(Top, 90.f);
+	}
+	SetActorRotation(Start);
+	ShowMessage(Report);
+	return Report;
+}
+
+const TCHAR* AForestCharacter::CarryPlaceName(ECarryPlace Place)
+{
+	switch (Place)
+	{
+	case ECarryPlace::Across:   return TEXT("köşe çaprazı");
+	case ECarryPlace::Lay:      return TEXT("yatırıldı");
+	case ECarryPlace::Stand:    return TEXT("dikildi");
+	case ECarryPlace::Beam:     return TEXT("kiriş");
+	case ECarryPlace::Brace:    return TEXT("payanda");
+	case ECarryPlace::Floor:    return TEXT("döşeme");
+	case ECarryPlace::Slope:    return TEXT("eğik");
+	case ECarryPlace::Stack:    return TEXT("üst üste");
+	case ECarryPlace::Diagonal: return TEXT("45° çapraz");
+	case ECarryPlace::Corner:   return TEXT("köşe geçmesi");
+	case ECarryPlace::Socket:   return TEXT("yüz snap'i");
+	case ECarryPlace::Load:     return TEXT("yüklendi");
+	default:                    return TEXT("YOK");
+	}
+}
+
+AForestCharacter::ECarryPlace AForestCharacter::PlaceForShowcase(ACarvableLog* Piece, AActor* Target, const FVector& Aim,
+	const FVector& Normal, float ViewYaw, EShowcaseHold Hold, float SlopeDeg)
+{
+	if (!Piece)
+	{
+		return ECarryPlace::None;
+	}
+	// Long logs are over a shoulder load: the showcase carries them anyway (in play they are dragged by rope).
+	if (!StartCarry(Piece))
+	{
+		Piece->Release();
+		CarriedItem = EForestItem::Log;
+		CarriedLogs.Add(Piece);
+		Piece->BeginCarry(Camera, FTransform::Identity);
+	}
+	SnapAngleMode = -1;   // the showcase aims by look, as its stations were written
+	const bool bWasStanding = bPlaceStanding;
+	const bool bWasSlope = bPlaceSlope;
+	const float WasAngle = SlopeAngle;
+	bPlaceStanding = Hold == EShowcaseHold::Stand;
+	bPlaceSlope = Hold == EShowcaseHold::Slope;
+	SlopeAngle = SlopeDeg;
+	SetActorRotation(FRotator(0.f, ViewYaw, 0.f));
+	FHitResult Hit;
+	Hit.HitObjectHandle = FActorInstanceHandle(Target);
+	Hit.ImpactPoint = Aim;
+	Hit.Location = Aim;
+	Hit.ImpactNormal = Normal;
+	Hit.Normal = Normal;
+	Hit.bBlockingHit = true;
+	UpdateCarryPlacementAt(Hit, true);
+	const ECarryPlace Chosen = CarryPlace;
+	const bool bPlaced = Chosen != ECarryPlace::None && PlaceCarried();
+	if (!bPlaced && CarriedLogs.Num() > 0 && GetTopCarried() == Piece)
+	{
+		// Nothing fits: put it down at the aim, lying, so it is still there to see.
+		CarriedLogs.Pop();
+		if (CarriedLogs.Num() == 0)
+		{
+			CarriedItem = EForestItem::None;
+		}
+		Piece->PlaceAt(Piece->GetLayTransform(Aim, ViewYaw + 90.f), true);
+	}
+	bPlaceStanding = bWasStanding;
+	bPlaceSlope = bWasSlope;
+	SlopeAngle = WasAngle;
+	return bPlaced ? Chosen : ECarryPlace::None;
+}
+
+FString AForestCharacter::TestShovel(FVector Point, FVector Normal, bool bFill)
+{
+	const FString Result = ShovelStroke(Point, Normal, bFill);
+	ShowMessage(Result);
+	return Result;
+}
+
 void AForestCharacter::UpdateTool(float DeltaSeconds)
 {
 	const float RestPitch = 12.f;
@@ -570,7 +1033,14 @@ void AForestCharacter::HandleDeath()
 float AForestCharacter::CarrySpeed() const
 {
 	float Speed = WalkSpeed;
-	if (CarriedItem == EForestItem::TrunkLog)
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		const AStoneActor* Stone = StoneCarry->GetCarried();
+		const UStoneDefinition* Definition = Stone ? Stone->GetDefinition() : nullptr;
+		const float Mass = Definition ? FMath::Max(0.0f, Definition->Mass) : 20.0f;
+		Speed = FMath::Clamp(WalkSpeed - Mass * 1.5f, 180.0f, WalkSpeed);
+	}
+	else if (CarriedItem == EForestItem::TrunkLog)
 	{
 		Speed = 150.f;
 	}
@@ -592,7 +1062,7 @@ float AForestCharacter::CarrySpeed() const
 
 bool AForestCharacter::IsHandsBusy() const
 {
-	return CarriedItem != EForestItem::None;
+	return CarriedItem != EForestItem::None || (StoneCarry && StoneCarry->IsCarrying());
 }
 
 void AForestCharacter::RefreshToolVisibility()
@@ -735,6 +1205,102 @@ void AForestCharacter::StopRopeDrag()
 	RefreshToolVisibility();
 }
 
+ACarvableLog* AForestCharacter::GetAimedCarvableLog() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	FVector ViewStart = FVector::ZeroVector;
+	FRotator ViewRotation = FRotator::ZeroRotator;
+	GetActorEyesViewPoint(ViewStart, ViewRotation);
+	if (ViewStart.ContainsNaN() || ViewRotation.ContainsNaN())
+	{
+		return nullptr;
+	}
+
+	WorldScanSystem::FScanResult Scan;
+	const FVector TraceEnd = ViewStart + ViewRotation.Vector() * 650.f;
+	if (!WorldScanSystem::Trace(World, ViewStart, TraceEnd, this, Scan, ECC_Visibility, true)
+		|| !Scan.bHit)
+	{
+		return nullptr;
+	}
+	return Cast<ACarvableLog>(Scan.Hit.GetActor());
+}
+
+bool AForestCharacter::LiftAimedLogOneEnd(float RaiseHeightCm, bool bRaiseEndB)
+{
+	if (!LogJacking)
+	{
+		return false;
+	}
+	ACarvableLog* Target = GetAimedCarvableLog();
+	if (!Target)
+	{
+		ShowMessage(TEXT("Kaldırmak için yere yerleştirilmiş bir kütüğe bak"));
+		return false;
+	}
+	if (!LogJacking->LiftOneEnd(Target, RaiseHeightCm, bRaiseEndB))
+	{
+		ShowMessage(TEXT("Kütük bu yükseklikte kaldırılamıyor; boy, açı veya çarpışma sınırını kontrol et"));
+		return false;
+	}
+	ShowMessage(FString::Printf(TEXT("Kütüğün %s ucu %.0f cm yükseltildi  —  altına uygun modülde destek koy"), bRaiseEndB ? TEXT("+X") : TEXT("-X"), RaiseHeightCm));
+	return true;
+}
+
+bool AForestCharacter::SupportAimedLogWithCarriedPiece(bool bRaiseEndB)
+{
+	if (!LogJacking)
+	{
+		return false;
+	}
+	ACarvableLog* Target = GetAimedCarvableLog();
+	ACarvableLog* SupportPiece = GetTopCarried();
+	if (!Target || !SupportPiece)
+	{
+		ShowMessage(TEXT("Destek için yükseltilmiş kütüğe bak ve uygun kısa kütüğü taşı"));
+		return false;
+	}
+	if (!LogJacking->PlaceSupportUnder(Target, SupportPiece, bRaiseEndB))
+	{
+		ShowMessage(TEXT("Destek yerleşmedi: uç yüksekliği, zemin veya yapı bağlantısı geçerli değil"));
+		return false;
+	}
+
+	CarriedLogs.RemoveAll([SupportPiece](const TWeakObjectPtr<ACarvableLog>& Candidate)
+	{
+		return !Candidate.IsValid() || Candidate.Get() == SupportPiece;
+	});
+	if (CarriedLogs.Num() == 0)
+	{
+		CarriedItem = EForestItem::None;
+	}
+	ArrangeShoulder();
+	RefreshToolVisibility();
+	ShowMessage(TEXT("Destek kütüğü yerleştirildi; yapı bağlantıları yeniden değerlendirildi"));
+	return true;
+}
+
+void AForestCharacter::ToggleJackingEnd()
+{
+	bJackingEndB = !bJackingEndB;
+	ShowMessage(FString::Printf(TEXT("Destek/ kaldırma ucu: %s (F2 ile değiştir)"), bJackingEndB ? TEXT("+X") : TEXT("-X")));
+}
+
+void AForestCharacter::LiftSelectedEnd()
+{
+	LiftAimedLogOneEnd(ACarvableLog::ModuleLength, bJackingEndB);
+}
+
+void AForestCharacter::SupportSelectedEnd()
+{
+	SupportAimedLogWithCarriedPiece(bJackingEndB);
+}
+
 ACarvableLog* AForestCharacter::GetTopCarried() const
 {
 	return CarriedLogs.Num() > 0 ? CarriedLogs.Last().Get() : nullptr;
@@ -750,6 +1316,398 @@ float AForestCharacter::GetCarryLoad() const
 	return Wood / ACarvableLog::GetShoulderCapacity();
 }
 
+namespace
+{
+	/**
+	 * A log laid along a lying log, on top of it: one course of a log wall. The upper log sits in a shallow groove
+	 * (a quarter of the thinner radius), straight above the lower one, its ends on the lower log's 75 cm module grid
+	 * and its middle over the lower log.
+	 */
+	bool ComputeStackPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper, FTransform& Out)
+	{
+		FVector Centre, Axis;
+		float LowerRadius, HalfLength;
+		if (!Lower || !Upper || Lower == Upper || Lower->IsCarried()
+			|| !ACarvableLog::GetLogAxis(Lower, Centre, Axis, LowerRadius, HalfLength) || FMath::Abs(Axis.Z) > 0.3f)
+		{
+			return false;
+		}
+		Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+		const float Module = ACarvableLog::ModuleLength;
+		const float Length = Upper->GetLength();
+		const FVector Start = Centre - Axis * HalfLength;
+		// Where along the lower log the player aims; the upper log's start goes on the nearest module line.
+		const float AimAlong = FVector::DotProduct(Aim - Start, Axis);
+		float UpperStart = FMath::RoundToFloat((AimAlong - Length * 0.5f) / Module) * Module;
+		UpperStart = FMath::Clamp(UpperStart, -Length * 0.5f, HalfLength * 2.f - Length * 0.5f);
+		const float Sink = 0.25f * FMath::Min(LowerRadius, Upper->GetRadius());
+		const FVector UpperCentre = Start + Axis * (UpperStart + Length * 0.5f)
+			+ FVector(0.f, 0.f, Centre.Z - Start.Z + LowerRadius + Upper->GetRadius() - Sink);
+		const FQuat Rotation = FRotator(0.f, Axis.Rotation().Yaw, 0.f).Quaternion();
+		Out = FTransform(Rotation, UpperCentre - Rotation.RotateVector(FVector(Upper->GetCenterX(), 0.f, 0.f)));
+		return true;
+	}
+
+	/**
+	 * A log nested in the valley between two lying logs that touch side by side (a pyramid / woodpile stack): it rests on both,
+	 * tangent to each, on the side of Lower the player aims at. Its start goes on the lower log's 75 cm module line.
+	 * False when Lower has no touching parallel neighbour on a usable side.
+	 */
+	bool ComputeNestPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper,
+		const TArray<ACarvableLog*>& Nearby, FTransform& Out)
+	{
+		FVector Centre, Axis;
+		float LowerRadius, HalfLength;
+		if (!Lower || !Upper || Lower == Upper || Lower->IsCarried()
+			|| !ACarvableLog::GetLogAxis(Lower, Centre, Axis, LowerRadius, HalfLength) || FMath::Abs(Axis.Z) > 0.3f)
+		{
+			return false;
+		}
+		Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+		const FVector Side = FVector::CrossProduct(FVector::UpVector, Axis);
+		const float AimSide = FVector::DotProduct(Aim - Centre, Side);
+		const float UpperRadius = Upper->GetRadius();
+		float BestScore = TNumericLimits<float>::Max();
+		float NeighbourRadius = 0.f, Offset = 0.f, NeighbourZ = 0.f;
+		for (const ACarvableLog* Other : Nearby)
+		{
+			FVector OtherCentre, OtherAxis;
+			float OtherRadius, OtherHalf;
+			if (!Other || Other == Lower || Other == Upper || Other->IsCarried()
+				|| !ACarvableLog::GetLogAxis(Other, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
+				|| FMath::Abs(FVector::DotProduct(FVector(OtherAxis.X, OtherAxis.Y, 0.f).GetSafeNormal(), Axis)) < 0.95f
+				|| FMath::Abs(OtherCentre.Z - Centre.Z) > 10.f)
+			{
+				continue;
+			}
+			const float Across = FVector::DotProduct(OtherCentre - Centre, Side);
+			const float Along = FVector::DotProduct(OtherCentre - Centre, Axis);
+			const float Touch = LowerRadius + OtherRadius;
+			if (FMath::Abs(Across) < Touch - 8.f || FMath::Abs(Across) > Touch + 8.f || FMath::Abs(Along) > HalfLength + OtherHalf - ACarvableLog::ModuleLength)
+			{
+				continue;
+			}
+			// The valley on the side the player aims at, else the nearest one.
+			const float Score = (Across * AimSide >= 0.f ? 0.f : 1000.f) + FMath::Abs(Across - AimSide);
+			if (Score < BestScore)
+			{
+				BestScore = Score;
+				NeighbourRadius = OtherRadius;
+				Offset = Across;
+				NeighbourZ = OtherCentre.Z;
+			}
+		}
+		if (BestScore == TNumericLimits<float>::Max())
+		{
+			return false;
+		}
+		// Tangent to both: distance LowerRadius + UpperRadius from the lower axis, NeighbourRadius + UpperRadius from the other.
+		const float D = FMath::Abs(Offset);
+		const float A = LowerRadius + UpperRadius, B = NeighbourRadius + UpperRadius;
+		const float X = (D * D + A * A - B * B) / (2.f * D);
+		const float H2 = A * A - X * X;
+		if (H2 <= 0.f)
+		{
+			return false;
+		}
+		const float Height = FMath::Sqrt(H2);
+		const float Length = Upper->GetLength();
+		const FVector Start = Centre - Axis * HalfLength;
+		const float AimAlong = FVector::DotProduct(Aim - Start, Axis);
+		float UpperStart = FMath::RoundToFloat((AimAlong - Length * 0.5f) / ACarvableLog::ModuleLength) * ACarvableLog::ModuleLength;
+		UpperStart = FMath::Clamp(UpperStart, -Length * 0.5f, HalfLength * 2.f - Length * 0.5f);
+		const FVector UpperCentre = Start + Axis * (UpperStart + Length * 0.5f) + Side * (FMath::Sign(Offset) * X)
+			+ FVector(0.f, 0.f, Centre.Z - Start.Z + Height - 1.f);
+		const FQuat Rotation = FRotator(0.f, Axis.Rotation().Yaw, 0.f).Quaternion();
+		Out = FTransform(Rotation, UpperCentre - Rotation.RotateVector(FVector(Upper->GetCenterX(), 0.f, 0.f)));
+		return true;
+	}
+
+	/** A placement decision may inspect only the immediate construction neighbourhood, never every log in the level. */
+	void FindLocalLogs(UWorld* World, const FVector& Centre, float Radius, TArray<ACarvableLog*>& OutLogs)
+	{
+		OutLogs.Reset();
+		if (!World)
+		{
+			return;
+		}
+		TArray<FOverlapResult> Hits;
+		World->OverlapMultiByObjectType(Hits, Centre, FQuat::Identity, FCollisionObjectQueryParams::AllObjects,
+			FCollisionShape::MakeSphere(Radius));
+		for (const FOverlapResult& Hit : Hits)
+		{
+			if (ACarvableLog* Log = Cast<ACarvableLog>(Hit.GetActor()))
+			{
+				OutLogs.AddUnique(Log);
+			}
+		}
+	}
+}
+
+namespace
+{
+	/** Which face of a lying log a hit is on. */
+	enum class ELogFace : uint8 { Top, Bottom, Front, Back, EndA, EndB };
+
+	const TCHAR* FaceName(ELogFace Face)
+	{
+		switch (Face)
+		{
+		case ELogFace::Top:    return TEXT("üst");
+		case ELogFace::Bottom: return TEXT("alt");
+		case ELogFace::Front:  return TEXT("ön");
+		case ELogFace::Back:   return TEXT("arka");
+		case ELogFace::EndA:   return TEXT("uç");
+		default:               return TEXT("uç");
+		}
+	}
+
+	/**
+	 * The snap points of a lying log: on each of its four long faces (top, bottom, front, back) one per 75 cm module line,
+	 * and one on each end face. Face comes from the hit normal in the log's own frame (axis, horizontal side, up).
+	 */
+	struct FLogSockets
+	{
+		FVector Centre, Axis, Side;
+		float Radius = 0.f, Half = 0.f;
+		TArray<float> Lines;   // module lines, measured from the centre along the axis
+		ELogFace Face = ELogFace::Top;
+		float Along = 0.f;     // the chosen line (or ±Half on an end)
+		FName PointId = NAME_None;
+		bool bTargetVertical = false;
+
+		bool Init(const ACarvableLog* Log, const FVector& Point, const FVector& Normal)
+		{
+			TArray<LogSnapSystem::FPoint> Points;
+			if (!Log || !LogSnapSystem::BuildPoints(Log, Points)
+				|| !ACarvableLog::GetLogAxis(Log, Centre, Axis, Radius, Half))
+			{
+				return false;
+			}
+			bTargetVertical = FMath::Abs(Axis.Z) > 0.7f;
+			if (bTargetVertical)
+			{
+				Axis = FVector(0.f, 0.f, Axis.Z >= 0.f ? 1.f : -1.f);
+				Side = Log->GetActorTransform().GetUnitAxis(EAxis::Y);
+				Side = FVector(Side.X, Side.Y, 0.f).GetSafeNormal();
+				if (Side.IsNearlyZero())
+				{
+					Side = FVector::ForwardVector;
+				}
+			}
+			else
+			{
+				Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+				Side = FVector::CrossProduct(FVector::UpVector, Axis).GetSafeNormal();
+			}
+
+			auto FaceGroup = [](LogSnapSystem::EFace SourceFace) -> FName
+			{
+				switch (SourceFace)
+				{
+				case LogSnapSystem::EFace::Top: return TEXT("Top");
+				case LogSnapSystem::EFace::Bottom: return TEXT("Bottom");
+				case LogSnapSystem::EFace::Front: return TEXT("Front");
+				case LogSnapSystem::EFace::Back: return TEXT("Back");
+				case LogSnapSystem::EFace::EndA: return TEXT("EndA");
+				case LogSnapSystem::EFace::EndB: return TEXT("EndB");
+				default: return NAME_None;
+				}
+			};
+
+			TArray<WorldSnap::FPoint> Candidates;
+			Candidates.Reserve(Points.Num());
+			for (int32 Index = 0; Index < Points.Num(); ++Index)
+			{
+				const LogSnapSystem::FPoint& Source = Points[Index];
+				WorldSnap::FPoint& Candidate = Candidates.AddDefaulted_GetRef();
+				Candidate.Id = Source.Id;
+				Candidate.Group = FaceGroup(Source.Face);
+				Candidate.Position = Source.Position;
+				Candidate.Normal = Source.Normal;
+				Candidate.Axis = Source.Axis;
+				Candidate.SourceIndex = Index;
+			}
+
+			WorldSnap::FQuery SnapQuery;
+			SnapQuery.HitPoint = Point;
+			SnapQuery.HitNormal = Normal;
+			SnapQuery.MaxDistanceCm = 125.f;
+			SnapQuery.bRequireNormalCompatibility = true;
+			SnapQuery.NormalAlignmentThreshold = 0.25f;
+			SnapQuery.bUseAxisConstraint = true;
+			SnapQuery.MaxAlongAxisErrorCm = ACarvableLog::ModuleLength * 0.6f;
+
+			WorldSnap::FResolveResult SnapResult;
+			if (!FWorldSnapResolver::Resolve(Candidates, SnapQuery, SnapResult)
+				|| !Points.IsValidIndex(SnapResult.Point.SourceIndex))
+			{
+				return false;
+			}
+			const LogSnapSystem::FPoint& Selected = Points[SnapResult.Point.SourceIndex];
+			switch (Selected.Face)
+			{
+			case LogSnapSystem::EFace::Top: Face = ELogFace::Top; break;
+			case LogSnapSystem::EFace::Bottom: Face = ELogFace::Bottom; break;
+			case LogSnapSystem::EFace::Front: Face = ELogFace::Front; break;
+			case LogSnapSystem::EFace::Back: Face = ELogFace::Back; break;
+			case LogSnapSystem::EFace::EndA: Face = ELogFace::EndA; break;
+			case LogSnapSystem::EFace::EndB: Face = ELogFace::EndB; break;
+			}
+			Along = Selected.AlongAxis;
+			PointId = Selected.Id;
+
+			Lines.Reset();
+			const int32 NumModules = FMath::Clamp(FMath::RoundToInt((2.f * Half) / ACarvableLog::ModuleLength), 1, 8);
+			for (int32 i = 0; i < NumModules; ++i)
+			{
+				const float LineAlong = (i == NumModules - 1) ? Half : (-Half + (i + 1) * ACarvableLog::ModuleLength);
+				Lines.Add(LineAlong);
+			}
+			return true;
+		}
+		bool IsEnd() const { return Face == ELogFace::EndA || Face == ELogFace::EndB; }
+		FVector FaceNormal() const
+		{
+			if (bTargetVertical)
+			{
+				const FVector Side2 = FVector::CrossProduct(Axis, Side).GetSafeNormal();
+				switch (Face)
+				{
+				case ELogFace::Front:  return Side;
+				case ELogFace::Back:   return -Side;
+				case ELogFace::Top:    return Side2;
+				case ELogFace::Bottom: return -Side2;
+				case ELogFace::EndA:   return -Axis;
+				default:               return Axis;
+				}
+			}
+			switch (Face)
+			{
+			case ELogFace::Top:    return FVector::UpVector;
+			case ELogFace::Bottom: return -FVector::UpVector;
+			case ELogFace::Front:  return Side;
+			case ELogFace::Back:   return -Side;
+			case ELogFace::EndA:   return -Axis;
+			default:               return Axis;
+			}
+		}
+		/** A point on the surface of the face at a line. */
+		FVector SurfacePoint(float At) const
+		{
+			return IsEnd() ? Centre + Axis * At : Centre + Axis * At + FaceNormal() * Radius;
+		}
+		void Markers(TArray<FVector>& Out) const
+		{
+			Out.Reset();
+			if (IsEnd())
+			{
+				Out.Add(SurfacePoint(Along));
+				return;
+			}
+			if (Lines.IsEmpty())
+			{
+				Out.Add(SurfacePoint(Along));
+				return;
+			}
+			for (const float Line : Lines)
+			{
+				if (FMath::Abs(Line) < Half - 1.f)
+				{
+					Out.Add(SurfacePoint(Line));
+				}
+			}
+		}
+	};
+
+	/** A lying piece's transform with its axis along Dir and its centre at Centre. */
+	FTransform LyingAt(const ACarvableLog* Piece, const FVector& Dir, const FVector& Centre)
+	{
+		const FQuat Rotation = FRotator(0.f, Dir.Rotation().Yaw, 0.f).Quaternion();
+		return FTransform(Rotation, Centre - Rotation.RotateVector(FVector(Piece->GetCenterX(), 0.f, 0.f)));
+	}
+}
+
+namespace
+{
+	/** How deep two pieces that stand on each other are let into one another. */
+	float JointSeatDepth(float RadiusA, float RadiusB)
+	{
+		// About a radius: posts and beams, posts and the logs they stand on, sit well into each other.
+		return 0.95f * FMath::Min(RadiusA, RadiusB);
+	}
+
+	/** The angle to the log being aimed at, forced to the placement mode picked with [G]: 0 straight, 1 forty-five degrees, 2 square. Negative = by look. */
+	float ForceSnapDelta(int32 Mode, float Delta)
+	{
+		if (Mode < 0)
+		{
+			return Delta;
+		}
+		const float Side = Delta < 0.f ? -1.f : 1.f;
+		return Mode == 0 || Mode == 3 ? 0.f : Mode == 1 ? 45.f * Side : 90.f * Side;
+	}
+}
+
+const FTransform& AForestCharacter::GetCarryPlacementTransform() const
+{
+	return CarryPlace == ECarryPlace::Across || CarryPlace == ECarryPlace::Corner || CarryPlace == ECarryPlace::Diagonal
+		? CrossPlacement.Upper
+		: PlaceTransform;
+}
+
+AForestCharacter::FLogPlacementResult AForestCharacter::GetLogPlacementResult() const
+{
+	FLogPlacementResult Result;
+	Result.Mode = CarryPlace;
+	Result.Transform = GetCarryPlacementTransform();
+	Result.TargetActor = PlaceTarget;
+	Result.SnapPointId = SelectedSnapPointId;
+	Result.bValid = CarryPlace != ECarryPlace::None;
+	Result.bSupported = bPlaceSupported;
+	if (!Result.bValid)
+	{
+		Result.InvalidReason = TEXT("NoCompatiblePlacement");
+	}
+	else if (!Result.bSupported)
+	{
+		Result.InvalidReason = TEXT("UnsupportedConnection");
+	}
+	return Result;
+}
+
+bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const FTransform& Transform, bool bForce)
+{
+	if (!GetWorld() || !Piece) return false;
+	const double Now = GetWorld()->GetTimeSeconds();
+	const bool bSameCandidate = bSupportPreviewCacheValid
+		&& CachedSupportPreviewPiece.Get() == Piece
+		&& CachedSupportPreviewTarget.Get() == PlaceTarget.Get()
+		&& CachedSupportPreviewMode == CarryPlace
+		&& CachedSupportPreviewSnapPointId == SelectedSnapPointId
+		&& CachedSupportPreviewStructureVersion == StructureLink::Version()
+		&& CachedSupportPreviewTransform.GetLocation().Equals(Transform.GetLocation(), 2.f)
+		&& CachedSupportPreviewTransform.GetRotation().AngularDistance(Transform.GetRotation()) <= FMath::DegreesToRadians(2.f);
+
+	// The structure graph rebuild is expensive: an unchanged candidate reuses its result. A different candidate is always
+	// evaluated (a throttle that returned the previous candidate's answer made good fits look unsupported).
+	if (!bForce && bSameCandidate)
+	{
+		return bCachedSupportPreview;
+	}
+
+	bCachedSupportPreview = StructureLink::WouldBeSupported(GetWorld(), Piece, Transform);
+	CachedSupportPreviewPiece = const_cast<ACarvableLog*>(Piece);
+	CachedSupportPreviewTarget = PlaceTarget;
+	CachedSupportPreviewMode = CarryPlace;
+	CachedSupportPreviewSnapPointId = SelectedSnapPointId;
+	CachedSupportPreviewStructureVersion = StructureLink::Version();
+	CachedSupportPreviewTransform = Transform;
+	LastSupportPreviewEvaluation = Now;
+	bSupportPreviewCacheValid = true;
+	return bCachedSupportPreview;
+}
+
 void AForestCharacter::UpdateCarryPlacement()
 {
 	FHitResult Hit;
@@ -761,26 +1719,102 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 {
 	CarryPlace = ECarryPlace::None;
 	CrossLower = nullptr;
+	StandBase = nullptr;
+	SocketMarkers.Reset();
+	SelectedSnapPointId = NAME_None;
+	PlaceTarget = nullptr;
 	bPlaceSupported = true;
 	ACarvableLog* Piece = GetTopCarried();
 	if (!Piece || !bHit)
 	{
 		return;
 	}
+	AActor* HitActor = Hit.GetActor();
+
 	// A fire: any wood goes on it. A damaged piece of a structure: swap it for the carried one of the same size.
-	PlaceTarget = Hit.GetActor();
-	if (ACampfire* Fire = Cast<ACampfire>(Hit.GetActor()))
+	PlaceTarget = HitActor;
+	if (ACampfire* Fire = Cast<ACampfire>(HitActor))
 	{
 		CarryPlace = ECarryPlace::Fuel;
 		return;
 	}
 	// A cart, sled or rack takes whatever fits on it.
-	if (AHaulCart* Cart = Cast<AHaulCart>(Hit.GetActor()))
+	if (AHaulCart* Cart = Cast<AHaulCart>(HitActor))
 	{
 		CarryPlace = Cart->CanLoad(Piece) ? ECarryPlace::Load : ECarryPlace::None;
 		return;
 	}
-	if (ACarvableLog* Damaged = Cast<ACarvableLog>(Hit.GetActor()); Damaged && ACarvableLog::CanReplace(Damaged, Piece))
+	// Two-anchor placement: one endpoint rests on the ground, the other on an anchored post top.
+	// The incline is solved from the endpoints and the piece length, never from camera pitch.
+	if (bPlaceSlope && !Piece->IsSplit())
+	{
+		FVector PostCentre, PostAxis;
+		float PostRadius, PostHalf;
+		if (const ACarvableLog* Post = Cast<ACarvableLog>(HitActor); Post && Post != Piece
+			&& ACarvableLog::GetLogAxis(Post, PostCentre, PostAxis, PostRadius, PostHalf) && FMath::Abs(PostAxis.Z) > 0.9f)
+		{
+			const float TopZ = PostCentre.Z + PostHalf;
+			const float BaseZ = PostCentre.Z - PostHalf;
+			FVector Out = GetActorLocation() - PostCentre;
+			Out.Z = 0.f;
+			Out = Out.IsNearlyZero() ? -FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal() : Out.GetSafeNormal();
+
+			const float PieceLength = Piece->GetLength();
+			const float PieceRadius = Piece->GetRadius();
+			const FVector Upper(PostCentre.X, PostCentre.Y, TopZ + PieceRadius - JointSeatDepth(PostRadius, PieceRadius));
+
+			// Solve H = L*sin(theta) + R*cos(theta), where the low endpoint centre stays tangent to ground.
+			const float Height = Upper.Z - BaseZ - 0.5f;
+			const float CombinedLength = FMath::Sqrt(PieceLength * PieceLength + PieceRadius * PieceRadius);
+			if (Height > 5.f && Height < CombinedLength && PieceLength > KINDA_SMALL_NUMBER)
+			{
+				const float AngleRadians = FMath::Asin(FMath::Clamp(Height / CombinedLength, -1.f, 1.f))
+					- FMath::Atan2(PieceRadius, PieceLength);
+				const float AngleDegrees = FMath::RadiansToDegrees(AngleRadians);
+				const float Run = PieceLength * FMath::Cos(AngleRadians);
+				if (AngleDegrees >= 10.f && AngleDegrees <= 80.f && Run > 5.f)
+				{
+					const FVector LowGround(Upper.X + Out.X * Run, Upper.Y + Out.Y * Run, BaseZ);
+					const FVector LowEnd = LowGround + FVector(0.f, 0.f, PieceRadius * FMath::Cos(AngleRadians) + 0.5f);
+
+					WorldSnap::FTwoAnchorQuery Query;
+					Query.StartAnchor.Id = TEXT("GroundAnchor");
+					Query.StartAnchor.Kind = WorldSnap::EAnchorKind::Ground;
+					Query.StartAnchor.Position = LowEnd;
+					Query.StartAnchor.Normal = FVector::UpVector;
+					Query.StartAnchor.bLoadBearing = true;
+
+					Query.EndAnchor.Id = Post->GetFName();
+					Query.EndAnchor.Kind = WorldSnap::EAnchorKind::PostTop;
+					Query.EndAnchor.Position = Upper;
+					Query.EndAnchor.Normal = FVector::UpVector;
+					Query.EndAnchor.bLoadBearing = Post->IsAnchored();
+					Query.EndAnchor.bSupportValid = Post->IsAnchored();
+					// A post top already carrying a beam is not a free second-end socket.
+					Query.EndAnchor.bOccupied = ACarvableLog::FindBeamOnPost(Post) != nullptr;
+
+					Query.PieceLengthCm = PieceLength;
+					Query.LocalMinX = Piece->GetMinX();
+					Query.LocalMaxX = Piece->GetMaxX();
+					Query.LengthToleranceCm = 2.f;
+					Query.MinPitchDegrees = 10.f;
+					Query.MaxPitchDegrees = 80.f;
+
+					WorldSnap::FTwoAnchorResult Solved;
+					if (FWorldSnapTwoAnchorSolver::Solve(Query, Solved))
+					{
+						PlaceTarget = HitActor;
+						PlaceTransform = Solved.Transform;
+						CarryPlace = ECarryPlace::Slope;
+						SocketLabel = FString::Printf(TEXT("direğe yaslandı (%.0f°)"), Solved.PitchDegrees);
+						bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
+						return;
+					}
+				}
+			}
+		}
+	}
+	if (ACarvableLog* Damaged = Cast<ACarvableLog>(HitActor); Damaged && ACarvableLog::CanReplace(Damaged, Piece))
 	{
 		CarryPlace = ECarryPlace::Repair;
 		return;
@@ -792,27 +1826,32 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		FVector PostCentre, PostAxis;
 		float PostRadius, PostHalf;
 		const bool bPost = ACarvableLog::GetLogAxis(Post, PostCentre, PostAxis, PostRadius, PostHalf) && FMath::Abs(PostAxis.Z) > 0.95f;
+		const float PostTopZ = PostCentre.Z + (PostAxis.Z > 0.f ? PostHalf : -PostHalf);
+		const bool bAimingAtTop = Hit.ImpactNormal.Z > 0.6f || Hit.ImpactPoint.Z > PostTopZ - 35.f;
+
 		// A post that already carries a beam takes a brace (a piece two to four modules long), nothing else on top.
-		if (bPost && ACarvableLog::FindBeamOnPost(Post))
+		if (bPost && bAimingAtTop && ACarvableLog::FindBeamOnPost(Post))
 		{
 			if (ACarvableLog::ComputeBracePlacement(Post, Piece, PlaceTransform))
 			{
 				CarryPlace = ECarryPlace::Brace;
-				bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+				bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 			}
 			return;
 		}
-		if (bPost && Piece->GetLength() >= 3.f * ACarvableLog::ModuleLength - 1.f)
+		if (bPost && bAimingAtTop && Piece->GetLength() >= ACarvableLog::ModuleLength - 1.f)
 		{
 			const FVector Top = PostCentre + PostAxis * (PostAxis.Z > 0.f ? PostHalf : -PostHalf);
 			const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 			FVector Direction = Forward;
 			float Farthest = 0.f;
-			for (TActorIterator<ACarvableLog> It(GetWorld()); It; ++It)
+			TArray<ACarvableLog*> NearbyPosts;
+			FindLocalLogs(GetWorld(), Top, Piece->GetLength() + PostRadius + 100.f, NearbyPosts);
+			for (ACarvableLog* Candidate : NearbyPosts)
 			{
 				FVector OtherCentre, OtherAxis;
 				float OtherRadius, OtherHalf;
-				if (*It == Post || !It->IsAnchored() || !ACarvableLog::GetLogAxis(*It, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
+				if (Candidate == Post || !Candidate->IsAnchored() || !ACarvableLog::GetLogAxis(Candidate, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
 					|| FMath::Abs(OtherAxis.Z) < 0.95f)
 				{
 					continue;
@@ -820,7 +1859,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				const FVector OtherTop = OtherCentre + OtherAxis * (OtherAxis.Z > 0.f ? OtherHalf : -OtherHalf);
 				const FVector Flat(OtherTop.X - Top.X, OtherTop.Y - Top.Y, 0.f);
 				const float Distance = Flat.Size();
-				// Same height (the grid cuts posts the same length), the far post fully under the beam, ahead of the player.
+				if (Distance < KINDA_SMALL_NUMBER) continue;
 				if (FMath::Abs(OtherTop.Z - Top.Z) <= 5.f && Distance > PostRadius + OtherRadius
 					&& Distance <= Piece->GetLength() - PostRadius - OtherRadius && Distance > Farthest
 					&& FVector::DotProduct(Flat / Distance, Forward) > 0.85f)
@@ -830,51 +1869,428 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				}
 			}
 			const FQuat Rotation = FRotator(0.f, Direction.Rotation().Yaw, 0.f).Quaternion();
-			const FVector End(Top.X - Direction.X * PostRadius, Top.Y - Direction.Y * PostRadius, Top.Z + Piece->GetRadius() + 0.5f);
+			// Seated into the post tops (a seat is cut under it when it goes in), not just touching them.
+			const FVector End(Top.X - Direction.X * PostRadius, Top.Y - Direction.Y * PostRadius, Top.Z + Piece->GetRadius() - JointSeatDepth(PostRadius, Piece->GetRadius()));
 			PlaceTransform = FTransform(Rotation, End - Rotation.RotateVector(FVector(Piece->GetLocalBox().Min.X, 0.f, 0.f)));
 			CarryPlace = ECarryPlace::Beam;
-			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+			bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 			return;
 		}
 	}
 	// A split piece onto a lying log: a floor board, flat face up, resting on it.
-	AActor* Lower = Hit.GetActor();
-	// A post stood on the top of an installed lying log (a platform beam): its foot rests on it.
-	if ((bPlaceStanding || bPlaceSlope) && Lower && Hit.ImpactNormal.Z > 0.6f && !Piece->IsSplit())
+	AActor* Lower = HitActor;
+	FVector SnapAimPoint = FVector(Hit.ImpactPoint);
+	// Snap points on every face of a lying log: aimed at its front, back, bottom or an end (not the top, which keeps
+	// the wall rules below), the piece attaches to that face at the nearest 75 cm line. Its direction to the log is the
+	// nearest of 0 / 45 / 90 degrees from the view, as everywhere: parallel beside it, square into it (a T), or at 45.
+	SocketMarkers.Reset();
+	SocketLabel.Reset();
+	if (const ACarvableLog* Target = Cast<ACarvableLog>(Lower); Target && !Target->IsCarried() && !bPlaceSlope)
+	{
+		FLogSockets Sockets;
+		if (Sockets.Init(Target, Hit.ImpactPoint, Hit.ImpactNormal))
+		{
+			Sockets.Markers(SocketMarkers);
+			SocketChosen = Sockets.SurfacePoint(Sockets.Along);
+			SelectedSnapPointId = Sockets.PointId;
+			SocketNormal = Sockets.FaceNormal();
+			if (SelectedSnapPointId != NAME_None && SocketNormal.Z > 0.5f)
+			{
+				SnapAimPoint = SocketChosen;
+			}
+			if (Sockets.Face != ELogFace::Top || Sockets.bTargetVertical)
+			{
+				const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+				const FVector Desired = FVector::CrossProduct(FVector::UpVector, Facing);
+				const float Rt = Sockets.Radius;
+				const float Rp = Piece->GetRadius();
+				const float Lp = Piece->GetLength();
+				const FVector N = Sockets.FaceNormal();
+				FString What;
+				bool bFound = false;
+
+				if (Sockets.bTargetVertical)
+				{
+					const FVector Tangent = FVector::CrossProduct(FVector::UpVector, N).GetSafeNormal();
+					const float Delta = ForceSnapDelta(SnapAngleMode, LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(Tangent.Rotation().Yaw, Facing.Rotation().Yaw)));
+					const float Sector = FMath::Abs(Delta) > 67.5f ? 90.f : FMath::Abs(Delta) < 22.5f ? 0.f : (Delta > 0.f ? 45.f : -45.f);
+
+					if (Sockets.IsEnd())
+					{
+						const FVector OutDir = Sockets.Face == ELogFace::EndB ? Sockets.Axis : -Sockets.Axis;
+						const FVector EndPoint = Sockets.Centre + OutDir * Sockets.Half;
+						if (bPlaceStanding)
+						{
+							PlaceTransform = Piece->GetStandTransform(EndPoint, Facing.Rotation().Yaw);
+							What = TEXT("direk üstüne direk");
+							bFound = true;
+						}
+						else
+						{
+							const FVector BeamCentre = EndPoint + FVector(0.f, 0.f, Rp - JointSeatDepth(Rt, Rp));
+							PlaceTransform = LyingAt(Piece, Facing, BeamCentre);
+							What = TEXT("direk tepesine kiriş");
+							bFound = true;
+						}
+					}
+					else
+					{
+						const FVector SnapPos = Sockets.SurfacePoint(Sockets.Along);
+						if (bPlaceStanding)
+						{
+							const FVector Foot = SnapPos + N * Rp;
+							PlaceTransform = Piece->GetStandTransform(FVector(Foot.X, Foot.Y, Sockets.Centre.Z - Sockets.Half), Facing.Rotation().Yaw);
+							What = TEXT("direk yanına direk");
+							bFound = true;
+						}
+						else
+						{
+							if (Sector == 90.f)
+							{
+								// The log's end is let into the post (a seat), not just touching it.
+								const FVector Dir = N;
+								const FVector C = SnapPos + Dir * (Lp * 0.5f - JointSeatDepth(Rt, Rp));
+								PlaceTransform = LyingAt(Piece, Dir, C);
+								What = TEXT("direğe dik (T)");
+							}
+							else if (Sector == 0.f)
+							{
+								const FVector Dir = Tangent;
+								const FVector C = SnapPos + N * Rp;
+								PlaceTransform = LyingAt(Piece, Dir, C);
+								What = TEXT("direğe paralel kiriş/çit");
+							}
+							else
+							{
+								const FVector Dir = (N * UE_INV_SQRT_2 + Tangent * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
+								const FVector C = SnapPos + Dir * (Lp * 0.5f - JointSeatDepth(Rt, Rp));
+								PlaceTransform = LyingAt(Piece, Dir, C);
+								What = TEXT("direğe 45°");
+							}
+							bFound = true;
+						}
+					}
+				}
+				else
+				{
+					// Angle of the piece to the log, folded into (-90, 90], snapped to 0 / 45 / -45 / 90.
+					const float Delta = ForceSnapDelta(SnapAngleMode, LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(Sockets.Axis.Rotation().Yaw, Desired.Rotation().Yaw)));
+					const float Sector = FMath::Abs(Delta) > 67.5f ? 90.f : FMath::Abs(Delta) < 22.5f ? 0.f : (Delta > 0.f ? 45.f : -45.f);
+					const float BottomZ = Sockets.Centre.Z - Rt;   // pieces beside or at the ends rest at the same level
+					if (bPlaceStanding)
+					{
+						// A post: under the log (its top touching the log's underside), beside it, or at an end.
+						FVector Foot;
+						float FootZ = BottomZ;
+						if (Sockets.Face == ELogFace::Bottom)
+						{
+							Foot = Sockets.Centre + Sockets.Axis * Sockets.Along;
+							FootZ = BottomZ - Lp;
+							What = TEXT("altına destek direği");
+						}
+						else
+						{
+							Foot = Sockets.SurfacePoint(Sockets.Along) + N * Rp;
+							What = Sockets.IsEnd() ? TEXT("ucuna direk") : TEXT("yanına direk");
+						}
+						PlaceTransform = Piece->GetStandTransform(FVector(Foot.X, Foot.Y, FootZ), Facing.Rotation().Yaw);
+						bFound = true;
+					}
+					else if (Sockets.Face == ELogFace::Bottom)
+					{
+						// Under it, parallel (a sister log), its start on the log's module grid.
+						const float Start = FMath::RoundToFloat((Sockets.Along - Lp * 0.5f + Sockets.Half) / ACarvableLog::ModuleLength) * ACarvableLog::ModuleLength - Sockets.Half;
+						PlaceTransform = LyingAt(Piece, Sockets.Axis, Sockets.Centre + Sockets.Axis * (Start + Lp * 0.5f) - FVector::UpVector * (Rt + Rp));
+						What = TEXT("altına paralel");
+						bFound = true;
+					}
+					else if (!Sockets.IsEnd())
+					{
+						if (Sector == 0.f)
+						{
+							// Side by side, touching, ends on the same 75 cm grid.
+							const float Start = FMath::RoundToFloat((Sockets.Along - Lp * 0.5f + Sockets.Half) / ACarvableLog::ModuleLength) * ACarvableLog::ModuleLength - Sockets.Half;
+							FVector C = Sockets.Centre + Sockets.Axis * (Start + Lp * 0.5f) + N * (Rt + Rp);
+							C.Z = BottomZ + Rp;
+							PlaceTransform = LyingAt(Piece, Sockets.Axis, C);
+							What = TEXT("yan yana");
+						}
+						else
+						{
+							// Its end against the side at the line: square (a T) or at 45 degrees.
+							const FVector Dir = Sector == 90.f ? N
+								: (N * UE_INV_SQRT_2 + Sockets.Axis * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
+							FVector C = Sockets.SurfacePoint(Sockets.Along) + Dir * (Lp * 0.5f + (Sector == 90.f ? 0.f : Rp));
+							C.Z = BottomZ + Rp;
+							PlaceTransform = LyingAt(Piece, Dir, C);
+							What = Sector == 90.f ? TEXT("yanına dik (T)") : TEXT("yanından 45°");
+						}
+						bFound = true;
+					}
+					else
+					{
+						const FVector Out = Sockets.Face == ELogFace::EndB ? Sockets.Axis : -Sockets.Axis;
+						const FVector EndPoint = Sockets.Centre + Out * Sockets.Half;
+						if (Sector == 0.f)
+						{
+							// Carries on in line, end to end: the two flat ends meet, lengths add (600 + 600 = 1200).
+							PlaceTransform = LyingAt(Piece, Out, EndPoint + Out * (Lp * 0.5f) + FVector(0.f, 0.f, Rp - Rt));
+							What = TEXT("uca uç (uzatma)");
+						}
+						else if (Sector == 90.f)
+						{
+							// Square across the end, the log's end butting into its middle.
+							FVector C = EndPoint + Out * Rp;
+							C.Z = BottomZ + Rp;
+							PlaceTransform = LyingAt(Piece, Sockets.Side, C);
+							What = TEXT("ucuna dik (T)");
+						}
+						else
+						{
+							const FVector Dir = (Out * UE_INV_SQRT_2 + Sockets.Side * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
+							FVector C = EndPoint + Dir * (Lp * 0.5f);
+							C.Z = BottomZ + Rp;
+							PlaceTransform = LyingAt(Piece, Dir, C);
+							What = TEXT("ucundan 45°");
+						}
+						bFound = true;
+					}
+				}
+				if (bFound)
+				{
+					SocketLabel = FString::Printf(TEXT("%s (%s yüz)"), *What, FaceName(Sockets.Face));
+					CarryPlace = ECarryPlace::Socket;
+					bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
+					return;
+				}
+			}
+		}
+	}
+	// A post stood, or a rafter leant, on the top of a lying log (a platform beam, a sill on the ground): its foot rests on it.
+	if ((bPlaceStanding || bPlaceSlope) && Lower && Lower == HitActor && Hit.ImpactNormal.Z > 0.6f && !Piece->IsSplit())
 	{
 		FVector BaseCentre, BaseAxis;
 		float BaseRadius, BaseHalf;
 		const ACarvableLog* Base = Cast<ACarvableLog>(Lower);
-		if (Base && Base->IsAnchored() && ACarvableLog::GetLogAxis(Base, BaseCentre, BaseAxis, BaseRadius, BaseHalf) && FMath::Abs(BaseAxis.Z) < 0.3f)
+		if (Base && !Base->IsCarried() && ACarvableLog::GetLogAxis(Base, BaseCentre, BaseAxis, BaseRadius, BaseHalf) && FMath::Abs(BaseAxis.Z) < 0.3f)
 		{
 			const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 			if (bPlaceSlope)
 			{
-				ACarvableLog::ComputeSlopePlacement(Hit.ImpactPoint, Facing, SlopeAngle, Piece, PlaceTransform);
+				// A rafter: from the top of this log up to the nearest higher log ahead lying the same way (the other
+				// wall), at the angle that lays it on both. With none ahead, the chosen angle.
+				const FVector BaseDir = FVector(BaseAxis.X, BaseAxis.Y, 0.f).GetSafeNormal();
+				FVector Out = Facing - BaseDir * FVector::DotProduct(Facing, BaseDir);
+				Out = Out.GetSafeNormal();
+				const FVector Foot(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, BaseCentre.Z + BaseRadius);
+				float Angle = SlopeAngle;
+				float Best = TNumericLimits<float>::Max();
+				TArray<ACarvableLog*> Nearby;
+				FindLocalLogs(GetWorld(), Foot, Piece->GetLength(), Nearby);
+				for (const ACarvableLog* Other : Nearby)
+				{
+					FVector OC, OA;
+					float OR, OH;
+					if (!Other || Other == Base || Other == Piece || Other->IsCarried() || !ACarvableLog::GetLogAxis(Other, OC, OA, OR, OH)
+						|| FMath::Abs(OA.Z) > 0.3f || FMath::Abs(FVector::DotProduct(FVector(OA.X, OA.Y, 0.f).GetSafeNormal(), BaseDir)) < 0.95f)
+					{
+						continue;
+					}
+					const float Run = FVector::DotProduct(OC - Foot, Out);
+					const float Rise = OC.Z + OR - Foot.Z;
+					const float Along = FVector::DotProduct(Foot - OC, BaseDir);
+					if (Run < OR + Piece->GetRadius() || Rise < 5.f || FMath::Abs(Along) > OH || Run - Rise * 0.01f >= Best
+						|| FMath::Sqrt(Run * Run + Rise * Rise) > Piece->GetLength() - Piece->GetRadius())
+					{
+						continue;
+					}
+					// The nearest wall; of its courses (same run) the top one.
+					Best = Run - Rise * 0.01f;
+					Angle = FMath::RadiansToDegrees(FMath::Atan2(Rise, Run));
+				}
+				ACarvableLog::ComputeSlopePlacement(Foot, Out.IsNearlyZero() ? Facing : Out, Angle, Piece, PlaceTransform);
 				CarryPlace = ECarryPlace::Slope;
 			}
 			else
 			{
-				PlaceTransform = Piece->GetStandTransform(Hit.ImpactPoint, Facing.Rotation().Yaw);
+				// Let into the log a little (a seat is cut into it when the post goes in).
+				const FVector Foot(SnapAimPoint.X, SnapAimPoint.Y, BaseCentre.Z + BaseRadius - JointSeatDepth(BaseRadius, Piece->GetRadius()));
+				PlaceTransform = Piece->GetStandTransform(Foot, Facing.Rotation().Yaw);
+				StandBase = const_cast<ACarvableLog*>(Base);
 				CarryPlace = ECarryPlace::Stand;
 			}
-			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+			bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 			return;
 		}
 	}
-	if (Lower && Lower->IsA<ACarvableLog>() && ACarvableLog::ComputeFloorPlacement(Lower, Hit.ImpactPoint, GetActorLocation(), Piece, PlaceTransform))
+	if (Lower && Lower->IsA<ACarvableLog>() && ACarvableLog::ComputeFloorPlacement(Lower, SnapAimPoint, GetActorLocation(), Piece, PlaceTransform))
 	{
 		CarryPlace = ECarryPlace::Floor;
-		bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+		bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 		return;
+	}
+	// Onto a lying log. The carried piece lies across the view (as on the ground); its angle to the log under it is
+	// snapped to the nearest of four equal 45 degree sectors: 0 = a wall course on top, +45 / -45 = a diagonal course,
+	// 90 = square across (a corner). A +45 course with a square-across log above it gives the complementary -45.
+	// If the chosen fit is impossible (too short, no free notch line) the next nearest sector is tried, so a piece
+	// aimed at a log always goes on it when it can.
+	if (ACarvableLog* LowerLog = Cast<ACarvableLog>(Lower); LowerLog && !bPlaceStanding && !bPlaceSlope)
+	{
+		FVector LowerCentre, LowerAxis;
+		float LowerRadius, LowerHalf;
+		if (ACarvableLog::GetLogAxis(LowerLog, LowerCentre, LowerAxis, LowerRadius, LowerHalf) && FMath::Abs(LowerAxis.Z) < 0.3f)
+		{
+			const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+			const float DesiredYaw = FVector::CrossProduct(FVector::UpVector, Facing).Rotation().Yaw;
+			const float LowerYaw = FVector(LowerAxis.X, LowerAxis.Y, 0.f).Rotation().Yaw;
+			// Keep a stable base axis when the player targets the top of a stack. Walking down parallel,
+			// touching courses finds the first crossing support; otherwise the next diagonal would be
+			// calculated from the immediately previous +45 course and drift to 0/90 instead of -45.
+			float ReferenceYaw = LowerYaw;
+			const ACarvableLog* CurrentCourse = LowerLog;
+			for (int32 Course = 0; Course < 12 && CurrentCourse; ++Course)
+			{
+				FVector CurrentCentre, CurrentAxis;
+				float CurrentRadius, CurrentHalf;
+				if (!ACarvableLog::GetLogAxis(CurrentCourse, CurrentCentre, CurrentAxis, CurrentRadius, CurrentHalf)
+					|| FMath::Abs(CurrentAxis.Z) > 0.3f)
+				{
+					break;
+				}
+				const FVector CurrentStart = CurrentCentre - CurrentAxis * CurrentHalf;
+				const FVector CurrentEnd = CurrentCentre + CurrentAxis * CurrentHalf;
+				const float CurrentBottom = CurrentCentre.Z - CurrentRadius;
+				const ACarvableLog* BestSupport = nullptr;
+				float BestSupportScore = TNumericLimits<float>::Max();
+				float BestSupportYaw = LowerYaw;
+
+				TArray<ACarvableLog*> LocalSupportCandidates;
+				FindLocalLogs(GetWorld(), CurrentCentre, CurrentHalf + CurrentRadius + 2.f * ACarvableLog::ModuleLength, LocalSupportCandidates);
+				for (const ACarvableLog* Candidate : LocalSupportCandidates)
+				{
+					FVector CandidateCentre, CandidateAxis;
+					float CandidateRadius, CandidateHalf;
+					if (Candidate == CurrentCourse || Candidate->IsCarried()
+						|| !ACarvableLog::GetLogAxis(Candidate, CandidateCentre, CandidateAxis, CandidateRadius, CandidateHalf)
+						|| FMath::Abs(CandidateAxis.Z) > 0.3f || CandidateCentre.Z >= CurrentCentre.Z - 1.f)
+					{
+						continue;
+					}
+					const float VerticalGap = CurrentBottom - (CandidateCentre.Z + CandidateRadius);
+					if (FMath::Abs(VerticalGap) > 18.f) continue;
+					const FVector CandidateStart = CandidateCentre - CandidateAxis * CandidateHalf;
+					const FVector CandidateEnd = CandidateCentre + CandidateAxis * CandidateHalf;
+					FVector OnCandidate = FMath::ClosestPointOnSegment(CurrentCentre, CandidateStart, CandidateEnd);
+					FVector OnCurrent = FMath::ClosestPointOnSegment(OnCandidate, CurrentStart, CurrentEnd);
+					OnCandidate = FMath::ClosestPointOnSegment(OnCurrent, CandidateStart, CandidateEnd);
+					const float AxisGap = FVector::Dist2D(OnCurrent, OnCandidate);
+					if (AxisGap > CurrentRadius + CandidateRadius + 12.f) continue;
+					const float Score = FMath::Abs(VerticalGap) + AxisGap * 0.1f;
+					if (Score < BestSupportScore)
+					{
+						BestSupport = Candidate;
+						BestSupportScore = Score;
+						BestSupportYaw = FVector(CandidateAxis.X, CandidateAxis.Y, 0.f).Rotation().Yaw;
+					}
+				}
+
+				if (!BestSupport)
+				{
+					break;
+				}
+
+				const float CourseDelta = LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(BestSupportYaw,
+					FVector(CurrentAxis.X, CurrentAxis.Y, 0.f).Rotation().Yaw));
+				if (FMath::Abs(CourseDelta) >= 20.f)
+				{
+					ReferenceYaw = BestSupportYaw;
+					break;
+				}
+
+				CurrentCourse = BestSupport;
+			}
+			// Angle between the two axes, folded into (-90, 90]: a log has no front or back.
+			const float Delta = ForceSnapDelta(SnapAngleMode, LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(LowerYaw, DesiredYaw)));
+			// A wall corner: square to the log and aimed at its last module joins the ends of the two (a log cabin's corner).
+			// The new log runs to the parallel log of the opposite wall when there is one and seats on both.
+			if (FMath::Abs(Delta) > 67.5f)
+			{
+				const float AimAlong = FVector::DotProduct(SnapAimPoint - LowerCentre, FVector(LowerAxis.X, LowerAxis.Y, 0.f).GetSafeNormal());
+				if (LowerHalf - FMath::Abs(AimAlong) <= ACarvableLog::ModuleLength)
+				{
+					TArray<ACarvableLog*> Nearby;
+					FindLocalLogs(GetWorld(), Hit.ImpactPoint, Piece->GetLength() + 50.f, Nearby);
+					if (ACarvableLog::ComputeCornerPlacement(LowerLog, SnapAimPoint, GetActorLocation(), Piece, Nearby, CrossPlacement))
+					{
+						CrossLower = LowerLog;
+						CarryPlace = ECarryPlace::Corner;
+						bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
+						return;
+					}
+				}
+			}
+			const float Sectors[4] = { 0.f, 45.f, -45.f, 90.f };
+			auto Distance = [Delta](float Sector)
+			{
+				return Sector == 90.f ? 90.f - FMath::Abs(Delta) : FMath::Abs(Delta - Sector);
+			};
+			int32 Order[4] = { 0, 1, 2, 3 };
+			Algo::Sort(Order, [&](int32 A, int32 B) { return Distance(Sectors[A]) < Distance(Sectors[B]); });
+			for (const int32 Index : Order)
+			{
+				const float Sector = Sectors[Index];
+				if (Sector == 0.f)
+				{
+					if (SnapAngleMode == 3)
+					{
+						TArray<ACarvableLog*> Neighbours;
+						FindLocalLogs(GetWorld(), SnapAimPoint, Piece->GetLength() + 100.f, Neighbours);
+						if (ComputeNestPlacement(LowerLog, FVector(Hit.ImpactPoint), Piece, Neighbours, PlaceTransform))
+						{
+							CarryPlace = ECarryPlace::Stack;
+							SocketLabel = TEXT("iki kütüğün arasına oturdu (yığın)");
+							bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
+							return;
+						}
+					}
+					if (ComputeStackPlacement(LowerLog, SnapAimPoint, Piece, PlaceTransform))
+					{
+						CarryPlace = ECarryPlace::Stack;
+						bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
+						return;
+					}
+				}
+				else if (Sector == 90.f)
+				{
+					if (ACarvableLog::ComputeCrossPlacement(LowerLog, SnapAimPoint, GetActorLocation(), Piece, CrossPlacement))
+					{
+						CrossLower = LowerLog;
+						CarryPlace = ECarryPlace::Across;
+						bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
+						return;
+					}
+				}
+				else if (ACarvableLog::ComputeComplementarySnapPlacement(LowerLog, SnapAimPoint, Piece, ReferenceYaw,
+					ReferenceYaw + Sector, CrossPlacement))
+				{
+					CrossLower = LowerLog;
+					CarryPlace = ECarryPlace::Diagonal;
+					const float ActualDelta = LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(ReferenceYaw,
+						CrossPlacement.Upper.GetRotation().Rotator().Yaw));
+					DiagonalAngle = ActualDelta;
+					bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
+					return;
+				}
+			}
+		}
 	}
 	// Onto a lying log: square across it, notched (whichever mode is chosen, a post does not stand on a log).
 	if (Lower && (Lower->IsA<ACarvableLog>() || Lower->IsA<APickupItem>())
-		&& ACarvableLog::ComputeCrossPlacement(Lower, Hit.ImpactPoint, GetActorLocation(), Piece, CrossPlacement))
+		&& ACarvableLog::ComputeCrossPlacement(Lower, SnapAimPoint, GetActorLocation(), Piece, CrossPlacement))
 	{
 		CrossLower = Lower;
 		CarryPlace = ECarryPlace::Across;
-		bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, CrossPlacement.Upper);
+		bPlaceSupported = EvaluateSupportPreview(Piece, CrossPlacement.Upper);
 		return;
 	}
 	// On the ground (anything flat enough): lying across the view, or standing up as a post.
@@ -883,17 +2299,81 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		return;
 	}
 	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	// Next to a laid log: parallel, square or 45 degrees to it, each an equal 45 degree slice of the view.
+	// Free on the ground: whole 15 degree steps.
+	constexpr float NearYawStep = 45.f;
+	constexpr float GroundYawStep = 15.f;
 	if (bPlaceSlope)
 	{
 		if (ACarvableLog::ComputeSlopePlacement(Hit.ImpactPoint, Forward, SlopeAngle, Piece, PlaceTransform))
 		{
 			CarryPlace = ECarryPlace::Slope;
-			bPlaceSupported = StructureLink::WouldBeSupported(GetWorld(), Piece, PlaceTransform);
+			bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
 		}
 		return;
 	}
-	const float Yaw = bPlaceStanding ? Forward.Rotation().Yaw : Forward.Rotation().Yaw + 90.f;
-	PlaceTransform = bPlaceStanding ? Piece->GetStandTransform(Hit.ImpactPoint, Yaw) : Piece->GetLayTransform(Hit.ImpactPoint, Yaw);
+	float Yaw = bPlaceStanding ? Forward.Rotation().Yaw : Forward.Rotation().Yaw + 90.f;
+	FVector Ground = Hit.ImpactPoint;
+	// Snap to a nearby installed lying log: the ground aim stays the placement target, while installed pieces provide
+	// a stable local frame. Prefer the frame whose parallel/perpendicular direction best matches the player's view.
+	const ACarvableLog* Near = nullptr;
+	float NearScore = TNumericLimits<float>::Max();
+	float NearDistance = TNumericLimits<float>::Max();
+	TArray<ACarvableLog*> NearbyGroundLogs;
+	FindLocalLogs(GetWorld(), Ground, 450.f, NearbyGroundLogs);
+	for (ACarvableLog* Candidate : NearbyGroundLogs)
+	{
+		FVector C, A;
+		float R, H;
+		if (Candidate == Piece || !Candidate->IsAnchored() || Candidate->IsCarried()
+			|| !ACarvableLog::GetLogAxis(Candidate, C, A, R, H) || FMath::Abs(A.Z) > 0.3f)
+		{
+			continue;
+		}
+		const FVector Closest = FMath::ClosestPointOnSegment(Ground, C - A * H, C + A * H);
+		const float Distance = FVector::Dist2D(Closest, Ground);
+		if (Distance > 400.f) continue;
+		const float ReferenceYaw = FVector(A.X, A.Y, 0.f).Rotation().Yaw;
+		const float DeltaYaw = FMath::FindDeltaAngleDegrees(ReferenceYaw, Yaw);
+		const float DirectionError = FMath::Abs(DeltaYaw - NearYawStep * FMath::RoundToFloat(DeltaYaw / NearYawStep));
+		const float Score = Distance + DirectionError * 2.f;
+		if (Score < NearScore || (FMath::IsNearlyEqual(Score, NearScore) && Distance < NearDistance))
+		{
+			NearScore = Score;
+			NearDistance = Distance;
+			Near = Candidate;
+		}
+	}
+	if (Near)
+	{
+		const FTransform NearFrame = Near->GetActorTransform();
+		const float NearYaw = NearFrame.GetRotation().Rotator().Yaw;
+		Yaw = NearYaw + NearYawStep * FMath::RoundToFloat(FMath::FindDeltaAngleDegrees(NearYaw, Yaw) / NearYawStep);
+		FVector Local = NearFrame.InverseTransformPosition(Ground);
+		const float MinX = Near->GetLocalBox().Min.X;
+		const float Module = ACarvableLog::ModuleLength;
+		Local.X = MinX + FMath::RoundToFloat((Local.X - MinX) / Module) * Module;
+		// Beside a parallel log the pieces touch (a plank next to a plank, a log next to a log); square or at 45 degrees
+		// to it the 75 cm grid holds.
+		const float Turn = FMath::Abs(FMath::FindDeltaAngleDegrees(NearYaw, Yaw));
+		if (FMath::Min(Turn, 180.f - Turn) < 5.f)
+		{
+			const float Step = (Near->GetWidth() + Piece->GetWidth()) * 0.5f + 0.5f;
+			const float Steps = FMath::Max(1.f, FMath::RoundToFloat(FMath::Abs(Local.Y) / Step));
+			Local.Y = FMath::Sign(Local.Y == 0.f ? 1.f : Local.Y) * Steps * Step;
+		}
+		else
+		{
+			Local.Y = FMath::RoundToFloat(Local.Y / Module) * Module;
+		}
+		Ground = FVector(NearFrame.TransformPosition(Local).X, NearFrame.TransformPosition(Local).Y, Ground.Z);
+	}
+	else
+	{
+		// Keep free placement equally predictable when there is no installed piece close enough to anchor its grid.
+		Yaw = GroundYawStep * FMath::RoundToFloat(Yaw / GroundYawStep);
+	}
+	PlaceTransform = bPlaceStanding ? Piece->GetStandTransform(Ground, Yaw) : Piece->GetLayTransform(Ground, Yaw);
 	CarryPlace = bPlaceStanding ? ECarryPlace::Stand : ECarryPlace::Lay;
 }
 
@@ -905,6 +2385,23 @@ bool AForestCharacter::PlaceCarried()
 		ShowMessage(TEXT("Buraya konmaz  —  yere ya da yerdeki bir kütüğe bak"));
 		return false;
 	}
+	const bool bNeedsSupportCheck = CarryPlace == ECarryPlace::Brace || CarryPlace == ECarryPlace::Beam
+		|| CarryPlace == ECarryPlace::Socket || CarryPlace == ECarryPlace::Stand || CarryPlace == ECarryPlace::Floor
+		|| CarryPlace == ECarryPlace::Corner || CarryPlace == ECarryPlace::Stack || CarryPlace == ECarryPlace::Across
+		|| CarryPlace == ECarryPlace::Diagonal || CarryPlace == ECarryPlace::Slope;
+	if (bNeedsSupportCheck)
+	{
+		const FLogPlacementResult Placement = GetLogPlacementResult();
+		const FTransform& FinalTransform = Placement.Transform;
+		// Not a block: an unsupported fit is allowed (the preview shows it as unsupported) and SettleStructure lets it fall.
+		bPlaceSupported = EvaluateSupportPreview(Piece, FinalTransform, true);
+		if (!bPlaceSupported)
+		{
+			ShowMessage(TEXT("Uyarı: bu bağlantı yapısal olarak desteklenmiyor, düşebilir."));
+		}
+	}
+	// Placing never snaps a beam for a long overhang (the second post comes next); removing a support still does.
+	TGuardValue<bool> PlacementGrace(StructureLink::bPlacementGrace, true);
 	CarriedLogs.Pop();
 	switch (CarryPlace)
 	{
@@ -913,15 +2410,81 @@ bool AForestCharacter::PlaceCarried()
 		ShowMessage(TEXT("Kütük çaprazlama oturdu  —  altına eyer çentiği açıldı"));
 		SettleStructure();
 		break;
-	case ECarryPlace::Stand:
-		// A post stays exactly where it is put.
+	case ECarryPlace::Lay:
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		ShowMessage(TEXT("Kütük yere yatırıldı"));
+		SettleStructure();
+		break;
+	case ECarryPlace::Stand:
+		// A post stays exactly where it is put; on a lying log it is let into a seat cut in the log's top.
+		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		if (ACarvableLog* Base = StandBase.Get())
+		{
+			Base->Anchor();
+			FVector C, A;
+			float R, H;
+			if (ACarvableLog::GetLogAxis(Base, C, A, R, H))
+			{
+				Base->CutSeat(Piece->GetActorLocation(), FVector::UpVector, Piece->GetRadius() * 2.f + 2.f, JointSeatDepth(R, Piece->GetRadius()) + 0.5f);
+			}
+		}
 		ACarvableLog::OnLogStoodUp.Broadcast(Piece);
 		ShowMessage(TEXT("Direk dikildi"));
 		SettleStructure();
 		break;
+	case ECarryPlace::Stack:
+		if (ACarvableLog* LowerLog = Cast<ACarvableLog>(PlaceTarget.Get()))
+		{
+			LowerLog->Anchor();
+		}
+		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		ShowMessage(TEXT("Kütük alttakinin üstüne oturdu  —  duvar sırası"));
+		SettleStructure();
+		break;
+	case ECarryPlace::Socket:
+		if (ACarvableLog* LowerLog = Cast<ACarvableLog>(PlaceTarget.Get()))
+		{
+			LowerLog->Anchor();
+		}
+		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		ShowMessage(FString::Printf(TEXT("Kütük kondu: %s"), *SocketLabel));
+		SettleStructure();
+		break;
+	case ECarryPlace::Corner:
+		ACarvableLog::PlaceAcross(CrossLower.Get(), CrossPlacement, Piece);
+		ShowMessage(TEXT("Köşe geçmesi  —  uçlar birbirine oturdu"));
+		SettleStructure();
+		break;
+	case ECarryPlace::Diagonal:
+		ACarvableLog::PlaceAcross(CrossLower.Get(), CrossPlacement, Piece);
+		ShowMessage(FString::Printf(TEXT("Kütük taban eksenine %+.0f° çaprazlama oturdu"), DiagonalAngle));
+		SettleStructure();
+		break;
 	case ECarryPlace::Beam:
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		{
+			// Seats under the beam for every post top it sits on, so beam and posts are let into each other.
+			FVector C, A;
+			float R, H;
+			ACarvableLog::GetLogAxis(Piece, C, A, R, H);
+			TArray<ACarvableLog*> Nearby;
+			FindLocalLogs(GetWorld(), C, H + 60.f, Nearby);
+			for (ACarvableLog* Post : Nearby)
+			{
+				FVector PC, PA;
+				float PR, PH;
+				if (!Post || Post == Piece || !Post->IsAnchored() || !ACarvableLog::GetLogAxis(Post, PC, PA, PR, PH) || FMath::Abs(PA.Z) < 0.95f)
+				{
+					continue;
+				}
+				const FVector Top = PC + PA * (PA.Z > 0.f ? PH : -PH);
+				const FVector OnAxis = FMath::ClosestPointOnSegment(Top, C - A * H, C + A * H);
+				if (FVector::Dist2D(Top, OnAxis) < R && Top.Z > OnAxis.Z - R - 1.f && Top.Z < OnAxis.Z)
+				{
+					Piece->CutSeat(Top, -FVector::UpVector, PR * 2.f + 2.f, Top.Z - (OnAxis.Z - R) + 0.5f);
+				}
+			}
+		}
 		ShowMessage(TEXT("Kiriş kondu"));
 		SettleStructure();
 		break;
@@ -932,10 +2495,45 @@ bool AForestCharacter::PlaceCarried()
 		break;
 	case ECarryPlace::Floor:
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		{
+			// Every lying log under the board gets a seat the board's width, so the board lies in it.
+			FVector C, A;
+			float R, H;
+			ACarvableLog::GetLogAxis(Piece, C, A, R, H);
+			const FVector BoardA = C - A * H;
+			const FVector BoardB = C + A * H;
+			const float Bottom = C.Z - R;
+			TArray<ACarvableLog*> Nearby;
+			FindLocalLogs(GetWorld(), C, H + 50.f, Nearby);
+			for (ACarvableLog* Beam : Nearby)
+			{
+				FVector BC, BA;
+				float BR, BH;
+				if (!Beam || Beam == Piece || Beam->IsCarried() || !ACarvableLog::GetLogAxis(Beam, BC, BA, BR, BH) || FMath::Abs(BA.Z) > 0.3f
+					|| FMath::Abs(FVector::DotProduct(BA, A)) > 0.3f)
+				{
+					continue;
+				}
+				double S = 0.0, T = 0.0;
+				WoodStructure::Geo::ClosestSegSeg(BoardA * FVector(1, 1, 0), BoardB * FVector(1, 1, 0), (BC - BA * BH) * FVector(1, 1, 0), (BC + BA * BH) * FVector(1, 1, 0), S, T);
+				const FVector OnBeam = FMath::Lerp(BC - BA * BH, BC + BA * BH, static_cast<float>(T));
+				const FVector OnBoard = FMath::Lerp(BoardA, BoardB, static_cast<float>(S));
+				const float Top = OnBeam.Z + BR;
+				if (FVector::Dist2D(OnBeam, OnBoard) < BR && Top > Bottom + 0.5f && Top < Bottom + BR * 2.f)
+				{
+					Beam->Anchor();
+					Beam->CutSeat(OnBeam, FVector::UpVector, Piece->GetWidth() + 1.f, Top - Bottom + 0.5f);
+				}
+			}
+		}
 		ShowMessage(TEXT("Döşeme tahtası kondu"));
 		SettleStructure();
 		break;
 	case ECarryPlace::Slope:
+		if (ACarvableLog* LowerLog = Cast<ACarvableLog>(PlaceTarget.Get()))
+		{
+			LowerLog->Anchor();
+		}
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
 		ShowMessage(FString::Printf(TEXT("Eğik parça kondu (%.0f°)"), SlopeAngle));
 		SettleStructure();
@@ -1045,6 +2643,13 @@ void AForestCharacter::HeatTarget(AActor* Target, float Seconds)
 		if (!Piece->IsBurning() && !Piece->IsCharred())
 		{
 			ShowMessage(FString::Printf(TEXT("Tutuşuyor %%%.0f"), Piece->GetHeatShare() * 100.f));
+		}
+	}
+	else if (AStickStructure* Stake = Cast<AStickStructure>(Target))
+	{
+		if (Stake->ApplyHeat(Seconds))
+		{
+			ShowMessage(TEXT("Kazık meşale oldu"));
 		}
 	}
 	else if (ACampfire* Fire = Cast<ACampfire>(Target))
@@ -1188,9 +2793,9 @@ void AForestCharacter::OpenAimed()
 		return;
 	}
 	const float LocalX = Piece->GetActorTransform().InverseTransformPosition(Hit.ImpactPoint).X;
-	if (Piece->CutOpening(LocalX, 2))
+	if (Piece->CutOpening(LocalX, 2, GetActorLocation()))
 	{
-		ShowMessage(TEXT("Açıklık açıldı (2 modül)"));
+		ShowMessage(TEXT("Açıklık açıldı (2 modül)  —  çıkan parçalar 75 cm kütük olarak düştü"));
 		SettleStructure();
 	}
 	else
@@ -1199,11 +2804,308 @@ void AForestCharacter::OpenAimed()
 	}
 }
 
+FString AForestCharacter::CraftEntryName(uint8 Entry)
+{
+	switch (Entry)
+	{
+	case CraftStake:    return TEXT("Kazık çubuk");
+	case CraftField:    return TEXT("Tarla");
+	case CraftGarment:  return TEXT("Deri giysi");
+	case CraftRope:     return TEXT("İp");
+	case CraftRopeLine: return TEXT("İp hattı");
+	default:            return TEXT("");
+	}
+}
+
+bool AForestCharacter::TestCraft(uint8 Entry, const FHitResult& Hit)
+{
+	StickBuildIndex = Entry % CraftEntryCount;
+	switch (StickBuildIndex)
+	{
+	case CraftStake:
+		return PlantStakeAt(Hit) != nullptr;
+	case CraftField:
+		if (GetItemCount(EForestItem::Stick) < 2)
+		{
+			ShowMessage(TEXT("Tarla sınırı için 2 çubuk gerek"));
+			return false;
+		}
+		if (!FarmKit::MakeField(GetWorld(), Hit.ImpactPoint))
+		{
+			return false;
+		}
+		RemoveItem(EForestItem::Stick, 2);
+		ShowMessage(TEXT("Tarla açıldı  —  [E] ile tohum ek"));
+		return true;
+	case CraftGarment:
+		if (FarmKit::MakeHideGarment(this))
+		{
+			ShowMessage(FString::Printf(TEXT("Deri giysi yapıldı: soğuğa yalıtım %%%.0f"), Survival->Insulation * 100.f));
+			return true;
+		}
+		ShowMessage(FString::Printf(TEXT("Deri giysi için %d deri gerek (giysiler zaten tamsa daha fazlası işe yaramaz)"), FarmKit::HidesPerGarment));
+		return false;
+	case CraftRope:
+		// Plant fibre and vines first: wool and hide are worth more as clothing.
+		if (GetItemCount(EForestItem::PlantFiber) >= 3)
+		{
+			RemoveItem(EForestItem::PlantFiber, 3);
+		}
+		else if (GetItemCount(EForestItem::Vine) >= 2)
+		{
+			RemoveItem(EForestItem::Vine, 2);
+		}
+		else if (GetItemCount(EForestItem::Wool) >= 2)
+		{
+			RemoveItem(EForestItem::Wool, 2);
+		}
+		else if (GetItemCount(EForestItem::Hide) >= 1)
+		{
+			RemoveItem(EForestItem::Hide, 1);
+		}
+		else
+		{
+			ShowMessage(TEXT("İp için 3 lif, 2 asma, 2 yün ya da 1 deri gerek"));
+			return false;
+		}
+		AddItem(EForestItem::Rope, 1);
+		ShowMessage(FString::Printf(TEXT("İp büküldü (%d ip)"), GetItemCount(EForestItem::Rope)));
+		return true;
+	case CraftRopeLine:
+	{
+		if (!bRopeAnchorSet)
+		{
+			if (GetItemCount(EForestItem::Rope) < 1)
+			{
+				ShowMessage(TEXT("İp hattı için 1 ip gerek: [I] listesinden lif, asma, yün ya da deriden ip bük"));
+				return false;
+			}
+			bRopeAnchorSet = true;
+			RopeAnchor = Hit.ImpactPoint;
+			ShowMessage(TEXT("İpin bir ucu bağlandı  —  öbür ucu için bak ve [Sol tık]"));
+			return true;
+		}
+		ARopeLine* NewLine = ARopeLine::Span(GetWorld(), RopeAnchor, Hit.ImpactPoint);
+		if (!NewLine)
+		{
+			ShowMessage(FString::Printf(TEXT("İp %.0f-%.0f m arası olmalı"), ARopeLine::MinLengthCm / 100.f, ARopeLine::MaxLengthCm / 100.f));
+			return false;
+		}
+		bRopeAnchorSet = false;
+		RemoveItem(EForestItem::Rope, 1);
+		ShowMessage(FString::Printf(TEXT("İp hattı gerildi (%.0f m)  —  bir ucunda [E] ile kay ya da tırman"), FVector::Dist(NewLine->GetA(), NewLine->GetB()) / 100.f));
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+AStickStructure* AForestCharacter::PlantStakeAt(const FHitResult& Hit)
+{
+	if (GetItemCount(EForestItem::Stick) < 1)
+	{
+		ShowMessage(TEXT("Kazık için çubuk gerek: devrilen ağaçların dalları"));
+		return nullptr;
+	}
+	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	AStickStructure* Stake = AStickStructure::Plant(GetWorld(), Hit.ImpactPoint, Forward.Rotation().Yaw);
+	if (!Stake)
+	{
+		return nullptr;
+	}
+	RemoveItem(EForestItem::Stick, 1);
+	ShowMessage(TEXT("Kazık çakıldı  —  aralıkları dar dikilen kazıklar yolu kapatır; [F] ile yakılan kazık meşale olur"));
+	return Stake;
+}
+
+bool AForestCharacter::TestReadNote(ARemnantNote* Note)
+{
+	if (!Note)
+	{
+		return false;
+	}
+	UScenarioSubsystem* Scenario = UScenarioSubsystem::Get(GetWorld());
+	const bool bNew = Scenario && Scenario->RecordNote(Note->Title);
+	ShowMessage(FString::Printf(TEXT("%s%s: %s"), bNew ? TEXT("[Yeni not] ") : TEXT(""), *Note->Title, *Note->Text));
+	return bNew;
+}
+
+bool AForestCharacter::IsWaterAtHand() const
+{
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, 90.f);
+	const FVector Ahead = Feet + FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal() * 150.f;
+	return ARiverStrip::IsInWater(GetWorld(), Feet) || ARiverStrip::IsInWater(GetWorld(), Ahead);
+}
+
+int32 AForestCharacter::TestGather(ARawMaterialNode* Node)
+{
+	if (!Node)
+	{
+		return 0;
+	}
+	if (Node->IsDepleted())
+	{
+		ShowMessage(Node->GetPrompt());
+		return 0;
+	}
+	FString Got;
+	const int32 Added = Node->Harvest(this, Got);
+	ShowMessage(Added > 0 ? Got : FString(TEXT("Çanta dolu; bir şey alınamadı")));
+	return Added;
+}
+
+bool AForestCharacter::TestDrink()
+{
+	if (!IsWaterAtHand())
+	{
+		return false;
+	}
+	Survival->Drink(30.f);
+	ShowMessage(TEXT("Su içildi"));
+	return true;
+}
+
+bool AForestCharacter::TestRideRope(ARopeLine* Line)
+{
+	if (!Line)
+	{
+		return false;
+	}
+	bool bAtB = false;
+	Line->EndNear(GetActorLocation(), bAtB);
+	RideRope = Line;
+	RideFrom = bAtB ? Line->GetB() : Line->GetA();
+	RideTo = bAtB ? Line->GetA() : Line->GetB();
+	RideT = 0.f;
+	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+	ShowMessage(TEXT("İpte..."));
+	return true;
+}
+
+void AForestCharacter::UpdateRide(float DeltaSeconds)
+{
+	if (!RideRope.IsValid())
+	{
+		return;
+	}
+	const float Length = FMath::Max(1.f, FVector::Dist(RideFrom, RideTo));
+	RideT = FMath::Min(1.f, RideT + DeltaSeconds * ARopeLine::RideSpeed / Length);
+	SetActorLocation(FMath::Lerp(RideFrom, RideTo, RideT) + FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), false, nullptr, ETeleportType::TeleportPhysics);
+	if (RideT >= 1.f)
+	{
+		RideRope.Reset();
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	}
+}
+
+void AForestCharacter::EatFood()
+{
+	const FString Eaten = FarmKit::Eat(this);
+	ShowMessage(Eaten.IsEmpty() ? FString(TEXT("Yiyecek yok: tahıl ek, hayvan besle ya da avla")) : FString::Printf(TEXT("Yendi: %s"), *Eaten));
+}
+
+void AForestCharacter::ToggleStickMode()
+{
+	bStickMode = !bStickMode;
+	ShowMessage(bStickMode ? GetStickModeLabel() : FString(TEXT("Çubuk modu kapandı")));
+}
+
+FString AForestCharacter::GetStickModeLabel() const
+{
+	FString Cost;
+	switch (StickBuildIndex)
+	{
+	case CraftStake:    Cost = FString::Printf(TEXT("1 çubuk, çantada %d"), GetItemCount(EForestItem::Stick)); break;
+	case CraftField:    Cost = FString::Printf(TEXT("2 çubuk, çantada %d"), GetItemCount(EForestItem::Stick)); break;
+	case CraftGarment:  Cost = FString::Printf(TEXT("%d deri, çantada %d"), FarmKit::HidesPerGarment, GetItemCount(EForestItem::Hide)); break;
+	case CraftRope:     Cost = FString::Printf(TEXT("3 lif / 2 asma / 2 yün / 1 deri; lif %d, asma %d, yün %d, deri %d"),
+		GetItemCount(EForestItem::PlantFiber), GetItemCount(EForestItem::Vine), GetItemCount(EForestItem::Wool), GetItemCount(EForestItem::Hide)); break;
+	default:            Cost = FString::Printf(TEXT("1 ip, çantada %d; %s"), GetItemCount(EForestItem::Rope), bRopeAnchorSet ? TEXT("ikinci ucu seç") : TEXT("birinci ucu seç")); break;
+	}
+	return FString::Printf(TEXT("Yapım: %s (%s)  —  [Q] değiştir, [Sol tık] yap, [I] kapat"), *CraftEntryName(StickBuildIndex), *Cost);
+}
+
+bool AForestCharacter::StickBuildSpot(FHitResult& OutHit) const
+{
+	return TraceFromView(500.f, OutHit, true) && OutHit.ImpactNormal.Z > 0.7f && OutHit.GetActor() && !OutHit.GetActor()->IsA<ACarvableLog>();
+}
+
+void AForestCharacter::TestDropStone()
+{
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		StoneCarry->Drop();
+		RefreshToolVisibility();
+	}
+}
+
+void AForestCharacter::TestUseUpSticks()
+{
+	RemoveItem(EForestItem::Stick, GetItemCount(EForestItem::Stick));
+}
+
+void AForestCharacter::TestGiveSticks(int32 Count)
+{
+	AddItem(EForestItem::Stick, Count);
+}
+
+bool AForestCharacter::IsCarryingStone() const
+{
+	return StoneCarry && StoneCarry->IsCarrying();
+}
+
+bool AForestCharacter::TestPickUpResource(AActor* Resource)
+{
+	if (!Resource)
+	{
+		return false;
+	}
+	if (AStoneActor* Stone = Cast<AStoneActor>(Resource))
+	{
+		if (LooseResources::IsPocketStone(Stone))
+		{
+			if (AddItem(EForestItem::Stone, 1) != 1)
+			{
+				return false;
+			}
+			Stone->Destroy();
+			return true;
+		}
+		const UStoneDefinition* Definition = Stone->GetDefinition();
+		const EStoneCarryMode Mode = Definition && Definition->Mass <= StoneCarry->MaxSingleHandMass ? EStoneCarryMode::SingleHand : EStoneCarryMode::TwoHands;
+		return CarriedItem == EForestItem::None && StoneCarry && !StoneCarry->IsCarrying() && StoneCarry->PickUp(Stone, Mode);
+	}
+	if (AStickActor* Stick = Cast<AStickActor>(Resource))
+	{
+		if (AddItem(EForestItem::Stick, 1) != 1)
+		{
+			return false;
+		}
+		Stick->Destroy();
+		return true;
+	}
+	return false;
+}
+
 void AForestCharacter::DebugRaid()
 {
 	if (RequireAdmin())
 	{
 		ShowMessage(RaidKit::StartDefaultRaid(GetWorld()) ? TEXT("Baskın başladı") : TEXT("Baskın başlamadı"));
+	}
+}
+
+void AForestCharacter::DebugSkipTime()
+{
+	if (!RequireAdmin())
+	{
+		return;
+	}
+	if (UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld()))
+	{
+		Loop->SkipHours(3.f);
+		ShowMessage(FString::Printf(TEXT("Zaman ileri: gün %d, %02d:00"), Loop->GetDay(), FMath::FloorToInt(Loop->GetHour())));
 	}
 }
 
@@ -1432,22 +3334,49 @@ bool AForestCharacter::TraceFromView(float Distance, FHitResult& OutHit, bool bI
 {
 	const FVector Start = Camera->GetComponentLocation();
 	const FVector End = Start + Camera->GetForwardVector() * Distance;
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(ForestView), false, this);
+	bool bHit = false;
+
 	if (bIgnorePlans)
 	{
-		// Placing pieces looks through see-through wall plans; they are only filled with [E].
+		// Preserve the existing wall-plan exception: only its ghost components are ignored.
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(ForestView), false, this);
+		Params.bReturnPhysicalMaterial = true;
 		for (TActorIterator<ALogWallBlueprint> It(GetWorld()); It; ++It)
 		{
 			Params.AddIgnoredComponent(It->GetGhosts());
 		}
+		bHit = GetWorld() && GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);
 	}
-	return GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);
+	else
+	{
+		WorldScanSystem::FScanResult Scan;
+		bHit = WorldScanSystem::Trace(GetWorld(), Start, End, this, Scan, ECC_Visibility, false);
+		if (bHit)
+		{
+			OutHit = Scan.Hit;
+		}
+	}
+
+	// Keep acquisition and interpretation together so all existing view-trace callers
+	// can query the same normalized classification without duplicating hit logic.
+	WorldScanSystem::FScanResult AnalysisInput;
+	AnalysisInput.bHit = bHit;
+	AnalysisInput.Hit = OutHit;
+	AnalysisInput.TraceStart = Start;
+	AnalysisInput.TraceEnd = End;
+	AnalysisInput.TraceLengthCm = Distance;
+	if (!WorldScanSystem::AnalyzeHit(AnalysisInput, LastWorldAnalysis))
+	{
+		LastWorldAnalysis = WorldScanSystem::FWorldAnalysis{};
+	}
+	return bHit;
 }
 
 void AForestCharacter::UpdateFocus()
 {
 	FocusedHarvestable = nullptr;
 	FocusedPickup = nullptr;
+	FocusedRawNode = nullptr;
 	FocusedBlueprint = nullptr;
 	FocusedLogActor = nullptr;
 	FocusedStoneActor = nullptr;
@@ -1459,10 +3388,20 @@ void AForestCharacter::UpdateFocus()
 		return;
 	}
 	FocusHitPoint = Hit.ImpactPoint;
+	FocusHit = Hit;
 	if (ACarvableLog* Carvable = Cast<ACarvableLog>(Hit.GetActor()))
 	{
 		FocusedCarvable = Carvable;
-		UpdateCarveAim(Hit, Carvable);
+		if (RawLogShapes::FromLog(Carvable).IsValid())
+		{
+			// Raw logs are worked as finished shapes by where they are hit: no cut guide; the HUD draws a dot where the axe lands.
+			CarvePreview->SetVisibility(false);
+			bCarveSpotValid = false;
+		}
+		else
+		{
+			UpdateCarveAim(Hit, Carvable);
+		}
 		if (CurrentTool != EForestTool::Axe && SwingTime < 0.f)
 		{
 			EquipTool(EForestTool::Axe);
@@ -1493,6 +3432,10 @@ void AForestCharacter::UpdateFocus()
 			}
 		}
 	}
+	else if (ARawMaterialNode* RawNode = Cast<ARawMaterialNode>(Hit.GetActor()))
+	{
+		FocusedRawNode = RawNode;
+	}
 	else if (APickupItem* Pickup = Cast<APickupItem>(Hit.GetActor()))
 	{
 		if (Pickup->IsPickable())
@@ -1509,6 +3452,55 @@ void AForestCharacter::UpdateFocus()
 
 void AForestCharacter::PrimaryAction()
 {
+	if (bStickMode && !IsHandsBusy())
+	{
+		FHitResult Spot;
+		if (StickBuildIndex == CraftRopeLine)
+		{
+			if (TraceFromView(600.f, Spot, true))
+			{
+				TestCraft(StickBuildIndex, Spot);
+			}
+		}
+		else if (StickBuildIndex == CraftGarment || StickBuildIndex == CraftRope || StickBuildSpot(Spot))
+		{
+			TestCraft(StickBuildIndex, Spot);
+		}
+		else
+		{
+			ShowMessage(TEXT("Kazık ve tarla düz zemine  —  yere bak"));
+		}
+		return;
+	}
+	// Physical-stone placement takes priority over legacy log/build placement input.
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (StonePlacement->ConfirmPlacement())
+		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
+			ShowMessage(TEXT("Taş yerleştirildi."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taşı yerleştirmek için geçerli bir yüzeye nişan al."));
+		}
+		return;
+	}
+
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		if (StonePlacement && StonePlacement->BeginPlacement(StoneCarry->GetCarried()))
+		{
+			ShowMessage(TEXT("Taş yerleştirme: Q/tekerlek ile yüz-soket seç, R ile döndür, sol tık onayla."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taş yerleştirme başlatılamadı."));
+		}
+		return;
+	}
+
 	if (bBuildMode)
 	{
 		if (IsWallTool())
@@ -1558,13 +3550,41 @@ void AForestCharacter::PerformHit()
 	}
 	if (ACarvableLog* Carvable = Cast<ACarvableLog>(Hit.GetActor()))
 	{
-		ApplyCarveHit(Carvable);
+		if (RawLogShapes::FromLog(Carvable).IsValid())
+		{
+			ApplyShapeHit(Carvable, Hit);
+		}
+		else
+		{
+			ApplyCarveHit(Carvable);
+		}
+		return;
+	}
+	if (AAnimalActor* Animal = Cast<AAnimalActor>(Hit.GetActor()))
+	{
+		if (FarmKit::Butcher(Animal, this))
+		{
+			ShowMessage(TEXT("Hayvan kesildi: et ve deri çantaya girdi"));
+		}
 		return;
 	}
 	if (ARaidEnemy* Enemy = Cast<ARaidEnemy>(Hit.GetActor()))
 	{
 		Enemy->TakeHit(25.f);
 		ShowMessage(Enemy->IsAlive() ? TEXT("Düşmana vuruldu") : TEXT("Düşman öldü"));
+		return;
+	}
+	if (CurrentTool == EForestTool::Shovel)
+	{
+		// Ground: the voxel terrain, or any flat static surface standing in for it.
+		if (Hit.GetActor() && (Hit.GetActor()->IsA<AExcavationTerrainChunkActor>() || Hit.ImpactNormal.Z > 0.3f))
+		{
+			ShowMessage(ShovelStroke(Hit.ImpactPoint, Hit.ImpactNormal, false));
+		}
+		else
+		{
+			ShowMessage(TEXT("Kürek yalnız toprağa  —  yere bak"));
+		}
 		return;
 	}
 	if (CurrentTool == EForestTool::Trowel)
@@ -1621,6 +3641,17 @@ void AForestCharacter::PerformHit()
 	if (AHarvestableActor* Harvestable = Cast<AHarvestableActor>(Hit.GetActor()))
 	{
 		const FVector Direction = (Hit.ImpactPoint - Camera->GetComponentLocation()).GetSafeNormal();
+		// A raw log of up to 300 cm lying where it fell is worked like any building piece: it becomes one in place and the
+		// hit cuts, splits, hews or channels it by where it lands. 600 cm logs only cut across, into two 300s.
+		if (Harvestable->IsTrunk() && Harvestable->GetRawLogLength() > 0 && Harvestable->GetRawLogLength() <= AHarvestableActor::LongestShoulderLogCm)
+		{
+			FocusedHarvestable = nullptr;
+			if (ACarvableLog* Piece = Harvestable->ConvertToCarvable())
+			{
+				ApplyShapeHit(Piece, Hit);
+			}
+			return;
+		}
 		if (Harvestable->ApplyHit(HitDamage, Hit, Direction))
 		{
 			ShowMessage(Harvestable->IsTrunk() ? TEXT("Kütük ikiye bölündü!") : Harvestable->IsTree() ? TEXT("Ağaç devriliyor!") : TEXT("Kaya parçalandı!"));
@@ -1657,11 +3688,93 @@ void AForestCharacter::Interact()
 	ALogWallBlueprint* Blueprint = FocusedBlueprint.Get();
 	APickupItem* FocusedLog = FocusedPickup.Get();
 
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		ShowMessage(TEXT("Taş yerleştirme açık. Sol tık onaylar, sağ tık iptal eder."));
+		return;
+	}
+
+	// A physical stone is a world actor, not an item count in the legacy backpack.
+	if (StoneCarry && StoneCarry->IsCarrying())
+	{
+		if (StoneCarry->Drop())
+		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
+			ShowMessage(TEXT("Taş yere bırakıldı."));
+		}
+		return;
+	}
+
 	// Untying the rope comes first: it is the only thing E does while dragging a trunk.
 	if (CarriedItem == EForestItem::TrunkLog)
 	{
 		StopRopeDrag();
 		return;
+	}
+	// A rope end within reach: ride it. A note in sight: read it. Water: drink.
+	if (CarriedItem == EForestItem::None && !IsRiding())
+	{
+		for (TActorIterator<ARopeLine> It(GetWorld()); It; ++It)
+		{
+			bool bAtB = false;
+			if (It->EndNear(GetActorLocation() - FVector(0.f, 0.f, 90.f), bAtB))
+			{
+				TestRideRope(*It);
+				return;
+			}
+		}
+		FHitResult NoteHit;
+		if (TraceFromView(400.f, NoteHit, true))
+		{
+			if (ARemnantNote* Note = Cast<ARemnantNote>(NoteHit.GetActor()))
+			{
+				TestReadNote(Note);
+				return;
+			}
+		}
+		if (IsWaterAtHand())
+		{
+			TestDrink();
+			return;
+		}
+	}
+	// A field: sow it, or bring in a ripe crop. An animal: take what it has made. A raw material source: gather.
+	if (CarriedItem == EForestItem::None)
+	{
+		FHitResult FarmHit;
+		if (TraceFromView(400.f, FarmHit, true))
+		{
+			if (ARawMaterialNode* RawNode = Cast<ARawMaterialNode>(FarmHit.GetActor()))
+			{
+				TestGather(RawNode);
+				return;
+			}
+			if (ACropFieldActor* Field = Cast<ACropFieldActor>(FarmHit.GetActor()))
+			{
+				if (FarmKit::IsRipe(Field))
+				{
+					const int32 Grain = FarmKit::Harvest(Field, this);
+					ShowMessage(FString::Printf(TEXT("Hasat: +%d tahıl, +%d tohum"), Grain, FarmKit::SeedsPerField + 2));
+				}
+				else if (!FarmKit::IsSown(Field))
+				{
+					ShowMessage(FarmKit::Sow(Field, this) ? FString(TEXT("Tarla ekildi: günler geçtikçe büyür"))
+						: FString::Printf(TEXT("Ekmek için %d tohum gerek (%d var)"), FarmKit::SeedsPerField, GetItemCount(EForestItem::Seed)));
+				}
+				else
+				{
+					ShowMessage(TEXT("Ekin büyüyor  —  henüz olgun değil"));
+				}
+				return;
+			}
+			if (AAnimalActor* Animal = Cast<AAnimalActor>(FarmHit.GetActor()))
+			{
+				const int32 Got = FarmKit::CollectProducts(Animal, this);
+				ShowMessage(Got > 0 ? FString::Printf(TEXT("+%d ürün (yumurta / yün)"), Got) : FString(TEXT("Şimdilik verecek bir şeyi yok")));
+				return;
+			}
+		}
 	}
 	// A loaded cart, sled or rack in sight: E takes the last piece off it.
 	if (CarriedItem == EForestItem::None)
@@ -1672,6 +3785,71 @@ void AForestCharacter::Interact()
 			if (AHaulCart* Cart = Cast<AHaulCart>(CartHit.GetActor()); Cart && Cart->GetLoadCount() > 0)
 			{
 				TestUnload(Cart);
+				return;
+			}
+		}
+	}
+
+	// Pick up the same physical stone actor that will later be installed in the world.
+	if (CarriedItem == EForestItem::None && StoneCarry && !StoneCarry->IsCarrying())
+	{
+		FHitResult StoneHit;
+		if (TraceFromView(400.f, StoneHit, true))
+		{
+			if (AStoneActor* Stone = Cast<AStoneActor>(StoneHit.GetActor()))
+			{
+				UStoneDefinition* Definition = Stone->GetDefinition();
+				// A small stone goes into the pack (fire rings, stone blocks); a building stone is carried and placed.
+				if (Definition && LooseResources::IsPocketStone(Stone))
+				{
+					if (!CanAddItem(EForestItem::Stone, 1) || AddItem(EForestItem::Stone, 1) != 1)
+					{
+						ShowMessage(TEXT("Çanta dolu; taş yerde kaldı."));
+						return;
+					}
+					Stone->Destroy();
+					ShowMessage(FString::Printf(TEXT("+1 Taş (%d)"), GetItemCount(EForestItem::Stone)));
+					return;
+				}
+				if (!Definition)
+				{
+					ShowMessage(TEXT("Bu taşın tanımı eksik; güvenli biçimde alınamıyor."));
+					return;
+				}
+
+				const EStoneCarryMode Mode = Definition->Mass <= StoneCarry->MaxSingleHandMass
+					? EStoneCarryMode::SingleHand
+					: EStoneCarryMode::TwoHands;
+				if (StoneCarry->PickUp(Stone, Mode))
+				{
+					RefreshToolVisibility();
+					GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
+					ShowMessage(TEXT("Taş alındı. Sol tıkla yerleştirme önizlemesini başlat."));
+				}
+				else
+				{
+					ShowMessage(TEXT("Bu taş çok ağır veya şu anda alınamıyor."));
+				}
+				return;
+			}
+
+			if (AStickActor* Stick = Cast<AStickActor>(StoneHit.GetActor()))
+			{
+				UStickDefinition* StickDefinition = Stick->GetDefinition();
+				if (!StickDefinition ||
+					Stick->GetStructuralState_Implementation() != EStructuralNodeState::Loose ||
+					StickDefinition->Shape != EStickShape::Raw)
+				{
+					ShowMessage(TEXT("Yalnızca serbest ve işlenmemiş çubuk stoğa alınabilir."));
+					return;
+				}
+				if (!CanAddItem(EForestItem::Stick, 1) || AddItem(EForestItem::Stick, 1) != 1)
+				{
+					ShowMessage(TEXT("Çanta dolu; çubuk dünyada bırakıldı."));
+					return;
+				}
+				Stick->Destroy();
+				ShowMessage(TEXT("+1 Çubuk"));
 				return;
 			}
 		}
@@ -1700,6 +3878,17 @@ void AForestCharacter::Interact()
 	// Big logs on the ground: half a trunk goes on the shoulder, a whole trunk is dragged by rope.
 	if (AHarvestableActor* BigLog = FocusedHarvestable.Get())
 	{
+		// Raw logs from a felled tree: up to 300 cm they become building pieces on the shoulder (one 300, two 150 or
+		// four 75 cm logs fill it); 600 cm is too heavy and is dragged by rope.
+		if (BigLog->IsTrunk() && BigLog->GetRawLogLength() > 0 && BigLog->GetRawLogLength() <= AHarvestableActor::LongestShoulderLogCm)
+		{
+			FocusedHarvestable = nullptr;
+			if (ACarvableLog* Piece = BigLog->ConvertToCarvable())
+			{
+				StartCarry(Piece);
+			}
+			return;
+		}
 		if (BigLog->IsTrunk())
 		{
 			if (BigLog->GetLogItem() == EForestItem::BigLog)
@@ -1743,10 +3932,171 @@ void AForestCharacter::Interact()
 		ShowMessage(TEXT("\u00C7anta dolu"));
 		return;
 	}
-	AddItem(Pickup->GetItem(), Pickup->GetCount());
-	ShowMessage(FString::Printf(TEXT("+%d %s"), Pickup->GetCount(), *ForestItems::GetDisplayName(Pickup->GetItem())));
+	const int32 PickupCount = Pickup->GetCount();
+	const int32 AddedCount = AddItem(Pickup->GetItem(), PickupCount);
+	if (AddedCount != PickupCount)
+	{
+		ShowMessage(TEXT("Alım tamamlanamadı; dünyadaki kaynak korunuyor."));
+		return;
+	}
+	ShowMessage(FString::Printf(TEXT("+%d %s"), PickupCount, *ForestItems::GetDisplayName(Pickup->GetItem())));
 	Pickup->Destroy();
 	FocusedPickup = nullptr;
+}
+
+AActor* AForestCharacter::DropInventoryItem(EForestItem Item, int32 Count)
+{
+	if (!CoreInventory || !GetWorld() || Count <= 0 || Item == EForestItem::None ||
+		ForestItems::IsCarriedItem(Item))
+	{
+		return nullptr;
+	}
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	if (ItemID.IsNone() || !CoreInventory->CanDropItem(ItemID, Count))
+	{
+		return nullptr;
+	}
+
+	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.0f).GetSafeNormal();
+	const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward).GetSafeNormal();
+	const FVector BaseLocation = GetActorLocation() + Forward * 105.0f + FVector(0.0f, 0.0f, 35.0f);
+	TArray<AActor*> SpawnedActors;
+	SpawnedActors.Reserve((Item == EForestItem::Stone || Item == EForestItem::Stick) ? Count : 1);
+
+	auto RollbackSpawnedActors = [&SpawnedActors]()
+	{
+		for (AActor* Spawned : SpawnedActors)
+		{
+			if (IsValid(Spawned))
+			{
+				Spawned->Destroy();
+			}
+		}
+	};
+
+	if (Item == EForestItem::Stone)
+	{
+		UStaticMesh* StoneMesh = ForestItems::GetMesh(Item);
+		if (!StoneMesh)
+		{
+			return nullptr;
+		}
+
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const FVector Location = BaseLocation + Right * (static_cast<float>(Index) * 42.0f);
+			AStoneActor* Stone = GetWorld()->SpawnActor<AStoneActor>(
+				AStoneActor::StaticClass(), Location, FRotator::ZeroRotator);
+			if (!Stone)
+			{
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+
+			UStoneDefinition* Definition = NewObject<UStoneDefinition>(Stone, TEXT("InventoryStoneDefinition"));
+			if (!Definition)
+			{
+				Stone->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			Definition->StoneName = TEXT("InventoryStone");
+			Definition->Type = EStoneType::Granite;
+			Definition->Shape = EStoneShape::Small;
+			Definition->Role = EStoneRole::None;
+			Definition->Dimensions = FVector(13.0f, 10.0f, 9.0f);
+			Definition->Mass = 2.0f;
+			Definition->Volume = 0.0002f;
+			Definition->CompressiveStrength = 180.0f;
+			Definition->TensileStrength = 15.0f;
+			Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
+				FSoftObjectPath(TEXT("/Game/Greybox/Meshes/SM_GB_Stone.SM_GB_Stone")));
+			Stone->InitializeFromDefinition(Definition);
+			if (Stone->MeshComponent && !Stone->MeshComponent->GetStaticMesh())
+			{
+				Stone->MeshComponent->SetStaticMesh(StoneMesh);
+			}
+			if (!Stone->MeshComponent || !Stone->MeshComponent->GetStaticMesh())
+			{
+				Stone->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			SpawnedActors.Add(Stone);
+		}
+	}
+	else if (Item == EForestItem::Stick)
+	{
+		UStaticMesh* StickMesh = ForestItems::GetMesh(Item);
+		if (!StickMesh)
+		{
+			return nullptr;
+		}
+
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const FVector Location = BaseLocation + Right * (static_cast<float>(Index) * 12.0f);
+			AStickActor* Stick = GetWorld()->SpawnActor<AStickActor>(
+				AStickActor::StaticClass(), Location, GetActorRotation());
+			if (!Stick)
+			{
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+
+			UStickDefinition* Definition = NewObject<UStickDefinition>(Stick, TEXT("InventoryStickDefinition"));
+			if (!Definition)
+			{
+				Stick->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			Definition->StickName = TEXT("InventoryStick");
+			Definition->Shape = EStickShape::Raw;
+			Definition->Size = EStickSize::Short;
+			Definition->Role = EStickRole::Crafting;
+			Definition->Length = 55.0f;
+			Definition->Diameter = 2.8f;
+			Definition->Mass = 0.2f;
+			Definition->Volume = 0.0006f;
+			Definition->Durability = 30.0f;
+			Definition->MaxStackSize = StackSize;
+			Definition->Mesh = TSoftObjectPtr<UStaticMesh>(
+				FSoftObjectPath(TEXT("/Game/Greybox/Meshes/SM_GB_Stick.SM_GB_Stick")));
+			Stick->InitializeFromDefinition(Definition);
+			if (Stick->MeshComponent && !Stick->MeshComponent->GetStaticMesh())
+			{
+				Stick->MeshComponent->SetStaticMesh(StickMesh);
+			}
+			if (!Stick->MeshComponent || !Stick->MeshComponent->GetStaticMesh())
+			{
+				Stick->Destroy();
+				RollbackSpawnedActors();
+				return nullptr;
+			}
+			SpawnedActors.Add(Stick);
+		}
+	}
+	else
+	{
+		const FTransform DropTransform(FRotator(0.0f, GetActorRotation().Yaw, 0.0f), BaseLocation);
+		APickupItem* Pickup = APickupItem::Spawn(
+			GetWorld(), Item, Count, DropTransform, Forward * 160.0f + FVector(0.0f, 0.0f, 90.0f));
+		if (!Pickup)
+		{
+			return nullptr;
+		}
+		SpawnedActors.Add(Pickup);
+	}
+
+	// One inventory debit commits the entire drop. If any physical spawn or the debit
+	// fails, every temporary actor is removed before returning.
+	if (CoreInventory->DropItem(ItemID, Count) != EInventoryResult::Success)
+	{
+		RollbackSpawnedActors();
+		return nullptr;
+	}
+	return SpawnedActors.IsEmpty() ? nullptr : SpawnedActors[0];
 }
 
 int32 AForestCharacter::GetItemCount(EForestItem Item) const
@@ -1765,63 +4115,35 @@ int32 AForestCharacter::GetItemCount(EForestItem Item) const
 		}
 		return Item == EForestItem::TrunkLog ? 0 : (CarriedItem == Item ? GetCarriedCount() : 0);
 	}
-	const int32* Count = Inventory.Find(Item);
-	return Count ? *Count : 0;
-}
 
-namespace
-{
-	int32 SlotsFor(int32 Count, int32 Stack)
-	{
-		return Count > 0 ? (Count + Stack - 1) / Stack : 0;
-	}
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory && !ItemID.IsNone() ? CoreInventory->GetItemCount(ItemID) : 0;
 }
 
 int32 AForestCharacter::GetUsedSlots() const
 {
-	int32 Used = 0;
-	for (const TPair<EForestItem, int32>& Entry : Inventory)
-	{
-		Used += SlotsFor(Entry.Value, StackSize);
-	}
-	return Used;
+	return CoreInventory ? CoreInventory->GetUsedSlotCount() : 0;
 }
 
-bool AForestCharacter::CanAddItem(EForestItem Item, int32 Count, EForestItem FreedItem, int32 Freed) const
+bool AForestCharacter::CanAddItem(EForestItem Item, int32 Count) const
 {
-	int32 Used = 0;
-	for (const TPair<EForestItem, int32>& Entry : Inventory)
+	if (!CoreInventory || Count <= 0 || Item == EForestItem::None ||
+		ForestItems::IsCarriedItem(Item))
 	{
-		int32 Amount = Entry.Value;
-		if (Entry.Key == FreedItem)
-		{
-			Amount = FMath::Max(0, Amount - Freed);
-		}
-		if (Entry.Key == Item)
-		{
-			Amount += Count;
-		}
-		Used += SlotsFor(Amount, StackSize);
+		return false;
 	}
-	if (!Inventory.Contains(Item))
-	{
-		Used += SlotsFor(Count, StackSize);
-	}
-	return Used <= InventorySlots;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return !ItemID.IsNone() && CoreInventory->CanAddItem(ItemID, Count);
 }
 
 int32 AForestCharacter::AddItem(EForestItem Item, int32 Count)
 {
-	int32 Added = 0;
-	while (Added < Count && CanAddItem(Item, Added + 1))
+	if (!CanAddItem(Item, Count))
 	{
-		++Added;
+		return 0;
 	}
-	if (Added > 0)
-	{
-		Inventory.FindOrAdd(Item) += Added;
-	}
-	return Added;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory->AddItem(ItemID, Count) == EInventoryResult::Success ? Count : 0;
 }
 
 void AForestCharacter::GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutSlots) const
@@ -1829,8 +4151,12 @@ void AForestCharacter::GetInventorySlots(TArray<TPair<EForestItem, int32>>& OutS
 	OutSlots.Reset();
 	for (const EForestItem Item : ForestItems::GetAllItems())
 	{
-		const int32* Count = Inventory.Find(Item);
-		for (int32 Left = Count ? *Count : 0; Left > 0; Left -= StackSize)
+		if (ForestItems::IsCarriedItem(Item))
+		{
+			continue;
+		}
+		const int32 Count = GetItemCount(Item);
+		for (int32 Left = Count; Left > 0; Left -= StackSize)
 		{
 			OutSlots.Emplace(Item, FMath::Min(Left, StackSize));
 		}
@@ -1844,34 +4170,68 @@ void AForestCharacter::ToggleInventory()
 
 bool AForestCharacter::RemoveItem(EForestItem Item, int32 Count)
 {
+	if (Count <= 0 || Item == EForestItem::None)
+	{
+		return false;
+	}
 	if (ForestItems::IsCarriedItem(Item))
 	{
 		return ConsumeCarried(Item, Count);
 	}
-	int32* Current = Inventory.Find(Item);
-	if (!Current || *Current < Count)
-	{
-		return false;
-	}
-	*Current -= Count;
-	return true;
+	const FName ItemID = ForestItems::GetInventoryID(Item);
+	return CoreInventory && !ItemID.IsNone() &&
+		CoreInventory->RemoveItem(ItemID, Count) == EInventoryResult::Success;
 }
 
 void AForestCharacter::Craft(EForestItem Input, int32 InputCount, EForestItem Output, int32 OutputCount)
 {
-	if (GetItemCount(Input) < InputCount)
+	if (InputCount <= 0 || OutputCount <= 0 || GetItemCount(Input) < InputCount)
 	{
-		ShowMessage(FString::Printf(TEXT("Yetersiz malzeme: %d %s gerekli"), InputCount, *ForestItems::GetDisplayName(Input)));
+		ShowMessage(FString::Printf(TEXT("Yetersiz malzeme: %d %s gerekli"),
+			InputCount, *ForestItems::GetDisplayName(Input)));
 		return;
 	}
-	if (!CanAddItem(Output, OutputCount, Input, ForestItems::IsCarriedItem(Input) ? 0 : InputCount))
+	if (!CoreInventory)
 	{
-		ShowMessage(TEXT("\u00C7anta dolu"));
+		ShowMessage(TEXT("Envanter sistemi hazır değil."));
 		return;
 	}
-	RemoveItem(Input, InputCount);
-	AddItem(Output, OutputCount);
-	ShowMessage(FString::Printf(TEXT("%d %s -> %d %s"), InputCount, *ForestItems::GetDisplayName(Input), OutputCount, *ForestItems::GetDisplayName(Output)));
+
+	if (ForestItems::IsCarriedItem(Input))
+	{
+		// Physical log consumption is separate from stack inventory. Preflight the
+		// output first; no callback is emitted between preflight and the synchronous
+		// actor removal/addition on this game-thread transaction.
+		if (!CanAddItem(Output, OutputCount))
+		{
+			ShowMessage(TEXT("Çanta dolu"));
+			return;
+		}
+		if (!ConsumeCarried(Input, InputCount))
+		{
+			ShowMessage(TEXT("Kütük işlemi tamamlanamadı; malzeme korunuyor."));
+			return;
+		}
+		if (AddItem(Output, OutputCount) != OutputCount)
+		{
+			UE_LOG(LogTemp, Error, TEXT("Phase 6: output inventory preflight drifted while consuming physical wood."));
+			ShowMessage(TEXT("Üretim işlemi durduruldu; envanter durumu kontrol edilmeli."));
+			return;
+		}
+	}
+	else
+	{
+		const FName InputID = ForestItems::GetInventoryID(Input);
+		const FName OutputID = ForestItems::GetInventoryID(Output);
+		if (InputID.IsNone() || OutputID.IsNone() ||
+			!CoreInventory->ExchangeItems(InputID, InputCount, OutputID, OutputCount))
+		{
+			ShowMessage(TEXT("Üretim reddedildi: kapasite veya kaynak durumu değişti."));
+			return;
+		}
+	}
+	ShowMessage(FString::Printf(TEXT("%d %s -> %d %s"), InputCount,
+		*ForestItems::GetDisplayName(Input), OutputCount, *ForestItems::GetDisplayName(Output)));
 }
 
 void AForestCharacter::CraftBeam()
@@ -1911,6 +4271,17 @@ void AForestCharacter::CraftPlank()
 
 void AForestCharacter::ToggleBuildMode()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		ShowMessage(TEXT("Önce taş yerleştirmesini onayla veya iptal et."));
+		return;
+	}
+	if (!bBuildMode && StoneCarry && StoneCarry->IsCarrying())
+	{
+		ShowMessage(TEXT("Fiziksel taşı yerleştirme modundayken klasik inşa moduna geçemezsin."));
+		return;
+	}
+
 	bBuildMode = !bBuildMode;
 	BuildPreview->SetVisibility(false);
 	RefreshToolVisibility();
@@ -1932,6 +4303,15 @@ void AForestCharacter::ToggleBuildMode()
 
 void AForestCharacter::DebugGiveMaterials()
 {
+	// While carrying a log, [G] changes how it is placed against another log: straight, forty-five degrees, square.
+	if (CarriedItem == EForestItem::Log && CarriedLogs.Num() > 0)
+	{
+		SnapAngleMode = (FMath::Max(SnapAngleMode, 0) + 1) % 4;
+		static const TCHAR* const Names[4] = { TEXT("düz (0°): yan yana / üst üste"), TEXT("45° çapraz"), TEXT("dik (90°, T / köşe)"),
+			TEXT("yığın: iki kütüğün arasındaki oyuğa") };
+		ShowMessage(FString::Printf(TEXT("Yerleştirme açısı: %s  —  [G] ile değiştir"), Names[SnapAngleMode]));
+		return;
+	}
 	if (!RequireAdmin())
 	{
 		return;
@@ -2047,6 +4427,30 @@ void AForestCharacter::DebugBuildRoom()
 
 void AForestCharacter::CancelBuild()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (StonePlacement->CancelPlacement())
+		{
+			RefreshToolVisibility();
+			GetCharacterMovement()->MaxWalkSpeed = CarrySpeed();
+			ShowMessage(TEXT("Taş yerleştirme iptal edildi; taş eski konumuna döndü."));
+		}
+		else
+		{
+			ShowMessage(TEXT("Taş yerleştirme iptal edilemedi."));
+		}
+		return;
+	}
+
+	if (CurrentTool == EForestTool::Shovel && !bBuildMode && !IsHandsBusy())
+	{
+		FHitResult Hit;
+		if (TraceFromView(ReachDistance, Hit))
+		{
+			ShowMessage(ShovelStroke(Hit.ImpactPoint, Hit.ImpactNormal, true));
+		}
+		return;
+	}
 	if (bBuildMode && bWallStartSet)
 	{
 		bWallStartSet = false;
@@ -2160,6 +4564,12 @@ void AForestCharacter::WallClick()
 
 void AForestCharacter::RotateBuild()
 {
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		StonePlacement->RotateStone(1.0f);
+		return;
+	}
+
 	if (bBuildMode)
 	{
 		BuildYawOffset = FMath::Fmod(BuildYawOffset + 90.f, 360.f);
@@ -2184,6 +4594,12 @@ void AForestCharacter::RotateBuild()
 		ShowMessage(bPlaceSlope ? FString::Printf(TEXT("Koyma: eğik %.0f°  (tekerlek: açı)"), SlopeAngle)
 			: bPlaceStanding ? FString(TEXT("Koyma: dik (direk)")) : FString(TEXT("Koyma: yatır")));
 	}
+	else if (FocusedCarvable.IsValid() && RawLogShapes::FromLog(FocusedCarvable.Get()).IsValid())
+	{
+		bChannelMode = !bChannelMode;
+		ShapeHits = 0;
+		ShowMessage(bChannelMode ? TEXT("Oluk açma: kütüğün üstüne vur  —  [R] normal") : TEXT("Normal: ortadan vur = enine kes, uca vur = boyuna yar, yana vur = düzle  —  [R] oluk"));
+	}
 	else if (FocusedCarvable.IsValid())
 	{
 		CarveTool = static_cast<ECarveTool>((static_cast<uint8>(CarveTool) + 1) % static_cast<uint8>(ECarveTool::Count));
@@ -2196,6 +4612,20 @@ void AForestCharacter::RotateBuild()
 void AForestCharacter::CycleBuildItem(const FInputActionValue& Value)
 {
 	const float Axis = Value.Get<float>();
+	if (StonePlacement && StonePlacement->IsPlacing())
+	{
+		if (!FMath::IsNearlyZero(Axis))
+		{
+			StonePlacement->CycleFace();
+		}
+		return;
+	}
+	if (bStickMode && !FMath::IsNearlyZero(Axis))
+	{
+		StickBuildIndex = static_cast<uint8>((StickBuildIndex + (Axis > 0.f ? 1 : CraftEntryCount - 1)) % CraftEntryCount);
+		ShowMessage(GetStickModeLabel());
+		return;
+	}
 	if (bBuildMode && !FMath::IsNearlyZero(Axis))
 	{
 		SelectNextAvailable(Axis > 0.f ? 1 : -1);
@@ -2534,6 +4964,83 @@ void AForestCharacter::ShowMessage(const FString& Text)
 	MessageTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 }
 
+void AForestCharacter::ApplyShapeHit(ACarvableLog* Log, const FHitResult& Hit)
+{
+	if (Log->IsAnchored() || Log->IsCarried())
+	{
+		ShowMessage(TEXT("Yapıdaki parça işlenmez  —  önce [E] ile al, yere koy"));
+		return;
+	}
+	const RawLogShapes::FShape Shape = RawLogShapes::FromLog(Log);
+	const RawLogShapes::EAction Action = RawLogShapes::ClassifyHit(Log, Hit, bChannelMode);
+	FString Why;
+	if (!RawLogShapes::CanApply(Shape, Action, Why))
+	{
+		ShapeHits = 0;
+		ShowMessage(Why);
+		return;
+	}
+	if (ShapeTarget.Get() != Log || ShapeAction != static_cast<uint8>(Action))
+	{
+		ShapeTarget = Log;
+		ShapeAction = static_cast<uint8>(Action);
+		ShapeHits = 0;
+	}
+	AHarvestableActor::PlayFellingSound(GetWorld(), TEXT("SW_AxeChop"), Hit.ImpactPoint);
+	const int32 Needed = RawLogShapes::HitsFor(Action);
+	if (++ShapeHits < Needed)
+	{
+		ShowMessage(FString::Printf(TEXT("%s  %d/%d  (%s)"), *RawLogShapes::ActionName(Action), ShapeHits, Needed, *RawLogShapes::Describe(Shape)));
+		return;
+	}
+	ShapeHits = 0;
+	ShapeTarget = nullptr;
+	FString Made;
+	if (RawLogShapes::Apply(Log, Action, Made))
+	{
+		FocusedCarvable = nullptr;
+		ShowMessage(Made);
+	}
+	else
+	{
+		ShowMessage(Made);
+	}
+}
+
+void AForestCharacter::TestPressInteract()
+{
+	UpdateFocus();
+	Interact();
+}
+
+void AForestCharacter::TestPressPrimary()
+{
+	UpdateFocus();
+	PrimaryAction();
+}
+
+void AForestCharacter::TestShapeHit(ACarvableLog* Log, FVector LocalPoint, FVector LocalNormal, bool bChannel)
+{
+	if (!Log)
+	{
+		return;
+	}
+	const FTransform Frame = Log->GetActorTransform();
+	FHitResult Hit(Log, nullptr, Frame.TransformPosition(LocalPoint), Frame.TransformVectorNoScale(LocalNormal).GetSafeNormal());
+	bChannelMode = bChannel;
+	ApplyShapeHit(Log, Hit);
+}
+
+FString AForestCharacter::TestCarriedItem() const
+{
+	return CarriedItem == EForestItem::None ? FString(TEXT("None")) : ForestItems::GetDisplayName(CarriedItem);
+}
+
+FString AForestCharacter::TestLastMessage() const
+{
+	return Message;
+}
+
 float AForestCharacter::GetMessageAge() const
 {
 	return GetWorld() ? static_cast<float>(GetWorld()->GetTimeSeconds() - MessageTime) : 100.f;
@@ -2764,14 +5271,14 @@ void AForestCharacter::DebugSpawnCarvableLogs()
 	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 	const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward);
 	const TCHAR* Paths[] = {
-		TEXT("/Game/Greybox/Meshes/SM_GB_RawLog_500.SM_GB_RawLog_500"),
-		TEXT("/Game/Greybox/Meshes/SM_GB_RawLog_375.SM_GB_RawLog_375"),
-		TEXT("/Game/Greybox/Meshes/SM_GB_RawLog_250.SM_GB_RawLog_250"),
+		TEXT("/Game/UnrealExport/SM_RawLog_600.SM_RawLog_600"),
+		TEXT("/Game/UnrealExport/SM_RawLog_300.SM_RawLog_300"),
+		TEXT("/Game/UnrealExport/SM_RawLog_150.SM_RawLog_150"),
 	};
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
-		const FVector Location = GetActorLocation() + Forward * (220.f + Index * 90.f) + FVector(0.f, 0.f, 30.f);
+		const FVector Location = GetActorLocation() + Forward * (300.f + Index * 450.f) + FVector(0.f, 0.f, 30.f);
 		ACarvableLog::SpawnFromStaticMesh(GetWorld(), LoadObject<UStaticMesh>(nullptr, Paths[Index]), FTransform(Right.Rotation(), Location));
 	}
-	ShowMessage(TEXT("Test: oyulabilir kütükler (A 500, B 375, C 250)  —  baltayla bak, [R] araç, [Tekerlek] açı, 2 vuruş"));
+	ShowMessage(TEXT("Test: oyulabilir kütükler (A 600, B 300, C 150)  —  baltayla bak, [R] araç, [Tekerlek] açı, 2 vuruş"));
 }

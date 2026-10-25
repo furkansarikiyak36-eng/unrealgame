@@ -25,13 +25,15 @@ public:
     UFUNCTION(BlueprintPure) EWoodShape GetCurrentShape() const { return CurrentShape; }
     UFUNCTION(BlueprintPure) float GetHealth() const { return Health; }
     // Shared material-agnostic structural interface used by stone/wood mixed structures.
-    virtual EMaterialType GetMaterialType_Implementation() const override;
+    virtual EStructuralMaterialType GetMaterialType_Implementation() const override;
     virtual EStructuralNodeState GetStructuralState_Implementation() const override;
     virtual bool SetStructuralState_Implementation(EStructuralNodeState NewState) override;
     virtual float GetStructuralMass_Implementation() const override;
     virtual float GetStructuralStrength_Implementation() const override;
     virtual bool IsGrounded_Implementation() const override;
     UFUNCTION(BlueprintCallable) void SetHealth(float NewHealth);
+    /** Optional canonical logistics segment this physical piece supports (e.g. a bridge plank). */
+    UPROPERTY(SaveGame, VisibleInstanceOnly, BlueprintReadOnly, Category="Logistics") FName InfrastructureLinkKey = NAME_None;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UStaticMeshComponent> MeshComponent;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<ULogStateMachine> StateMachine;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<ULogConnectionGraph> ConnectionGraph;

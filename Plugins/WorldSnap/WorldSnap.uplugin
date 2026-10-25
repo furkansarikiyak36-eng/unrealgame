@@ -1,0 +1,18 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0.0",
+  "FriendlyName": "World Snap",
+  "Description": "Reusable deterministic snap-point resolver. It consumes plain hit and candidate data and has no dependency on the project scanner.",
+  "Category": "Gameplay",
+  "CreatedBy": "Project",
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Modules": [
+    {
+      "Name": "WorldSnap",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}

@@ -36,6 +36,8 @@ public:
 
 	/** A fire pit with a ring of stones on the ground at Ground, not lit until it has fuel. */
 	static ACampfire* Build(UWorld* World, const FVector& Ground);
+	/** Creates only the fire logic; the caller's hand-placed stones remain as the visible hearth ring. */
+	static ACampfire* BuildWithExternalStoneRing(UWorld* World, const FVector& Ground);
 
 	/**
 	 * Throws Piece on the fire: it is used up (a burning piece lights the fire). False if the fire is already full or the piece is part of a

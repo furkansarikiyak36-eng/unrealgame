@@ -4,6 +4,7 @@
 #include "StoneCore/StoneConnectionGraph.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
+#include "StructureLink.h"
 
 AStoneActor::AStoneActor()
 {
@@ -30,7 +31,7 @@ void AStoneActor::InitializeFromDefinition(UStoneDefinition* Def)
     SetStructuralState_Implementation(EStructuralNodeState::Loose);
 }
 
-EMaterialType AStoneActor::GetMaterialType_Implementation() const { return EMaterialType::Stone; }
+EStructuralMaterialType AStoneActor::GetMaterialType_Implementation() const { return EStructuralMaterialType::Stone; }
 EStructuralNodeState AStoneActor::GetStructuralState_Implementation() const
 { return StateMachine ? StateMachine->GetState() : EStructuralNodeState::Loose; }
 bool AStoneActor::SetStructuralState_Implementation(EStructuralNodeState NewState)
@@ -64,13 +65,20 @@ void AStoneActor::ApplyShape(EStoneShape NewShape, FVector NewDimensions)
 
 void AStoneActor::ApplyDamage(float Amount)
 {
-    if (Amount <= 0.0f || Health <= 0.0f) return;
+    if (!FMath::IsFinite(Amount) || Amount <= 0.0f || Health <= 0.0f) return;
     Health = FMath::Max(0.0f, Health - Amount);
-    if (Health <= 0.0f) SetStructuralState_Implementation(EStructuralNodeState::Fractured);
+    StructureLink::MarkChanged();
+    if (Health <= 0.0f)
+    {
+        SetStructuralState_Implementation(EStructuralNodeState::Fractured);
+        // Fracture removes this node's support contribution; re-evaluate dependent wood and stone immediately.
+        StructureLink::Settle(GetWorld());
+    }
 }
 
 void AStoneActor::HandleStateChanged(AActor* Stone, EStructuralNodeState NewState)
 {
+    StructureLink::MarkChanged();
     if (!MeshComponent) return;
     switch (NewState)
     {

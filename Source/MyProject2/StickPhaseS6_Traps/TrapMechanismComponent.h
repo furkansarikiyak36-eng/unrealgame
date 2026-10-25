@@ -1,6 +1,71 @@
 #pragma once
+
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "TrapMechanismComponent.generated.h"
-UENUM(BlueprintType) enum class ETrapTriggerType:uint8{Pressure,TripWire,Proximity,Manual}; DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrapTriggered,AActor*,Victim);
-UCLASS(ClassGroup=(Trap),meta=(BlueprintSpawnableComponent)) class MYPROJECT2_API UTrapMechanismComponent:public UActorComponent{GENERATED_BODY() public: UTrapMechanismComponent(); UFUNCTION(BlueprintCallable) void Arm(); UFUNCTION(BlueprintCallable) void Disarm(); UFUNCTION(BlueprintCallable) bool Trigger(AActor* Victim); UFUNCTION(BlueprintPure) bool IsArmed()const{return bArmed;} UPROPERTY(BlueprintAssignable) FOnTrapTriggered OnTrapTriggered; UPROPERTY(EditAnywhere,BlueprintReadWrite) ETrapTriggerType TriggerType=ETrapTriggerType::Pressure; UPROPERTY(EditAnywhere,BlueprintReadWrite) float Cooldown=5; UPROPERTY(EditAnywhere,BlueprintReadWrite) float Damage=40; UPROPERTY(VisibleInstanceOnly,BlueprintReadOnly) bool bArmed=true; UPROPERTY(VisibleInstanceOnly,BlueprintReadOnly) float LastTriggerTime=-100;};
+
+UENUM(BlueprintType)
+enum class ETrapTriggerType : uint8
+{
+	Pressure,
+	TripWire,
+	Proximity,
+	Manual
+};
+
+UENUM(BlueprintType)
+enum class ETrapLifecycleState : uint8
+{
+	Disarmed,
+	Armed,
+	Triggered,
+	Cooldown,
+	Consumed
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrapTriggered, AActor*, Victim);
+
+UCLASS(ClassGroup = (Trap), meta = (BlueprintSpawnableComponent))
+class MYPROJECT2_API UTrapMechanismComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	UTrapMechanismComponent();
+
+	UFUNCTION(BlueprintCallable, Category = "Trap")
+	void Arm();
+	UFUNCTION(BlueprintCallable, Category = "Trap")
+	void Disarm();
+	UFUNCTION(BlueprintCallable, Category = "Trap")
+	bool Trigger(AActor* Victim);
+	/** Trigger only if the incoming signal matches the configured pressure/tripwire/proximity/manual mode. */
+	UFUNCTION(BlueprintCallable, Category = "Trap")
+	bool TriggerFrom(AActor* Victim, ETrapTriggerType SourceType);
+
+	UFUNCTION(BlueprintPure, Category = "Trap")
+	bool IsArmed() const { return bArmed; }
+	UFUNCTION(BlueprintPure, Category = "Trap")
+	ETrapLifecycleState GetLifecycleState() const { return LifecycleState; }
+
+	UPROPERTY(BlueprintAssignable, Category = "Trap")
+	FOnTrapTriggered OnTrapTriggered;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap")
+	ETrapTriggerType TriggerType = ETrapTriggerType::Pressure;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
+	float Cooldown = 5.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
+	float Damage = 40.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap")
+	bool bConsumeOnTrigger = false;
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Trap")
+	bool bArmed = true;
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Trap")
+	float LastTriggerTime = -100.f;
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Trap")
+	ETrapLifecycleState LifecycleState = ETrapLifecycleState::Armed;
+
+private:
+	void FinishCooldown();
+	FTimerHandle CooldownTimer;
+};

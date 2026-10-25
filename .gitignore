@@ -5,3 +5,34 @@ DerivedDataCache/
 .vs/
 *.sln
 *.slnx
+
+# --- 2026-10-20: kept out of the (public) repository, stay on the local disk ---
+# Third-party asset kits (Epic / Fab marketplace): ~20 GB, single files up to 614 MB (GitHub limit 100 MB), and their
+# licences do not allow publishing the source assets. Re-download list: Docs/RAPOR_2026-10-20.md.
+/Content/KiteDemo/
+/Content/ParagonProps/
+/Content/SoulCave/
+/Content/Fab/
+/Content/SampleMap/
+/Content/Lighting/
+/Plugins/Marketplace/
+# Paid (Pure Polygons vol2) or unknown-source textures used by the raw-log materials.
+/Content/UnrealExport/Textures/wooden_fence_albedo.uasset
+/Content/UnrealExport/Textures/wooden_fence_normal.uasset
+/Content/UnrealExport/Textures/T_EndGrain_Slice_C.uasset
+/Content/UnrealExport/Textures/T_EndGrain_Slice_N.uasset
+/do/EndGrain/
+/do/endgrain_ao.zip
+/do/endgrainv2_height.zip
+# Marketplace promo images.
+/OldWest_VOL5.png
+/PN_OpenWorldFoliage.png
+
+# Editor tool output
+/Scripts/editor_tools/build_last.log
+
+# Python cache
+__pycache__/
+*.pyc
+# Local backups of maps
+*.umap.bak

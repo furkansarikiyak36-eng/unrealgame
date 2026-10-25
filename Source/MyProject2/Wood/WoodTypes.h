@@ -92,7 +92,7 @@ struct MYPROJECT2_API FWoodPieceData
 
 	/** Tam kütük boyu (cm). Modül = bunun 1/6'sı (390 cm -> 65 cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wood", meta = (ClampMin = "10"))
-	float FullLogLengthCm = 390.f;
+	float FullLogLengthCm = 450.f;
 
 	/** Parçanın modül sayısı, 1..6 (mekanik 16-18). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wood", meta = (ClampMin = "1", ClampMax = "6"))

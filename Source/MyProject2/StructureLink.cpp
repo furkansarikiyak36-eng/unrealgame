@@ -2,6 +2,10 @@
 
 #include "StructureLink.h"
 #include "CarvableLog.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneDefinition.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Wood/WoodStructureGeometry.h"
@@ -13,7 +17,7 @@ namespace
 	constexpr float GroundToleranceCm = 15.f;
 
 	/** The lowest point of the piece rests on the ground (not on another log). */
-	bool IsGrounded(const UWorld* World, const ACarvableLog* Log, const FVector& A, const FVector& B, float Radius)
+	bool IsGrounded(const UWorld* World, const AActor* Piece, const FVector& A, const FVector& B, float Radius)
 	{
 		const FVector Axis = (B - A).GetSafeNormal();
 		const FVector Low = A.Z < B.Z ? A : B;
@@ -21,9 +25,24 @@ namespace
 		const float Below = Radius * FMath::Sqrt(FMath::Max(0.f, 1.f - Axis.Z * Axis.Z));
 		const FVector Bottom = Low - FVector(0.f, 0.f, Below);
 		FHitResult Hit;
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(StructureGround), false, Log);
-		return World->LineTraceSingleByObjectType(Hit, Bottom + FVector(0.f, 0.f, 30.f), Bottom - FVector(0.f, 0.f, GroundToleranceCm),
-			FCollisionObjectQueryParams(ECC_WorldStatic), Params) && !Hit.GetActor()->IsA<ACarvableLog>();
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(StructureGround), false, Piece);
+		const bool bHitGround = World->LineTraceSingleByObjectType(Hit, Bottom + FVector(0.f, 0.f, 30.f), Bottom - FVector(0.f, 0.f, GroundToleranceCm),
+			FCollisionObjectQueryParams(ECC_WorldStatic), Params);
+		const AActor* HitActor = Hit.GetActor();
+		return bHitGround && (!HitActor || (!HitActor->IsA<ACarvableLog>() && !HitActor->IsA<AStoneActor>()));
+	}
+
+	bool IsLogGrounded(const UWorld* World, const ACarvableLog* Log)
+	{
+		if (!World || !Log || Log->IsCarried())
+		{
+			return false;
+		}
+		const FTransform& Frame = Log->GetActorTransform();
+		const FBox Box = Log->GetLocalBox();
+		const FVector A = Frame.TransformPosition(FVector(Box.Min.X, 0.f, 0.f));
+		const FVector B = Frame.TransformPosition(FVector(Box.Max.X, 0.f, 0.f));
+		return IsGrounded(World, Log, A, B, Log->GetRadius());
 	}
 
 	TArray<ACarvableLog*> Installed(UWorld* World, const ACarvableLog* Except = nullptr)
@@ -31,13 +50,59 @@ namespace
 		TArray<ACarvableLog*> Logs;
 		for (TActorIterator<ACarvableLog> It(World); It; ++It)
 		{
-			if (*It != Except && It->IsAnchored() && !It->IsCarried())
+			if (*It != Except && !It->IsCarried() && (It->IsAnchored() || IsLogGrounded(World, *It)))
 			{
 				Logs.Add(*It);
 			}
 		}
 		return Logs;
 	}
+
+	/** Live structural pieces participating in the same geometry graph. Carried/loose stones are not structure nodes. */
+	TArray<AActor*> InstalledStructuralParts(UWorld* World, const AActor* Except = nullptr)
+	{
+		TArray<AActor*> Parts;
+		if (!World) return Parts;
+
+		for (TActorIterator<ACarvableLog> It(World); It; ++It)
+		{
+			ACarvableLog* Log = *It;
+			if (Log && Log != Except && !Log->IsCarried() && (Log->IsAnchored() || IsLogGrounded(World, Log)))
+			{
+				Parts.Add(Log);
+			}
+		}
+		for (TActorIterator<AStoneActor> It(World); It; ++It)
+		{
+			AStoneActor* Stone = *It;
+			if (Stone && Stone != Except && Stone->MeshComponent && Stone->MeshComponent->GetStaticMesh()
+				&& Stone->GetStructuralState_Implementation() == EStructuralNodeState::Installed)
+			{
+				Parts.Add(Stone);
+			}
+		}
+		Parts.Sort([](const AActor& A, const AActor& B)
+		{
+			return A.GetPathName() < B.GetPathName();
+		});
+		return Parts;
+	}
+
+	WoodStructure::FNode MakeNodeForPart(AActor* Part, int32 Id)
+	{
+		if (ACarvableLog* Log = Cast<ACarvableLog>(Part))
+		{
+			return StructureLink::MakeNode(Log, Id);
+		}
+		if (AStoneActor* Stone = Cast<AStoneActor>(Part))
+		{
+			return StructureLink::MakeNode(Stone, Id);
+		}
+		WoodStructure::FNode Empty;
+		Empty.Id = Id;
+		return Empty;
+	}
+
 
 	/** Every connection between the nodes, each pair checked once. */
 	TArray<WoodStructure::FEdge> Connect(const TArray<WoodStructure::FNode>& Nodes)
@@ -53,7 +118,7 @@ namespace
 	}
 }
 
-TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges, TMap<int32, float>* OutSnaps, FString* OutNotes)
+TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges, TMap<int32, float>* OutSnaps, FString* OutNotes, TMap<int32, FDroop>* OutDroops)
 {
 	const float MaxGap = MaxSupportGapModules * ACarvableLog::ModuleLength;
 	const float MaxOverhang = MaxOverhangModules * ACarvableLog::ModuleLength + 5.f;
@@ -61,6 +126,10 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 	for (int32 Pass = 0; Pass <= Nodes.Num(); ++Pass)
 	{
 		ById.Reset();
+		if (OutDroops)
+		{
+			OutDroops->Reset();
+		}
 		for (const WoodStructure::FNode& Node : Nodes)
 		{
 			ById.Add(Node.Id, &Node);
@@ -85,6 +154,23 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 				{
 					continue;
 				}
+				if (Edge.Kind == EWoodConnectionKind::Stacked)
+				{
+					// A bed: the beam lies on the holder over their whole common stretch.
+					const FVector BeamAxis = (Beam.B - Beam.A).GetSafeNormal();
+					const double H0 = FVector::DotProduct((*Holder)->A - Beam.A, BeamAxis);
+					const double H1 = FVector::DotProduct((*Holder)->B - Beam.A, BeamAxis);
+					const double BeamLength = Beam.Length();
+					// A bed holds it all along: a support point every module over the common stretch, not just its two ends.
+					const double Lo = FMath::Clamp(FMath::Min(H0, H1), 0.0, BeamLength);
+					const double Hi = FMath::Clamp(FMath::Max(H0, H1), 0.0, BeamLength);
+					for (double Point = Lo; Point < Hi; Point += ACarvableLog::ModuleLength)
+					{
+						At.Add(static_cast<float>(Point));
+					}
+					At.Add(static_cast<float>(Hi));
+					continue;
+				}
 				double S = 0.0, T = 0.0;
 				WoodStructure::Geo::ClosestSegSeg(Beam.A, Beam.B, (*Holder)->A, (*Holder)->B, S, T);
 				At.Add(static_cast<float>(S * Beam.Length()));
@@ -106,13 +192,16 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 			// The spans along the beam: before the first support, between supports, after the last.
 			const float Length = static_cast<float>(Beam.Length());
 			float BreakAt = -1.f;
-			if (At[0] > MaxOverhang)
+			// Hanging from one side only: it pivots on the support and its free end comes down (the caller lowers it).
+			// Past the limit on both sides it balances on its supports and stays.
+			const bool bFreeA = At[0] > MaxOverhang;
+			const bool bFreeB = Length - At.Last() > MaxOverhang;
+			if (bFreeA != bFreeB && OutDroops)
 			{
-				BreakAt = At[0] * 0.5f;
-			}
-			if (Length - At.Last() > MaxOverhang)
-			{
-				BreakAt = (At.Last() + Length) * 0.5f;
+				FDroop Droop;
+				Droop.bFreeEndB = bFreeB;
+				Droop.PivotFromA = bFreeB ? At.Last() : At[0];
+				OutDroops->Add(Beam.Id, Droop);
 			}
 			for (int32 Index = 1; Index < At.Num(); ++Index)
 			{
@@ -121,7 +210,7 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 					BreakAt = (At[Index] + At[Index - 1]) * 0.5f;
 				}
 			}
-			if (BreakAt >= 0.f)
+			if (BreakAt >= 0.f && !bPlacementGrace)
 			{
 				Beam.Damage = 1.f;
 				bFailed = true;
@@ -149,7 +238,7 @@ WoodStructure::FNode StructureLink::MakeNode(const ACarvableLog* Log, int32 Id, 
 	Node.A = Frame.TransformPosition(FVector(Box.Min.X, 0.f, 0.f));
 	Node.B = Frame.TransformPosition(FVector(Box.Max.X, 0.f, 0.f));
 	Node.RadiusCm = Log->GetRadius();
-	Node.LengthModules = FMath::Clamp(FMath::RoundToInt(Log->GetLength() / ACarvableLog::ModuleLength), 1, 6);
+	Node.LengthModules = FMath::Clamp(FMath::RoundToInt(Log->GetLength() / ACarvableLog::ModuleLength), 1, 8);
 	for (const FVector2f& Span : Log->GetCutSpans())
 	{
 		FWoodNotch Notch;
@@ -168,18 +257,109 @@ WoodStructure::FNode StructureLink::MakeNode(const ACarvableLog* Log, int32 Id, 
 	return Node;
 }
 
+
+WoodStructure::FNode StructureLink::MakeNode(const AStoneActor* Stone, int32 Id)
+{
+	WoodStructure::FNode Node;
+	Node.Id = Id;
+	if (!Stone || !Stone->MeshComponent || !Stone->MeshComponent->GetStaticMesh())
+	{
+		return Node;
+	}
+
+	const UStaticMeshComponent* Mesh = Stone->MeshComponent;
+	const FBox LocalBox = Mesh->GetStaticMesh()->GetBoundingBox();
+	const FVector LocalSize = LocalBox.GetSize();
+	const FVector Scale = Mesh->GetComponentScale();
+	const FVector AbsScale(FMath::Abs(Scale.X), FMath::Abs(Scale.Y), FMath::Abs(Scale.Z));
+	const FVector Size = LocalSize * AbsScale;
+	const FTransform Frame = Mesh->GetComponentTransform();
+	const FVector Center = Frame.TransformPosition(LocalBox.GetCenter());
+	const UStoneDefinition* Definition = Stone->GetDefinition();
+	const EStoneRole StoneRole = Definition ? Definition->Role : EStoneRole::None;
+
+	int32 AxisIndex = 0;
+	if (StoneRole == EStoneRole::Pillar)
+	{
+		// A pillar follows its vertical centreline so its top can support beams or posts.
+		AxisIndex = 2;
+	}
+	else if (StoneRole == EStoneRole::Foundation || StoneRole == EStoneRole::Floor
+		|| StoneRole == EStoneRole::Path || StoneRole == EStoneRole::Wall)
+	{
+		// Foundations and masonry surfaces use their longest horizontal dimension as the contact axis.
+		AxisIndex = Size.X >= Size.Y ? 0 : 1;
+	}
+	else
+	{
+		AxisIndex = Size.X >= Size.Y && Size.X >= Size.Z ? 0 : (Size.Y >= Size.Z ? 1 : 2);
+	}
+
+	const FVector LocalAxis = AxisIndex == 0 ? FVector::XAxisVector
+		: (AxisIndex == 1 ? FVector::YAxisVector : FVector::ZAxisVector);
+	const FVector Axis = Frame.TransformVectorNoScale(LocalAxis).GetSafeNormal();
+	const float HalfLength = 0.5f * Size[AxisIndex];
+	const float Radius = 0.5f * FMath::Max(
+		Size[AxisIndex == 0 ? 1 : 0],
+		Size[AxisIndex == 2 ? 1 : 2]);
+	Node.A = Center - Axis * HalfLength;
+	Node.B = Center + Axis * HalfLength;
+	Node.RadiusCm = FMath::Max(1.f, Radius);
+	Node.LengthModules = FMath::Clamp(FMath::RoundToInt((HalfLength * 2.f) / ACarvableLog::ModuleLength), 1, 8);
+	Node.Damage = Stone->GetMaxHealth() > KINDA_SMALL_NUMBER
+		? FMath::Clamp(1.f - Stone->GetHealth() / Stone->GetMaxHealth(), 0.f, 1.f) : 1.f;
+	Node.bGrounded = IsGrounded(Stone->GetWorld(), Stone, Node.A, Node.B, Node.RadiusCm);
+	Node.bTemporary = false;
+
+	switch (StoneRole)
+	{
+	case EStoneRole::Pillar:
+		Node.Role = EWoodRole::Post;
+		break;
+	case EStoneRole::Foundation:
+		Node.Role = EWoodRole::Floor;
+		break;
+	case EStoneRole::Beam:
+	case EStoneRole::Arch:
+		Node.Role = EWoodRole::Beam;
+		break;
+	case EStoneRole::Wall:
+		Node.Role = EWoodRole::Wall;
+		break;
+	case EStoneRole::Floor:
+	case EStoneRole::Path:
+	case EStoneRole::Stair:
+		Node.Role = EWoodRole::Floor;
+		break;
+	case EStoneRole::None:
+	case EStoneRole::Fireplace:
+	case EStoneRole::Trap:
+	default:
+		Node.Role = EWoodRole::Unassigned;
+		break;
+	}
+	return Node;
+}
+
 bool StructureLink::bLogFalls = false;
+bool StructureLink::bPlacementGrace = false;
 
 namespace
 {
 	int32 StructureVersion = 0;
 	int32 CachedVersion = -1;
+	TWeakObjectPtr<UWorld> CachedWorld;
 	TArray<StructureLink::FFeatureInfo> CachedFeatures;
 }
 
 void StructureLink::MarkChanged()
 {
 	++StructureVersion;
+}
+
+int32 StructureLink::Version()
+{
+	return StructureVersion;
 }
 
 FString StructureLink::NameOf(EWoodFeatureKind Kind)
@@ -208,17 +388,23 @@ FString StructureLink::NameOf(EWoodFeatureKind Kind)
 
 const TArray<StructureLink::FFeatureInfo>& StructureLink::Features(UWorld* World)
 {
-	if (CachedVersion == StructureVersion || !World)
+	if (!World)
+	{
+		return CachedFeatures;
+	}
+	if (CachedVersion == StructureVersion && CachedWorld.Get() == World)
 	{
 		return CachedFeatures;
 	}
 	CachedVersion = StructureVersion;
+	CachedWorld = World;
 	CachedFeatures.Reset();
-	const TArray<ACarvableLog*> Logs = Installed(World);
+	const TArray<AActor*> Parts = InstalledStructuralParts(World);
 	TArray<WoodStructure::FNode> Nodes;
-	for (int32 Index = 0; Index < Logs.Num(); ++Index)
+	Nodes.Reserve(Parts.Num());
+	for (int32 Index = 0; Index < Parts.Num(); ++Index)
 	{
-		Nodes.Add(MakeNode(Logs[Index], Index));
+		Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 	}
 	for (const WoodStructure::FFeature& Found : WoodStructure::AnalyzeStructure(Nodes, Connect(Nodes), ContactToleranceCm))
 	{
@@ -228,7 +414,15 @@ const TArray<StructureLink::FFeatureInfo>& StructureLink::Features(UWorld* World
 		Info.Center = Found.Center;
 		for (const int32 Id : Found.NodeIds)
 		{
-			Info.Pieces.Add(Logs[Id]);
+			if (!Parts.IsValidIndex(Id) || !IsValid(Parts[Id]))
+			{
+				continue;
+			}
+			Info.StructuralPieces.Add(Parts[Id]);
+			if (ACarvableLog* Log = Cast<ACarvableLog>(Parts[Id]))
+			{
+				Info.Pieces.Add(Log);
+			}
 		}
 	}
 	return CachedFeatures;
@@ -236,14 +430,27 @@ const TArray<StructureLink::FFeatureInfo>& StructureLink::Features(UWorld* World
 
 FString StructureLink::DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log)
 {
+	return DescribeFeaturesOfActor(World, Log);
+}
+
+FString StructureLink::DescribeFeaturesOfActor(UWorld* World, const AActor* Part)
+{
+	if (!World || !IsValid(Part))
+	{
+		return FString();
+	}
 	FString Text;
 	for (const FFeatureInfo& Info : Features(World))
 	{
-		for (const TWeakObjectPtr<ACarvableLog>& Piece : Info.Pieces)
+		for (const TWeakObjectPtr<AActor>& Member : Info.StructuralPieces)
 		{
-			if (Piece.Get() == Log)
+			if (Member.Get() == Part)
 			{
-				Text += (Text.IsEmpty() ? TEXT("") : TEXT(", ")) + NameOf(Info.Kind);
+				const FString KindName = NameOf(Info.Kind);
+				if (!KindName.IsEmpty())
+				{
+					Text += (Text.IsEmpty() ? TEXT("") : TEXT(", ")) + KindName;
+				}
 				break;
 			}
 		}
@@ -253,11 +460,12 @@ FString StructureLink::DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log
 
 FString StructureLink::Describe(UWorld* World)
 {
-	const TArray<ACarvableLog*> Logs = Installed(World);
+	const TArray<AActor*> Parts = InstalledStructuralParts(World);
 	TArray<WoodStructure::FNode> Nodes;
-	for (int32 Index = 0; Index < Logs.Num(); ++Index)
+	Nodes.Reserve(Parts.Num());
+	for (int32 Index = 0; Index < Parts.Num(); ++Index)
 	{
-		Nodes.Add(MakeNode(Logs[Index], Index));
+		Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 	}
 	const TArray<WoodStructure::FEdge> Edges = Connect(Nodes);
 	TMap<int32, float> Snaps;
@@ -265,13 +473,20 @@ FString StructureLink::Describe(UWorld* World)
 	const TSet<int32> Supported = Evaluate(Nodes, Edges, &Snaps, &Text);
 	for (const WoodStructure::FNode& Node : Nodes)
 	{
-		Text += FString::Printf(TEXT("\n    #%d %s (%.0f,%.0f,%.0f) rol %d zemin %d notches %d %s"), Node.Id, *Logs[Node.Id]->GetName(),
-			Logs[Node.Id]->GetActorLocation().X, Logs[Node.Id]->GetActorLocation().Y, Logs[Node.Id]->GetActorLocation().Z,
-			static_cast<int32>(Node.Role), Node.bGrounded ? 1 : 0, Node.Notches.Num(), Supported.Contains(Node.Id) ? TEXT("destekli") : TEXT("DESTEKSİZ"));
+		const AActor* Part = Parts.IsValidIndex(Node.Id) ? Parts[Node.Id] : nullptr;
+		if (!IsValid(Part))
+		{
+			continue;
+		}
+		Text += FString::Printf(TEXT("\n    #%d %s (%.0f,%.0f,%.0f) role %d grounded %d notches %d %s"),
+			Node.Id, *Part->GetName(), Part->GetActorLocation().X, Part->GetActorLocation().Y,
+			Part->GetActorLocation().Z, static_cast<int32>(Node.Role), Node.bGrounded ? 1 : 0,
+			Node.Notches.Num(), Supported.Contains(Node.Id) ? TEXT("supported") : TEXT("UNSUPPORTED"));
 	}
 	for (const WoodStructure::FEdge& Edge : Edges)
 	{
-		Text += FString::Printf(TEXT("\n    bağ #%d -> #%d tür %d %s"), Edge.A, Edge.B, static_cast<int32>(Edge.Kind), Edge.bOneWay ? TEXT("tek yön") : TEXT("çift yön"));
+		Text += FString::Printf(TEXT("\n    edge #%d -> #%d kind %d %s"), Edge.A, Edge.B,
+			static_cast<int32>(Edge.Kind), Edge.bOneWay ? TEXT("one-way") : TEXT("two-way"));
 	}
 	return Text;
 }
@@ -284,40 +499,134 @@ int32 StructureLink::Settle(UWorld* World)
 	}
 	MarkChanged();
 	int32 Fallen = 0;
-	// A piece that falls can take others with it: repeat until everything left standing is held up.
+	// Rebuild the mixed wood/stone graph after each failure: falling pieces are removed from the next installed pass.
 	for (int32 Pass = 0; Pass < 16; ++Pass)
 	{
-		const TArray<ACarvableLog*> Logs = Installed(World);
+		const TArray<AActor*> Parts = InstalledStructuralParts(World);
 		TArray<WoodStructure::FNode> Nodes;
-		for (int32 Index = 0; Index < Logs.Num(); ++Index)
+		Nodes.Reserve(Parts.Num());
+		for (int32 Index = 0; Index < Parts.Num(); ++Index)
 		{
-			Nodes.Add(MakeNode(Logs[Index], Index));
+			Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 		}
+
 		TMap<int32, float> Snaps;
-		const TSet<int32> Supported = StructureLink::Evaluate(Nodes, Connect(Nodes), &Snaps);
+		TMap<int32, FDroop> Droops;
+		const TSet<int32> Supported = StructureLink::Evaluate(Nodes, Connect(Nodes), &Snaps, nullptr, &Droops);
 		int32 FellNow = 0;
-		for (int32 Index = 0; Index < Logs.Num(); ++Index)
+		for (int32 Index = 0; Index < Parts.Num(); ++Index)
 		{
 			if (Supported.Contains(Index))
 			{
 				continue;
 			}
+
+			AActor* Part = Parts[Index];
+			if (!IsValid(Part))
+			{
+				continue;
+			}
 			if (bLogFalls)
 			{
-				UE_LOG(LogTemp, Display, TEXT("[Structure] %s %s%s"), *Logs[Index]->GetName(), Snaps.Contains(Index) ? TEXT("kırıldı: açıklık ya da taşma sınırı aşıldı") : TEXT("desteksiz kaldı"),
+				UE_LOG(LogTemp, Display, TEXT("[Structure] %s %s%s"), *Part->GetName(),
+					Snaps.Contains(Index) ? TEXT("failed span / overhang limit") : TEXT("lost support"),
 					*StructureLink::Describe(World));
 			}
-			// A beam that failed on its span snaps; anything else just loses its hold.
-			if (const float* Where = Snaps.Find(Index))
+
+			if (ACarvableLog* Log = Cast<ACarvableLog>(Part))
 			{
-				Logs[Index]->SnapAt(Logs[Index]->GetMinX() + *Where);
+				if (const float* Where = Snaps.Find(Index))
+				{
+					Log->SnapAt(Log->GetMinX() + *Where);
+				}
+				else
+				{
+					Log->LetFall();
+				}
 			}
-			else
+			else if (AStoneActor* Stone = Cast<AStoneActor>(Part))
 			{
-				Logs[Index]->LetFall();
+				// Stone blocks do not auto-snap into two pieces; an unsupported one returns to rigid-body physics.
+				Stone->SetStructuralState_Implementation(EStructuralNodeState::Falling);
 			}
 			++FellNow;
 		}
+
+		// A beam hanging from one support lowers its free end onto the ground (or what lies under it), pivoting on the support.
+		for (const TPair<int32, FDroop>& Pair : Droops)
+		{
+			ACarvableLog* Log = Parts.IsValidIndex(Pair.Key) ? Cast<ACarvableLog>(Parts[Pair.Key]) : nullptr;
+			if (!IsValid(Log) || !Supported.Contains(Pair.Key))
+			{
+				continue;
+			}
+			const WoodStructure::FNode& Node = Nodes[Pair.Key];
+			const FVector Dir = (Node.B - Node.A).GetSafeNormal();
+			const FVector Pivot = Node.A + Dir * Pair.Value.PivotFromA;
+			const FVector Free = Pair.Value.bFreeEndB ? Node.B : Node.A;
+			const float FreeLength = FVector::Dist(Pivot, Free);
+			FHitResult Under;
+			FCollisionQueryParams Query(SCENE_QUERY_STAT(StructureDroop), false, Log);
+			const bool bUnder = World->LineTraceSingleByChannel(Under, Free + FVector(0.f, 0.f, 40.f), Free - FVector(0.f, 0.f, 2000.f), ECC_Visibility, Query);
+			const float TargetZ = (bUnder ? Under.ImpactPoint.Z : 0.f) + Node.RadiusCm;
+			const float Rise = Pivot.Z - TargetZ;
+			if (FMath::Abs(Free.Z - TargetZ) < 6.f || Rise <= 1.f || FreeLength < 1.f)
+			{
+				continue;
+			}
+			if (Rise >= FreeLength * 0.98f)
+			{
+				// Too short to reach the ground from its support: it stays where it is put (nothing to come down to).
+				continue;
+			}
+			const FVector Flat = FVector(Free.X - Pivot.X, Free.Y - Pivot.Y, 0.f).GetSafeNormal();
+			const FVector NewFree = Pivot + Flat * FMath::Sqrt(FreeLength * FreeLength - Rise * Rise) + FVector(0.f, 0.f, -Rise);
+			const FQuat Turn = FQuat::FindBetweenNormals((Free - Pivot).GetSafeNormal(), (NewFree - Pivot).GetSafeNormal());
+			const FTransform Old = Log->GetActorTransform();
+			Log->PlaceAt(FTransform(Turn * Old.GetRotation(), Pivot + Turn.RotateVector(Old.GetLocation() - Pivot), Old.GetScale3D()), /*bAnchorIt*/ true);
+			++FellNow;
+		}
+
+		// A leaning log held only by the ground at its low end falls when nothing is left under its high end (the post it
+		// leaned on, the beam it was pinned to, was taken away).
+		for (int32 Index = 0; Index < Parts.Num(); ++Index)
+		{
+			ACarvableLog* Log = Cast<ACarvableLog>(Parts[Index]);
+			if (!IsValid(Log) || !Supported.Contains(Index) || Log->IsCarried())
+			{
+				continue;
+			}
+			const WoodStructure::FNode& Node = Nodes[Index];
+			const FVector Dir = (Node.B - Node.A).GetSafeNormal();
+			if (FMath::Abs(Dir.Z) < 0.2f || FMath::Abs(Dir.Z) > 0.9f)
+			{
+				continue;   // lying flat or standing: other rules
+			}
+			const FVector High = Node.A.Z > Node.B.Z ? Node.A : Node.B;
+			static TSet<TWeakObjectPtr<ACarvableLog>> WasHeldAtHighEnd;
+			bool bHeld = false;
+			for (int32 Other = 0; Other < Parts.Num() && !bHeld; ++Other)
+			{
+				if (Other == Index || !Supported.Contains(Other) || FellNow > 0 && !IsValid(Parts[Other]))
+				{
+					continue;
+				}
+				double T = 0.0;
+				bHeld = WoodStructure::Geo::DistToSegment(High, Nodes[Other].A, Nodes[Other].B, T) <= Nodes[Other].RadiusCm + Node.RadiusCm + 8.0;
+			}
+			// Only a log that was held up there (leaning on a post, pinned to a beam) falls when that goes; one the player laid
+			// slanted on the ground, never held, stays until something is put under its high end.
+			if (bHeld)
+			{
+				WasHeldAtHighEnd.Add(Log);
+			}
+			else if (WasHeldAtHighEnd.Remove(Log) > 0)
+			{
+				Log->LetFall();
+				++FellNow;
+			}
+		}
+
 		Fallen += FellNow;
 		if (FellNow == 0)
 		{
@@ -333,11 +642,12 @@ bool StructureLink::WouldBeSupported(UWorld* World, const ACarvableLog* Piece, c
 	{
 		return false;
 	}
-	const TArray<ACarvableLog*> Logs = Installed(World, Piece);
+	const TArray<AActor*> Parts = InstalledStructuralParts(World, Piece);
 	TArray<WoodStructure::FNode> Nodes;
-	for (int32 Index = 0; Index < Logs.Num(); ++Index)
+	Nodes.Reserve(Parts.Num() + 1);
+	for (int32 Index = 0; Index < Parts.Num(); ++Index)
 	{
-		Nodes.Add(MakeNode(Logs[Index], Index));
+		Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 	}
 	const int32 PieceId = Nodes.Num();
 	Nodes.Add(MakeNode(Piece, PieceId, &Transform));

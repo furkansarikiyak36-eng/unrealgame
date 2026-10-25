@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "system": "World Mechanics Modules",
+  "target": "Portable domain layer before eventual Unreal Engine 5.8 adapters",
+  "unrealIntegrated": false,
+  "implementationStatus": "partial-portable-prototype",
+  "statusVocabulary": [
+    "specified",
+    "prototype-partial",
+    "implemented",
+    "unit-tested",
+    "cross-module-verified",
+    "unreal-adapted",
+    "unreal-verified"
+  ],
+  "modules": [
+    {
+      "id": "CoreContracts",
+      "path": "Modules/CoreContracts",
+      "dependsOn": [],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "RuntimeProfiles",
+      "path": "Modules/RuntimeProfiles",
+      "dependsOn": [
+        "CoreContracts"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "WorldScan",
+      "path": "Modules/WorldScan",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "WorldClassification",
+      "path": "Modules/WorldClassification",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles",
+        "WorldScan"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "TerrainVoxel",
+      "path": "Modules/TerrainVoxel",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "MeshCollision",
+      "path": "Modules/MeshCollision",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles",
+        "TerrainVoxel"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "PlacementSnap",
+      "path": "Modules/PlacementSnap",
+      "dependsOn": [
+        "CoreContracts",
+        "WorldScan",
+        "WorldClassification",
+        "TerrainVoxel",
+        "MeshCollision"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "Excavation",
+      "path": "Modules/Excavation",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles",
+        "WorldScan",
+        "WorldClassification",
+        "TerrainVoxel",
+        "MeshCollision"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "Shoring",
+      "path": "Modules/Shoring",
+      "dependsOn": [
+        "CoreContracts",
+        "WorldScan",
+        "WorldClassification",
+        "TerrainVoxel",
+        "MeshCollision",
+        "PlacementSnap",
+        "Excavation"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "StructuralIntegrity",
+      "path": "Modules/StructuralIntegrity",
+      "dependsOn": [
+        "CoreContracts",
+        "Shoring"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "WorldEnvironment",
+      "path": "Modules/WorldEnvironment",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "Survival",
+      "path": "Modules/Survival",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles",
+        "Excavation",
+        "Shoring",
+        "WorldEnvironment"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "Persistence",
+      "path": "Modules/Persistence",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles",
+        "TerrainVoxel",
+        "Excavation",
+        "Shoring",
+        "StructuralIntegrity",
+        "Survival",
+        "WorldEnvironment"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "GameplayIntegration",
+      "path": "Modules/GameplayIntegration",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles",
+        "WorldScan",
+        "WorldClassification",
+        "TerrainVoxel",
+        "MeshCollision",
+        "PlacementSnap",
+        "Excavation",
+        "Shoring",
+        "StructuralIntegrity",
+        "WorldEnvironment",
+        "Survival",
+        "Persistence"
+      ],
+      "status": "prototype-partial"
+    },
+    {
+      "id": "Validation",
+      "path": "Modules/Validation",
+      "dependsOn": [
+        "CoreContracts",
+        "RuntimeProfiles",
+        "WorldScan",
+        "WorldClassification",
+        "TerrainVoxel",
+        "MeshCollision",
+        "PlacementSnap",
+        "Excavation",
+        "Shoring",
+        "StructuralIntegrity",
+        "Survival",
+        "WorldEnvironment",
+        "Persistence",
+        "GameplayIntegration"
+      ],
+      "status": "prototype-partial"
+    }
+  ]
+}

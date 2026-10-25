@@ -7,6 +7,7 @@
 #include "Wood/WoodStructureAnalysis.h"
 
 class ACarvableLog;
+class AStoneActor;
 class UWorld;
 
 /**
@@ -20,10 +21,17 @@ namespace StructureLink
 {
 	/** The graph node for Log, as it is or as it would be at Transform. */
 	WoodStructure::FNode MakeNode(const ACarvableLog* Log, int32 Id, const FTransform* Transform = nullptr);
+	/** A placed stone represented by its oriented bounds in the same support graph as logs. */
+	WoodStructure::FNode MakeNode(const AStoneActor* Stone, int32 Id);
 
 	/** How far apart the supports of a beam may be, and how far it may reach past the last one (modules). */
-	constexpr float MaxSupportGapModules = 4.5f;
-	constexpr float MaxOverhangModules = 2.f;
+	/** 8 modules = the longest log (600 cm): a log lying across two crossing logs at its ends (a cabin wall, 525 cm apart) holds. */
+	constexpr float MaxSupportGapModules = 8.f;
+	/**
+	 * One firm support is enough. A beam whose supports are all at one end and that reaches further than this past the last one
+	 * does not hang in the air: its free end drops until it rests on the ground (or whatever lies under it), pivoting on the support.
+	 */
+	constexpr float MaxOverhangModules = 1.f;
 
 	/**
 	 * Support with the beam rules on top of the graph: a beam that is not lying on the ground holds only if its supports
@@ -32,17 +40,35 @@ namespace StructureLink
 	 * Failed nodes get Damage 1 (this is how the Wood logic marks a piece that cannot hold). Returns the supported ids.
 	 * OutSnaps gets, for each beam that failed, how far from its A end it snaps: the middle of the gap or overhang that was too long.
 	 */
+	/** A beam hanging from one support: where it pivots (cm from its A end) and which end is free. */
+	struct FDroop
+	{
+		float PivotFromA = 0.f;
+		bool bFreeEndB = true;
+	};
+
+	/** OutDroops gets each beam that hangs from one support (see MaxOverhangModules); they stay supported, the caller lowers them. */
 	TSet<int32> Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges,
-		TMap<int32, float>* OutSnaps = nullptr, FString* OutNotes = nullptr);
+		TMap<int32, float>* OutSnaps = nullptr, FString* OutNotes = nullptr, TMap<int32, FDroop>* OutDroops = nullptr);
 
 	/** When set (the automatic mechanics test sets it), every piece that falls or snaps is logged with the structure graph at that moment. */
 	extern bool bLogFalls;
+
+	/**
+	 * Set while a piece is being placed: the settling that follows does not snap a beam for an overhang or gap that is too long
+	 * (the builder is on the way to the second post). The span rules apply again at the next settling that is not a placement,
+	 * and the placement preview still shows them as unsupported.
+	 */
+	MYPROJECT2_API extern bool bPlacementGrace;
 
 	/** A walls, platform, door frame... the standing pieces make up (see WoodStructure::AnalyzeStructure). */
 	struct FFeatureInfo
 	{
 		EWoodFeatureKind Kind = EWoodFeatureKind::Platform;
+		/** Backward-compatible log-only view used by existing callers. */
 		TArray<TWeakObjectPtr<ACarvableLog>> Pieces;
+		/** All structural members, including placed stone, for mixed-material recognition. */
+		TArray<TWeakObjectPtr<AActor>> StructuralPieces;
 		float SpanCm = 0.f;
 		FVector Center = FVector::ZeroVector;
 	};
@@ -53,8 +79,12 @@ namespace StructureLink
 	FString NameOf(EWoodFeatureKind Kind);
 	/** What Log is part of, e.g. "Platform, Korkuluk" (empty if it stands alone). */
 	FString DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log);
+	/** Structure feature names for any installed member, including stone. */
+	FString DescribeFeaturesOfActor(UWorld* World, const AActor* Part);
 	/** Something in the structure changed: the next Features() works it out afresh. */
 	void MarkChanged();
+	/** Monotonic version incremented whenever the structural graph is invalidated. */
+	int32 Version();
 
 	/** Every standing piece with its role, whether it rests on the ground, and what holds it: for reading what the graph sees. */
 	FString Describe(UWorld* World);

@@ -1,0 +1,11 @@
+- [Greybox rebuild](project-greybox-rebuild.md) — MyProject2 = greybox port of Downloads/MyProject; assets/map come from Scripts/build_greybox.py
+- [Log everything](feedback-log-everything.md) — append every task to Docs/PROJE_GUNLUGU.md + run update_docs.py
+- [Reference games](project-reference-games.md) — what each game gives: SotF log/stone/stick, 7DtD raids + minimal voxel, Subnautica remnant story, Frostpunk/Long Dark daily hardship, farming sims, Death Stranding bridges/ropes
+- [Assembly, not modeling](project-assembly-not-modeling.md) — no prefabs; pieces assembled by hand; raw materials only bind/seal
+- [Editor MCP](reference-editor-mcp.md) — drive the open UE editor via 127.0.0.1:8000 (Scripts/ue_mcp.py); Live Coding types lack Python bindings
+- [Analyze live state](feedback-analyze-live-state.md) — "analiz et" = measure the open editor/disk now, not log/memory findings
+- [FBX import UE 5.8](reference-fbx-import-ue58.md) — Interchange drops UCX collision; legacy importer needs scale 100 + clean folder
+- [No keys to editor](feedback-no-keys-to-editor.md) — never PressKey into UE (Ctrl+A/BackSpace deleted a scene); FillForm + Type only
+- [GitHub workflow](project-github-workflow.md) — mechanics arrive via GitHub integrate/web-plan; Claude pulls, builds, wires in editor, tests, pushes; keep GitHub current
+- [Check open map before saving](feedback-check-open-map.md) — guard scripts that save to a fixed map path; user switches maps (PerfTest got overwritten once)
+- [UE Python Rotator order](reference-ue-python-rotator.md) — unreal.Rotator positional = (roll, pitch, yaw); always use keyword args

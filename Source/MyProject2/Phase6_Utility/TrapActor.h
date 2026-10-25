@@ -1,8 +1,65 @@
 #pragma once
+
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "TrapActor.generated.h"
+
 class UBoxComponent;
-UENUM(BlueprintType) enum class ETrapType:uint8{RollingLog,FallingLog,SpikePit};
-UCLASS() class MYPROJECT2_API ATrapActor:public AActor
-{GENERATED_BODY() public: ATrapActor(); UFUNCTION(BlueprintCallable) void Trigger(AActor* Victim); UPROPERTY(VisibleAnywhere) TObjectPtr<UBoxComponent> TriggerVolume; UPROPERTY(EditAnywhere,BlueprintReadWrite) ETrapType TrapType=ETrapType::RollingLog; UPROPERTY(EditAnywhere,BlueprintReadWrite) float Damage=50.0f; UPROPERTY(EditAnywhere,BlueprintReadWrite) float Cooldown=5.0f; protected: float LastTriggerTime=-100.0f; };
+class UTrapMechanismComponent;
+class UPrimitiveComponent;
+class ACarvableLog;
+
+UENUM(BlueprintType)
+enum class ETrapType : uint8
+{
+	RollingLog,
+	FallingLog,
+	SpikePit
+};
+
+UCLASS()
+class MYPROJECT2_API ATrapActor : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	ATrapActor();
+
+	UFUNCTION(BlueprintCallable, Category = "Trap")
+	void Trigger(AActor* Victim);
+	UFUNCTION(BlueprintCallable, Category = "Trap")
+	void Arm();
+	UFUNCTION(BlueprintCallable, Category = "Trap")
+	void Disarm();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Trap")
+	TObjectPtr<UBoxComponent> TriggerVolume;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Trap")
+	TObjectPtr<UTrapMechanismComponent> Mechanism;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap")
+	ETrapType TrapType = ETrapType::RollingLog;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
+	float Damage = 50.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
+	float Cooldown = 5.f;
+	/** Physical payload for rolling/falling-log traps. The trap never fabricates a log if this is unset. */
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Trap")
+	TObjectPtr<ACarvableLog> PayloadLog = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
+	float PayloadImpulse = 5000.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap", meta = (ClampMin = "0.0"))
+	float SpikeLaunchVelocity = 500.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Trap")
+	bool bConsumeAfterPayloadRelease = true;
+
+protected:
+	UFUNCTION()
+	void HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep,
+		const FHitResult& SweepResult);
+	UFUNCTION()
+	void HandleMechanismTriggered(AActor* Victim);
+
+private:
+	bool bPayloadReleased = false;
+};

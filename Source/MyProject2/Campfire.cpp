@@ -86,6 +86,27 @@ ACampfire* ACampfire::Build(UWorld* World, const FVector& Ground)
 	return Fire;
 }
 
+ACampfire* ACampfire::BuildWithExternalStoneRing(UWorld* World, const FVector& Ground)
+{
+	ACampfire* Fire = Build(World, Ground);
+	if (!Fire)
+	{
+		return nullptr;
+	}
+
+	// The manually placed AStoneActor ring remains visible; do not draw a second built-in ring over it.
+	for (UStaticMeshComponent* Stone : Fire->Stones)
+	{
+		if (Stone)
+		{
+			Stone->SetVisibility(false, true);
+			Stone->SetHiddenInGame(true, true);
+			Stone->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+	}
+	return Fire;
+}
+
 bool ACampfire::AddFuel(ACarvableLog* Piece)
 {
 	if (!Piece || Piece->IsAnchored() || FuelSeconds >= MaxFuelSeconds - 0.5f)

@@ -27,7 +27,12 @@ enum class EWoodConnectionKind : uint8
 	/** İki gövde çaprazlanıyor ve en az birinde o noktada çentik var. Tek yönlü: üstteki alttakine oturur. */
 	Notched,
 	/** Döşeme/duvar/çatı tahtası bir taşıyıcının üstüne yaslanıyor (çentik gerekmez). Tek yönlü. */
-	Resting
+	Resting,
+	/**
+	 * Paralel iki kütük üst üste: üstteki ortak boy boyunca alttakinin üstüne yatıyor (kütük duvar sırası).
+	 * Tek yönlü; tek başına yeterli destektir (yatay parçanın iki destek noktası şartı yerine boydan boya yatak).
+	 */
+	Stacked
 };
 
 /** Yapı tanıma sonucu (mekanik 37-52): işlev modelden değil geometri ve bağlantıdan çıkarılır. */

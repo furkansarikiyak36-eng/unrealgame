@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "targetEngine": "Unreal Engine 5.8",
+  "pluginName": "WorldMechanics",
+  "runtimeModuleName": "WorldMechanicsRuntime",
+  "integrationMode": "One Unreal plugin and one runtime module. Each phase adds only its portable headers and sources; all phases compile inside the same module to avoid cross-module export macros for the engine-neutral C++ types.",
+  "phases": [
+    {
+      "phase": 0,
+      "name": "Core",
+      "description": "Shared IDs, revisions, math contracts, and runtime profiles.",
+      "portableModules": ["CoreContracts", "RuntimeProfiles"]
+    },
+    {
+      "phase": 1,
+      "name": "WorldQuery",
+      "description": "World-scan contracts and region classification.",
+      "portableModules": ["WorldScan", "WorldClassification"]
+    },
+    {
+      "phase": 2,
+      "name": "Terrain",
+      "description": "Density terrain, derived mesh data, revision/dirty queues, and placement snap rules.",
+      "portableModules": ["TerrainVoxel", "MeshCollision", "PlacementSnap"]
+    },
+    {
+      "phase": 3,
+      "name": "Construction",
+      "description": "Excavation preflight, shoring plans, and structural integrity decisions.",
+      "portableModules": ["Excavation", "Shoring", "StructuralIntegrity"]
+    },
+    {
+      "phase": 4,
+      "name": "Environment",
+      "description": "Water/soil/fire simulation and survival exposure calculations.",
+      "portableModules": ["WorldEnvironment", "Survival"]
+    },
+    {
+      "phase": 5,
+      "name": "PersistenceGameplay",
+      "description": "Versioned density persistence, restore staging, raid/spawn decisions, work scheduling, material rules, plant/animal models, and crafting preflight.",
+      "portableModules": ["Persistence", "GameplayIntegration"]
+    }
+  ]
+}

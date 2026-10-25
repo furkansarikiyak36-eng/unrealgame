@@ -19,7 +19,27 @@ bool UStoneCarryComponent::PickUp(AStoneActor* Stone, EStoneCarryMode Mode)
     {
         const FName Socket = Mode == EStoneCarryMode::TwoHands ? LeftHandSocket :
             (Mode == EStoneCarryMode::Shouldered ? ShoulderSocket : HandSocket);
-        Stone->AttachToComponent(Char->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, Socket);
+        USkeletalMeshComponent* CharacterMesh = Char->GetMesh();
+        if (CharacterMesh && CharacterMesh->DoesSocketExist(Socket))
+        {
+            Stone->AttachToComponent(
+                CharacterMesh,
+                FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+                Socket);
+        }
+        else if (USceneComponent* OwnerRoot = Char->GetRootComponent())
+        {
+            // The current first-person prototype may not assign a full skeletal mesh/socket rig.
+            // Keep the physical stone visible just in front of the player instead of snapping it
+            // into the capsule origin or a nonexistent hand socket.
+            const FVector CarryLocation = Char->GetActorLocation()
+                + Char->GetActorForwardVector() * 48.0f
+                + FVector(0.0f, 0.0f, 38.0f);
+            Stone->SetActorLocation(CarryLocation, false, nullptr, ETeleportType::TeleportPhysics);
+            Stone->AttachToComponent(
+                OwnerRoot,
+                FAttachmentTransformRules::KeepWorldTransform);
+        }
     }
     CarriedStone = Stone; CurrentMode = Mode; return true;
 }
@@ -30,6 +50,20 @@ bool UStoneCarryComponent::Drop()
     CarriedStone->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
     CarriedStone->SetStructuralState_Implementation(EStructuralNodeState::Loose);
     CarriedStone = nullptr; return true;
+}
+
+bool UStoneCarryComponent::ReleaseForPlacement(AStoneActor* Stone)
+{
+    if (!IsValid(Stone) || CarriedStone != Stone)
+    {
+        return false;
+    }
+
+    // Placement has already transitioned this same physical stone to Installed.
+    // Do not detach or mutate its state here; only clear the carry owner's reference.
+    CarriedStone = nullptr;
+    CurrentMode = EStoneCarryMode::SingleHand;
+    return true;
 }
 
 int32 UStoneCarryComponent::AddToStack(AStoneActor* SmallStone)

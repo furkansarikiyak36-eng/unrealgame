@@ -1,6 +1,16 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ForestHUD.h"
+#include "RawLogShapes.h"
+#include "UnrealClient.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "Misc/Paths.h"
+#include "DayLoopSubsystem.h"
+#include "ScenarioSubsystem.h"
+#include "SurvivalGuideSubsystem.h"
+#include "WorldFeatures.h"
+#include "StructureLink.h"
 #include "ForestCharacter.h"
 #include "HarvestableActor.h"
 #include "LogWallBlueprint.h"
@@ -13,6 +23,7 @@
 #include "Campfire.h"
 #include "StructureLink.h"
 #include "EngineUtils.h"
+#include "RawMaterialNode.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
@@ -41,9 +52,32 @@ void AForestHUD::DrawPanel(float X, float Y, float Width, float Height)
 	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), X, Y, Width, Height);
 }
 
+void AForestHUD::UpdateHudShot()
+{
+	float Delay = 0.f;
+	if (!GetWorld() || !FParse::Value(FCommandLine::Get(), TEXT("HudShot="), Delay))
+	{
+		return;
+	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (!bShotTaken && Now >= Delay)
+	{
+		FString Name = TEXT("HudShot");
+		FParse::Value(FCommandLine::Get(), TEXT("HudShotName="), Name);
+		FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / (Name + TEXT(".png")), /*bShowUI*/ true, /*bAddFilenameSuffix*/ false);
+		bShotTaken = true;
+		ShotTakenAt = Now;
+	}
+	else if (bShotTaken && Now >= ShotTakenAt + 2.0)
+	{
+		FPlatformMisc::RequestExit(false);
+	}
+}
+
 void AForestHUD::DrawHUD()
 {
 	Super::DrawHUD();
+	UpdateHudShot();
 
 	const AForestCharacter* Player = Cast<AForestCharacter>(GetOwningPawn());
 	if (!Player || !Canvas)
@@ -101,11 +135,16 @@ void AForestHUD::DrawHUD()
 			Detail += TEXT("  |  yanık");
 		}
 		const TCHAR* Wheel = bProfile ? TEXT("[Tekerlek] derinlik")
-			: Tool == ECarveTool::CrossCut ? TEXT("65 cm'lik modül çizgileri")
+			: Tool == ECarveTool::CrossCut ? TEXT("75 cm'lik modül çizgileri")
 			: AForestCharacter::IsEndTool(Tool) ? TEXT("kütüğün iki ucundan biri")
 			: Tool == ECarveTool::Split ? TEXT("[Tekerlek] dikey/yatay") : TEXT("[Tekerlek] köşe/oluk");
-		const FString Label = FString::Printf(TEXT("Oyma: %s  %s   vuruş %d/2   |   [R] araç   %s"),
-			AForestCharacter::GetCarveToolName(Tool), *Detail, Player->GetCarveHits(), Wheel);
+		// Raw UnrealExport logs are worked by where the axe lands (RawLogShapes), not with the carving tools.
+		const RawLogShapes::FShape Shape = RawLogShapes::FromLog(Player->GetFocusedCarvable());
+		const FString Label = Shape.IsValid()
+			? FString::Printf(TEXT("%s   |   ortaya vur: enine kes   uca vur: boyuna yar   yana vur: düzle   [R] oluk / normal"),
+				*RawLogShapes::Describe(Shape))
+			: FString::Printf(TEXT("Oyma: %s  %s   vuruş %d/2   |   [R] araç   %s"),
+				AForestCharacter::GetCarveToolName(Tool), *Detail, Player->GetCarveHits(), Wheel);
 		// A piece of a structure says what the structure is.
 		const FString Made = StructureLink::DescribeFeaturesOf(GetWorld(), Player->GetFocusedCarvable());
 		if (!Made.IsEmpty())
@@ -113,6 +152,25 @@ void AForestHUD::DrawHUD()
 			float MadeW, MadeH;
 			GetTextSize(Made, MadeW, MadeH, Font);
 			DrawText(Made, FLinearColor(1.f, 0.85f, 0.4f), CenterX - MadeW * 0.5f, CenterY + 40.f, Font);
+		}
+		// A raw log: a ring on the screen where the axe lands, coloured and named by what that hit would do.
+		if (Shape.IsValid())
+		{
+			const FHitResult& StrikeHit = Player->GetFocusHit();
+			const RawLogShapes::EAction Action = RawLogShapes::ClassifyHit(Player->GetFocusedCarvable(), StrikeHit, Player->IsChannelMode());
+			FString Why;
+			const bool bCan = RawLogShapes::CanApply(Shape, Action, Why);
+			const FLinearColor Colour = !bCan ? FLinearColor(0.6f, 0.6f, 0.6f)
+				: Action == RawLogShapes::EAction::CrossCut ? FLinearColor(1.f, 0.3f, 0.2f)
+				: Action == RawLogShapes::EAction::Split ? FLinearColor(0.25f, 0.6f, 1.f)
+				: Action == RawLogShapes::EAction::Hew ? FLinearColor(1.f, 0.67f, 0.15f) : FLinearColor(0.3f, 0.85f, 0.45f);
+			const FVector2D Screen = FVector2D(Project(FVector(StrikeHit.ImpactPoint)));
+			DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.8f), Screen.X - 7.f, Screen.Y - 7.f, 14.f, 14.f);
+			DrawRect(Colour, Screen.X - 5.f, Screen.Y - 5.f, 10.f, 10.f);
+			const FString Strike = bCan ? RawLogShapes::ActionName(Action) : Why;
+			float StrikeW, StrikeH;
+			GetTextSize(Strike, StrikeW, StrikeH, Font);
+			DrawText(Strike, Colour, Screen.X - StrikeW * 0.5f, Screen.Y - 30.f, Font);
 		}
 		float TextW, TextH;
 		GetTextSize(Label, TextW, TextH, Font);
@@ -216,6 +274,23 @@ void AForestHUD::DrawHUD()
 		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), CenterX - BarW * 0.5f, BarY, BarW, 8.f);
 		DrawRect(DynamicColor, CenterX - BarW * 0.5f, BarY, BarW * CapRatio, 8.f);
 	}
+	else if (const ARawMaterialNode* RawNode = Player->GetFocusedRawNode())
+	{
+		// Red when used up, yellow at half, green when full: the same gradient as the other capacity bars.
+		const float Ratio = RawNode->GetSupplyRatio();
+		const FLinearColor DynamicColor = GetValueGradientColor(Ratio);
+		const FString Label = RawNode->GetPrompt();
+		float TextW, TextH;
+		GetTextSize(Label, TextW, TextH, Font);
+		DrawText(Label, DynamicColor, CenterX - TextW * 0.5f, CenterY + 18.f, Font);
+		if (RawNode->MaxSupply > 0)
+		{
+			const float BarW = 160.f;
+			const float BarY = CenterY + 22.f + TextH;
+			DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), CenterX - BarW * 0.5f, BarY, BarW, 6.f);
+			DrawRect(DynamicColor, CenterX - BarW * 0.5f, BarY, BarW * Ratio, 6.f);
+		}
+	}
 	else if (const APickupItem* Pickup = Player->GetFocusedPickup())
 	{
 		FString Label = ForestItems::IsCarriedItem(Pickup->GetItem())
@@ -237,7 +312,8 @@ void AForestHUD::DrawHUD()
 		const float X0 = 20.f, Y0 = Canvas->ClipY - SlotH - 20.f;
 		const FString Tool = Player->GetCurrentTool() == EForestTool::Pickaxe
 			? TEXT("Kazma")
-			: (Player->GetCurrentTool() == EForestTool::Trowel ? TEXT("Mala [T]") : TEXT("Balta"));
+			: (Player->GetCurrentTool() == EForestTool::Trowel ? TEXT("Mala [T]")
+			: (Player->GetCurrentTool() == EForestTool::Shovel ? TEXT("Kürek [B]") : TEXT("Balta")));
 		const FString Labels[3] = { Tool, TEXT("\u2014"), TEXT("\u2014") };
 		const FString Titles[3] = { TEXT("Alet"), TEXT("Yiyecek"), TEXT("Su") };
 		for (int32 Index = 0; Index < 3; ++Index)
@@ -315,6 +391,7 @@ void AForestHUD::DrawHUD()
 			{ TEXT("Dayan\u0131kl\u0131l\u0131k"), Survival->GetStamina(), FLinearColor(0.95f, 0.8f, 0.25f) },
 			{ TEXT("A\u00E7l\u0131k"),        Survival->GetHunger(),  FLinearColor(0.85f, 0.5f, 0.2f) },
 			{ TEXT("Susuzluk"),               Survival->GetThirst(),  FLinearColor(0.3f, 0.6f, 0.95f) },
+			{ TEXT("Vücut ısısı"),            Survival->GetBodyHeat(), FLinearColor(0.95f, 0.45f, 0.75f) },
 		};
 		const float BarW = 180.f, BarH = 10.f, RowH = 24.f;
 		const float X = Canvas->ClipX - BarW - 40.f;
@@ -331,22 +408,53 @@ void AForestHUD::DrawHUD()
 		}
 	}
 
-	// Controls, top left
-	static const TArray<FString> Help = {
-		TEXT("WASD hareket  |  Shift koş  |  Space zıpla"),
-		TEXT("Sol tık: vur / blok koy  |  E: topla  |  [T]: Mala (Chinking/Harç)"),
-		TEXT("[3] 3 Taş -> 1 Taş Blok"),
-		TEXT("Odun tarifle değil, kesilerek yapılır (kütük -> kiriş, yarım, kısa, kalas...)  |  [Tab] Çanta"),
-		TEXT("[P] Admin modu: [G] malzeme, [H] oda, [J] kes, [N] aç, [M] hasar, [K] oyma kütüğü, [L] demo, [Y] hasar"),
-		TEXT("[B] İnşa modu  |  Tekerlek / [Q]: seç  |  [R] döndür  |  Sağ tık: iptal"),
-		TEXT("Kütük Duvar: köşelere tıkla, plana bakıp [E] ile kütük ekle"),
-		TEXT("Parça omuzdayken: [Sol tık] koy (kütüğe: çaprazlama, direğe: kiriş/payanda, ateşe: odun)  |  [R] yatır / dik / eğik  |  [F] çakmak (basılı tut)  |  [C] taş koy (7 taş = ateş yeri)  |  [X] it  |  [O] açıklık aç  |  [V] iskele işareti"),
-		TEXT("Oyma: [R] alet (çentik, enine kesim, yarma, oval, düz, sivri uç, pah, uç düzeltme, kırlangıç)  |  [E] parçayı omza al"),
-	};
-	DrawPanel(20.f, 20.f, 620.f, 16.f + 20.f * Help.Num());
-	for (int32 Index = 0; Index < Help.Num(); ++Index)
+	if (Player->IsStickMode())
 	{
-		DrawText(Help[Index], FLinearColor(1.f, 1.f, 1.f, 0.8f), 30.f, 28.f + Index * 20.f, SmallFont);
+		const FString Label = Player->GetStickModeLabel();
+		float LabelW = 0.f, LabelH = 0.f;
+		GetTextSize(Label, LabelW, LabelH, SmallFont);
+		DrawPanel(Canvas->ClipX * 0.5f - LabelW * 0.5f - 10.f, Canvas->ClipY - 150.f, LabelW + 20.f, LabelH + 10.f);
+		DrawText(Label, FLinearColor(1.f, 0.85f, 0.5f), Canvas->ClipX * 0.5f - LabelW * 0.5f, Canvas->ClipY - 145.f, SmallFont);
+	}
+
+	// The day, top centre: when and how cold on the first line, what is coming and what has been done on the second.
+	if (const UDayLoopSubsystem* Loop = UDayLoopSubsystem::Get(GetWorld()))
+	{
+		const FVector Where = Player->GetActorLocation();
+		const FTemperatureReading Air = Loop->GetTemperatureAt(Where);
+		const float Hour = Loop->GetHour();
+		FString Warmth;
+		Warmth += Air.Fire > 0.5f ? TEXT(" ateş") : TEXT("");
+		Warmth += Air.Shelter > 0.5f ? TEXT(" çatı") : TEXT("");
+		Warmth += Air.Wet < -0.5f ? TEXT(" ıslak") : TEXT("");
+		const FString First = FString::Printf(TEXT("Gün %d   %02d:%02d %s   %s %.0f°C%s"), Loop->GetDay(), FMath::FloorToInt(Hour),
+			FMath::FloorToInt(FMath::Fmod(Hour, 1.f) * 60.f), Loop->IsNight() ? TEXT("gece") : TEXT("gündüz"),
+			*UDayLoopSubsystem::RegionNameAt(Where), Air.Total(), Warmth.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (%s)"), *Warmth.TrimStart()));
+		int32 Bridges = 0;
+		for (const StructureLink::FFeatureInfo& Feature : StructureLink::Features(GetWorld()))
+		{
+			Bridges += Feature.Kind == EWoodFeatureKind::Bridge ? 1 : 0;
+		}
+		const UScenarioSubsystem* Scenario = UScenarioSubsystem::Get(GetWorld());
+		const FString Second = FString::Printf(TEXT("%s   ·   notlar %d/%d   ·   %d ip, %d köprü"),
+			Loop->IsRaidRunning() ? TEXT("BASKIN!") : *FString::Printf(TEXT("baskın: %d. gece"), Loop->GetNextRaidDay()),
+			Scenario ? Scenario->GetJournal().Num() : 0, UScenarioSubsystem::StoryNotes().Num(), ARopeLine::CountAll(GetWorld()), Bridges);
+		float W1 = 0.f, H1 = 0.f, W2 = 0.f, H2 = 0.f;
+		GetTextSize(First, W1, H1, Font);
+		GetTextSize(Second, W2, H2, SmallFont);
+		const float PanelW = FMath::Max(W1, W2) + 28.f;
+		DrawPanel(CenterX - PanelW * 0.5f, 10.f, PanelW, H1 + H2 + 18.f);
+		DrawText(First, White, CenterX - W1 * 0.5f, 15.f, Font);
+		DrawText(Second, Loop->IsRaidRunning() ? FLinearColor(1.f, 0.4f, 0.3f) : FLinearColor(0.8f, 0.85f, 0.9f), CenterX - W2 * 0.5f, 17.f + H1, SmallFont);
+	}
+
+	// Controls: one line, top left; [F1] opens the full list.
+	{
+		const FString Tip = TEXT("[F1] tuşlar    [Tab] çanta    [I] yapım");
+		float TipW = 0.f, TipH = 0.f;
+		GetTextSize(Tip, TipW, TipH, SmallFont);
+		DrawPanel(20.f, 20.f, TipW + 20.f, TipH + 10.f);
+		DrawText(Tip, FLinearColor(1.f, 1.f, 1.f, 0.85f), 30.f, 25.f, SmallFont);
 	}
 
 	// Fires nearby: how long they burn, over the fire
@@ -372,7 +480,11 @@ void AForestHUD::DrawHUD()
 		FString Label;
 		switch (Player->GetCarryPlace())
 		{
-		case AForestCharacter::ECarryPlace::Across: Label = TEXT("[Sol tık] Çaprazlama yerleştir  (eyer çentiği kendiliğinden açılır)"); break;
+		case AForestCharacter::ECarryPlace::Across: Label = TEXT("[Sol tık] Çaprazlama yerleştir (köşe, çentik kendiliğinden)   —  duvar sırası için duvara dönük bak"); break;
+		case AForestCharacter::ECarryPlace::Diagonal: Label = FString::Printf(TEXT("[Sol tık] %+.0f° çaprazlama koy   —  bakışını çevirerek 0 / 45 / 90"), Player->GetDiagonalAngle()); break;
+		case AForestCharacter::ECarryPlace::Socket: Label = FString::Printf(TEXT("[Sol tık] %s   —  bakışını çevirerek 0 / 45 / 90"), *Player->GetSocketLabel()); break;
+		case AForestCharacter::ECarryPlace::Corner: Label = TEXT("[Sol tık] Köşe geçmesi (uçlar birbirine oturur)"); break;
+		case AForestCharacter::ECarryPlace::Stack:  Label = TEXT("[Sol tık] Üstüne koy (duvar sırası)   —  köşe için kütük boyunca bak"); break;
 		case AForestCharacter::ECarryPlace::Stand:  Label = TEXT("[Sol tık] Dik koy (direk)   [R] yatır"); break;
 		case AForestCharacter::ECarryPlace::Lay:    Label = TEXT("[Sol tık] Yatır   [R] dik koy"); break;
 		case AForestCharacter::ECarryPlace::Beam:   Label = TEXT("[Sol tık] Kiriş koy (direğin üstüne)"); break;
@@ -404,7 +516,7 @@ void AForestHUD::DrawHUD()
 		FString Hint;
 		It->GetGuide(Lines, Hint);
 		const float X = 20.f;
-		float Y = 36.f + 20.f * Help.Num() + 12.f;
+		float Y = 60.f;
 		const float RowH = 22.f;
 		DrawPanel(X, Y, 620.f, 40.f + RowH * Lines.Num() + 26.f);
 		DrawText(TEXT("MEKANİK DEMOSU"), FLinearColor(1.f, 0.85f, 0.4f), X + 10.f, Y + 8.f, Font);
@@ -419,6 +531,91 @@ void AForestHUD::DrawHUD()
 		}
 		DrawText(Hint, FLinearColor(0.75f, 0.9f, 1.f), X + 12.f, Y + 4.f, SmallFont);
 		break;
+	}
+
+	// Survival demo, right side: the goal at hand with its hint, then the next three.
+	if (const USurvivalGuideSubsystem* Guide = USurvivalGuideSubsystem::Get(GetWorld()); Guide && Guide->IsActive())
+	{
+		TArray<FSurvivalGoalLine> Lines;
+		int32 Current = INDEX_NONE;
+		Guide->GetLines(Lines, Current);
+		const float PanelW = 400.f;
+		const float X = Canvas->ClipX - PanelW - 20.f;
+		const float Y0 = 80.f;
+		const float RowH = 19.f;
+		// Words onto lines no wider than the panel.
+		auto Wrap = [this, SmallFont, PanelW](const FString& Text)
+		{
+			TArray<FString> Words;
+			Text.ParseIntoArray(Words, TEXT(" "));
+			TArray<FString> Out;
+			FString Line;
+			for (const FString& Word : Words)
+			{
+				const FString Try = Line.IsEmpty() ? Word : Line + TEXT(" ") + Word;
+				float W = 0.f, H = 0.f;
+				GetTextSize(Try, W, H, SmallFont);
+				if (W > PanelW - 24.f && !Line.IsEmpty())
+				{
+					Out.Add(Line);
+					Line = Word;
+				}
+				else
+				{
+					Line = Try;
+				}
+			}
+			if (!Line.IsEmpty())
+			{
+				Out.Add(Line);
+			}
+			return Out;
+		};
+		TArray<FString> GoalLines;
+		TArray<FString> HintLines;
+		TArray<FString> NextLines;
+		if (Lines.IsValidIndex(Current))
+		{
+			GoalLines = Wrap(FString::Printf(TEXT("> %s"), *Lines[Current].Text));
+			HintLines = Wrap(Lines[Current].Hint);
+			for (int32 Index = Current + 1; Index < Lines.Num() && NextLines.Num() < 3; ++Index)
+			{
+				if (!Lines[Index].bDone)
+				{
+					NextLines.Add(FString::Printf(TEXT("·  %s"), *Lines[Index].Text));
+				}
+			}
+		}
+		else
+		{
+			GoalLines.Add(TEXT("Hepsi tamam: hayatta kaldın!"));
+		}
+		const int32 Rows = 1 + GoalLines.Num() + HintLines.Num() + (NextLines.Num() > 0 ? 1 + NextLines.Num() : 0);
+		DrawPanel(X, Y0, PanelW, 16.f + RowH * Rows + 8.f);
+		float Y = Y0 + 8.f;
+		DrawText(FString::Printf(TEXT("HAYATTA KALMA   %d / %d"), Guide->GetDoneCount(), USurvivalGuideSubsystem::GetGoalCount()), FLinearColor(1.f, 0.85f, 0.4f), X + 12.f, Y, SmallFont);
+		Y += RowH + 2.f;
+		for (const FString& Line : GoalLines)
+		{
+			DrawText(Line, FLinearColor(1.f, 0.92f, 0.45f), X + 12.f, Y, SmallFont);
+			Y += RowH;
+		}
+		for (const FString& Line : HintLines)
+		{
+			DrawText(Line, FLinearColor(0.75f, 0.9f, 1.f), X + 12.f, Y, SmallFont);
+			Y += RowH;
+		}
+		if (NextLines.Num() > 0)
+		{
+			Y += 4.f;
+			DrawText(TEXT("Sıradaki:"), FLinearColor(1.f, 1.f, 1.f, 0.5f), X + 12.f, Y, SmallFont);
+			Y += RowH;
+			for (const FString& Line : NextLines)
+			{
+				DrawText(Line, FLinearColor(1.f, 1.f, 1.f, 0.5f), X + 12.f, Y, SmallFont);
+				Y += RowH;
+			}
+		}
 	}
 
 	// Admin mode badge, top right
@@ -472,4 +669,40 @@ void AForestHUD::DrawHUD()
 		GetTextSize(Player->GetMessage(), TextW, TextH, Font);
 		DrawText(Player->GetMessage(), FLinearColor(1.f, 1.f, 1.f, Alpha), CenterX - TextW * 0.5f, Canvas->ClipY * 0.22f, Font);
 	}
+
+	if (Player->IsHelpOpen())
+	{
+		static const TArray<FString> Help = {
+			TEXT("HAREKET     WASD   ·   Shift koş   ·   Space zıpla"),
+			TEXT("ELLER        Sol tık: vur, koy, yap   ·   E: al, kullan   ·   Sağ tık: iptal"),
+			TEXT("KÜTÜK        R: yatır / dik / eğik (oymada: alet)   ·   Q, tekerlek: seçim"),
+			TEXT("                  X: it   ·   O: duvarda açıklık   ·   V: iskele işareti"),
+			TEXT("ATEŞ          C: taş koy (7 taş = ateş yeri)   ·   F basılı: çakmak"),
+			TEXT("                  Odunu omza al, ateş yerine bak, Sol tık: yakıt"),
+			TEXT("YAPIM         I: kazık çubuk (tek tek çak), tarla, deri giysi, ip, ip hattı"),
+			TEXT("                  Dar aralıklı kazıklar yolu kapatır; [F] ile yakılan kazık meşale olur"),
+			TEXT("YAŞAM         8: ye   ·   E: su iç (nehir), not oku, ipe bin, tarla, hayvan, ham madde topla"),
+			TEXT("                  Ateş, çatı ve deri giysi ısıtır; ıslanmak üşütür"),
+			TEXT("DİĞER         Tab: çanta"),
+			TEXT("ADMİN (P)    G malzeme   ·   9 zaman +3 saat   ·   Z baskın   ·   U araba"),
+			TEXT("                  K oyma kütüğü   ·   L kütük demosu   ·   Y yapıya hasar"),
+		};
+		float MaxW = 0.f;
+		for (const FString& Line : Help)
+		{
+			float W = 0.f, H = 0.f;
+			GetTextSize(Line, W, H, SmallFont);
+			MaxW = FMath::Max(MaxW, W);
+		}
+		const float PanelW = MaxW + 40.f;
+		const float X = CenterX - PanelW * 0.5f;
+		const float Y = Canvas->ClipY * 0.5f - (Help.Num() * 21.f + 50.f) * 0.5f;
+		DrawPanel(X, Y, PanelW, Help.Num() * 21.f + 50.f);
+		DrawText(TEXT("TUŞLAR   ([F1] kapat)"), FLinearColor(1.f, 0.85f, 0.4f), X + 20.f, Y + 10.f, SmallFont);
+		for (int32 Index = 0; Index < Help.Num(); ++Index)
+		{
+			DrawText(Help[Index], FLinearColor(1.f, 1.f, 1.f, 0.9f), X + 20.f, Y + 36.f + Index * 21.f, SmallFont);
+		}
+	}
 }
+
