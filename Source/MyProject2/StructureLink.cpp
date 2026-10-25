@@ -274,14 +274,15 @@ WoodStructure::FNode StructureLink::MakeNode(const AStoneActor* Stone, int32 Id)
 	const EStoneRole StoneRole = Definition ? Definition->Role : EStoneRole::None;
 
 	int32 AxisIndex = 0;
-	if (StoneRole == EStoneRole::Pillar || StoneRole == EStoneRole::Foundation)
+	if (StoneRole == EStoneRole::Pillar)
 	{
-		// A pillar/foundation is modelled around its vertical centreline so its top can support beams or posts.
+		// A pillar follows its vertical centreline so its top can support beams or posts.
 		AxisIndex = 2;
 	}
-	else if (StoneRole == EStoneRole::Floor || StoneRole == EStoneRole::Path || StoneRole == EStoneRole::Wall)
+	else if (StoneRole == EStoneRole::Foundation || StoneRole == EStoneRole::Floor
+		|| StoneRole == EStoneRole::Path || StoneRole == EStoneRole::Wall)
 	{
-		// Horizontal masonry units use the longest horizontal dimension as their support axis.
+		// Foundations and masonry surfaces use their longest horizontal dimension as the contact axis.
 		AxisIndex = Size.X >= Size.Y ? 0 : 1;
 	}
 	else
@@ -308,8 +309,10 @@ WoodStructure::FNode StructureLink::MakeNode(const AStoneActor* Stone, int32 Id)
 	switch (StoneRole)
 	{
 	case EStoneRole::Pillar:
-	case EStoneRole::Foundation:
 		Node.Role = EWoodRole::Post;
+		break;
+	case EStoneRole::Foundation:
+		Node.Role = EWoodRole::Floor;
 		break;
 	case EStoneRole::Beam:
 	case EStoneRole::Arch:
