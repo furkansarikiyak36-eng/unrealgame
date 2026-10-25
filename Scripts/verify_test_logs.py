@@ -118,6 +118,9 @@ def verify_stone_trap(path: Path, minimum_tests: int = 4) -> tuple[int, int]:
         path, "Stone trap", "MyProject2.StoneTrap", minimum_tests
     )
 
+def verify_world_snap(path: Path, minimum_tests: int = 9) -> tuple[int, int]:
+    return verify_automation_suite(path, "World Snap", "WorldSnap", minimum_tests)
+
 
 def verify_inventory_capacity(path: Path, minimum_tests: int = 5) -> tuple[int, int]:
     return verify_automation_suite(
@@ -133,6 +136,7 @@ def main() -> int:
     parser.add_argument("--stone-placement", required=True, type=Path)
     parser.add_argument("--stone-trap", required=True, type=Path)
     parser.add_argument("--inventory-capacity", required=True, type=Path)
+    parser.add_argument("--world-snap", required=True, type=Path)
     parser.add_argument("--minimum-mechanics-checks", type=int, default=101,
                         help="Fail if fewer than this many MechanicsDemo checks passed (default: 101).")
     parser.add_argument("--minimum-wood-tests", type=int, default=12,
@@ -143,6 +147,8 @@ def main() -> int:
                         help="Fail if fewer than this many unique stone placement tests passed (default: 5).")
     parser.add_argument("--minimum-stone-trap-tests", type=int, default=4,
                         help="Fail if fewer than this many unique stone trap tests passed (default: 4).")
+    parser.add_argument("--minimum-world-snap-tests", type=int, default=9,
+                        help="Fail if fewer than this many unique WorldSnap tests passed (default: 9).")
     args = parser.parse_args()
     if min(args.minimum_mechanics_checks, args.minimum_wood_tests,
            args.minimum_stick_inventory_tests, args.minimum_stone_placement_tests,
@@ -161,6 +167,7 @@ def main() -> int:
             args.stone_trap, args.minimum_stone_trap_tests
         )
         inventory_passed, inventory_failed = verify_inventory_capacity(args.inventory_capacity)
+        world_snap_passed, world_snap_failed = verify_world_snap(args.world_snap, args.minimum_world_snap_tests)
     except ValueError as exc:
         print(f"TEST VERIFICATION FAILED: {exc}", file=sys.stderr)
         return 1
@@ -170,6 +177,7 @@ def main() -> int:
     print(f"Stone placement automation: {stone_passed} passed, {stone_failed} failed")
     print(f"Stone trap automation: {trap_passed} passed, {trap_failed} failed")
     print(f"Inventory capacity automation: {inventory_passed} passed, {inventory_failed} failed")
+    print(f"WorldSnap automation: {world_snap_passed} passed, {world_snap_failed} failed")
     print("TEST VERIFICATION PASSED")
     return 0
 
