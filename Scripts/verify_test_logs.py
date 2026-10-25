@@ -152,7 +152,7 @@ def main() -> int:
     args = parser.parse_args()
     if min(args.minimum_mechanics_checks, args.minimum_wood_tests,
            args.minimum_stick_inventory_tests, args.minimum_stone_placement_tests,
-           args.minimum_stone_trap_tests) < 1:
+           args.minimum_stone_trap_tests, args.minimum_world_snap_tests) < 1:
         parser.error("minimum test counts must be at least 1")
     try:
         mech_passed, mech_failed = verify_mechanics(args.mechanics, args.minimum_mechanics_checks)
