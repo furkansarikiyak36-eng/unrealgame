@@ -23,6 +23,7 @@
 #include "PickupItem.h"
 #include "ForestOutline.h"
 #include "StructureLink.h"
+#include "Phase2_Transport/CarvableLogJackingComponent.h"
 #include "Campfire.h"
 #include "HaulCart.h"
 #include "FireStone.h"
@@ -117,6 +118,7 @@ AForestCharacter::AForestCharacter()
 	CoreInventory->bIgnoreWeight = true; // Preserve the playable character's existing 24-slot rule.
 	StoneCarry = CreateDefaultSubobject<UStoneCarryComponent>(TEXT("StoneCarry"));
 	StonePlacement = CreateDefaultSubobject<UStonePlacementComponent>(TEXT("StonePlacement"));
+	LogJacking = CreateDefaultSubobject<UCarvableLogJackingComponent>(TEXT("LogJacking"));
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
@@ -336,6 +338,15 @@ void AForestCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	Input->BindAction(RotateAction, ETriggerEvent::Started, this, &AForestCharacter::RotateBuild);
 	Input->BindAction(CycleAction, ETriggerEvent::Started, this, &AForestCharacter::CycleBuildItem);
 	Input->BindAction(CancelAction, ETriggerEvent::Started, this, &AForestCharacter::CancelBuild);
+	UInputAction* JackEndAction = MakeAction(TEXT("IA_JackSelectEnd"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(JackEndAction, EKeys::F2);
+	Input->BindAction(JackEndAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleJackingEnd);
+	UInputAction* JackLiftAction = MakeAction(TEXT("IA_JackLiftEnd"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(JackLiftAction, EKeys::H);
+	Input->BindAction(JackLiftAction, ETriggerEvent::Started, this, &AForestCharacter::LiftSelectedEnd);
+	UInputAction* JackSupportAction = MakeAction(TEXT("IA_JackPlaceSupport"), EInputActionValueType::Boolean);
+	MappingContext->MapKey(JackSupportAction, EKeys::T);
+	Input->BindAction(JackSupportAction, ETriggerEvent::Started, this, &AForestCharacter::SupportSelectedEnd);
 	UInputAction* ShovelAction = MakeAction(TEXT("IA_ToggleShovel"), EInputActionValueType::Boolean);
 	MappingContext->MapKey(ShovelAction, EKeys::B);
 	Input->BindAction(ShovelAction, ETriggerEvent::Started, this, &AForestCharacter::ToggleShovel);
@@ -1192,6 +1203,102 @@ void AForestCharacter::StopRopeDrag()
 		CarriedItem = EForestItem::None;
 	}
 	RefreshToolVisibility();
+}
+
+ACarvableLog* AForestCharacter::GetAimedCarvableLog() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	FVector ViewStart = FVector::ZeroVector;
+	FRotator ViewRotation = FRotator::ZeroRotator;
+	GetActorEyesViewPoint(ViewStart, ViewRotation);
+	if (ViewStart.ContainsNaN() || ViewRotation.ContainsNaN())
+	{
+		return nullptr;
+	}
+
+	WorldScanSystem::FScanResult Scan;
+	const FVector TraceEnd = ViewStart + ViewRotation.Vector() * 650.f;
+	if (!WorldScanSystem::Trace(World, ViewStart, TraceEnd, this, Scan, ECC_Visibility, true)
+		|| !Scan.bHit)
+	{
+		return nullptr;
+	}
+	return Cast<ACarvableLog>(Scan.Hit.GetActor());
+}
+
+bool AForestCharacter::LiftAimedLogOneEnd(float RaiseHeightCm, bool bRaiseEndB)
+{
+	if (!LogJacking)
+	{
+		return false;
+	}
+	ACarvableLog* Target = GetAimedCarvableLog();
+	if (!Target)
+	{
+		ShowMessage(TEXT("Kaldırmak için yere yerleştirilmiş bir kütüğe bak"));
+		return false;
+	}
+	if (!LogJacking->LiftOneEnd(Target, RaiseHeightCm, bRaiseEndB))
+	{
+		ShowMessage(TEXT("Kütük bu yükseklikte kaldırılamıyor; boy, açı veya çarpışma sınırını kontrol et"));
+		return false;
+	}
+	ShowMessage(FString::Printf(TEXT("Kütüğün %s ucu %.0f cm yükseltildi  —  altına uygun modülde destek koy"), bRaiseEndB ? TEXT("+X") : TEXT("-X"), RaiseHeightCm));
+	return true;
+}
+
+bool AForestCharacter::SupportAimedLogWithCarriedPiece(bool bRaiseEndB)
+{
+	if (!LogJacking)
+	{
+		return false;
+	}
+	ACarvableLog* Target = GetAimedCarvableLog();
+	ACarvableLog* SupportPiece = GetTopCarried();
+	if (!Target || !SupportPiece)
+	{
+		ShowMessage(TEXT("Destek için yükseltilmiş kütüğe bak ve uygun kısa kütüğü taşı"));
+		return false;
+	}
+	if (!LogJacking->PlaceSupportUnder(Target, SupportPiece, bRaiseEndB))
+	{
+		ShowMessage(TEXT("Destek yerleşmedi: uç yüksekliği, zemin veya yapı bağlantısı geçerli değil"));
+		return false;
+	}
+
+	CarriedLogs.RemoveAll([SupportPiece](const TWeakObjectPtr<ACarvableLog>& Candidate)
+	{
+		return !Candidate.IsValid() || Candidate.Get() == SupportPiece;
+	});
+	if (CarriedLogs.Num() == 0)
+	{
+		CarriedItem = EForestItem::None;
+	}
+	ArrangeShoulder();
+	RefreshToolVisibility();
+	ShowMessage(TEXT("Destek kütüğü yerleştirildi; yapı bağlantıları yeniden değerlendirildi"));
+	return true;
+}
+
+void AForestCharacter::ToggleJackingEnd()
+{
+	bJackingEndB = !bJackingEndB;
+	ShowMessage(FString::Printf(TEXT("Destek/ kaldırma ucu: %s (F2 ile değiştir)"), bJackingEndB ? TEXT("+X") : TEXT("-X")));
+}
+
+void AForestCharacter::LiftSelectedEnd()
+{
+	LiftAimedLogOneEnd(ACarvableLog::ModuleLength, bJackingEndB);
+}
+
+void AForestCharacter::SupportSelectedEnd()
+{
+	SupportAimedLogWithCarriedPiece(bJackingEndB);
 }
 
 ACarvableLog* AForestCharacter::GetTopCarried() const
