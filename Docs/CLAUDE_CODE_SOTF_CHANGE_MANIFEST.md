@@ -2,7 +2,7 @@
 
 **Branch:** feature/sotf-mechanics-expansion  
 **Current task policy:** no tests/builds are to be run until the user explicitly changes this instruction; no changes to main.  
-**Use this file for:** quickly locating what changed, where the behavior lives, and which file owns the real runtime. For behavioral detail use Docs/CLAUDE_CODE_SOTF_LINE_BY_LINE_HANDOFF.md. For initial instructions use Docs/CLAUDE_CODE_START_HERE.md.
+**Use this file for:** quickly locating what changed, where the behavior lives, and which file owns the real runtime. For behavioral detail use Docs/CLAUDE_CODE_SOTF_LINE_BY_LINE_HANDOFF.md. For initial instructions use Docs/CLAUDE_CODE_START_HERE.md; for the next task prompt use Docs/CLAUDE_CODE_NEXT_WORK_PROMPT_TR.md.
 
 ## 1. File inventory by mechanic
 
@@ -79,7 +79,8 @@
 | Docs/WorldSnapLinkedPackage.md | existing | WorldSnap plugin responsibility and existing integration rationale | Changing shared snap architecture |
 | Docs/KARARLAR.md | existing | Decision ledger | Checking previously locked choices |
 | Modules/PlacementSnap/SPEC.md | 37 lines | Generic provider-to-commit pipeline and two-anchor portable-vs-UE parity note | Changing generic placement contract |
-| Docs/CLAUDE_CODE_START_HERE.md | new | Lowest-token entry point and work protocol | Always read first |
+| Docs/CLAUDE_CODE_START_HERE.md | 66 lines | Lowest-token entry point and work protocol | Always read first |
+| Docs/CLAUDE_CODE_NEXT_WORK_PROMPT_TR.md | 86 lines | Reusable Turkish scoped execution prompt: read order, first target files, acceptance gates and report format | Start of a new coding session |
 | Docs/CLAUDE_CODE_SOTF_LINE_BY_LINE_HANDOFF.md | updated | Detailed code map, call flow, range-by-range explanations, owners and open risks | Read only the matching section |
 | Docs/CLAUDE_CODE_SOTF_CHANGE_MANIFEST.md | this file | All-code path map and system ownership index | Use for file discovery |
 
