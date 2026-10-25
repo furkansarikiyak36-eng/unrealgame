@@ -29,6 +29,15 @@ namespace WorldSnap
 
 		/** Optional caller-owned index used to map the chosen point back to its source representation. */
 		int32 SourceIndex = INDEX_NONE;
+
+		/** Caller reports whether this candidate can currently receive a piece. */
+		bool bAvailable = true;
+		/** Occupied sockets are not snap targets even when geometrically closest. */
+		bool bOccupied = false;
+		/** Whether the candidate is permitted to bear structural load. */
+		bool bLoadBearing = true;
+		/** Optional semantic target label, e.g. Ground, PostTop, LogEnd. */
+		FName SemanticType = NAME_None;
 	};
 
 	struct FQuery
@@ -51,6 +60,10 @@ namespace WorldSnap
 		float AlongAxisWeight = 1.f;
 		float AcrossAxisWeight = 0.02f;
 		float NormalPenalty = 10000.f;
+
+		bool bRejectUnavailable = true;
+		bool bRejectOccupied = true;
+		bool bRequireLoadBearing = false;
 	};
 
 	struct FResolveResult
