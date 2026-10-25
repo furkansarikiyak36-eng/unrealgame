@@ -385,11 +385,12 @@ const TArray<StructureLink::FFeatureInfo>& StructureLink::Features(UWorld* World
 	}
 	CachedVersion = StructureVersion;
 	CachedFeatures.Reset();
-	const TArray<ACarvableLog*> Logs = Installed(World);
+	const TArray<AActor*> Parts = InstalledStructuralParts(World);
 	TArray<WoodStructure::FNode> Nodes;
-	for (int32 Index = 0; Index < Logs.Num(); ++Index)
+	Nodes.Reserve(Parts.Num());
+	for (int32 Index = 0; Index < Parts.Num(); ++Index)
 	{
-		Nodes.Add(MakeNode(Logs[Index], Index));
+		Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 	}
 	for (const WoodStructure::FFeature& Found : WoodStructure::AnalyzeStructure(Nodes, Connect(Nodes), ContactToleranceCm))
 	{
@@ -399,7 +400,15 @@ const TArray<StructureLink::FFeatureInfo>& StructureLink::Features(UWorld* World
 		Info.Center = Found.Center;
 		for (const int32 Id : Found.NodeIds)
 		{
-			Info.Pieces.Add(Logs[Id]);
+			if (!Parts.IsValidIndex(Id) || !IsValid(Parts[Id]))
+			{
+				continue;
+			}
+			Info.StructuralPieces.Add(Parts[Id]);
+			if (ACarvableLog* Log = Cast<ACarvableLog>(Parts[Id]))
+			{
+				Info.Pieces.Add(Log);
+			}
 		}
 	}
 	return CachedFeatures;
@@ -407,14 +416,27 @@ const TArray<StructureLink::FFeatureInfo>& StructureLink::Features(UWorld* World
 
 FString StructureLink::DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log)
 {
+	return DescribeFeaturesOfActor(World, Log);
+}
+
+FString StructureLink::DescribeFeaturesOfActor(UWorld* World, const AActor* Part)
+{
+	if (!World || !IsValid(Part))
+	{
+		return FString();
+	}
 	FString Text;
 	for (const FFeatureInfo& Info : Features(World))
 	{
-		for (const TWeakObjectPtr<ACarvableLog>& Piece : Info.Pieces)
+		for (const TWeakObjectPtr<AActor>& Member : Info.StructuralPieces)
 		{
-			if (Piece.Get() == Log)
+			if (Member.Get() == Part)
 			{
-				Text += (Text.IsEmpty() ? TEXT("") : TEXT(", ")) + NameOf(Info.Kind);
+				const FString KindName = NameOf(Info.Kind);
+				if (!KindName.IsEmpty())
+				{
+					Text += (Text.IsEmpty() ? TEXT("") : TEXT(", ")) + KindName;
+				}
 				break;
 			}
 		}
@@ -431,7 +453,6 @@ FString StructureLink::Describe(UWorld* World)
 	{
 		Nodes.Add(MakeNodeForPart(Parts[Index], Index));
 	}
-
 	const TArray<WoodStructure::FEdge> Edges = Connect(Nodes);
 	TMap<int32, float> Snaps;
 	FString Text;
