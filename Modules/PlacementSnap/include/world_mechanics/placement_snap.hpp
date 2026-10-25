@@ -14,6 +14,9 @@ struct SnapCandidate {
   bool overlapFree{false};
   Revision surfaceRevision{0};
   Revision classificationRevision{0};
+  bool targetCompatible{true};
+  bool supportValid{true};
+  bool socketOccupied{false};
 };
 struct SnapRequest {
   Vec3 desiredNormal{0,0,1};
@@ -24,6 +27,7 @@ struct SnapRequest {
   Revision expectedSurfaceRevision{0};
   Revision expectedClassificationRevision{0};
   std::size_t maxCandidates{512};
+  bool requireExplicitSocket{false};
 };
 class PlacementSnapResolver {
  public:
@@ -63,7 +67,8 @@ class PlacementSnapResolver {
     for(const auto& c:candidates) {
       if(c.candidateId==0||!c.transform.IsFinite()||!c.surfaceNormal.IsFinite()||
          !std::isfinite(c.distanceM)||c.distanceM<0||c.distanceM>req.maxDistanceM||
-         !c.regionAllowed||!c.overlapFree) continue;
+         !c.regionAllowed||!c.overlapFree||!c.targetCompatible||!c.supportValid||
+         (c.explicitSocket&&c.socketOccupied)||(req.requireExplicitSocket&&!c.explicitSocket)) continue;
       if(req.expectedSurfaceRevision && c.surfaceRevision!=req.expectedSurfaceRevision) continue;
       if(req.expectedClassificationRevision && c.classificationRevision!=req.expectedClassificationRevision) continue;
       const Vec3 n=Normalize(c.surfaceNormal), f=Normalize(c.transform.forward);
@@ -83,13 +88,23 @@ class PlacementSnapResolver {
   }
   static Result<bool> ValidateCommit(const SnapCandidate& c,Revision currentSurfaceRevision,
                                      Revision currentClassificationRevision,bool regionStillAllowed,
-                                     bool overlapStillFree) {
-    if(c.candidateId==0||!c.transform.IsFinite()||!c.regionAllowed||!c.overlapFree)
+                                     bool overlapStillFree,
+                                     bool targetStillCompatible=true,
+                                     bool socketStillAvailable=true,
+                                     bool supportStillValid=true) {
+    if(c.candidateId==0||!c.transform.IsFinite()||!c.regionAllowed||!c.overlapFree||
+       !c.targetCompatible||!c.supportValid||(c.explicitSocket&&c.socketOccupied))
       return Result<bool>::Failure(ErrorCode::InvalidArgument,"candidate is missing or failed preview authorization");
     if(c.surfaceRevision!=currentSurfaceRevision||c.classificationRevision!=currentClassificationRevision)
       return Result<bool>::Failure(ErrorCode::StaleRevision,"surface or classification changed after preview");
     if(!regionStillAllowed)
       return Result<bool>::Failure(ErrorCode::Unsupported,"placement region is no longer allowed");
+    if(!targetStillCompatible)
+      return Result<bool>::Failure(ErrorCode::Unsupported,"target no longer accepts this piece kind");
+    if(!supportStillValid)
+      return Result<bool>::Failure(ErrorCode::MissingDependency,"support path is no longer valid");
+    if(c.explicitSocket&&!socketStillAvailable)
+      return Result<bool>::Failure(ErrorCode::Conflict,"snap socket became occupied after preview");
     if(!overlapStillFree)
       return Result<bool>::Failure(ErrorCode::Conflict,"candidate volume is now obstructed");
     return Result<bool>::Success(true);
