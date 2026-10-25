@@ -14,6 +14,7 @@ add_library(world_mechanics
   Survival/src/survival.cpp
   WorldEnvironment/src/environment_simulation.cpp
   GameplayIntegration/src/gameplay_quality.cpp
+  GameplayIntegration/src/local_stone_ring_recognition.cpp
 )
 target_compile_features(world_mechanics PUBLIC cxx_std_17)
 target_include_directories(world_mechanics PUBLIC
