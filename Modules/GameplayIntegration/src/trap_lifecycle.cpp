@@ -47,6 +47,9 @@ Result<bool> TrapLifecycle::Arm(Revision expectedStateRevision) {
 }
 
 Result<bool> TrapLifecycle::Disarm(Revision expectedStateRevision) {
+  if (!ConfigValid()) {
+    return Result<bool>::Failure(ErrorCode::InvalidArgument, "trap configuration is invalid");
+  }
   if (expectedStateRevision != stateRevision_) {
     return Result<bool>::Failure(ErrorCode::StaleRevision, "trap changed before disarm request");
   }
