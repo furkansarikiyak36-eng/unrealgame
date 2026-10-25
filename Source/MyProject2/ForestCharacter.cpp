@@ -1789,6 +1789,9 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 					Query.EndAnchor.Position = Upper;
 					Query.EndAnchor.Normal = FVector::UpVector;
 					Query.EndAnchor.bLoadBearing = Post->IsAnchored();
+					Query.EndAnchor.bSupportValid = Post->IsAnchored();
+					// A post top already carrying a beam is not a free second-end socket.
+					Query.EndAnchor.bOccupied = ACarvableLog::FindBeamOnPost(Post) != nullptr;
 
 					Query.PieceLengthCm = PieceLength;
 					Query.LocalMinX = Piece->GetMinX();
