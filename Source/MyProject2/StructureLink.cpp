@@ -179,7 +179,7 @@ WoodStructure::FNode StructureLink::MakeNode(const ACarvableLog* Log, int32 Id, 
 	Node.A = Frame.TransformPosition(FVector(Box.Min.X, 0.f, 0.f));
 	Node.B = Frame.TransformPosition(FVector(Box.Max.X, 0.f, 0.f));
 	Node.RadiusCm = Log->GetRadius();
-	Node.LengthModules = FMath::Clamp(FMath::RoundToInt(Log->GetLength() / ACarvableLog::ModuleLength), 1, 6);
+	Node.LengthModules = FMath::Clamp(FMath::RoundToInt(Log->GetLength() / ACarvableLog::ModuleLength), 1, 8);
 	for (const FVector2f& Span : Log->GetCutSpans())
 	{
 		FWoodNotch Notch;
