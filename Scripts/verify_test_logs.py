@@ -118,8 +118,13 @@ def verify_stone_trap(path: Path, minimum_tests: int = 4) -> tuple[int, int]:
         path, "Stone trap", "MyProject2.StoneTrap", minimum_tests
     )
 
-def verify_world_snap(path: Path, minimum_tests: int = 9) -> tuple[int, int]:
+def verify_world_snap(path: Path, minimum_tests: int = 12) -> tuple[int, int]:
     return verify_automation_suite(path, "World Snap", "WorldSnap", minimum_tests)
+
+def verify_stone_shape_recognition(path: Path, minimum_tests: int = 4) -> tuple[int, int]:
+    return verify_automation_suite(
+        path, "Stone shape recognition", "MyProject2.Construction.StoneShapeRecognition", minimum_tests
+    )
 
 
 def verify_inventory_capacity(path: Path, minimum_tests: int = 5) -> tuple[int, int]:
@@ -137,6 +142,7 @@ def main() -> int:
     parser.add_argument("--stone-trap", required=True, type=Path)
     parser.add_argument("--inventory-capacity", required=True, type=Path)
     parser.add_argument("--world-snap", required=True, type=Path)
+    parser.add_argument("--stone-shape-recognition", required=True, type=Path)
     parser.add_argument("--minimum-mechanics-checks", type=int, default=101,
                         help="Fail if fewer than this many MechanicsDemo checks passed (default: 101).")
     parser.add_argument("--minimum-wood-tests", type=int, default=12,
@@ -147,12 +153,14 @@ def main() -> int:
                         help="Fail if fewer than this many unique stone placement tests passed (default: 5).")
     parser.add_argument("--minimum-stone-trap-tests", type=int, default=4,
                         help="Fail if fewer than this many unique stone trap tests passed (default: 4).")
-    parser.add_argument("--minimum-world-snap-tests", type=int, default=9,
-                        help="Fail if fewer than this many unique WorldSnap tests passed (default: 9).")
+    parser.add_argument("--minimum-world-snap-tests", type=int, default=12,
+                        help="Fail if fewer than this many unique WorldSnap tests passed (default: 12).")
+    parser.add_argument("--minimum-stone-shape-tests", type=int, default=4,
+                        help="Fail if fewer than this many unique stone-shape tests passed (default: 4).")
     args = parser.parse_args()
     if min(args.minimum_mechanics_checks, args.minimum_wood_tests,
            args.minimum_stick_inventory_tests, args.minimum_stone_placement_tests,
-           args.minimum_stone_trap_tests, args.minimum_world_snap_tests) < 1:
+           args.minimum_stone_trap_tests, args.minimum_world_snap_tests, args.minimum_stone_shape_tests) < 1:
         parser.error("minimum test counts must be at least 1")
     try:
         mech_passed, mech_failed = verify_mechanics(args.mechanics, args.minimum_mechanics_checks)
@@ -168,6 +176,9 @@ def main() -> int:
         )
         inventory_passed, inventory_failed = verify_inventory_capacity(args.inventory_capacity)
         world_snap_passed, world_snap_failed = verify_world_snap(args.world_snap, args.minimum_world_snap_tests)
+        stone_shape_passed, stone_shape_failed = verify_stone_shape_recognition(
+            args.stone_shape_recognition, args.minimum_stone_shape_tests
+        )
     except ValueError as exc:
         print(f"TEST VERIFICATION FAILED: {exc}", file=sys.stderr)
         return 1
@@ -178,6 +189,7 @@ def main() -> int:
     print(f"Stone trap automation: {trap_passed} passed, {trap_failed} failed")
     print(f"Inventory capacity automation: {inventory_passed} passed, {inventory_failed} failed")
     print(f"WorldSnap automation: {world_snap_passed} passed, {world_snap_failed} failed")
+    print(f"Stone shape recognition: {stone_shape_passed} passed, {stone_shape_failed} failed")
     print("TEST VERIFICATION PASSED")
     return 0
 
