@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace wm {
 
@@ -60,8 +61,12 @@ Result<StoneRingAssessment> StoneFireplaceLifecycle::ReassessRing(
   ringRecognized_ = nextAssessment.recognized;
   if (!ringRecognized_) {
     state_ = StoneFireplaceState::NotBuilt;
+    resumeBurningAfterRingRevalidation_ = false;
   } else if (state_ == StoneFireplaceState::NotBuilt) {
-    state_ = StoneFireplaceState::Ready;
+    state_ = resumeBurningAfterRingRevalidation_ && fuelUnits_ > 0.0
+        ? StoneFireplaceState::Burning
+        : StoneFireplaceState::Ready;
+    resumeBurningAfterRingRevalidation_ = false;
   }
   ++stateRevision_;
   return Result<StoneRingAssessment>::Success(ringAssessment_);
@@ -174,6 +179,57 @@ Result<StoneFireplaceTick> StoneFireplaceLifecycle::Advance(
   result.heatOutput = CurrentHeatOutput();
   result.stateRevision = stateRevision_;
   return Result<StoneFireplaceTick>::Success(result);
+}
+
+Result<StoneFireplaceSaveRecord> StoneFireplaceLifecycle::CreateSaveRecord() const {
+  if (!ConfigValid() || stateRevision_ == 0 ||
+      !std::isfinite(fuelUnits_) || fuelUnits_ < 0.0 ||
+      fuelUnits_ > config_.maxFuelUnits ||
+      (state_ == StoneFireplaceState::Burning && (!ringRecognized_ || fuelUnits_ <= 0.0))) {
+    return Result<StoneFireplaceSaveRecord>::Failure(
+        ErrorCode::CorruptData, "fireplace state is not internally valid for saving");
+  }
+
+  StoneFireplaceSaveRecord record;
+  record.schemaVersion = 1;
+  record.savedStateRevision = stateRevision_;
+  record.fuelUnits = fuelUnits_;
+  record.hasCookingPot = hasCookingPot_;
+  record.wasBurning = state_ == StoneFireplaceState::Burning;
+  return Result<StoneFireplaceSaveRecord>::Success(record);
+}
+
+Result<bool> StoneFireplaceLifecycle::RestoreFromSaveRecord(
+    const StoneFireplaceSaveRecord& record) {
+  if (!ConfigValid()) {
+    return Result<bool>::Failure(ErrorCode::InvalidArgument, "fireplace config is invalid");
+  }
+  if (record.schemaVersion != 1) {
+    return Result<bool>::Failure(ErrorCode::Unsupported, "unsupported fireplace save schema");
+  }
+  if (record.savedStateRevision == 0 || !std::isfinite(record.fuelUnits) ||
+      record.fuelUnits < 0.0 || record.fuelUnits > config_.maxFuelUnits ||
+      (record.wasBurning && record.fuelUnits <= 0.0)) {
+    return Result<bool>::Failure(ErrorCode::CorruptData, "fireplace save record contains invalid state");
+  }
+
+  const Revision baseRevision = std::max(stateRevision_, record.savedStateRevision);
+  if (baseRevision == std::numeric_limits<Revision>::max()) {
+    return Result<bool>::Failure(ErrorCode::OutOfRange, "fireplace revision cannot advance after restore");
+  }
+
+  // Restore gameplay resources immediately, but never trust saved geometry as live
+  // world evidence. The stone ring must be observed again before heat/ignition resumes.
+  fuelUnits_ = record.fuelUnits;
+  hasCookingPot_ = record.hasCookingPot;
+  ringSourceRevision_ = 0;
+  ringRecognized_ = false;
+  state_ = StoneFireplaceState::NotBuilt;
+  resumeBurningAfterRingRevalidation_ = record.wasBurning && fuelUnits_ > 0.0;
+  ringAssessment_ = StoneRingAssessment{};
+  ringAssessment_.reason = "stone ring requires world revalidation after restore";
+  stateRevision_ = baseRevision + 1;
+  return Result<bool>::Success(true);
 }
 
 StoneFireplaceSnapshot StoneFireplaceLifecycle::Snapshot() const {
