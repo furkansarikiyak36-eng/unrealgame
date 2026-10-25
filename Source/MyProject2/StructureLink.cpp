@@ -343,6 +343,7 @@ namespace
 {
 	int32 StructureVersion = 0;
 	int32 CachedVersion = -1;
+	TWeakObjectPtr<UWorld> CachedWorld;
 	TArray<StructureLink::FFeatureInfo> CachedFeatures;
 }
 
@@ -382,11 +383,16 @@ FString StructureLink::NameOf(EWoodFeatureKind Kind)
 
 const TArray<StructureLink::FFeatureInfo>& StructureLink::Features(UWorld* World)
 {
-	if (CachedVersion == StructureVersion || !World)
+	if (!World)
+	{
+		return CachedFeatures;
+	}
+	if (CachedVersion == StructureVersion && CachedWorld.Get() == World)
 	{
 		return CachedFeatures;
 	}
 	CachedVersion = StructureVersion;
+	CachedWorld = World;
 	CachedFeatures.Reset();
 	const TArray<AActor*> Parts = InstalledStructuralParts(World);
 	TArray<WoodStructure::FNode> Nodes;
