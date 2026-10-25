@@ -2,6 +2,7 @@
 
 #include "ForestCharacter.h"
 #include "LogSnapSystem.h"
+#include "WorldSnapTwoAnchorSolver.h"
 #include "Algo/Sort.h"
 #include "Wood/WoodStructureGeometry.h"
 #include "Engine/OverlapResult.h"
@@ -1600,8 +1601,8 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		CarryPlace = Cart->CanLoad(Piece) ? ECarryPlace::Load : ECarryPlace::None;
 		return;
 	}
-	// A log held slanted and aimed at a standing post leans on it: the lower end on the ground on the player's side, the
-	// upper end on the post's top. The angle comes from those two ends (the post's height and the piece's length), not the view.
+	// Two-anchor placement: one endpoint rests on the ground, the other on an anchored post top.
+	// The incline is solved from the endpoints and the piece length, never from camera pitch.
 	if (bPlaceSlope && !Piece->IsSplit())
 	{
 		FVector PostCentre, PostAxis;
@@ -1614,23 +1615,55 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			FVector Out = GetActorLocation() - PostCentre;
 			Out.Z = 0.f;
 			Out = Out.IsNearlyZero() ? -FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal() : Out.GetSafeNormal();
-			// The upper end's centre sits on the post top, let into it like a beam.
-			const float Rp = Piece->GetRadius();
-			const FVector Upper(PostCentre.X, PostCentre.Y, TopZ + Rp - JointSeatDepth(PostRadius, Rp));
-			const float Length = Piece->GetLength();
-			const float Rise = Upper.Z - (BaseZ + Rp);
-			if (Rise > 5.f && Length > Rise + 5.f)
+
+			const float PieceLength = Piece->GetLength();
+			const float PieceRadius = Piece->GetRadius();
+			const FVector Upper(PostCentre.X, PostCentre.Y, TopZ + PieceRadius - JointSeatDepth(PostRadius, PieceRadius));
+
+			// Solve H = L*sin(theta) + R*cos(theta), where the low endpoint centre stays tangent to ground.
+			const float Height = Upper.Z - BaseZ - 0.5f;
+			const float CombinedLength = FMath::Sqrt(PieceLength * PieceLength + PieceRadius * PieceRadius);
+			if (Height > 5.f && Height < CombinedLength && PieceLength > KINDA_SMALL_NUMBER)
 			{
-				const float Run = FMath::Sqrt(Length * Length - Rise * Rise);
-				const float Angle = FMath::RadiansToDegrees(FMath::Atan2(Rise, Run));
-				const FVector LowEnd(Upper.X + Out.X * Run, Upper.Y + Out.Y * Run, BaseZ);
-				if (Angle >= 10.f && Angle <= 80.f && ACarvableLog::ComputeSlopePlacement(LowEnd, -Out, Angle, Piece, PlaceTransform))
+				const float AngleRadians = FMath::Asin(FMath::Clamp(Height / CombinedLength, -1.f, 1.f))
+					- FMath::Atan2(PieceRadius, PieceLength);
+				const float AngleDegrees = FMath::RadiansToDegrees(AngleRadians);
+				const float Run = PieceLength * FMath::Cos(AngleRadians);
+				if (AngleDegrees >= 10.f && AngleDegrees <= 80.f && Run > 5.f)
 				{
-					PlaceTarget = HitActor;
-					CarryPlace = ECarryPlace::Slope;
-					SocketLabel = FString::Printf(TEXT("direğe yaslandı (%.0f°)"), Angle);
-					bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
-					return;
+					const FVector LowGround(Upper.X + Out.X * Run, Upper.Y + Out.Y * Run, BaseZ);
+					const FVector LowEnd = LowGround + FVector(0.f, 0.f, PieceRadius * FMath::Cos(AngleRadians) + 0.5f);
+
+					WorldSnap::FTwoAnchorQuery Query;
+					Query.StartAnchor.Id = TEXT("GroundAnchor");
+					Query.StartAnchor.Kind = WorldSnap::EAnchorKind::Ground;
+					Query.StartAnchor.Position = LowEnd;
+					Query.StartAnchor.Normal = FVector::UpVector;
+					Query.StartAnchor.bLoadBearing = true;
+
+					Query.EndAnchor.Id = Post->GetFName();
+					Query.EndAnchor.Kind = WorldSnap::EAnchorKind::PostTop;
+					Query.EndAnchor.Position = Upper;
+					Query.EndAnchor.Normal = FVector::UpVector;
+					Query.EndAnchor.bLoadBearing = Post->IsAnchored();
+
+					Query.PieceLengthCm = PieceLength;
+					Query.LocalMinX = Piece->GetMinX();
+					Query.LocalMaxX = Piece->GetMaxX();
+					Query.LengthToleranceCm = 2.f;
+					Query.MinPitchDegrees = 10.f;
+					Query.MaxPitchDegrees = 80.f;
+
+					WorldSnap::FTwoAnchorResult Solved;
+					if (FWorldSnapTwoAnchorSolver::Solve(Query, Solved))
+					{
+						PlaceTarget = HitActor;
+						PlaceTransform = Solved.Transform;
+						CarryPlace = ECarryPlace::Slope;
+						SocketLabel = FString::Printf(TEXT("direğe yaslandı (%.0f°)"), Solved.PitchDegrees);
+						bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
+						return;
+					}
 				}
 			}
 		}
