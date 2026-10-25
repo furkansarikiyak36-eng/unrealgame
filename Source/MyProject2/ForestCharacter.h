@@ -35,6 +35,7 @@ class UCableComponent;
 class ULineBatchComponent;
 class UStoneCarryComponent;
 class UStonePlacementComponent;
+class UCarvableLogJackingComponent;
 class UInventoryComponent;
 class AStoneActor;
 
@@ -75,6 +76,11 @@ public:
 	/** The log in the player's hands (None when empty; TrunkLog while a trunk is dragged by rope). */
 	EForestItem GetCarriedItem() const { return CarriedItem; }
 	int32 GetCarriedCount() const { return CarriedItem == EForestItem::Log ? CarriedLogs.Num() : (CarriedItem != EForestItem::None ? 1 : 0); }
+
+	UFUNCTION(BlueprintCallable, Category = "Forest|Construction")
+	bool LiftAimedLogOneEnd(float RaiseHeightCm = 75.f, bool bRaiseEndB = true);
+	UFUNCTION(BlueprintCallable, Category = "Forest|Construction")
+	bool SupportAimedLogWithCarriedPiece(bool bRaiseEndB = true);
 	AHarvestableActor* GetFocusedHarvestable() const { return FocusedHarvestable.Get(); }
 	APickupItem* GetFocusedPickup() const { return FocusedPickup.Get(); }
 	ARawMaterialNode* GetFocusedRawNode() const { return FocusedRawNode.Get(); }
@@ -384,6 +390,8 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Stone")
 	TObjectPtr<UStonePlacementComponent> StonePlacement;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Forest|Construction")
+	TObjectPtr<UCarvableLogJackingComponent> LogJacking;
 
 	/** Heavy actions cost stamina (GDD 6.1). */
 	UPROPERTY(EditAnywhere, Category = "Forest")
@@ -575,6 +583,11 @@ private:
 	bool EvaluateSupportPreview(const ACarvableLog* Piece, const FTransform& Transform, bool bForce = false);
 	const FTransform& GetCarryPlacementTransform() const;
 	ACarvableLog* GetTopCarried() const;
+	ACarvableLog* GetAimedCarvableLog() const;
+	void LiftPositiveEndAction();
+	void LiftNegativeEndAction();
+	void SupportPositiveEndAction();
+	void SupportNegativeEndAction();
 	bool PlaceCarried();
 
 	UPROPERTY(Transient)
