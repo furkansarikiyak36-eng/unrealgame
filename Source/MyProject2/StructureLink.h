@@ -53,7 +53,10 @@ namespace StructureLink
 	struct FFeatureInfo
 	{
 		EWoodFeatureKind Kind = EWoodFeatureKind::Platform;
+		/** Backward-compatible log-only view used by existing callers. */
 		TArray<TWeakObjectPtr<ACarvableLog>> Pieces;
+		/** All structural members, including placed stone, for mixed-material recognition. */
+		TArray<TWeakObjectPtr<AActor>> StructuralPieces;
 		float SpanCm = 0.f;
 		FVector Center = FVector::ZeroVector;
 	};
@@ -64,6 +67,8 @@ namespace StructureLink
 	FString NameOf(EWoodFeatureKind Kind);
 	/** What Log is part of, e.g. "Platform, Korkuluk" (empty if it stands alone). */
 	FString DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log);
+	/** Structure feature names for any installed member, including stone. */
+	FString DescribeFeaturesOfActor(UWorld* World, const AActor* Part);
 	/** Something in the structure changed: the next Features() works it out afresh. */
 	void MarkChanged();
 	/** Monotonic version incremented whenever the structural graph is invalidated. */
