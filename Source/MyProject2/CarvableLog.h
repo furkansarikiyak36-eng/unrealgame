@@ -269,6 +269,8 @@ public:
 
 	/** Wood in this piece (cm3); what it weighs on the shoulder. */
 	float GetVolume() const { return Volume; }
+	/** The log's dynamic mesh component (its geometry, collision and physics body). */
+	UDynamicMeshComponent* GetMeshComponent() const { return MeshComponent; }
 	/** Volume-based shoulder capacity: approximately one 300 cm raw log, or any equivalent combination of smaller pieces. */
 	static float GetShoulderCapacity();
 	/** Split lengthwise at some point (a half, a quarter): not a round log any more. */

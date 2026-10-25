@@ -2,8 +2,8 @@
 
 Üreten: `Scripts/probe_showcase.sh` (Scripts/record_dilim.py). Plan: [DILIM_SOTF.md](DILIM_SOTF.md).
 
-- Tarih: 2026-10-25 05:13
-- Dal: test/chatgpt-world-snap, commit: cf6b423 (kirli çalışma kopyası)
+- Tarih: 2026-10-25 07:47
+- Dal: claude/sotf-expansion-build, commit: 8f054db (kirli çalışma kopyası)
 - Çalışan istasyonlar: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
 - Toplam: PASS 9, KISMEN 13, FAIL 1, BLOCKED 101
 

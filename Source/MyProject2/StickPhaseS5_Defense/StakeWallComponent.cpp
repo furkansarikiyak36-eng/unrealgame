@@ -2,7 +2,7 @@
 
 #include "StakeActor.h"
 #include "Engine/World.h"
-#include "Engine/CollisionQueryParams.h"
+#include "CollisionQueryParams.h"
 #include "Engine/EngineTypes.h"
 #include "Components/StaticMeshComponent.h"
 

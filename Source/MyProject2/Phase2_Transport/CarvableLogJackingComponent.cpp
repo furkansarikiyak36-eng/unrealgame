@@ -23,7 +23,7 @@ UCarvableLogJackingComponent::UCarvableLogJackingComponent()
 
 bool UCarvableLogJackingComponent::LiftOneEnd(ACarvableLog* Log, float RaiseHeightCm, bool bRaiseEndB)
 {
-	if (!IsValid(Log) || !GetWorld() || Log->IsCarried() || !Log->IsAnchored()
+	if (!IsValid(Log) || !GetWorld() || Log->IsCarried()
 		|| !FMath::IsFinite(RaiseHeightCm) || RaiseHeightCm <= 0.f
 		|| !FMath::IsFinite(MaxLiftHeightCm) || RaiseHeightCm > MaxLiftHeightCm
 		|| !FMath::IsFinite(MaxPitchDegrees) || MaxPitchDegrees <= 0.f || MaxPitchDegrees >= 90.f)
@@ -65,12 +65,9 @@ bool UCarvableLogJackingComponent::LiftOneEnd(ACarvableLog* Log, float RaiseHeig
 	const FVector LocalCenter = LocalBox.GetCenter() * OldTransform.GetScale3D();
 	const FVector NewLocation = NewCenter - NewRotation.RotateVector(LocalCenter);
 
-	FHitResult SweepHit;
-	if (!Log->SetActorLocationAndRotation(NewLocation, NewRotation.Rotator(), true, &SweepHit, ETeleportType::TeleportPhysics))
-	{
-		Log->SetActorTransform(OldTransform, false, nullptr, ETeleportType::TeleportPhysics);
-		return false;
-	}
+	// A log lying loose on the ground (the usual case) is taken into the structure here: it is held where it is put.
+	// No sweep: the fixed end stays on the ground it already touches, which a sweep would report as a blocking hit.
+	Log->PlaceAt(FTransform(NewRotation, NewLocation, OldTransform.GetScale3D()), /*bAnchorIt*/ true);
 
 	StructureLink::MarkChanged();
 	return true;

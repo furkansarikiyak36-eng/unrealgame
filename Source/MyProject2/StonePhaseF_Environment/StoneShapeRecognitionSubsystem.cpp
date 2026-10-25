@@ -173,7 +173,7 @@ bool UStoneShapeRecognitionSubsystem::TryRecognizeManualFireplace(AStoneActor* N
 	}
 
 	// Always include the newly placed stone first; then choose a deterministic local set.
-	Candidates.Sort([&NewlyInstalledStone](const TPair<AStoneActor*, FVector>& A, const TPair<AStoneActor*, FVector>& B)
+	Candidates.Sort([&NewlyInstalledStone, &NewGround](const TPair<AStoneActor*, FVector>& A, const TPair<AStoneActor*, FVector>& B)
 	{
 		if (A.Key == NewlyInstalledStone && B.Key != NewlyInstalledStone) return true;
 		if (B.Key == NewlyInstalledStone && A.Key != NewlyInstalledStone) return false;

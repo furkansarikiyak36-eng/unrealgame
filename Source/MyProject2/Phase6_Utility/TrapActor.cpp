@@ -89,9 +89,9 @@ void ATrapActor::HandleMechanismTriggered(AActor* Victim)
 			bPayloadReleased = true;
 			PayloadLog->LetFall();
 			if (TrapType == ETrapType::RollingLog && PayloadImpulse > 0.f
-				&& PayloadLog->MeshComponent && PayloadLog->MeshComponent->IsSimulatingPhysics())
+				&& PayloadLog->GetMeshComponent() && PayloadLog->GetMeshComponent()->IsSimulatingPhysics())
 			{
-				PayloadLog->MeshComponent->AddImpulse(GetActorForwardVector() * PayloadImpulse, NAME_None, true);
+				PayloadLog->GetMeshComponent()->AddImpulse(GetActorForwardVector() * PayloadImpulse, NAME_None, true);
 			}
 		}
 		break;

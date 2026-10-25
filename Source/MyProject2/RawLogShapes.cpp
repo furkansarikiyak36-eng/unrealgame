@@ -255,7 +255,7 @@ bool Apply(ACarvableLog* Log, EAction Action, FString& OutMessage)
 	}
 
 	// Disable the source while outputs spawn so the old collision hull cannot push the new pieces apart.
-	UDynamicMeshComponent* SourceComponent = Log->MeshComponent;
+	UDynamicMeshComponent* SourceComponent = Log->GetMeshComponent();
 	if (!IsValid(SourceComponent))
 	{
 		OutMessage = TEXT("Kaynak kütüğün çarpışma bileşeni bulunamadı");

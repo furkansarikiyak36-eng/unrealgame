@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (25 October 2026 05:19) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (25 October 2026 07:58) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -30,6 +30,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 - `static float FuelSecondsOf(const ACarvableLog* Piece)` — Seconds Piece would burn.
 - `static ACampfire* Build(UWorld* World, const FVector& Ground)` — A fire pit with a ring of stones on the ground at Ground, not lit until it has fuel.
+- `static ACampfire* BuildWithExternalStoneRing(UWorld* World, const FVector& Ground)` — Creates only the fire logic; the caller's hand-placed stones remain as the visible hearth ring.
 - `bool AddFuel(ACarvableLog* Piece)` — Throws Piece on the fire: it is used up (a burning piece lights the fire). False if the fire is already full or the piece is part of a structure. The caller takes the …
 - `bool IsBurning() const` — Fuel alone does not make a fire: it has to be lit (a lighter, or burning wood).
 - `bool Ignite()` — Lights the fire if it has fuel.
@@ -48,7 +49,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **ACarvableLog** (class)
 
 - `static ACarvableLog* SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh, const FTransform& Transform)` — Spawns a carvable copy of a raw log mesh (e.g. /Game/Building/Raw/SM_RawLog_C).
-- `static ACarvableLog* SpawnLog(UWorld* World, const FTransform& Transform)` — A whole log as a tree gives it (the greybox log, six modules long), falling into place.
+- `static ACarvableLog* SpawnLog(UWorld* World, const FTransform& Transform)` — Spawns a raw-log mesh as a carvable actor; its dimensions come from the source mesh.
 - `static ACarvableLog* SpawnFromPickup(APickupItem* Pickup)` — Puts a log lying on the ground on the bench: replaces the pickup with a carvable log of the same mesh, in place.
 - `static bool GetLogAxis(const AActor* Log, FVector& OutCentre, FVector& OutAxis, float& OutRadius, float& OutHalfLength)` — Axis of a log lying in the world: a carvable log or a carryable log item. False for anything else.
 - `static float GetComplementarySnapYaw(float ReferenceYaw, float LowerYaw, float DesiredYaw)` — Pick the complementary +45/-45 degree course in a shared reference frame, alternating above an existing diagonal log.
@@ -86,7 +87,8 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `const TArray<TWeakObjectPtr<ACarvableLog>>& GetLastOpeningOffcuts() const` — The 75 cm pieces the last CutOpening dropped (for tests and the showcase).
 - `bool CutGroove(float SideAngleDeg)` — Cuts a channel along the whole log, opening towards SideAngleDeg (0 = top).
 - `float GetVolume() const` — Wood in this piece (cm3); what it weighs on the shoulder.
-- `static float GetShoulderCapacity()` — How much wood fits on the shoulder: one whole log (390 x 70 cm), or two halves, or six one-module pieces.
+- `UDynamicMeshComponent* GetMeshComponent() const` — The log's dynamic mesh component (its geometry, collision and physics body).
+- `static float GetShoulderCapacity()` — Volume-based shoulder capacity: approximately one 300 cm raw log, or any equivalent combination of smaller pieces.
 - `bool IsSplit() const` — Split lengthwise at some point (a half, a quarter): not a round log any more.
 - `bool IsFullLog() const` — A whole carryable log: four modules (the 300 cm raw log), not split.
 - `FBox GetLocalBox() const` — The piece's extent in its own frame.
@@ -201,7 +203,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsHelpOpen() const` — [F1]: the full list of controls.
 - `void TestLight(AActor* Target, float Seconds)` — For the mechanics test: the lighter held on Target for Seconds.
 - `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
-- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetFocusHit`, `IsChannelMode`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetLogPlacementResult`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `LiftAimedLogOneEnd`, `SupportAimedLogWithCarriedPiece`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetFocusHit`, `IsChannelMode`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetLogPlacementResult`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
 
 **FLogPlacementResult** (struct) — One snapshot shared by the ghost preview, support validation and placement commit.
 
@@ -444,10 +446,12 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **StructureLink** (namespace) — Bridge between the carvable logs in the world and the structure graph of Wood/WoodStructureLogic. Every anchored log (post, corner log, beam) is a node: its real ends, …
 
 - `WoodStructure::FNode MakeNode(const ACarvableLog* Log, int32 Id, const FTransform* Transform = nullptr)` — The graph node for Log, as it is or as it would be at Transform.
+- `WoodStructure::FNode MakeNode(const AStoneActor* Stone, int32 Id)` — A placed stone represented by its oriented bounds in the same support graph as logs.
 - `TSet<int32> Evaluate(TArray<WoodStructure::FNode>& Nodes, const TArray<WoodStructure::FEdge>& Edges, TMap<int32, float>* OutSnaps  …` — Support with the beam rules on top of the graph: a beam that is not lying on the ground holds only if its supports (posts, braces, the logs under it) are not further …
 - `const TArray<FFeatureInfo>& Features(UWorld* World)` — What the standing pieces make up. Worked out again only after the structure has changed (Settle, damage, new pieces).
 - `FString NameOf(EWoodFeatureKind Kind)` — Turkish name of a kind of structure.
 - `FString DescribeFeaturesOf(UWorld* World, const ACarvableLog* Log)` — What Log is part of, e.g. "Platform, Korkuluk" (empty if it stands alone).
+- `FString DescribeFeaturesOfActor(UWorld* World, const AActor* Part)` — Structure feature names for any installed member, including stone.
 - `void MarkChanged()` — Something in the structure changed: the next Features() works it out afresh.
 - `int32 Version()` — Monotonic version incremented whenever the structural graph is invalidated.
 - `FString Describe(UWorld* World)` — Every standing piece with its role, whether it rests on the ground, and what holds it: for reading what the graph sees.
@@ -653,4 +657,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-222 / 544 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+224 / 550 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

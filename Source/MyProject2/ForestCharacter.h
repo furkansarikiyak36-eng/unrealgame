@@ -390,7 +390,7 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Stone")
 	TObjectPtr<UStonePlacementComponent> StonePlacement;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Forest|Construction")
+	UPROPERTY(VisibleAnywhere, Category = "Forest|Construction")
 	TObjectPtr<UCarvableLogJackingComponent> LogJacking;
 
 	/** Heavy actions cost stamina (GDD 6.1). */

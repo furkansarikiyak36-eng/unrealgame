@@ -18,8 +18,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Defense")
 	bool ReinforceWithStones(AStakeActor* Stake, const TArray<AStoneActor*>& Stones);
 
-	/** Count-only compatibility path is disabled by default to prevent free reinforcement. */
-	UFUNCTION(BlueprintCallable, Category = "Defense")
+	/** Count-only compatibility path (C++ only: UFUNCTIONs cannot overload), disabled by default to prevent free reinforcement. */
 	bool ReinforceWithStones(AStakeActor* Stake, int32 StoneCount);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Defense", meta = (ClampMin = "0.0"))
