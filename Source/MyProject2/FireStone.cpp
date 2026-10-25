@@ -7,6 +7,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "StonePhaseF_Environment/StoneShapeRecognitionSubsystem.h"
 
 AFireStone::AFireStone()
 {
@@ -57,13 +58,25 @@ ACampfire* AFireStone::TryForm(UWorld* World, const AFireStone* New)
 		return FVector::DistSquared2D(A.GetActorLocation(), New->GetActorLocation()) < FVector::DistSquared2D(B.GetActorLocation(), New->GetActorLocation());
 	});
 	Ring.SetNum(StonesPerPit);
-	FVector Middle = FVector::ZeroVector;
+	TArray<FVector> GroundPoints;
+	GroundPoints.Reserve(Ring.Num());
 	for (const AFireStone* Stone : Ring)
 	{
-		Middle += Stone->GetActorLocation();
+		// FireStone actors are placed nine centimetres above the contact plane.
+		GroundPoints.Add(Stone->GetActorLocation() - FVector(0.f, 0.f, 9.f));
 	}
-	Middle /= StonesPerPit;
-	Middle.Z -= 9.f;
+	FVector Middle;
+	float RadiusCm = 0.f, RadialErrorCm = 0.f, MaxGapDegrees = 360.f;
+	if (!UStoneShapeRecognitionSubsystem::EvaluateHearthRing(
+		GroundPoints, Middle, RadiusCm, RadialErrorCm, MaxGapDegrees))
+	{
+		// Seven nearby stones are not enough: they must actually enclose a hearth.
+		return nullptr;
+	}
+	if (FVector::Dist2D(New->GetActorLocation(), Middle) > RingReachCm)
+	{
+		return nullptr;
+	}
 	for (AFireStone* Stone : Ring)
 	{
 		Stone->Destroy();
