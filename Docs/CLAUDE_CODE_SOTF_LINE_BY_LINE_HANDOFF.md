@@ -37,7 +37,7 @@ Terms used:
 | Next task | Start here | Read these exact ranges |
 |---|---|---|
 | Stone-ring geometry (portable) | local_stone_ring_recognition.hpp/.cpp | header 8–35; cpp 11–82 |
-| Actual player-placed stone hearth | StonePlacementComponent / StoneShapeRecognitionSubsystem / Campfire | placement 386–? for graph connect, 590–660 for commit (reconfirm line after edit); recognition cpp 13–121 and 140–223; Campfire cpp 79–105 and 211–234 |
+| Actual player-placed stone hearth | StonePlacementComponent / StoneShapeRecognitionSubsystem / Campfire | placement 394–589 for graph connect/validation, 591–656 for commit/undo; recognition cpp 13–121 and 140–223; Campfire cpp 79–105 and 211–234 |
 | Portable fireplace fuel/heat/save | stone_fireplace_lifecycle.hpp/.cpp | header 10–89; cpp 12–74, 75–183, 184–234, 235–254 |
 | UE trap overlap and payload | TrapActor + TrapMechanismComponent | TrapActor.cpp 27–39, 44–54, 59–109; Mechanism.cpp 40–102 |
 | Portable trap rules/save | trap_lifecycle.hpp/.cpp | header 7–104; cpp 12–28, 29–148, 149–245, 246–259 |
@@ -282,10 +282,10 @@ Placement:
 - StonePlacementComponent.cpp **82 onward BeginPlacement:** validates carried/loose stone and transitions it into placement preview.
 - **127 onward CancelPlacement:** restores prior state/transform and clears preview.
 - **194 onward UpdatePlacementTarget / 251 onward ApplySelectedPlacementOption:** target face/socket choice, orientation and preview transform.
-- **around 386–? TryConnectStructuralTarget:** checks structural target/graph/definitions, picks a matching source face/socket and finds a live unoccupied compatible target socket with aligned normal/position.
-- **ConfirmPlacement around the end of the file before UndoLastPlacement:** final overlap clearance, transform, graph connect, Installed transition; rollback of a newly created connection if installation fails; only after installation succeeds releases carry reference, appends placement history, invalidates/rebuilds shared support, and calls TryRecognizeManualFireplace on the newly installed stone.
+- **394–589 TryConnectStructuralTarget and supporting helpers:** checks structural target/graph/definitions, picks a matching source face/socket and finds a live unoccupied compatible target socket with aligned normal/position.
+- **591–656 ConfirmPlacement / UndoLastPlacement:** final overlap clearance, transform, graph connect, Installed transition; rollback of a newly created connection if installation fails; only after installation succeeds releases carry reference, appends placement history, invalidates/rebuilds shared support, and calls TryRecognizeManualFireplace on the newly installed stone.
 - **UndoLastPlacement:** disconnects graph edges before returning stone to Loose, then invalidates and settles support.
-- Use exact symbol search on TryConnectStructuralTarget / ConfirmPlacement to re-find line numbers if moved. Do not paste/read all 729 lines.
+- TryConnectStructuralTarget begins at line 394; ConfirmPlacement at 591; UndoLastPlacement at 657; TickComponent at 694. Do not paste/read all 729 lines.
 
 Actor:
 - Campfire.cpp **79–105:** Build and BuildWithExternalStoneRing; external mode hides built-in ring mesh/collision to avoid double ring visuals.
