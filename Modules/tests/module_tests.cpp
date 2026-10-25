@@ -17,6 +17,7 @@
 #include "world_mechanics/gameplay_quality.hpp"
 #include "world_mechanics/persistence_transaction.hpp"
 #include "world_mechanics/density_snapshot_codec.hpp"
+#include "world_mechanics/local_stone_ring_recognition.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -905,6 +906,40 @@ bool TestSurvivalAndRestoreTransaction() {
   auto ok=tx.Execute({&c,&d}); CHECK(ok); CHECK(c.value==1&&d.value==2);
   return true;
 }
+
+bool TestLocalStoneRingRecognition() {
+  std::vector<wm::LocalStoneSample> stones;
+  for (std::uint64_t i=0; i<8; ++i) {
+    const double angle = static_cast<double>(i) * 6.283185307179586 / 8.0;
+    stones.push_back({i+1, 60.0*std::cos(angle), 60.0*std::sin(angle), 0.0, true});
+  }
+  auto accepted = wm::LocalStoneRingRecognizer::Assess(stones,0,0,0);
+  CHECK(accepted.recognized);
+  CHECK(accepted.contributingStones==8);
+  CHECK(accepted.largestAngularGapDegrees <= 45.001);
+
+  auto openRing = stones;
+  openRing[0].active=false; openRing[1].active=false; openRing[2].active=false;
+  auto rejectedGap = wm::LocalStoneRingRecognizer::Assess(openRing,0,0,0);
+  CHECK(!rejectedGap.recognized);
+  CHECK(rejectedGap.reason.find("open") != std::string::npos);
+
+  auto obstructed = stones;
+  obstructed.push_back({99,2,1,0,true});
+  auto rejectedCenter = wm::LocalStoneRingRecognizer::Assess(obstructed,0,0,0);
+  CHECK(!rejectedCenter.recognized);
+  CHECK(rejectedCenter.reason.find("obstructed") != std::string::npos);
+
+  auto tooFew = stones;
+  for (std::size_t i=0;i<3;++i) tooFew[i].active=false;
+  CHECK(!wm::LocalStoneRingRecognizer::Assess(tooFew,0,0,0).recognized);
+
+  auto invalid = wm::StoneRingConfig{};
+  invalid.maxRadius=invalid.minRadius;
+  CHECK(!wm::LocalStoneRingRecognizer::Assess(stones,0,0,0,invalid).recognized);
+  return true;
+}
+
 }
 
 int main() {
@@ -925,7 +960,8 @@ int main() {
     {"material rule precedence/cache",TestMaterialRulePrecedenceAndInvalidation},
     {"plant/animal determinism",TestPlantAndAnimalDeterminism},
     {"crafting transaction planner",TestCraftingTransactionPlanner},
-    {"survival/restore transaction",TestSurvivalAndRestoreTransaction}
+    {"survival/restore transaction",TestSurvivalAndRestoreTransaction},
+    {"local stone ring recognition",TestLocalStoneRingRecognition}
   };
   unsigned passed=0;
   for(const auto& t:tests) {
