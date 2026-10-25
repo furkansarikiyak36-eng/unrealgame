@@ -66,7 +66,7 @@ bool UCarvableLogJackingComponent::LiftOneEnd(ACarvableLog* Log, float RaiseHeig
 	const FVector NewLocation = NewCenter - NewRotation.RotateVector(LocalCenter);
 
 	FHitResult SweepHit;
-	if (!Log->SetActorLocationAndRotation(NewLocation, NewRotation, true, &SweepHit, ETeleportType::TeleportPhysics))
+	if (!Log->SetActorLocationAndRotation(NewLocation, NewRotation.Rotator(), true, &SweepHit, ETeleportType::TeleportPhysics))
 	{
 		Log->SetActorTransform(OldTransform, false, nullptr, ETeleportType::TeleportPhysics);
 		return false;
