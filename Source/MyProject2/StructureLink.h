@@ -7,6 +7,7 @@
 #include "Wood/WoodStructureAnalysis.h"
 
 class ACarvableLog;
+class AStoneActor;
 class UWorld;
 
 /**
@@ -20,6 +21,8 @@ namespace StructureLink
 {
 	/** The graph node for Log, as it is or as it would be at Transform. */
 	WoodStructure::FNode MakeNode(const ACarvableLog* Log, int32 Id, const FTransform* Transform = nullptr);
+	/** A placed stone represented by its oriented bounds in the same support graph as logs. */
+	WoodStructure::FNode MakeNode(const AStoneActor* Stone, int32 Id);
 
 	/** How far apart the supports of a beam may be, and how far it may reach past the last one (modules). */
 	/** 8 modules = the longest log (600 cm): a log lying across two crossing logs at its ends (a cabin wall, 525 cm apart) holds. */
