@@ -27,6 +27,52 @@ Result<bool> StructuralGraph::RemoveNode(Id id) {
   }
   ++revision_; return Result<bool>::Success(true);
 }
+Result<bool> StructuralGraph::RemoveEdge(Id edgeId) {
+  if(!edges_.erase(edgeId))
+    return Result<bool>::Failure(ErrorCode::NotFound,"support edge does not exist");
+  ++revision_;
+  return Result<bool>::Success(true);
+}
+Result<bool> StructuralGraph::SetEdgeActive(Id edgeId,bool active) {
+  auto it=edges_.find(edgeId);
+  if(it==edges_.end())
+    return Result<bool>::Failure(ErrorCode::NotFound,"support edge does not exist");
+  if(it->second.active==active) return Result<bool>::Success(false);
+  it->second.active=active;
+  ++revision_;
+  return Result<bool>::Success(true);
+}
+Result<bool> StructuralGraph::SetNodeDemand(Id nodeId,double demand) {
+  if(!std::isfinite(demand)||demand<0)
+    return Result<bool>::Failure(ErrorCode::InvalidArgument,"node demand must be finite and nonnegative");
+  auto it=nodes_.find(nodeId);
+  if(it==nodes_.end())
+    return Result<bool>::Failure(ErrorCode::NotFound,"structure node does not exist");
+  if(it->second.demand==demand) return Result<bool>::Success(false);
+  it->second.demand=demand;
+  ++revision_;
+  return Result<bool>::Success(true);
+}
+Result<bool> StructuralGraph::SetNodeGrounded(Id nodeId,bool grounded) {
+  auto it=nodes_.find(nodeId);
+  if(it==nodes_.end())
+    return Result<bool>::Failure(ErrorCode::NotFound,"structure node does not exist");
+  if(it->second.grounded==grounded) return Result<bool>::Success(false);
+  it->second.grounded=grounded;
+  ++revision_;
+  return Result<bool>::Success(true);
+}
+Result<bool> StructuralGraph::SetNodeCapacity(Id nodeId,double capacity) {
+  if(!std::isfinite(capacity)||capacity<0)
+    return Result<bool>::Failure(ErrorCode::InvalidArgument,"node capacity must be finite and nonnegative");
+  auto it=nodes_.find(nodeId);
+  if(it==nodes_.end())
+    return Result<bool>::Failure(ErrorCode::NotFound,"structure node does not exist");
+  if(it->second.capacity==capacity) return Result<bool>::Success(false);
+  it->second.capacity=capacity;
+  ++revision_;
+  return Result<bool>::Success(true);
+}
 Result<bool> StructuralGraph::ApplyDamage(Id id,double amount) {
   if(!std::isfinite(amount)||amount<=0) return Result<bool>::Failure(ErrorCode::InvalidArgument,"damage must be positive and finite");
   auto it=nodes_.find(id); if(it==nodes_.end()) return Result<bool>::Failure(ErrorCode::NotFound,"structure node does not exist");
