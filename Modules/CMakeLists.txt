@@ -15,6 +15,8 @@ add_library(world_mechanics
   WorldEnvironment/src/environment_simulation.cpp
   GameplayIntegration/src/gameplay_quality.cpp
   GameplayIntegration/src/local_stone_ring_recognition.cpp
+  GameplayIntegration/src/stone_fireplace_lifecycle.cpp
+  GameplayIntegration/src/trap_lifecycle.cpp
 )
 target_compile_features(world_mechanics PUBLIC cxx_std_17)
 target_include_directories(world_mechanics PUBLIC
