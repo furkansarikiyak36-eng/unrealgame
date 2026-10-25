@@ -102,7 +102,7 @@ public:
 	/** Spawns a carvable copy of a raw log mesh (e.g. /Game/Building/Raw/SM_RawLog_C). */
 	static ACarvableLog* SpawnFromStaticMesh(UWorld* World, UStaticMesh* Mesh, const FTransform& Transform);
 
-	/** A whole log as a tree gives it (the greybox log, six modules long), falling into place. */
+	/** Spawns a raw-log mesh as a carvable actor; its dimensions come from the source mesh. */
 	static ACarvableLog* SpawnLog(UWorld* World, const FTransform& Transform);
 
 	/** Puts a log lying on the ground on the bench: replaces the pickup with a carvable log of the same mesh, in place. */
@@ -269,7 +269,7 @@ public:
 
 	/** Wood in this piece (cm3); what it weighs on the shoulder. */
 	float GetVolume() const { return Volume; }
-	/** How much wood fits on the shoulder: one whole log (390 x 70 cm), or two halves, or six one-module pieces. */
+	/** Volume-based shoulder capacity: approximately one 300 cm raw log, or any equivalent combination of smaller pieces. */
 	static float GetShoulderCapacity();
 	/** Split lengthwise at some point (a half, a quarter): not a round log any more. */
 	bool IsSplit() const { return bSplitPiece; }
@@ -317,7 +317,7 @@ public:
 	/**
 	 * The modular grid every cut snaps to: lines ModuleLength apart, counted from one end of the log as it was felled.
 	 * Pieces keep the same lines (they share the log's local frame), so pieces cut on the grid always fit together.
-	 * A 390 cm log is exactly six modules.
+	 * Canonical lengths are multiples of 75 cm: 300 cm = 4 modules and 600 cm = 8 modules. Legacy 390 cm assets are not canonical.
 	 */
 	static constexpr float ModuleLength = 75.f;
 
