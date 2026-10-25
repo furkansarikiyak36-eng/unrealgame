@@ -21,6 +21,7 @@ class LogVerifierTests(unittest.TestCase):
         self.stone_trap = self.root / "stone_trap.log"
         self.inventory_capacity = self.root / "inventory_capacity.log"
         self.world_snap = self.root / "world_snap.log"
+        self.stone_shape = self.root / "stone_shape.log"
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -227,6 +228,9 @@ class LogVerifierTests(unittest.TestCase):
             "Resolver.NearestCompatibleCandidate",
             "Resolver.DeterministicTieBreak",
             "Resolver.RequiredGroupFilter",
+            "Resolver.OccupiedCandidateSkipped",
+            "Resolver.UnavailableCandidateSkipped",
+            "Resolver.LoadBearingRequired",
             "TwoAnchor.LevelPlacement",
             "TwoAnchor.SlopePitch",
             "TwoAnchor.LengthMismatch",
@@ -242,7 +246,7 @@ class LogVerifierTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.assertEqual(VERIFY.verify_world_snap(self.world_snap), (9, 0))
+        self.assertEqual(VERIFY.verify_world_snap(self.world_snap), (12, 0))
 
     def test_world_snap_failure_is_rejected(self):
         self.world_snap.write_text(
@@ -257,6 +261,39 @@ class LogVerifierTests(unittest.TestCase):
         self.world_snap.write_text("Automation suite aborted\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "no parseable"):
             VERIFY.verify_world_snap(self.world_snap)
+
+    def test_valid_stone_shape_recognition_log_passes(self):
+        names = (
+            "RegularRing",
+            "LineRejected",
+            "UnevenGroundRejected",
+            "PartialArcRejected",
+        )
+        self.stone_shape.write_text(
+            "".join(
+                f"Test Completed. Result={{Success}} Name={{{name}}} "
+                f"Path={{MyProject2.Construction.StoneShapeRecognition.{name}}}\n"
+                for name in names
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(VERIFY.verify_stone_shape_recognition(self.stone_shape), (4, 0))
+
+    def test_stone_shape_recognition_failure_is_rejected(self):
+        self.stone_shape.write_text(
+            "Test Completed. Result={Success} Name={Ring} "
+            "Path={MyProject2.Construction.StoneShapeRecognition.RegularRing}\n"
+            "Test Completed. Result={Fail} Name={Line} "
+            "Path={MyProject2.Construction.StoneShapeRecognition.LineRejected}\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "1 failed"):
+            VERIFY.verify_stone_shape_recognition(self.stone_shape)
+
+    def test_missing_stone_shape_recognition_results_are_rejected(self):
+        self.stone_shape.write_text("Automation suite aborted\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "no parseable"):
+            VERIFY.verify_stone_shape_recognition(self.stone_shape)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
