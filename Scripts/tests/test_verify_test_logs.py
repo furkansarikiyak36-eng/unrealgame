@@ -20,6 +20,7 @@ class LogVerifierTests(unittest.TestCase):
         self.stone_placement = self.root / "stone_placement.log"
         self.stone_trap = self.root / "stone_trap.log"
         self.inventory_capacity = self.root / "inventory_capacity.log"
+        self.world_snap = self.root / "world_snap.log"
 
     def tearDown(self):
         self.tempdir.cleanup()
@@ -220,6 +221,42 @@ class LogVerifierTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "expected at least 5"):
             VERIFY.verify_inventory_capacity(self.inventory_capacity)
+
+    def test_valid_world_snap_log_passes(self):
+        names = (
+            "Resolver.NearestCompatibleCandidate",
+            "Resolver.DeterministicTieBreak",
+            "Resolver.RequiredGroupFilter",
+            "TwoAnchor.LevelPlacement",
+            "TwoAnchor.SlopePitch",
+            "TwoAnchor.LengthMismatch",
+            "TwoAnchor.NonLoadBearing",
+            "TwoAnchor.SameAnchor",
+            "TwoAnchor.PitchRange",
+        )
+        self.world_snap.write_text(
+            "".join(
+                f"Test Completed. Result={{Success}} Name={{{name}}} "
+                f"Path={{WorldSnap.{name}}}\n"
+                for name in names
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(VERIFY.verify_world_snap(self.world_snap), (9, 0))
+
+    def test_world_snap_failure_is_rejected(self):
+        self.world_snap.write_text(
+            "Test Completed. Result={Success} Name={Level} Path={WorldSnap.Level}\n"
+            "Test Completed. Result={Fail} Name={Slope} Path={WorldSnap.Slope}\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "1 failed"):
+            VERIFY.verify_world_snap(self.world_snap)
+
+    def test_missing_world_snap_results_are_rejected(self):
+        self.world_snap.write_text("Automation suite aborted\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "no parseable"):
+            VERIFY.verify_world_snap(self.world_snap)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
