@@ -20,6 +20,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Defense")
 	void Sharpen();
+	UFUNCTION(BlueprintCallable, Category = "Defense") bool SetStakeHeight(float HeightCm);
 
 	UFUNCTION(BlueprintCallable, Category = "Defense")
 	void ApplyDamageToTarget(AActor* Target, float DamageAmount);
