@@ -9,6 +9,7 @@
 #include "world_mechanics/terrain_voxel.hpp"
 #include "world_mechanics/revision_gate.hpp"
 #include "world_mechanics/placement_snap.hpp"
+#include "world_mechanics/world_snap_two_anchor_solver.hpp"
 #include "world_mechanics/excavation.hpp"
 #include "world_mechanics/shoring.hpp"
 #include "world_mechanics/structural_integrity.hpp"
@@ -1117,6 +1118,93 @@ bool TestTrapLifecycle() {
   return true;
 }
 
+bool TestWorldSnapTwoAnchorSolver() {
+  wm::TwoAnchorSnapRequest request;
+  request.pieceId=501;
+  request.localEndAOffsetM=-3.0;
+  request.localEndBOffsetM=3.0;
+  request.maxLengthErrorM=0.01;
+  request.maxEndPenetrationM=0.05;
+  request.maxGapM=0.05;
+  request.minPitchDegrees=-60.0;
+  request.maxPitchDegrees=60.0;
+  request.minimumAnchorAxisDot=0.5;
+  request.requiredLoad=20.0;
+  request.expectedSurfaceRevision=3;
+  request.expectedClassificationRevision=4;
+  request.expectedSupportRevision=5;
+
+  auto makeAnchor=[](wm::Id id,wm::Id owner,wm::Vec3 p) {
+    wm::TwoAnchorSnapAnchor a;
+    a.anchorId=id; a.ownerPieceId=owner; a.positionM=p;
+    a.longitudinalAxis={1,0,0};
+    a.surfaceRevision=3; a.classificationRevision=4; a.supportRevision=5;
+    a.maxSupportedLoad=100.0;
+    a.available=true; a.targetCompatible=true; a.supportValid=true;
+    a.socketOccupied=false;
+    return a;
+  };
+  const double end=6.0/std::sqrt(2.0);
+  auto a=makeAnchor(11,101,{0,0,0});
+  auto b=makeAnchor(12,102,{end,0,end});
+  auto solved=wm::WorldSnapTwoAnchorSolver::Resolve(request,{a,b});
+  CHECK(solved);
+  CHECK(solved.value.anchorAId==11 && solved.value.anchorBId==12);
+  CHECK(std::abs(solved.value.actualAnchorDistanceM-6.0)<1e-9);
+  CHECK(std::abs(solved.value.pitchDegrees-45.0)<1e-8);
+  CHECK(std::abs(solved.value.transform.position.x-end/2.0)<1e-9);
+  CHECK(std::abs(solved.value.transform.position.z-end/2.0)<1e-9);
+  CHECK(solved.value.minimumAnchorCapacity==100.0);
+
+  auto commit=wm::WorldSnapTwoAnchorSolver::ValidateCommit(
+      request,solved.value,{a,b},3,4,5,true);
+  CHECK(commit && commit.value);
+  auto obstructed=wm::WorldSnapTwoAnchorSolver::ValidateCommit(
+      request,solved.value,{a,b},3,4,5,false);
+  CHECK(!obstructed && obstructed.error==wm::ErrorCode::Conflict);
+  auto staleSupport=wm::WorldSnapTwoAnchorSolver::ValidateCommit(
+      request,solved.value,{a,b},3,4,6,true);
+  CHECK(!staleSupport && staleSupport.error==wm::ErrorCode::StaleRevision);
+
+  auto moved=b;
+  moved.positionM.x+=0.1; // provider forgot to bump revision; geometry recheck still catches it
+  auto staleGeometry=wm::WorldSnapTwoAnchorSolver::ValidateCommit(
+      request,solved.value,{a,moved},3,4,5,true);
+  CHECK(!staleGeometry && staleGeometry.error==wm::ErrorCode::StaleRevision);
+
+  auto occupied=b; occupied.socketOccupied=true;
+  auto noOccupiedPair=wm::WorldSnapTwoAnchorSolver::Resolve(request,{a,occupied});
+  CHECK(!noOccupiedPair && noOccupiedPair.error==wm::ErrorCode::NotFound);
+  auto unsupported=b; unsupported.supportValid=false;
+  auto noSupportPair=wm::WorldSnapTwoAnchorSolver::Resolve(request,{a,unsupported});
+  CHECK(!noSupportPair && noSupportPair.error==wm::ErrorCode::NotFound);
+  auto underCapacity=b; underCapacity.maxSupportedLoad=19.0;
+  auto noCapacityPair=wm::WorldSnapTwoAnchorSolver::Resolve(request,{a,underCapacity});
+  CHECK(!noCapacityPair && noCapacityPair.error==wm::ErrorCode::NotFound);
+
+  auto tooCompressed=b;
+  tooCompressed.positionM={5.6,0,0};
+  auto lengthMismatch=wm::WorldSnapTwoAnchorSolver::Resolve(request,{a,tooCompressed});
+  CHECK(!lengthMismatch && lengthMismatch.error==wm::ErrorCode::NotFound);
+
+  auto pitchLimited=request;
+  pitchLimited.minPitchDegrees=-10.0; pitchLimited.maxPitchDegrees=10.0;
+  auto pitchDenied=wm::WorldSnapTwoAnchorSolver::Resolve(pitchLimited,{a,b});
+  CHECK(!pitchDenied && pitchDenied.error==wm::ErrorCode::NotFound);
+
+  auto duplicate=b; duplicate.anchorId=a.anchorId;
+  auto duplicateId=wm::WorldSnapTwoAnchorSolver::Resolve(request,{a,duplicate});
+  CHECK(!duplicateId && duplicateId.error==wm::ErrorCode::Conflict);
+  auto overBudget=request; overBudget.maxCandidateAnchors=2;
+  auto extra=makeAnchor(13,103,{6,0,0});
+  auto budgetDenied=wm::WorldSnapTwoAnchorSolver::Resolve(overBudget,{a,b,extra});
+  CHECK(!budgetDenied && budgetDenied.error==wm::ErrorCode::BudgetExceeded);
+  auto pairBudget=request; pairBudget.maxPairsToEvaluate=1;
+  auto incompleteSearch=wm::WorldSnapTwoAnchorSolver::Resolve(pairBudget,{a,b,extra});
+  CHECK(!incompleteSearch && incompleteSearch.error==wm::ErrorCode::BudgetExceeded);
+  return true;
+}
+
 bool TestLocalStoneRingRecognition() {
   std::vector<wm::LocalStoneSample> stones;
   for (std::uint64_t i=0; i<8; ++i) {
@@ -1173,6 +1261,7 @@ int main() {
     {"survival/restore transaction",TestSurvivalAndRestoreTransaction},
     {"stone fireplace lifecycle",TestStoneFireplaceLifecycle},
     {"trap lifecycle",TestTrapLifecycle},
+    {"two-anchor world snap",TestWorldSnapTwoAnchorSolver},
     {"local stone ring recognition",TestLocalStoneRingRecognition}
   };
   unsigned passed=0;
