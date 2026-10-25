@@ -18,6 +18,8 @@
 #include "world_mechanics/persistence_transaction.hpp"
 #include "world_mechanics/density_snapshot_codec.hpp"
 #include "world_mechanics/local_stone_ring_recognition.hpp"
+#include "world_mechanics/stone_fireplace_lifecycle.hpp"
+#include "world_mechanics/trap_lifecycle.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -907,6 +909,79 @@ bool TestSurvivalAndRestoreTransaction() {
   return true;
 }
 
+bool TestStoneFireplaceLifecycle() {
+  std::vector<wm::LocalStoneSample> stones;
+  for (std::uint64_t i=0; i<8; ++i) {
+    const double angle = static_cast<double>(i) * 6.283185307179586 / 8.0;
+    stones.push_back({i+1, 60.0*std::cos(angle), 60.0*std::sin(angle), 0.0, true});
+  }
+
+  wm::StoneFireplaceLifecycle fireplace;
+  auto prematureIgnition=fireplace.Ignite(fireplace.GetRevision());
+  CHECK(!prematureIgnition);
+  auto ring=fireplace.ReassessRing(stones,0,0,0,1);
+  CHECK(ring && ring.value.recognized);
+  CHECK(fireplace.Snapshot().state==wm::StoneFireplaceState::Ready);
+  auto duplicateObservation=fireplace.ReassessRing(stones,0,0,0,1);
+  CHECK(!duplicateObservation && duplicateObservation.error==wm::ErrorCode::StaleRevision);
+
+  auto fuel=fireplace.AddFuel(30.0,fireplace.GetRevision());
+  CHECK(fuel && std::abs(fuel.value-30.0)<1e-9);
+  auto staleIgnition=fireplace.Ignite(2);
+  CHECK(!staleIgnition && staleIgnition.error==wm::ErrorCode::StaleRevision);
+  auto lit=fireplace.Ignite(fireplace.GetRevision());
+  CHECK(lit && lit.value);
+  auto pot=fireplace.PlaceCookingPot(fireplace.GetRevision());
+  CHECK(pot && pot.value);
+  auto tick=fireplace.Advance(1.5,fireplace.GetRevision());
+  CHECK(tick && std::abs(tick.value.fuelConsumed-3.0)<1e-9);
+  CHECK(std::abs(tick.value.fuelRemaining-27.0)<1e-9);
+  CHECK(std::abs(tick.value.heatOutput-135.0)<1e-9);
+
+  auto brokenRing=stones;
+  brokenRing[0].active=false;
+  brokenRing[1].active=false;
+  brokenRing[2].active=false;
+  auto lost=fireplace.ReassessRing(brokenRing,0,0,0,2);
+  CHECK(lost && !lost.value.recognized);
+  const auto afterLoss=fireplace.Snapshot();
+  CHECK(afterLoss.state==wm::StoneFireplaceState::NotBuilt);
+  CHECK(afterLoss.heatOutput==0.0);
+  CHECK(afterLoss.hasCookingPot);
+  CHECK(afterLoss.fuelUnits>0.0);
+  return true;
+}
+
+bool TestTrapLifecycle() {
+  wm::TrapLifecycle trap({700,wm::TrapTriggerSource::Pressure,1.0,0.01,40.0,false,3600.0});
+  const auto initial=trap.Snapshot();
+  auto wrongSource=trap.TryTrigger({1,42,wm::TrapTriggerSource::TripWire,10.0,initial.stateRevision});
+  CHECK(!wrongSource && wrongSource.error==wm::ErrorCode::Unsupported);
+  CHECK(trap.GetRevision()==initial.stateRevision);
+
+  auto fired=trap.TryTrigger({1,42,wm::TrapTriggerSource::Pressure,10.0,trap.GetRevision()});
+  CHECK(fired && fired.value.applyDamage);
+  CHECK(fired.value.damage==40.0);
+  CHECK(fired.value.resultingState==wm::TrapLifecycleState::CoolingDown);
+  CHECK(std::abs(fired.value.cooldownEndsAt-11.0)<1e-9);
+  auto replay=trap.TryTrigger({1,42,wm::TrapTriggerSource::Pressure,10.1,trap.GetRevision()});
+  CHECK(!replay && replay.error==wm::ErrorCode::Conflict);
+  auto early=trap.Advance(10.999,trap.GetRevision());
+  CHECK(early && !early.value);
+  auto ready=trap.Advance(11.0,trap.GetRevision());
+  CHECK(ready && ready.value);
+  auto firedAgain=trap.TryTrigger({2,43,wm::TrapTriggerSource::Pressure,11.0,trap.GetRevision()});
+  CHECK(firedAgain && trap.Snapshot().triggerCount==2);
+
+  wm::TrapLifecycle oneShot({701,wm::TrapTriggerSource::Manual,0.0,0.01,0.0,true,3600.0});
+  auto consumed=oneShot.TryTrigger({1,0,wm::TrapTriggerSource::Manual,1.0,oneShot.GetRevision()});
+  CHECK(consumed && !consumed.value.applyDamage);
+  CHECK(consumed.value.resultingState==wm::TrapLifecycleState::Consumed);
+  auto cannotRearm=oneShot.Arm(oneShot.GetRevision());
+  CHECK(!cannotRearm && cannotRearm.error==wm::ErrorCode::Unsupported);
+  return true;
+}
+
 bool TestLocalStoneRingRecognition() {
   std::vector<wm::LocalStoneSample> stones;
   for (std::uint64_t i=0; i<8; ++i) {
@@ -961,6 +1036,8 @@ int main() {
     {"plant/animal determinism",TestPlantAndAnimalDeterminism},
     {"crafting transaction planner",TestCraftingTransactionPlanner},
     {"survival/restore transaction",TestSurvivalAndRestoreTransaction},
+    {"stone fireplace lifecycle",TestStoneFireplaceLifecycle},
+    {"trap lifecycle",TestTrapLifecycle},
     {"local stone ring recognition",TestLocalStoneRingRecognition}
   };
   unsigned passed=0;
