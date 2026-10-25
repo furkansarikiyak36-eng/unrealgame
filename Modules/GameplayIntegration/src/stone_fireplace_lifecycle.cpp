@@ -23,6 +23,7 @@ bool StoneFireplaceLifecycle::ConfigValid() const noexcept {
          config_.ring.maxAngularGapDegrees < 360.0 &&
          std::isfinite(config_.ring.maxCenterOccupancyRadius) &&
          config_.ring.maxCenterOccupancyRadius >= 0.0 &&
+         config_.ring.maxCenterOccupancyRadius < config_.ring.minRadius &&
          std::isfinite(config_.maxFuelUnits) && config_.maxFuelUnits > 0.0 &&
          std::isfinite(config_.fuelUnitsPerSecond) &&
          config_.fuelUnitsPerSecond > 0.0 &&
