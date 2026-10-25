@@ -130,6 +130,7 @@ else
   TRAP_RC=$?
 fi
 
+echo "[8/11] Running WorldSnap two-anchor and resolver automation tests..."
 if run_ue_test "WorldSnap automation" 300 "WorldSnapTests.log" "world_snap_$STAMP.log" \
   -ExecCmds="Automation RunTests WorldSnap; Quit" -unattended -nullrhi -nosplash -nop4 -log=WorldSnapTests.log; then
   SNAP_RC=0
