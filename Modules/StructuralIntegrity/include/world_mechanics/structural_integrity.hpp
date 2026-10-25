@@ -38,6 +38,11 @@ class StructuralGraph {
   Result<bool> AddNode(const StructureNode& node);
   Result<bool> AddEdge(const SupportEdge& edge);
   Result<bool> RemoveNode(Id nodeId);
+  Result<bool> RemoveEdge(Id edgeId);
+  Result<bool> SetEdgeActive(Id edgeId,bool active);
+  Result<bool> SetNodeDemand(Id nodeId,double demand);
+  Result<bool> SetNodeGrounded(Id nodeId,bool grounded);
+  Result<bool> SetNodeCapacity(Id nodeId,double capacity);
   Result<bool> ApplyDamage(Id nodeId,double amount);
   Result<bool> Repair(Id nodeId,double amount);
   Result<bool> LatchCollapse(Id nodeId);
