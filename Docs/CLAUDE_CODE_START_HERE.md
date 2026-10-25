@@ -7,11 +7,12 @@
 ## Do this before any code task
 
 1. Read this file only.
-2. Open **Docs/CLAUDE_CODE_SOTF_CHANGE_MANIFEST.md** and locate the one mechanic/file group for the task.
-3. Open **Docs/CLAUDE_CODE_SOTF_LINE_BY_LINE_HANDOFF.md** and read only the matching section/range.
-4. Fetch only the targeted source file and the specific line range/functions that must be changed. Do not reread the repo, huge source files or unrelated systems.
-5. Make the smallest coherent implementation on this branch, record the commit SHA, then update the relevant handoff/manifest entry with new line numbers and remaining integration work.
-6. Do not run CMake, CTest, Unreal Build Tool, UHT, Automation or PIE in the current stage. Test source is not test success.
+2. For a new coding session, copy the instructions from **Docs/CLAUDE_CODE_NEXT_WORK_PROMPT_TR.md** into Claude Code. That prompt fixes the first source files, acceptance gates and final report format. Treat it as the execution brief, not as a request for repo-wide analysis.
+3. Open **Docs/CLAUDE_CODE_SOTF_CHANGE_MANIFEST.md** and locate the one mechanic/file group for the task.
+4. Open **Docs/CLAUDE_CODE_SOTF_LINE_BY_LINE_HANDOFF.md** and read only the matching section/range.
+5. Fetch only the targeted source file and the specific line range/functions that must be changed. Do not reread the repo, huge source files or unrelated systems.
+6. Make the smallest coherent implementation on this branch, record the commit SHA, then update the relevant handoff/manifest entry with new line numbers and remaining integration work.
+7. Do not run CMake, CTest, Unreal Build Tool, UHT, Automation or PIE in the current stage. Test source is not test success.
 
 ## What is currently implemented
 
@@ -47,6 +48,7 @@ Portable and Unreal versions are **not automatically wired together**. Do not de
 - Source implementation commit before this documentation packaging: **72e26bdaf41f31b440d5d1b214ac96cfe66eda18**.
 - Detailed handoff was replaced and corrected in **7972535ca5b79713ed95a1538f28e640e3bdb518**, then exact StonePlacement ranges were pinned in **0fff11df3a22a0ad4996deacc144d2cb5074c5ac**.
 - Manifest commit: **da335ff685f47e91763f15046de667765e286be4**.
+- Reusable Turkish execution prompt commit: **dca388debf8ddda732a92d6b6fa4fe8d62c141c9**.
 - These are source/document commits only. The test/build state is: **not executed**.
 
 ## Required report for every future code change
