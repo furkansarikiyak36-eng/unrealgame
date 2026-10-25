@@ -1358,3 +1358,4 @@ Kullanıcı: "bize snap noktları daha düzenli ve çok laızm log dikey koysak 
 - Sebep: eğik tutulan log için direğe yaslama yerleşimi yoktu (eğik log yalnız yatan logun üstüne ya da yere konabiliyordu).
 - `ForestCharacter.cpp`: eğik tutup dik bir direğe bakınca alt uç yerde (oyuncu tarafında), üst uç direk tepesine oturur; açı iki uçtan (direk yüksekliği + log boyu) hesaplanır, kameradan değil. Etiket "direğe yaslandı (N°)".
 - Vitrin istasyon 5'e iki kontrol eklendi: (1) direk → yaslanan log, ikisi de yapı değerlendirmesinden sonra yerinde; (2) önce yere eğik log, sonra kalkık ucunun altına direk, ikisi de yerinde. 16/16. Tüm vitrin: aşağıdaki sonuç.
+- GitHub güncellendi: test/chatgpt-world-snap → integrate/web-plan (hızlı ileri, 2 commit, 6c6ce37) + test dalı push edildi. Yerel integrate/web-plan aynı commit'e getirildi. Push edilmeyenler: M_RawLog.uasset (kasıtsız değişiklik), Content/WorldScanner, setup_v2.py, 'do/reference images' (bana ait değil).

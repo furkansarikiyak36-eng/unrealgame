@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (25 October 2026 05:13) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (25 October 2026 05:19) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
