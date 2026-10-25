@@ -50,6 +50,26 @@ void AStakeActor::UpdateDamageVolume()
 	DamageSphere->SetCollisionEnabled(bSharpened ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
 }
 
+bool AStakeActor::SetStakeHeight(float HeightCm)
+{
+	if (!StakeMesh || !StakeMesh->GetStaticMesh() || !FMath::IsFinite(HeightCm) || HeightCm <= 0.f)
+	{
+		return false;
+	}
+	const float MeshHeight = StakeMesh->GetStaticMesh()->GetBoundingBox().GetSize().Z;
+	const FVector CurrentScale = StakeMesh->GetRelativeScale3D();
+	const float CurrentHeight = MeshHeight * FMath::Abs(CurrentScale.Z);
+	if (!FMath::IsFinite(CurrentHeight) || CurrentHeight <= KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+	FVector NewScale = CurrentScale;
+	NewScale.Z *= HeightCm / CurrentHeight;
+	StakeMesh->SetRelativeScale3D(NewScale);
+	UpdateDamageVolume();
+	return true;
+}
+
 void AStakeActor::Sharpen()
 {
 	if (bSharpened) return;
