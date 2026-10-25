@@ -108,4 +108,91 @@ bool FWorldSnapResolverGroupFilterTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWorldSnapResolverOccupiedCandidateTest,
+	"WorldSnap.Resolver.OccupiedCandidateSkipped",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldSnapResolverOccupiedCandidateTest::RunTest(const FString& Parameters)
+{
+	TArray<WorldSnap::FPoint> Points;
+	WorldSnap::FPoint Occupied;
+	Occupied.Id = TEXT("Occupied");
+	Occupied.Group = TEXT("Top");
+	Occupied.Position = FVector::ZeroVector;
+	Occupied.Normal = FVector::UpVector;
+	Occupied.bOccupied = true;
+	Points.Add(Occupied);
+
+	WorldSnap::FPoint Free = Occupied;
+	Free.Id = TEXT("Free");
+	Free.bOccupied = false;
+	Free.Position = FVector(25.f, 0.f, 0.f);
+	Points.Add(Free);
+
+	WorldSnap::FQuery Query;
+	Query.HitPoint = FVector::ZeroVector;
+	Query.HitNormal = FVector::UpVector;
+	WorldSnap::FResolveResult Result;
+	TestTrue(TEXT("occupied nearest target is skipped"), FWorldSnapResolver::Resolve(Points, Query, Result));
+	TestTrue(TEXT("free candidate is selected"), Result.Point.Id == TEXT("Free"));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWorldSnapResolverUnavailableCandidateTest,
+	"WorldSnap.Resolver.UnavailableCandidateSkipped",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldSnapResolverUnavailableCandidateTest::RunTest(const FString& Parameters)
+{
+	TArray<WorldSnap::FPoint> Points;
+	WorldSnap::FPoint Point;
+	Point.Id = TEXT("Unavailable");
+	Point.Group = TEXT("Top");
+	Point.Position = FVector::ZeroVector;
+	Point.Normal = FVector::UpVector;
+	Point.bAvailable = false;
+	Points.Add(Point);
+
+	Point.Id = TEXT("Available");
+	Point.Position = FVector(30.f, 0.f, 0.f);
+	Point.bAvailable = true;
+	Points.Add(Point);
+
+	WorldSnap::FQuery Query;
+	Query.HitPoint = FVector::ZeroVector;
+	Query.HitNormal = FVector::UpVector;
+	WorldSnap::FResolveResult Result;
+	TestTrue(TEXT("unavailable target is skipped"), FWorldSnapResolver::Resolve(Points, Query, Result));
+	TestTrue(TEXT("available candidate is selected"), Result.Point.Id == TEXT("Available"));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWorldSnapResolverLoadBearingRequirementTest,
+	"WorldSnap.Resolver.LoadBearingRequired",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldSnapResolverLoadBearingRequirementTest::RunTest(const FString& Parameters)
+{
+	TArray<WorldSnap::FPoint> Points;
+	WorldSnap::FPoint Point;
+	Point.Id = TEXT("Decorative");
+	Point.Group = TEXT("Top");
+	Point.Position = FVector::ZeroVector;
+	Point.Normal = FVector::UpVector;
+	Point.bLoadBearing = false;
+	Points.Add(Point);
+
+	WorldSnap::FQuery Query;
+	Query.HitPoint = FVector::ZeroVector;
+	Query.HitNormal = FVector::UpVector;
+	Query.bRequireLoadBearing = true;
+	WorldSnap::FResolveResult Result;
+	TestFalse(TEXT("non-load-bearing points cannot satisfy structural queries"),
+		FWorldSnapResolver::Resolve(Points, Query, Result));
+	TestTrue(TEXT("the rejection is reported as no compatible point"),
+		Result.Status == WorldSnap::EResolveStatus::NoCompatiblePoint);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
