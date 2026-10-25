@@ -177,6 +177,9 @@ bool UStoneShapeRecognitionSubsystem::TryRecognizeManualFireplace(AStoneActor* N
 	{
 		if (A.Key == NewlyInstalledStone && B.Key != NewlyInstalledStone) return true;
 		if (B.Key == NewlyInstalledStone && A.Key != NewlyInstalledStone) return false;
+		const float DistanceA = FVector::DistSquared2D(A.Value, NewGround);
+		const float DistanceB = FVector::DistSquared2D(B.Value, NewGround);
+		if (!FMath::IsNearlyEqual(DistanceA, DistanceB)) return DistanceA < DistanceB;
 		if (A.Value.X != B.Value.X) return A.Value.X < B.Value.X;
 		if (A.Value.Y != B.Value.Y) return A.Value.Y < B.Value.Y;
 		return A.Value.Z < B.Value.Z;
