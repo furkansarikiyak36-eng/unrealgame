@@ -135,4 +135,62 @@ bool FWorldSnapTwoAnchorPitchRangeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWorldSnapTwoAnchorReadinessGateTest,
+	"WorldSnap.TwoAnchor.ReadinessAndCapacity",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldSnapTwoAnchorReadinessGateTest::RunTest(const FString& Parameters)
+{
+	WorldSnap::FTwoAnchorQuery Query = MakeQuery(FVector::ZeroVector, FVector(600.f, 0.f, 0.f));
+	WorldSnap::FTwoAnchorResult Result;
+
+	Query.StartAnchor.bOccupied = true;
+	TestFalse(TEXT("occupied endpoint cannot be reused"), FWorldSnapTwoAnchorSolver::Solve(Query, Result));
+	TestTrue(TEXT("occupied endpoint has an explicit status"), Result.Status == WorldSnap::ETwoAnchorStatus::OccupiedAnchor);
+
+	Query.StartAnchor.bOccupied = false;
+	Query.EndAnchor.bTargetCompatible = false;
+	TestFalse(TEXT("incompatible endpoint type is rejected"), FWorldSnapTwoAnchorSolver::Solve(Query, Result));
+	TestTrue(TEXT("target compatibility rejection is explicit"), Result.Status == WorldSnap::ETwoAnchorStatus::IncompatibleAnchor);
+
+	Query.EndAnchor.bTargetCompatible = true;
+	Query.EndAnchor.bSupportValid = false;
+	TestFalse(TEXT("support path loss rejects endpoint"), FWorldSnapTwoAnchorSolver::Solve(Query, Result));
+	TestTrue(TEXT("support loss has an explicit status"), Result.Status == WorldSnap::ETwoAnchorStatus::InvalidSupport);
+
+	Query.EndAnchor.bSupportValid = true;
+	Query.RequiredLoad = 80.f;
+	Query.EndAnchor.MaxSupportedLoad = 79.f;
+	TestFalse(TEXT("anchor below required load is rejected"), FWorldSnapTwoAnchorSolver::Solve(Query, Result));
+	TestTrue(TEXT("capacity rejection has an explicit status"), Result.Status == WorldSnap::ETwoAnchorStatus::InvalidSupport);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWorldSnapTwoAnchorEndpointToleranceTest,
+	"WorldSnap.TwoAnchor.EndpointPenetrationAndGap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWorldSnapTwoAnchorEndpointToleranceTest::RunTest(const FString& Parameters)
+{
+	WorldSnap::FTwoAnchorQuery Compressed = MakeQuery(FVector::ZeroVector, FVector(598.f, 0.f, 0.f));
+	Compressed.LengthToleranceCm = 0.1f;
+	Compressed.MaxEndPenetrationCm = 1.f;
+	WorldSnap::FTwoAnchorResult Result;
+	TestTrue(TEXT("two endpoints may seat into their anchors within penetration budget"),
+		FWorldSnapTwoAnchorSolver::Solve(Compressed, Result));
+	TestTrue(TEXT("compression is reported with sign"), FMath::IsNearlyEqual(Result.SignedLengthErrorCm, -2.f, 0.01f));
+
+	WorldSnap::FTwoAnchorQuery Gap = MakeQuery(FVector::ZeroVector, FVector(601.f, 0.f, 0.f));
+	Gap.LengthToleranceCm = 0.1f;
+	Gap.MaxGapCm = 0.9f;
+	TestTrue(TEXT("configured extra gap is accepted"), FWorldSnapTwoAnchorSolver::Solve(Gap, Result));
+	TestTrue(TEXT("gap is reported with sign"), FMath::IsNearlyEqual(Result.SignedLengthErrorCm, 1.f, 0.01f));
+
+	Gap.MaxGapCm = 0.1f;
+	TestFalse(TEXT("gap beyond the configured budget is rejected"), FWorldSnapTwoAnchorSolver::Solve(Gap, Result));
+	TestTrue(TEXT("bad gap keeps a length mismatch status"), Result.Status == WorldSnap::ETwoAnchorStatus::LengthMismatch);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
