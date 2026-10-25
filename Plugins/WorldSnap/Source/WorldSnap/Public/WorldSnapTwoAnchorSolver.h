@@ -28,7 +28,10 @@ namespace WorldSnap
 		NonLoadBearing,
 		SameAnchor,
 		LengthMismatch,
-		PitchOutOfRange
+		PitchOutOfRange,
+		OccupiedAnchor,
+		IncompatibleAnchor,
+		InvalidSupport
 	};
 
 	/** Endpoint target. Position is the desired endpoint-centre position, not the raw surface hit. */
@@ -40,6 +43,10 @@ namespace WorldSnap
 		FVector Normal = FVector::UpVector;
 		bool bAvailable = true;
 		bool bLoadBearing = true;
+		bool bOccupied = false;
+		bool bTargetCompatible = true;
+		bool bSupportValid = true;
+		float MaxSupportedLoad = TNumericLimits<float>::Max();
 	};
 
 	/** Geometry contract for a rigid piece whose local long axis is X. */
@@ -51,10 +58,16 @@ namespace WorldSnap
 		float LocalMinX = 0.f;
 		float LocalMaxX = 0.f;
 		float LengthToleranceCm = 2.f;
+		/** Extra compression allowed across both ends, e.g. logs slightly seated in sockets. */
+		float MaxEndPenetrationCm = 0.f;
+		/** Extra free span allowed beyond LengthToleranceCm. */
+		float MaxGapCm = 0.f;
+		float RequiredLoad = 0.f;
 		float MinPitchDegrees = -80.f;
 		float MaxPitchDegrees = 80.f;
 		FVector UpHint = FVector::UpVector;
 		bool bRequireLoadBearing = true;
+		bool bRejectOccupied = true;
 		bool bRequireDistinctAnchors = true;
 	};
 
@@ -67,6 +80,8 @@ namespace WorldSnap
 		FVector SolvedEnd = FVector::ZeroVector;
 		float AnchorDistanceCm = 0.f;
 		float LengthErrorCm = 0.f;
+		float SignedLengthErrorCm = 0.f;
+		float YawDegrees = 0.f;
 		float PitchDegrees = 0.f;
 	};
 }
