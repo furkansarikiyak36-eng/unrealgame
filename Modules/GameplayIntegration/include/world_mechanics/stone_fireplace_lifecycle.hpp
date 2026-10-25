@@ -42,6 +42,14 @@ struct StoneFireplaceTick {
   Revision stateRevision{0};
 };
 
+struct StoneFireplaceSaveRecord {
+  std::uint32_t schemaVersion{1};
+  Revision savedStateRevision{1};
+  double fuelUnits{0.0};
+  bool hasCookingPot{false};
+  bool wasBurning{false};
+};
+
 // Engine-neutral authority for the stone-ring -> fireplace -> fuel -> heat loop.
 // Unreal owns traces, actors, effects and inventory; this class owns the rules.
 class StoneFireplaceLifecycle {
@@ -59,6 +67,8 @@ class StoneFireplaceLifecycle {
   Result<bool> PlaceCookingPot(Revision expectedStateRevision);
   Result<StoneFireplaceTick> Advance(double deltaSeconds,
                                      Revision expectedStateRevision);
+  Result<StoneFireplaceSaveRecord> CreateSaveRecord() const;
+  Result<bool> RestoreFromSaveRecord(const StoneFireplaceSaveRecord& record);
 
   StoneFireplaceSnapshot Snapshot() const;
   Revision GetRevision() const noexcept { return stateRevision_; }
@@ -74,6 +84,7 @@ class StoneFireplaceLifecycle {
   bool ringRecognized_{false};
   bool hasCookingPot_{false};
   double fuelUnits_{0.0};
+  bool resumeBurningAfterRingRevalidation_{false};
   StoneRingAssessment ringAssessment_{};
 };
 
