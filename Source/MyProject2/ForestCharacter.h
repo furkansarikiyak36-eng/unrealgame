@@ -588,6 +588,10 @@ private:
 	void LiftNegativeEndAction();
 	void SupportPositiveEndAction();
 	void SupportNegativeEndAction();
+	void ToggleJackingEnd();
+	void LiftSelectedEnd();
+	void SupportSelectedEnd();
+	bool bJackingEndB = true;
 	bool PlaceCarried();
 
 	UPROPERTY(Transient)
