@@ -33,6 +33,14 @@ struct GraphAssessment {
   Revision graphRevision{0};
   std::vector<NodeAssessment> nodes;
 };
+
+struct StructuralGraphSnapshot {
+  std::uint32_t schemaVersion{1};
+  Revision savedGraphRevision{0};
+  std::vector<StructureNode> nodes;
+  std::vector<SupportEdge> edges;
+};
+
 class StructuralGraph {
  public:
   Result<bool> AddNode(const StructureNode& node);
@@ -47,6 +55,10 @@ class StructuralGraph {
   Result<bool> Repair(Id nodeId,double amount);
   Result<bool> LatchCollapse(Id nodeId);
   Result<GraphAssessment> Assess() const;
+  Result<StructuralGraphSnapshot> CreateSnapshot(
+      std::size_t maxNodes=100000,std::size_t maxEdges=500000) const;
+  Result<bool> RestoreSnapshot(const StructuralGraphSnapshot& snapshot,
+      std::size_t maxNodes=100000,std::size_t maxEdges=500000);
   Revision GetRevision() const noexcept { return revision_; }
  private:
   std::unordered_map<Id,StructureNode> nodes_;
