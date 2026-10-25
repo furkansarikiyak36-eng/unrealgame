@@ -2,6 +2,10 @@
 
 #include "StructureLink.h"
 #include "CarvableLog.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneDefinition.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Wood/WoodStructureGeometry.h"
@@ -13,7 +17,7 @@ namespace
 	constexpr float GroundToleranceCm = 15.f;
 
 	/** The lowest point of the piece rests on the ground (not on another log). */
-	bool IsGrounded(const UWorld* World, const ACarvableLog* Log, const FVector& A, const FVector& B, float Radius)
+	bool IsGrounded(const UWorld* World, const AActor* Piece, const FVector& A, const FVector& B, float Radius)
 	{
 		const FVector Axis = (B - A).GetSafeNormal();
 		const FVector Low = A.Z < B.Z ? A : B;
@@ -21,9 +25,11 @@ namespace
 		const float Below = Radius * FMath::Sqrt(FMath::Max(0.f, 1.f - Axis.Z * Axis.Z));
 		const FVector Bottom = Low - FVector(0.f, 0.f, Below);
 		FHitResult Hit;
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(StructureGround), false, Log);
-		return World->LineTraceSingleByObjectType(Hit, Bottom + FVector(0.f, 0.f, 30.f), Bottom - FVector(0.f, 0.f, GroundToleranceCm),
-			FCollisionObjectQueryParams(ECC_WorldStatic), Params) && !Hit.GetActor()->IsA<ACarvableLog>();
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(StructureGround), false, Piece);
+		const bool bHitGround = World->LineTraceSingleByObjectType(Hit, Bottom + FVector(0.f, 0.f, 30.f), Bottom - FVector(0.f, 0.f, GroundToleranceCm),
+			FCollisionObjectQueryParams(ECC_WorldStatic), Params);
+		const AActor* HitActor = Hit.GetActor();
+		return bHitGround && (!HitActor || (!HitActor->IsA<ACarvableLog>() && !HitActor->IsA<AStoneActor>()));
 	}
 
 	bool IsLogGrounded(const UWorld* World, const ACarvableLog* Log)
@@ -51,6 +57,52 @@ namespace
 		}
 		return Logs;
 	}
+
+	/** Live structural pieces participating in the same geometry graph. Carried/loose stones are not structure nodes. */
+	TArray<AActor*> InstalledStructuralParts(UWorld* World, const AActor* Except = nullptr)
+	{
+		TArray<AActor*> Parts;
+		if (!World) return Parts;
+
+		for (TActorIterator<ACarvableLog> It(World); It; ++It)
+		{
+			ACarvableLog* Log = *It;
+			if (Log && Log != Except && !Log->IsCarried() && (Log->IsAnchored() || IsLogGrounded(World, Log)))
+			{
+				Parts.Add(Log);
+			}
+		}
+		for (TActorIterator<AStoneActor> It(World); It; ++It)
+		{
+			AStoneActor* Stone = *It;
+			if (Stone && Stone != Except && Stone->MeshComponent && Stone->MeshComponent->GetStaticMesh()
+				&& Stone->GetStructuralState_Implementation() == EStructuralNodeState::Installed)
+			{
+				Parts.Add(Stone);
+			}
+		}
+		Parts.Sort([](const AActor& A, const AActor& B)
+		{
+			return A.GetPathName() < B.GetPathName();
+		});
+		return Parts;
+	}
+
+	WoodStructure::FNode MakeNodeForPart(AActor* Part, int32 Id)
+	{
+		if (ACarvableLog* Log = Cast<ACarvableLog>(Part))
+		{
+			return StructureLink::MakeNode(Log, Id);
+		}
+		if (AStoneActor* Stone = Cast<AStoneActor>(Part))
+		{
+			return StructureLink::MakeNode(Stone, Id);
+		}
+		WoodStructure::FNode Empty;
+		Empty.Id = Id;
+		return Empty;
+	}
+
 
 	/** Every connection between the nodes, each pair checked once. */
 	TArray<WoodStructure::FEdge> Connect(const TArray<WoodStructure::FNode>& Nodes)
@@ -195,6 +247,87 @@ WoodStructure::FNode StructureLink::MakeNode(const ACarvableLog* Log, int32 Id, 
 	Node.bGrounded = IsGrounded(Log->GetWorld(), Log, Node.A, Node.B, Node.RadiusCm);
 	Node.Damage = Log->GetDamage();
 	Node.bTemporary = Log->IsTemporary();
+	return Node;
+}
+
+
+WoodStructure::FNode StructureLink::MakeNode(const AStoneActor* Stone, int32 Id)
+{
+	WoodStructure::FNode Node;
+	Node.Id = Id;
+	if (!Stone || !Stone->MeshComponent || !Stone->MeshComponent->GetStaticMesh())
+	{
+		return Node;
+	}
+
+	const UStaticMeshComponent* Mesh = Stone->MeshComponent;
+	const FBox LocalBox = Mesh->GetStaticMesh()->GetBoundingBox();
+	const FVector LocalSize = LocalBox.GetSize();
+	const FVector Scale = Mesh->GetComponentScale();
+	const FVector AbsScale(FMath::Abs(Scale.X), FMath::Abs(Scale.Y), FMath::Abs(Scale.Z));
+	const FVector Size = LocalSize * AbsScale;
+	const FTransform Frame = Mesh->GetComponentTransform();
+	const FVector Center = Frame.TransformPosition(LocalBox.GetCenter());
+	const UStoneDefinition* Definition = Stone->GetDefinition();
+	const EStoneRole StoneRole = Definition ? Definition->Role : EStoneRole::None;
+
+	int32 AxisIndex = 0;
+	if (StoneRole == EStoneRole::Pillar || StoneRole == EStoneRole::Foundation)
+	{
+		// A pillar/foundation is modelled around its vertical centreline so its top can support beams or posts.
+		AxisIndex = 2;
+	}
+	else if (StoneRole == EStoneRole::Floor || StoneRole == EStoneRole::Path || StoneRole == EStoneRole::Wall)
+	{
+		// Horizontal masonry units use the longest horizontal dimension as their support axis.
+		AxisIndex = Size.X >= Size.Y ? 0 : 1;
+	}
+	else
+	{
+		AxisIndex = Size.X >= Size.Y && Size.X >= Size.Z ? 0 : (Size.Y >= Size.Z ? 1 : 2);
+	}
+
+	const FVector LocalAxis = AxisIndex == 0 ? FVector::XAxisVector
+		: (AxisIndex == 1 ? FVector::YAxisVector : FVector::ZAxisVector);
+	const FVector Axis = Frame.TransformVectorNoScale(LocalAxis).GetSafeNormal();
+	const float HalfLength = 0.5f * Size[AxisIndex];
+	const float Radius = 0.5f * FMath::Max(
+		Size[AxisIndex == 0 ? 1 : 0],
+		Size[AxisIndex == 2 ? 1 : 2]);
+	Node.A = Center - Axis * HalfLength;
+	Node.B = Center + Axis * HalfLength;
+	Node.RadiusCm = FMath::Max(1.f, Radius);
+	Node.LengthModules = FMath::Clamp(FMath::RoundToInt((HalfLength * 2.f) / ACarvableLog::ModuleLength), 1, 8);
+	Node.Damage = Stone->GetMaxHealth() > KINDA_SMALL_NUMBER
+		? FMath::Clamp(1.f - Stone->GetHealth() / Stone->GetMaxHealth(), 0.f, 1.f) : 1.f;
+	Node.bGrounded = IsGrounded(Stone->GetWorld(), Stone, Node.A, Node.B, Node.RadiusCm);
+	Node.bTemporary = false;
+
+	switch (StoneRole)
+	{
+	case EStoneRole::Pillar:
+	case EStoneRole::Foundation:
+		Node.Role = EWoodRole::Post;
+		break;
+	case EStoneRole::Beam:
+	case EStoneRole::Arch:
+		Node.Role = EWoodRole::Beam;
+		break;
+	case EStoneRole::Wall:
+		Node.Role = EWoodRole::Wall;
+		break;
+	case EStoneRole::Floor:
+	case EStoneRole::Path:
+	case EStoneRole::Stair:
+		Node.Role = EWoodRole::Floor;
+		break;
+	case EStoneRole::None:
+	case EStoneRole::Fireplace:
+	case EStoneRole::Trap:
+	default:
+		Node.Role = EWoodRole::Unassigned;
+		break;
+	}
 	return Node;
 }
 
