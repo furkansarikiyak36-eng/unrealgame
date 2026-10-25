@@ -33,6 +33,10 @@ StoneRingAssessment LocalStoneRingRecognizer::Assess(
         !Finite(s.x) || !Finite(s.y) || !Finite(s.z)) continue;
     const double dx = s.x - centerX, dy = s.y - centerY;
     const double radius = std::sqrt(dx*dx + dy*dy);
+    if (radius < cfg.maxCenterOccupancyRadius) {
+      out.reason = "ring center is obstructed by a local stone";
+      return out;
+    }
     if (radius < cfg.minRadius || radius > cfg.maxRadius ||
         std::abs(s.z - baseZ) > cfg.maxHeightSpan) continue;
     candidates.push_back({s.id, radius, s.z, std::atan2(dy, dx)});
