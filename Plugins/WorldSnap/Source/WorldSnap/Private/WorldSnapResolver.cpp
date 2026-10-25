@@ -39,6 +39,13 @@ bool FWorldSnapResolver::Resolve(const TArray<WorldSnap::FPoint>& Candidates,
 	for (int32 Index = 0; Index < Candidates.Num(); ++Index)
 	{
 		const WorldSnap::FPoint& Candidate = Candidates[Index];
+
+		if ((Query.bRejectUnavailable && !Candidate.bAvailable)
+			|| (Query.bRejectOccupied && Candidate.bOccupied)
+			|| (Query.bRequireLoadBearing && !Candidate.bLoadBearing))
+		{
+			continue;
+		}
 		if (Candidate.Position.ContainsNaN() || Candidate.Normal.ContainsNaN()
 			|| Candidate.Axis.ContainsNaN())
 		{
