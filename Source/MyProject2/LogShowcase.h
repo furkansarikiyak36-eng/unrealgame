@@ -42,7 +42,7 @@ public:
 
 	/** How many stations there are. */
 	UFUNCTION(BlueprintPure, Category = "Showcase")
-	static int32 StationCount() { return 14; }
+	static int32 StationCount() { return 15; }
 
 	UPROPERTY(EditAnywhere, Category = "Showcase")
 	float StationSpacingCm = 1400.f;
@@ -102,6 +102,7 @@ private:
 	void StationFaceSockets();
 	void StationUnderSockets();
 	void StationLogHouse();
+	void StationPostBeams();
 
 	FVector StationSignSpot;
 	FString StationTitle;

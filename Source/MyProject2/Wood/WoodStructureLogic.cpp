@@ -33,8 +33,9 @@ namespace WoodStructure
 
 		int32 RequiredSupports(const FNode& N)
 		{
-			// Yatay taşıyıcılar ve yüzeyler tek noktadan değil, en az iki noktadan taşınır.
-			return (N.Role == EWoodRole::Beam || N.Role == EWoodRole::Floor || N.Role == EWoodRole::Roof) ? 2 : 1;
+			// Bir sağlam destek yeter, diğer uç serbest kalabilir (tek direkteki kiriş, direğin yanına bağlı yatay kütük).
+			// Destek hiç kalmayınca (ya da kırılınca) parça düşer; yeni parça konurken ikinci direk sonradan eklenir.
+			return 1;
 		}
 
 		bool AlreadyConnected(const TArray<FEdge>& Edges, int32 X, int32 Y)

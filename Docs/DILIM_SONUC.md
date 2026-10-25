@@ -2,9 +2,9 @@
 
 Üreten: `Scripts/probe_showcase.sh` (Scripts/record_dilim.py). Plan: [DILIM_SOTF.md](DILIM_SOTF.md).
 
-- Tarih: 2026-10-25 07:47
-- Dal: claude/sotf-expansion-build, commit: 8f054db (kirli çalışma kopyası)
-- Çalışan istasyonlar: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+- Tarih: 2026-10-25 08:23
+- Dal: claude/sotf-expansion-build, commit: 34dbbf1 (kirli çalışma kopyası)
+- Çalışan istasyonlar: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
 - Toplam: PASS 9, KISMEN 13, FAIL 1, BLOCKED 101
 
 PASS: ölçen istasyon çalıştı, ilgili yerleştirmelerde XX yok ve ölçüt yalnız yerleştirmeyse. KISMEN: yerleştirme tamam, ölçütün geri kalanı (sayım, destek, yürüme...) henüz ölçülmüyor. FAIL: XX var. BLOCKED: ölçen istasyon yok ya da çalışmadı. Unreal içinde koşulmayan hiçbir satır PASS sayılmaz.
@@ -27,6 +27,7 @@ PASS: ölçen istasyon çalıştı, ilgili yerleştirmelerde XX yok ve ölçüt 
 | 12 | Yüz snap noktaları: ön, arka, iki uç (her 75 cm'de) | 12 | 0 |
 | 13 | Alt yüz: kirişin altına paralel kütük ve destek direği | 5 | 0 |
 | 14 | Kütük ev: 600'lük kütükler, 12 sıra köşe geçmeli, kapı, penc | 48 | 0 |
+| 15 | Direk ve kiriş: tek direkte kiriş, direğin ortasına yatay lo | 11 | 0 |
 
 ## Kabul ID'leri
 

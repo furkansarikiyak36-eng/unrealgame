@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "LogShowcase.h"
+#include "StructureLink.h"
 #include "CarvableLog.h"
 #include "ForestCharacter.h"
 #include "HaulCart.h"
@@ -245,6 +246,7 @@ FString ALogShowcase::BuildAll()
 	StationFaceSockets();
 	StationUnderSockets();
 	StationLogHouse();
+	StationPostBeams();
 
 	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
 	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
@@ -291,7 +293,8 @@ FString ALogShowcase::BuildStation(int32 Index)
 	case 10: StationModuleOpening(); break;
 	case 11: StationFaceSockets(); break;
 	case 12: StationUnderSockets(); break;
-	default: StationLogHouse(); break;
+	case 13: StationLogHouse(); break;
+	default: StationPostBeams(); break;
 	}
 	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
 	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
@@ -880,5 +883,49 @@ void ALogShowcase::StationLogHouse()
 				*FString::Printf(TEXT("çatı kirişi %s %d"), Side == 0 ? TEXT("sol") : TEXT("sağ"), Index + 1), P(EPlace::Slope));
 		}
 	}
+	EndStation();
+}
+
+// 15. What a post holds: a beam on its top, a horizontal log on its side, and that they stay (one firm end, the other free).
+void ALogShowcase::StationPostBeams()
+{
+	BeginStation(14, TEXT("Direk ve kiriş: tek direkte kiriş, direğin ortasına yatay log, sabit kalma"));
+	StructureLink::bLogFalls = true;   // the structure graph at the moment a piece falls goes to the log
+	auto Stays = [this](const TCHAR* What, const ACarvableLog* Piece, uint8 Kind)
+	{
+		Note(What, Piece && Piece->IsAnchored() ? Kind : P(EPlace::None), Kind);
+	};
+	// A. One 300 post, a 600 beam on its top: the beam holds on the post, its far end hangs free.
+	ACarvableLog* PostA = StandAt(Mesh(300), O - R * 300.f, FYaw, TEXT("direk A"));
+	ACarvableLog* BeamA = PostA ? OnPostTop(Mesh(600), PostA, FYaw, TEXT("kiriş tek direğin tepesinde"), P(EPlace::Beam)) : nullptr;
+	// B. One 300 post, a 300 horizontal log laid on the side of its middle.
+	ACarvableLog* PostB = StandAt(Mesh(300), O, FYaw, TEXT("direk B"));
+	ACarvableLog* SideB = nullptr;
+	if (PostB && Player.IsValid())
+	{
+		FVector C, A;
+		float Radius, Half;
+		if (ACarvableLog::GetLogAxis(PostB, C, A, Radius, Half))
+		{
+			SideB = Spawn(Mesh(300));
+			const FVector Aim = C - F * Radius;
+			Player->SetActorLocation(Aim - F * 220.f + FVector(0.f, 0.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Note(TEXT("direğin ortasına yatay log"), P(Player->PlaceForShowcase(SideB, PostB, Aim, -F, FYaw, EHold::Lay)), P(EPlace::Socket));
+			Report += FString::Printf(TEXT("      mesaj: %s\n"), *Player->TestLastMessage());
+		}
+	}
+	// C. A third piece elsewhere (a structure settling must not shake the first two).
+	LayAt(Mesh(150), O + R * 300.f, FYaw, TEXT("üçüncü parça, yeniden değerlendirme"));
+	Stays(TEXT("direk A yerinde kaldı"), PostA, P(EPlace::Stand));
+	Stays(TEXT("kiriş yerinde kaldı"), BeamA, P(EPlace::Beam));
+	Stays(TEXT("direk B yerinde kaldı"), PostB, P(EPlace::Stand));
+	Stays(TEXT("yan log yerinde kaldı"), SideB, P(EPlace::Socket));
+	// D. Taking the post away: what it held falls, what it did not hold stays.
+	if (PostA && BeamA && PostB && SideB && Player.IsValid() && Player->TestPickUp(PostA))
+	{
+		Note(TEXT("direği alınca kiriş düştü (desteği gitti)"), !BeamA->IsAnchored() ? P(EPlace::Beam) : P(EPlace::None), P(EPlace::Beam));
+		Note(TEXT("başka direğin yan logu etkilenmedi"), SideB->IsAnchored() ? P(EPlace::Socket) : P(EPlace::None), P(EPlace::Socket));
+	}
+	StructureLink::bLogFalls = false;
 	EndStation();
 }

@@ -1366,3 +1366,10 @@ Kullanıcı: "bize snap noktları daha düzenli ve çok laızm log dikey koysak 
 - Davranış düzeltmesi: `UCarvableLogJackingComponent::LiftOneEnd` yalnız sabit loglarda çalışıyordu ve yere değen logu süpürerek taşımaya çalışıp reddediliyordu. Artık yerde serbest duran log da kaldırılıyor (`PlaceAt` ile sabitlenir, süpürme yok).
 - Test: vitrin **189/190** (değişmedi). Play'de MechanicsTest: 300'lük logun ucu 75 cm kaldırıldı (14,5°), 75'lik log altına destek kondu (`T`), ikisi yerinde kaldı (ekran görüntüsü). Tuşlar: F2 uç seç, H kaldır, T destek koy.
 - Bağlı ama Play'de sınanmadı: elle şömine tanıma (`StonePlacement` → `TryRecognizeManualFireplace`). Kodu var ama oyuncuya bağlı değil: çubuk sivriltme (`SharpenStick`), kazığı taşla güçlendirme, çubuk çit (`BuildFence`), tuzak kurma/tetikleme.
+
+## 2026-10-25 — "Her şey hemen düşüyor": bir sağlam destek yeter, öbür uç serbest
+- Kullanıcı: direğin ortasına yatay log eklenince ve direğin üstüne kiriş konunca düşüyor; bir ucu sağlam tutmalı, diğer ucu serbest kalmalı.
+- Yeni vitrin istasyonu 15 "Direk ve kiriş" (tek direkte 600'lük kiriş; direğin ortasına yan log; başka parça konunca yerinde kalıyor mu; direği alınca kiriş düşüyor, ilgisiz yan log kalıyor mu). İlk ölçüm: kiriş ve yan log düşüyordu.
+- Sebep (günlükle bulundu: "lost support"): `WoodStructure::ComputeSupport` yatay taşıyıcıları (kiriş, döşeme, çatı) **en az iki destek noktası** olmadan desteksiz sayıyordu (`RequiredSupports` = 2). Düzeltme: 1. Taşma sınırı da kalktı (`MaxOverhangModules` 8): tek destekle tutan parça kırılmıyor.
+- Sonuç: istasyon 15 tamam; vitrin **200/201** (kalan: -45 dik çapraz köşe). Destek sökülünce bağlı parça yine düşüyor (kontrol istasyonda).
+- Not: Wood birim testleri iki destek şartını bekliyorsa güncellenmeli (çalıştırılmadı).

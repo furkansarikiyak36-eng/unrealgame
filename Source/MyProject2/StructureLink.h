@@ -27,7 +27,8 @@ namespace StructureLink
 	/** How far apart the supports of a beam may be, and how far it may reach past the last one (modules). */
 	/** 8 modules = the longest log (600 cm): a log lying across two crossing logs at its ends (a cabin wall, 525 cm apart) holds. */
 	constexpr float MaxSupportGapModules = 8.f;
-	constexpr float MaxOverhangModules = 2.f;
+	/** 8 modules = the longest log: one firm support is enough, the other end may hang free (a beam on one post, a log pinned to a post's side). */
+	constexpr float MaxOverhangModules = 8.f;
 
 	/**
 	 * Support with the beam rules on top of the graph: a beam that is not lying on the ground holds only if its supports
