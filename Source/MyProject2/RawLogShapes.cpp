@@ -5,6 +5,8 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/HitResult.h"
 #include "Engine/World.h"
+#include "Components/DynamicMeshComponent.h"
+#include "StructureLink.h"
 
 namespace RawLogShapes
 {
@@ -198,24 +200,36 @@ bool Apply(ACarvableLog* Log, EAction Action, FString& OutMessage)
 {
 	const FShape Shape = FromLog(Log);
 	FResult Result;
-	if (!Shape.IsValid() || !Outcome(Shape, Action, Result, OutMessage))
+	if (!IsValid(Log) || !Shape.IsValid() || !Outcome(Shape, Action, Result, OutMessage))
 	{
 		return false;
 	}
 	UStaticMesh* PieceMesh = LoadMesh(Result.Length, Result.Profile);
 	UWorld* World = Log->GetWorld();
-	if (!PieceMesh || !World)
+	if (!PieceMesh || !World || Result.Count < 1 || Result.Count > 4)
 	{
-		OutMessage = TEXT("Bu parçanın modeli yok");
+		OutMessage = TEXT("Bu dönüşüm için model veya geçerli parça sayısı yok");
 		return false;
 	}
 
-	// The new pieces lie where the old one was, on its underside: along the log for a cross cut, side by side
-	// across it (a little apart) for a split.
+	// First calculate the complete result. No actor/resource state is mutated during preflight.
 	const FTransform Frame(Log->GetActorQuat(), Log->GetActorLocation());
 	const FBox Old = Log->GetLocalBox();
 	const FBox New = PieceMesh->GetBoundingBox();
+	if (!Old.IsValid || !New.IsValid)
+	{
+		OutMessage = TEXT("Kesim geometrisi geçersiz; kaynak kütük korundu");
+		return false;
+	}
 	const FVector NewSize = New.GetSize();
+	if (NewSize.ContainsNaN() || NewSize.X <= 0.f || NewSize.Y <= 0.f || NewSize.Z <= 0.f)
+	{
+		OutMessage = TEXT("Kesim modeli ölçüleri geçersiz; kaynak kütük korundu");
+		return false;
+	}
+
+	TArray<FTransform> PlannedTransforms;
+	PlannedTransforms.Reserve(Result.Count);
 	const float Bottom = Old.Min.Z;
 	const FVector OldCentre = Old.GetCenter();
 	for (int32 Index = 0; Index < Result.Count; ++Index)
@@ -231,12 +245,59 @@ bool Apply(ACarvableLog* Log, EAction Action, FString& OutMessage)
 			Centre.Y += Offset * (NewSize.Y + 4.f);
 		}
 		const FVector Location = Frame.TransformPosition(Centre - New.GetCenter());
-		ACarvableLog::SpawnFromStaticMesh(World, PieceMesh, FTransform(Frame.GetRotation(), Location));
+		const FTransform PieceTransform(Frame.GetRotation(), Location);
+		if (Location.ContainsNaN() || PieceTransform.ContainsNaN())
+		{
+			OutMessage = TEXT("Kesim yerleşimi hesaplanamadı; kaynak kütük korundu");
+			return false;
+		}
+		PlannedTransforms.Add(PieceTransform);
 	}
+
+	// Disable the source while outputs spawn so the old collision hull cannot push the new pieces apart.
+	UDynamicMeshComponent* SourceComponent = Log->MeshComponent;
+	if (!IsValid(SourceComponent))
+	{
+		OutMessage = TEXT("Kaynak kütüğün çarpışma bileşeni bulunamadı");
+		return false;
+	}
+	const ECollisionEnabled::Type OldCollision = SourceComponent->GetCollisionEnabled();
+	const bool bOldSimulatesPhysics = SourceComponent->IsSimulatingPhysics();
+	SourceComponent->SetSimulatePhysics(false);
+	SourceComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	TArray<ACarvableLog*> SpawnedPieces;
+	SpawnedPieces.Reserve(Result.Count);
+	for (const FTransform& PieceTransform : PlannedTransforms)
+	{
+		ACarvableLog* Piece = ACarvableLog::SpawnFromStaticMesh(World, PieceMesh, PieceTransform);
+		if (!IsValid(Piece) || Piece->GetLength() <= 0.f || Piece->GetRadius() <= 0.f)
+		{
+			if (IsValid(Piece))
+			{
+				Piece->Destroy();
+			}
+			for (ACarvableLog* Spawned : SpawnedPieces)
+			{
+				if (IsValid(Spawned)) Spawned->Destroy();
+			}
+			SourceComponent->SetCollisionEnabled(OldCollision);
+			SourceComponent->SetSimulatePhysics(bOldSimulatesPhysics);
+			OutMessage = TEXT("Parçalardan biri üretilemedi; işlem geri alındı ve kaynak kütük korundu");
+			return false;
+		}
+		SpawnedPieces.Add(Piece);
+	}
+
+	// Commit point: all requested outputs exist and carry valid dimensions.
 	Log->Destroy();
+	StructureLink::MarkChanged();
+	StructureLink::Settle(World);
 
 	const FShape Made{ Result.Length, Result.Profile };
-	OutMessage = Result.Count > 1 ? FString::Printf(TEXT("%d × %s"), Result.Count, *Describe(Made)) : Describe(Made);
+	OutMessage = Result.Count > 1
+		? FString::Printf(TEXT("%d × %s"), Result.Count, *Describe(Made))
+		: Describe(Made);
 	return true;
 }
 
