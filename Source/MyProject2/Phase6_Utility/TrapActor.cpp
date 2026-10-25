@@ -33,7 +33,8 @@ void ATrapActor::Trigger(AActor* Victim)
 	}
 	Mechanism->Damage = Damage;
 	Mechanism->Cooldown = Cooldown;
-	Mechanism->bConsumeOnTrigger = bConsumeAfterPayloadRelease
+	Mechanism->bConsumeOnTrigger = bConsumeAfterPayloadRelease && IsValid(PayloadLog)
+		&& !bPayloadReleased
 		&& (TrapType == ETrapType::RollingLog || TrapType == ETrapType::FallingLog);
 	Mechanism->Trigger(Victim);
 }
