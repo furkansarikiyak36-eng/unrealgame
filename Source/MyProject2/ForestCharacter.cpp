@@ -2,6 +2,7 @@
 
 #include "ForestCharacter.h"
 #include "LogSnapSystem.h"
+#include "WorldSnapResolver.h"
 #include "WorldSnapTwoAnchorSolver.h"
 #include "Algo/Sort.h"
 #include "Wood/WoodStructureGeometry.h"
@@ -1393,15 +1394,50 @@ namespace
 				Side = FVector::CrossProduct(FVector::UpVector, Axis).GetSafeNormal();
 			}
 
-			LogSnapSystem::FQuery Query;
-			Query.HitPoint = Point;
-			Query.HitNormal = Normal;
-			Query.MaxAlongAxisError = ACarvableLog::ModuleLength * 0.6f;
-			LogSnapSystem::FPoint Selected;
-			if (!LogSnapSystem::Resolve(Points, Query, Selected))
+			auto FaceGroup = [](LogSnapSystem::EFace SourceFace) -> FName
+			{
+				switch (SourceFace)
+				{
+				case LogSnapSystem::EFace::Top: return TEXT("Top");
+				case LogSnapSystem::EFace::Bottom: return TEXT("Bottom");
+				case LogSnapSystem::EFace::Front: return TEXT("Front");
+				case LogSnapSystem::EFace::Back: return TEXT("Back");
+				case LogSnapSystem::EFace::EndA: return TEXT("EndA");
+				case LogSnapSystem::EFace::EndB: return TEXT("EndB");
+				default: return NAME_None;
+				}
+			};
+
+			TArray<WorldSnap::FPoint> Candidates;
+			Candidates.Reserve(Points.Num());
+			for (int32 Index = 0; Index < Points.Num(); ++Index)
+			{
+				const LogSnapSystem::FPoint& Source = Points[Index];
+				WorldSnap::FPoint& Candidate = Candidates.AddDefaulted_GetRef();
+				Candidate.Id = Source.Id;
+				Candidate.Group = FaceGroup(Source.Face);
+				Candidate.Position = Source.Position;
+				Candidate.Normal = Source.Normal;
+				Candidate.Axis = Source.Axis;
+				Candidate.SourceIndex = Index;
+			}
+
+			WorldSnap::FQuery SnapQuery;
+			SnapQuery.HitPoint = Point;
+			SnapQuery.HitNormal = Normal;
+			SnapQuery.MaxDistanceCm = 125.f;
+			SnapQuery.bRequireNormalCompatibility = true;
+			SnapQuery.NormalAlignmentThreshold = 0.25f;
+			SnapQuery.bUseAxisConstraint = true;
+			SnapQuery.MaxAlongAxisErrorCm = ACarvableLog::ModuleLength * 0.6f;
+
+			WorldSnap::FResolveResult SnapResult;
+			if (!FWorldSnapResolver::Resolve(Candidates, SnapQuery, SnapResult)
+				|| !Points.IsValidIndex(SnapResult.Point.SourceIndex))
 			{
 				return false;
 			}
+			const LogSnapSystem::FPoint& Selected = Points[SnapResult.Point.SourceIndex];
 			switch (Selected.Face)
 			{
 			case LogSnapSystem::EFace::Top: Face = ELogFace::Top; break;
