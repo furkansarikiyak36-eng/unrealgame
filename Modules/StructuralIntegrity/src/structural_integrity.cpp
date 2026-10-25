@@ -1,5 +1,6 @@
 #include "world_mechanics/structural_integrity.hpp"
 #include <functional>
+#include <limits>
 #include <queue>
 #include <set>
 
@@ -204,4 +205,66 @@ Result<GraphAssessment> StructuralGraph::Assess() const {
   }
   return Result<GraphAssessment>::Success(std::move(assessment));
 }
+Result<StructuralGraphSnapshot> StructuralGraph::CreateSnapshot(
+    std::size_t maxNodes,std::size_t maxEdges) const {
+  if(maxNodes==0||maxEdges==0)
+    return Result<StructuralGraphSnapshot>::Failure(
+        ErrorCode::InvalidArgument,"structural snapshot limits must be nonzero");
+  if(nodes_.size()>maxNodes||edges_.size()>maxEdges)
+    return Result<StructuralGraphSnapshot>::Failure(
+        ErrorCode::BudgetExceeded,"structural graph exceeds snapshot limits");
+
+  StructuralGraphSnapshot snapshot;
+  snapshot.schemaVersion=1;
+  snapshot.savedGraphRevision=revision_;
+  snapshot.nodes.reserve(nodes_.size());
+  snapshot.edges.reserve(edges_.size());
+  for(const auto& item:nodes_) snapshot.nodes.push_back(item.second);
+  for(const auto& item:edges_) snapshot.edges.push_back(item.second);
+  std::sort(snapshot.nodes.begin(),snapshot.nodes.end(),
+      [](const StructureNode& a,const StructureNode& b){return a.id<b.id;});
+  std::sort(snapshot.edges.begin(),snapshot.edges.end(),
+      [](const SupportEdge& a,const SupportEdge& b){return a.id<b.id;});
+  return Result<StructuralGraphSnapshot>::Success(std::move(snapshot));
+}
+
+Result<bool> StructuralGraph::RestoreSnapshot(
+    const StructuralGraphSnapshot& snapshot,
+    std::size_t maxNodes,std::size_t maxEdges) {
+  if(maxNodes==0||maxEdges==0)
+    return Result<bool>::Failure(ErrorCode::InvalidArgument,"structural restore limits must be nonzero");
+  if(snapshot.schemaVersion!=1)
+    return Result<bool>::Failure(ErrorCode::Unsupported,"unsupported structural graph schema");
+  if(snapshot.savedGraphRevision==0)
+    return Result<bool>::Failure(ErrorCode::CorruptData,"structural graph revision must be nonzero");
+  if(snapshot.nodes.size()>maxNodes||snapshot.edges.size()>maxEdges)
+    return Result<bool>::Failure(ErrorCode::BudgetExceeded,"structural graph snapshot exceeds limits");
+
+  // Build and validate in a private candidate graph. Live state is untouched until
+  // every node, edge reference and active-support cycle check succeeds.
+  StructuralGraph candidate;
+  for(const auto& node:snapshot.nodes) {
+    auto added=candidate.AddNode(node);
+    if(!added)
+      return Result<bool>::Failure(added.error,"invalid snapshot node: "+added.message);
+  }
+  for(const auto& edge:snapshot.edges) {
+    auto added=candidate.AddEdge(edge);
+    if(!added)
+      return Result<bool>::Failure(added.error,"invalid snapshot edge: "+added.message);
+  }
+  auto assessment=candidate.Assess();
+  if(!assessment)
+    return Result<bool>::Failure(assessment.error,"invalid snapshot support topology: "+assessment.message);
+
+  const Revision baseRevision=std::max(revision_,snapshot.savedGraphRevision);
+  if(baseRevision==std::numeric_limits<Revision>::max())
+    return Result<bool>::Failure(ErrorCode::OutOfRange,"structural graph revision cannot advance after restore");
+
+  nodes_=std::move(candidate.nodes_);
+  edges_=std::move(candidate.edges_);
+  revision_=baseRevision+1;
+  return Result<bool>::Success(true);
+}
+
 } // namespace wm
