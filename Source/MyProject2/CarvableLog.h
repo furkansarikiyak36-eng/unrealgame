@@ -301,6 +301,13 @@ public:
 	 * (up for a post standing on it, down for the top of a post under it): two pieces joined into each other.
 	 */
 	void CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth);
+	/**
+	 * Whether placing pieces cuts their joints (seats under posts and beams, notches at crossings and corners, floor board
+	 * seats). Off for now (user, 2026-10-25): pieces only sit into each other, the preview shows a dashed outline instead.
+	 */
+	static bool bCutJointsOnPlace;
+	/** Records a joint over Width cm at LocalX without cutting (the structure graph reads joints from these spans). */
+	void MarkJointSpan(float LocalX, float Width) { CutSpans.Add(FVector2f(LocalX - Width * 0.5f, LocalX + Width * 0.5f)); }
 	/** How deep a floor board is let into a beam of this radius. */
 	static float FloorBoardSeatDepth(float BeamRadius);
 	float GetCenterX() const { return (MinX + MaxX) * 0.5f; }

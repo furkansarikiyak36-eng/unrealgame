@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/EngineTypes.h"
 #include "Engine/HitResult.h"
 

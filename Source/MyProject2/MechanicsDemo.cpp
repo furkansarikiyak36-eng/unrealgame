@@ -277,7 +277,7 @@ ACarvableLog* AMechanicsDemo::SpawnCarvable(ACharacter* Player)
 	{
 		Spot.Z = Ground.ImpactPoint.Z + 40.f;
 	}
-	UStaticMesh* Raw = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Greybox/Meshes/SM_GB_RawLog_375.SM_GB_RawLog_375"));
+	UStaticMesh* Raw = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/UnrealExport/SM_RawLog_300.SM_RawLog_300"));
 	return ACarvableLog::SpawnFromStaticMesh(GetWorld(), Raw, FTransform(FRotator(0.f, Yaw, 0.f), Spot));
 }
 

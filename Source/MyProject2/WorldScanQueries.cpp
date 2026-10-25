@@ -224,7 +224,7 @@ bool WorldScanSystem::QueryPhysicsState(
 	if (Component)
 	{
 		OutAnalysis.bSimulatingPhysics = Component->IsSimulatingPhysics();
-		OutAnalysis.bRigidBodyAwake = Component->IsSimulatingPhysics() && Component->IsAnyRigidBodyAwake();
+		OutAnalysis.bRigidBodyAwake = Component->IsSimulatingPhysics() && const_cast<UPrimitiveComponent*>(Component)->IsAnyRigidBodyAwake();
 		if (Component->IsSimulatingPhysics())
 		{
 			OutAnalysis.LinearVelocityCmPerSec = Component->GetPhysicsLinearVelocity();

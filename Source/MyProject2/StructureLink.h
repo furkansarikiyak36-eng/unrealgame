@@ -22,7 +22,8 @@ namespace StructureLink
 	WoodStructure::FNode MakeNode(const ACarvableLog* Log, int32 Id, const FTransform* Transform = nullptr);
 
 	/** How far apart the supports of a beam may be, and how far it may reach past the last one (modules). */
-	constexpr float MaxSupportGapModules = 4.5f;
+	/** 8 modules = the longest log (600 cm): a log lying across two crossing logs at its ends (a cabin wall, 525 cm apart) holds. */
+	constexpr float MaxSupportGapModules = 8.f;
 	constexpr float MaxOverhangModules = 2.f;
 
 	/**
@@ -37,6 +38,13 @@ namespace StructureLink
 
 	/** When set (the automatic mechanics test sets it), every piece that falls or snaps is logged with the structure graph at that moment. */
 	extern bool bLogFalls;
+
+	/**
+	 * Set while a piece is being placed: the settling that follows does not snap a beam for an overhang or gap that is too long
+	 * (the builder is on the way to the second post). The span rules apply again at the next settling that is not a placement,
+	 * and the placement preview still shows them as unsupported.
+	 */
+	MYPROJECT2_API extern bool bPlacementGrace;
 
 	/** A walls, platform, door frame... the standing pieces make up (see WoodStructure::AnalyzeStructure). */
 	struct FFeatureInfo

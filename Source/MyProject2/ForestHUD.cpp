@@ -153,6 +153,25 @@ void AForestHUD::DrawHUD()
 			GetTextSize(Made, MadeW, MadeH, Font);
 			DrawText(Made, FLinearColor(1.f, 0.85f, 0.4f), CenterX - MadeW * 0.5f, CenterY + 40.f, Font);
 		}
+		// A raw log: a ring on the screen where the axe lands, coloured and named by what that hit would do.
+		if (Shape.IsValid())
+		{
+			const FHitResult& StrikeHit = Player->GetFocusHit();
+			const RawLogShapes::EAction Action = RawLogShapes::ClassifyHit(Player->GetFocusedCarvable(), StrikeHit, Player->IsChannelMode());
+			FString Why;
+			const bool bCan = RawLogShapes::CanApply(Shape, Action, Why);
+			const FLinearColor Colour = !bCan ? FLinearColor(0.6f, 0.6f, 0.6f)
+				: Action == RawLogShapes::EAction::CrossCut ? FLinearColor(1.f, 0.3f, 0.2f)
+				: Action == RawLogShapes::EAction::Split ? FLinearColor(0.25f, 0.6f, 1.f)
+				: Action == RawLogShapes::EAction::Hew ? FLinearColor(1.f, 0.67f, 0.15f) : FLinearColor(0.3f, 0.85f, 0.45f);
+			const FVector2D Screen = FVector2D(Project(FVector(StrikeHit.ImpactPoint)));
+			DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.8f), Screen.X - 7.f, Screen.Y - 7.f, 14.f, 14.f);
+			DrawRect(Colour, Screen.X - 5.f, Screen.Y - 5.f, 10.f, 10.f);
+			const FString Strike = bCan ? RawLogShapes::ActionName(Action) : Why;
+			float StrikeW, StrikeH;
+			GetTextSize(Strike, StrikeW, StrikeH, Font);
+			DrawText(Strike, Colour, Screen.X - StrikeW * 0.5f, Screen.Y - 30.f, Font);
+		}
 		float TextW, TextH;
 		GetTextSize(Label, TextW, TextH, Font);
 		DrawText(Label, FLinearColor(0.55f, 0.8f, 1.f), CenterX - TextW * 0.5f, CenterY + 18.f, Font);

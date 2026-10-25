@@ -36,6 +36,8 @@ namespace
 	constexpr float WoodDensity = 0.0005f;
 	/** A cup is cut a hair wider than the log that sits in it. */
 	constexpr float CupFit = 1.02f;
+	/** How much closer (as a fraction of the lower radius) the axes of a wall corner's logs sit than for a plain crossing. */
+	constexpr float CornerBite = 0.2f;
 	constexpr float BigBox = 4000.f;
 	/** A dovetail's opening at the surface, as a share of its width at the floor. */
 	constexpr float DovetailNeck = 0.7f;
@@ -1678,7 +1680,8 @@ bool ACarvableLog::ComputeCornerPlacement(const ACarvableLog* Lower, const FVect
 		return false;
 	}
 	const float UpperRadius = Upper->GetRadius();
-	const float AxisGap = UpperRadius + LowerRadius * CupFit - LowerRadius;
+	// A wall corner bites a little deeper than a plain crossing, so the round ends meet with little end grain gap between courses.
+	const float AxisGap = UpperRadius + LowerRadius * CupFit - LowerRadius - LowerRadius * CornerBite;
 	FVector Location = Joint - Direction * NotchX;
 	Location.Z = FMath::Max(Centre.Z, PartnerAxisZ) + AxisGap;
 	Out.NotchX = NotchX;
@@ -1761,8 +1764,19 @@ float ACarvableLog::GetWidth() const
 	return Box.IsValid ? Box.GetSize().Y : Radius * 2.f;
 }
 
+bool ACarvableLog::bCutJointsOnPlace = false;
+
 void ACarvableLog::CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth)
 {
+	if (!bCutJointsOnPlace)
+	{
+		const float X = GetActorTransform().InverseTransformPosition(WorldPoint).X;
+		if (Depth > 0.5f && IsSpanFree(X - Width * 0.5f, X + Width * 0.5f))
+		{
+			MarkJointSpan(X, Width);
+		}
+		return;
+	}
 	const FVector Local = GetActorTransform().InverseTransformVectorNoScale(WorldSide);
 	const float SideAngle = FMath::RadiansToDegrees(FMath::Atan2(Local.Y, Local.Z));
 	const float LocalX = GetActorTransform().InverseTransformPosition(WorldPoint).X;
@@ -1850,8 +1864,25 @@ ACarvableLog* ACarvableLog::PlaceAcross(AActor* Lower, const FCrossPlacement& Pl
 		const FVector Local = Log->GetActorTransform().InverseTransformVectorNoScale(WorldDir);
 		return FMath::RadiansToDegrees(FMath::Atan2(Local.Y, Local.Z));
 	};
-	const float NotchDepth = Placement.LowerRadius * 0.5f;
-	Upper->CutProfile(Placement.NotchX, SideAngleFor(Upper, -FVector::UpVector), Placement.LowerRadius * 2.f + 2.f, NotchDepth, false);
+	// Half of how far the two logs overlap each is cut away (a quarter of the lower log's thickness for a plain crossing, a bit more for a corner).
+	float NotchDepth = Placement.LowerRadius * 0.5f;
+	{
+		FVector LowerCentre, LowerAxis;
+		float LowerRadius, LowerHalf;
+		if (LowerLog && GetLogAxis(LowerLog, LowerCentre, LowerAxis, LowerRadius, LowerHalf))
+		{
+			const float Gap = Placement.Upper.GetLocation().Z - LowerCentre.Z;
+			NotchDepth = FMath::Clamp((Placement.UpperRadius + LowerRadius - Gap) * 0.5f, NotchDepth, Placement.LowerRadius * 0.8f);
+		}
+	}
+	if (bCutJointsOnPlace)
+	{
+		Upper->CutProfile(Placement.NotchX, SideAngleFor(Upper, -FVector::UpVector), Placement.LowerRadius * 2.f + 2.f, NotchDepth, false);
+	}
+	else
+	{
+		Upper->MarkJointSpan(Placement.NotchX, Placement.LowerRadius * 2.f + 2.f);
+	}
 	if (LowerLog)
 	{
 		const FVector Crossing = Upper->GetActorTransform().TransformPosition(FVector(Placement.NotchX, 0.f, 0.f));
@@ -1859,7 +1890,14 @@ ACarvableLog* ACarvableLog::PlaceAcross(AActor* Lower, const FCrossPlacement& Pl
 		const float Width = Placement.UpperRadius * 2.f + 2.f;
 		if (LowerLog->IsSpanFree(LowerX - Width * 0.5f, LowerX + Width * 0.5f))
 		{
-			LowerLog->CutProfile(LowerX, SideAngleFor(LowerLog, FVector::UpVector), Width, NotchDepth, false);
+			if (bCutJointsOnPlace)
+			{
+				LowerLog->CutProfile(LowerX, SideAngleFor(LowerLog, FVector::UpVector), Width, NotchDepth, false);
+			}
+			else
+			{
+				LowerLog->MarkJointSpan(LowerX, Width);
+			}
 		}
 	}
 
@@ -1895,7 +1933,14 @@ ACarvableLog* ACarvableLog::PlaceAcross(AActor* Lower, const FCrossPlacement& Pl
 		const float Depth = Placement.UpperRadius + OtherRadius * CupFit - Gap;
 		if (Upper->IsSpanFree(LocalX - OtherRadius, LocalX + OtherRadius))
 		{
-			Upper->CutProfile(LocalX, 180.f, OtherRadius * 2.f + 2.f, Depth, false);
+			if (bCutJointsOnPlace)
+			{
+				Upper->CutProfile(LocalX, 180.f, OtherRadius * 2.f + 2.f, Depth, false);
+			}
+			else
+			{
+				Upper->MarkJointSpan(LocalX, OtherRadius * 2.f + 2.f);
+			}
 		}
 		Other->Anchor();
 	}

@@ -88,6 +88,8 @@ public:
 	ALogConstructionActor* GetFocusedLogActor() const { return FocusedLogActor.Get(); }
 	AStoneMasonryActor* GetFocusedStoneActor() const { return FocusedStoneActor.Get(); }
 	ACarvableLog* GetFocusedCarvable() const { return FocusedCarvable.Get(); }
+	const FHitResult& GetFocusHit() const { return FocusHit; }
+	bool IsChannelMode() const { return bChannelMode; }
 	ECarveTool GetCarveTool() const { return CarveTool; }
 	float GetCarveAngle() const { return CarveAngle; }
 	int32 GetCarveHits() const { return CarveHits; }
@@ -494,6 +496,8 @@ private:
 	void DrawCutGuide();
 	/** Where the view trace hit the focused target this frame. */
 	FVector FocusHitPoint = FVector::ZeroVector;
+	/** The trace hit under the crosshair this frame (what the axe would strike). */
+	FHitResult FocusHit;
 
 	/**
 	 * Carrying pieces: where a left click puts the top one. Across a lying log (saddle-notched, see
@@ -502,6 +506,8 @@ private:
 	ECarryPlace CarryPlace = ECarryPlace::None;
 	bool bPlaceStanding = false;
 	bool bPlaceSlope = false;
+	/** Log placement angle against another log, changed with [G]: 0 straight, 1 forty-five degrees, 2 square; -1 = by look (showcase). */
+	int32 SnapAngleMode = 0;
 	float SlopeAngle = 45.f;
 	/** [F] held. */
 	bool bLighterHeld = false;

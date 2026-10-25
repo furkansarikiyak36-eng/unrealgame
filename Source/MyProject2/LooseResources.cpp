@@ -48,6 +48,35 @@ AStoneActor* LooseResources::SpawnStone(UWorld* World, const FVector& Location, 
 	return Stone;
 }
 
+AStoneActor* LooseResources::SpawnStoneFromMesh(UWorld* World, UStaticMesh* Mesh, const FTransform& Transform, EStoneShape Shape)
+{
+	if (!World || !Mesh)
+	{
+		return nullptr;
+	}
+	AStoneActor* Stone = World->SpawnActor<AStoneActor>(AStoneActor::StaticClass(), Transform.GetLocation(), Transform.Rotator());
+	if (!Stone)
+	{
+		return nullptr;
+	}
+	const FVector Size = Mesh->GetBoundingBox().GetSize() * Transform.GetScale3D();
+	UStoneDefinition* Definition = NewObject<UStoneDefinition>(Stone);
+	Definition->StoneName = *Mesh->GetName();
+	Definition->Type = EStoneType::Granite;
+	Definition->Shape = Shape;
+	Definition->Role = EStoneRole::None;
+	Definition->Dimensions = Size;
+	Definition->Volume = Size.X * Size.Y * Size.Z * 1e-6f;
+	// Granite is about 2600 kg/m3 and a rock fills roughly 60% of its box; capped so the player can still lift it.
+	Definition->Mass = FMath::Clamp(Definition->Volume * 2600.f * 0.6f, 3.f, 75.f);
+	Definition->CompressiveStrength = 180.f;
+	Definition->TensileStrength = 15.f;
+	Definition->Mesh = TSoftObjectPtr<UStaticMesh>(Mesh);
+	Stone->InitializeFromDefinition(Definition);
+	Stone->SetActorScale3D(Transform.GetScale3D());
+	return Stone;
+}
+
 AStickActor* LooseResources::SpawnStick(UWorld* World, const FVector& Location, const FRotator& Rotation)
 {
 	AStickActor* Stick = World ? World->SpawnActor<AStickActor>(AStickActor::StaticClass(), Location, Rotation) : nullptr;

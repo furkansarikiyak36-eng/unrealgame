@@ -7,6 +7,9 @@
 #include "ForestHUD.h"
 #include "HarvestableActor.h"
 #include "StoneMasonryActor.h"
+#include "LooseResources.h"
+#include "StonePhaseA_Mining/StoneActor.h"
+#include "StoneCore/StoneTypes.h"
 #include "LogConstructionActor.h"
 #include "OpeningBuckActor.h"
 #include "LogWallBlueprint.h"
@@ -36,7 +39,7 @@ void AForestGameMode::StartPlay()
 	// The wood chain demo level and test kit stages keep their stage clear of the building stations.
 	const FString MapName = GetWorld() ? GetWorld()->GetMapName() : FString();
 	const bool bIsTestOrStageMap = MapName.Contains(TEXT("TestKits")) || MapName.Contains(TEXT("Snap"))
-		|| MapName.Contains(TEXT("Showcase")) || MapName.Contains(TEXT("Demo"));
+		|| MapName.Contains(TEXT("Showcase")) || MapName.Contains(TEXT("Demo")) || MapName.Contains(TEXT("MechanicsTest"));
 	const bool bDemoLevel = TActorIterator<AMechanicsDemo>(GetWorld()) || TActorIterator<ALogShowcase>(GetWorld()) || bIsTestOrStageMap;
 	const bool bExplicitDemo = FParse::Param(FCommandLine::Get(), TEXT("DemoShowcase"));
 	if ((bSpawnDemoShowcase || bExplicitDemo) && !bDemoLevel)
@@ -92,6 +95,29 @@ void AForestGameMode::ConvertHarvestables()
 			// Convert placed raw log meshes directly into interactive CarvableLogs so they can be picked up, carried, carved, and snapped!
 			ACarvableLog* Carvable = ACarvableLog::SpawnFromStaticMesh(World, const_cast<UStaticMesh*>(StaticMesh), Source->GetActorTransform());
 			if (Carvable)
+			{
+				Source->SetActorHiddenInGame(true);
+				Source->SetActorEnableCollision(false);
+			}
+			continue;
+		}
+		else if (Name.StartsWith(TEXT("sdAta")) || Name.StartsWith(TEXT("xksldamqx")) || Name.StartsWith(TEXT("xkqmdhaqx")))
+		{
+			// A wall stone (Castle Wall Stone) or a cobblestone (grey / brown): a carryable stone, placed face to face into walls.
+			const bool bWallStone = Name.StartsWith(TEXT("sdAta"));
+			if (AStoneActor* Stone = LooseResources::SpawnStoneFromMesh(World, const_cast<UStaticMesh*>(StaticMesh), Source->GetActorTransform(),
+				bWallStone ? EStoneShape::Flat : EStoneShape::Carved))
+			{
+				Source->SetActorHiddenInGame(true);
+				Source->SetActorEnableCollision(false);
+			}
+			continue;
+		}
+		else if ((Name.StartsWith(TEXT("vcljbb1iw")) || Name.StartsWith(TEXT("vdjkbfmiw")) || Name.Contains(TEXT("Small_Stones")))
+			&& (StaticMesh->GetBoundingBox().GetSize() * Source->GetActorScale3D()).GetMax() >= 30.f)
+		{
+			// A rock of building-stone size (30 cm or more): carried in both hands and placed like a wall stone.
+			if (AStoneActor* Stone = LooseResources::SpawnStoneFromMesh(World, const_cast<UStaticMesh*>(StaticMesh), Source->GetActorTransform(), EStoneShape::Building))
 			{
 				Source->SetActorHiddenInGame(true);
 				Source->SetActorEnableCollision(false);

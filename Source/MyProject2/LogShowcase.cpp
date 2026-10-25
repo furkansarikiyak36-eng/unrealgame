@@ -257,6 +257,51 @@ FString ALogShowcase::BuildAll()
 	return Report;
 }
 
+FString ALogShowcase::BuildStation(int32 Index)
+{
+	Player = Cast<AForestCharacter>(UGameplayStatics::GetPlayerPawn(this, 0));
+	if (!Player.IsValid())
+	{
+		return TEXT("no ForestCharacter");
+	}
+	if (Index < 0 || Index >= StationCount())
+	{
+		return TEXT("no such station");
+	}
+	const FVector PlayerStart = Player->GetActorLocation();
+	const FRotator PlayerFacing = Player->GetActorRotation();
+	F = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	R = FVector::CrossProduct(FVector::UpVector, F);
+	FYaw = F.Rotation().Yaw;
+	Report = FString::Printf(TEXT("Kütük vitrini, istasyon %d — her parça oyuncunun yerleştirmesiyle\n"), Index + 1);
+	Placed = 0;
+	Failed = 0;
+	switch (Index)
+	{
+	case 0: StationCutChain(); break;
+	case 1: StationWall(); break;
+	case 2: StationCabin(); break;
+	case 3: StationPlatform(); break;
+	case 4: StationRoof(); break;
+	case 5: StationPalisade(); break;
+	case 6: StationDiagonal(); break;
+	case 7: StationSteps(); break;
+	case 8: StationFurniture(); break;
+	case 9: StationHauling(); break;
+	case 10: StationModuleOpening(); break;
+	case 11: StationFaceSockets(); break;
+	case 12: StationUnderSockets(); break;
+	default: StationLogHouse(); break;
+	}
+	Report += FString::Printf(TEXT("Toplam: %d parça istendiği gibi, %d parça olmadı\n"), Placed, Failed);
+	Player->SetActorLocationAndRotation(PlayerStart, PlayerFacing, false, nullptr, ETeleportType::TeleportPhysics);
+	if (APlayerController* Controller = Cast<APlayerController>(Player->GetController()))
+	{
+		Controller->SetControlRotation(PlayerFacing);
+	}
+	return Report;
+}
+
 // 1. Every length and every shape a raw log is worked into, side by side.
 void ALogShowcase::StationCutChain()
 {
@@ -436,6 +481,44 @@ void ALogShowcase::StationRoof()
 	{
 		OnLog(Mesh(300), Low, -100.f + Rafter * 100.f, FYaw + 90.f, static_cast<uint8>(EHold::Slope), 18.f,
 			*FString::Printf(TEXT("çatı kirişi %d"), Rafter + 1), P(EPlace::Slope));
+	}
+	// A log held slanted and aimed at a standing post leans on it: lower end on the ground, upper end on the post top.
+	// It must also stay there (not be released as unsupported) after the structure settles.
+	if (ACarvableLog* Post = StandAt(Mesh(150), O - R * 250.f, FYaw, TEXT("yaslama direği")))
+	{
+		FVector C, A;
+		float Radius, Half;
+		ACarvableLog* Lean = ACarvableLog::GetLogAxis(Post, C, A, Radius, Half) ? Spawn(Mesh(300)) : nullptr;
+		if (Lean)
+		{
+			const FVector Top = C + FVector(0.f, 0.f, Half);
+			Player->SetActorLocation(Top - F * 250.f + FVector(0.f, 0.f, -60.f), false, nullptr, ETeleportType::TeleportPhysics);
+			const uint8 Got = P(Player->PlaceForShowcase(Lean, Post, Top, FVector::UpVector, FYaw, EHold::Slope, 45.f));
+			Note(TEXT("direğe yaslanan kütük"), Got, P(EPlace::Slope));
+			Note(TEXT("yaslanan kütük yerinde kaldı"), Lean->IsAnchored() ? P(EPlace::Slope) : P(EPlace::None), P(EPlace::Slope));
+			Note(TEXT("yaslama direği yerinde kaldı"), Post->IsAnchored() ? P(EPlace::Stand) : P(EPlace::None), P(EPlace::Stand));
+		}
+	}
+	// The other order: a log laid slanted on the ground first (its raised end in the air), then a post stood under that end.
+	{
+		ACarvableLog* Slant = Spawn(Mesh(300));
+		AActor* GroundHit = nullptr;
+		const FVector Foot = Ground(O - R * 450.f, GroundHit);
+		if (Slant)
+		{
+			Player->SetActorLocation(Foot - F * 250.f + FVector(0.f, 0.f, 100.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Note(TEXT("yere eğik kütük"), P(Player->PlaceForShowcase(Slant, GroundHit, Foot, FVector::UpVector, FYaw, EHold::Slope, 30.f)), P(EPlace::Slope));
+			Note(TEXT("yere eğik kütük yerinde kaldı"), Slant->IsAnchored() ? P(EPlace::Slope) : P(EPlace::None), P(EPlace::Slope));
+			FVector C, A;
+			float Radius, Half;
+			if (Slant->IsAnchored() && ACarvableLog::GetLogAxis(Slant, C, A, Radius, Half))
+			{
+				const FVector RaisedEnd = C + A * (A.Z > 0.f ? Half : -Half) - A * 40.f;
+				ACarvableLog* Under = StandAt(Mesh(75), FVector(RaisedEnd.X, RaisedEnd.Y, O.Z), FYaw, TEXT("eğik kütüğün altına direk"));
+				Note(TEXT("altına konan direk yerinde kaldı"), Under && Under->IsAnchored() ? P(EPlace::Stand) : P(EPlace::None), P(EPlace::Stand));
+				Note(TEXT("eğik kütük direkten sonra yerinde kaldı"), Slant->IsAnchored() ? P(EPlace::Slope) : P(EPlace::None), P(EPlace::Slope));
+			}
+		}
 	}
 	EndStation();
 }
@@ -781,7 +864,7 @@ void ALogShowcase::StationLogHouse()
 	}
 	if (PostFront)
 	{
-		OnPostTop(Mesh(600), PostFront, FYaw, TEXT("mahya kirişi"), P(EPlace::Beam));
+			OnPostTop(Mesh(600), PostFront, FYaw, TEXT("mahya kirişi"), P(EPlace::Beam));
 	}
 	// Rafters every 75 cm along both side walls, leaning in to the ridge.
 	for (int32 Side = 0; Side < 2; ++Side)

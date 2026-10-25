@@ -1,6 +1,6 @@
 # Kod haritası
 
-Otomatik üretildi (23 October 2026 06:04) — `python Scripts/update_docs.py`. Elle düzenlenmez.
+Otomatik üretildi (25 October 2026 05:13) — `python Scripts/update_docs.py`. Elle düzenlenmez.
 
 Her sınıf için genel (public) fonksiyonlar ve üstlerindeki açıklama. Kaynak `Source/MyProject2` (`Wood/` alt klasörü web Claude paketi).
 Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yorum yazılmalı.
@@ -97,6 +97,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `int32 GetTriangleCount() const` — Triangles in the current mesh; grows with every cut, used by the mechanics demo to check a cut landed.
 - `float GetWidth() const` — Width across the axis (local Y) of the piece as it is now: 35 cm for a round log, 24 for a plank.
 - `void CutSeat(const FVector& WorldPoint, const FVector& WorldSide, float Width, float Depth)` — Cuts a flat seat Depth deep and Width wide across this lying log at WorldPoint, on the side facing WorldSide (up for a post standing on it, down for the top of a post …
+- `void MarkJointSpan(float LocalX, float Width)` — Records a joint over Width cm at LocalX without cutting (the structure graph reads joints from these spans).
 - `static float FloorBoardSeatDepth(float BeamRadius)` — How deep a floor board is let into a beam of this radius.
 - `void GetModuleLines(TArray<float>& OutX) const` — Local X of the grid lines that lie inside the log (not its ends).
 - `void GetSnapPoints(ECarveTool Tool, float Width, TArray<float>& OutX) const` — Where an axe can make this cut on this log, all on the module grid. Joints (notch, round, flat) go at the corners, one module in from each end, and on the middle line of …
@@ -200,7 +201,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 - `bool IsHelpOpen() const` — [F1]: the full list of controls.
 - `void TestLight(AActor* Target, float Seconds)` — For the mechanics test: the lighter held on Target for Seconds.
 - `void MechanicsDemo()` — Console: MechanicsDemo. Same as admin + L, without needing admin mode.
-- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetLogPlacementResult`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
+- Ayrıca (açıklamasız): `AForestCharacter`, `GetItemCount`, `GetUsedSlots`, `IsInventoryOpen`, `IsAdminMode`, `GetCurrentTool`, `GetSurvival`, `GetCarriedCount`, `GetFocusedHarvestable`, `GetFocusedPickup`, `GetFocusedRawNode`, `IsInBuildMode`, `GetSelectedBuildItem`, `IsPlacementValid`, `IsWallStartSet`, `GetFocusedBlueprint`, `GetFocusedLogActor`, `GetFocusedStoneActor`, `GetFocusedCarvable`, `GetFocusHit`, `IsChannelMode`, `GetCarveTool`, `GetCarveAngle`, `GetCarveHits`, `GetCarveWidth`, `GetCarveDepth`, `GetCarveDepthIndex`, `GetLogPlacementResult`, `GetCarryPlace`, `GetSlopeAngle`, `IsProfileTool`, `GetCarveToolName`, `GetMessage`, `GetMessageAge`, `IsCarryingStone`, `TestUseUpSticks`, `TestGiveSticks`, `TestRemoveItem`, `CraftEntryName`, `TestDrink`, `TestRideRope`, `IsRiding`, `IsStickMode`, `ToggleHelp`, `GetStickModeLabel`
 
 **FLogPlacementResult** (struct) — One snapshot shared by the ghost preview, support validation and placement commit.
 
@@ -299,6 +300,8 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **ALogShowcase** (class) — Builds, when play starts, a row of stations that show what logs can be made into, each built piece by piece with the player's own placement …
 
 - `FString BuildAll()` — Builds every station now (also called by itself shortly after play starts). Returns the report.
+- `FString BuildStation(int32 Index)` — Builds one station (0 = cut chain ... 13 = log house; see StationCount) and returns its report, "no ForestCharacter" if there is no player. The same station can be built …
+- `static int32 StationCount()` — How many stations there are.
 - Ayrıca (açıklamasız): `ALogShowcase`
 
 ## LogSnapSystem.h
@@ -322,6 +325,7 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 **LooseResources** (namespace) — Physical stones and sticks lying in the world, as a broken rock or a felled tree leaves them (Sons of the Forest: the resource is a thing you pick up, not a number). A …
 
 - `AStoneActor* SpawnStone(UWorld* World, const FVector& Location, bool bBuildingStone)` — A small stone (pocketable, for fire rings) or a building stone (heavy, carried and placed).
+- `AStoneActor* SpawnStoneFromMesh(UWorld* World, UStaticMesh* Mesh, const FTransform& Transform, EStoneShape Shape)` — A carryable stone made from a placed stone mesh (a Megascans rock, a wall stone, a cobblestone): same mesh and size, physical, picked up with [E] and placed face to face …
 - `AStickActor* SpawnStick(UWorld* World, const FVector& Location, const FRotator& Rotation)` — A raw stick, about half a metre long.
 - `bool IsPocketStone(const AStoneActor* Stone)` — A stone light enough for one hand goes into the pack rather than into the hands.
 
@@ -649,4 +653,4 @@ Açıklaması olmayanlar sayfanın sonunda: bunlar için başlık dosyasına yor
 
 ## Açıklaması eksik fonksiyonlar
 
-220 / 538 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.
+222 / 544 fonksiyonun açıklaması yok. Yukarıda sınıfların altında "Ayrıca" satırlarında isimleriyle listeli; isimleri kendini açıklayan getter fonksiyonları için sorun değil.

@@ -483,17 +483,29 @@ void AForestCharacter::DrawPreviewLines()
 	// Where the carried piece goes: its outline there, and for a crossing the saddle notch it will get.
 	if (const ACarvableLog* Piece = GetTopCarried(); Piece && CarryPlace != ECarryPlace::None)
 	{
-		// Only a base line where the piece will lie (along its underside) with short end marks; a crossing notches by itself.
+		// A dashed outline of the piece where it will go: both end rings and four lines along it (green held, red unsupported).
 		const FLogPlacementResult Placement = GetLogPlacementResult();
 		const FTransform& Where = Placement.Transform;
 		const FBox Box = Piece->GetLocalBox();
 		const FLinearColor Color = Placement.bSupported ? ForestOutline::ValidColor() : ForestOutline::InvalidColor();
-		const FVector A = Where.TransformPosition(FVector(Box.Min.X, 0.f, Box.Min.Z + 1.f));
-		const FVector B = Where.TransformPosition(FVector(Box.Max.X, 0.f, Box.Min.Z + 1.f));
-		const FVector Across = Where.TransformVectorNoScale(FVector(0.f, Box.GetExtent().Y, 0.f));
-		PreviewLines->DrawLine(A, B, Color, SDPG_World, 2.f, 0.f);
-		PreviewLines->DrawLine(A - Across, A + Across, Color, SDPG_World, 2.f, 0.f);
-		PreviewLines->DrawLine(B - Across, B + Across, Color, SDPG_World, 2.f, 0.f);
+		const FVector Mid = Box.GetCenter();
+		const float RadiusY = Box.GetExtent().Y, RadiusZ = Box.GetExtent().Z;
+		for (const float X : { Box.Min.X, Box.Max.X })
+		{
+			TArray<FVector> Ring;
+			for (int32 Step = 0; Step < 16; ++Step)
+			{
+				const float Angle = 2.f * PI * Step / 16.f;
+				Ring.Add(FVector(X, Mid.Y + RadiusY * FMath::Cos(Angle), Mid.Z + RadiusZ * FMath::Sin(Angle)));
+			}
+			ForestOutline::DrawDashed(PreviewLines, Where, Ring, true, Color);
+		}
+		for (int32 Side = 0; Side < 4; ++Side)
+		{
+			const float Angle = PI * 0.5f * Side;
+			const FVector Offset(0.f, RadiusY * FMath::Cos(Angle), RadiusZ * FMath::Sin(Angle));
+			ForestOutline::DrawDashed(PreviewLines, Where, { FVector(Box.Min.X, Mid.Y, Mid.Z) + Offset, FVector(Box.Max.X, Mid.Y, Mid.Z) + Offset }, false, Color);
+		}
 	}
 	// The snap points of the aimed face: small white crosses on its 75 cm lines, the chosen one larger and green.
 	if (GetTopCarried() && SocketMarkers.Num() > 0)
@@ -888,6 +900,7 @@ AForestCharacter::ECarryPlace AForestCharacter::PlaceForShowcase(ACarvableLog* P
 		CarriedLogs.Add(Piece);
 		Piece->BeginCarry(Camera, FTransform::Identity);
 	}
+	SnapAngleMode = -1;   // the showcase aims by look, as its stations were written
 	const bool bWasStanding = bPlaceStanding;
 	const bool bWasSlope = bPlaceSlope;
 	const float WasAngle = SlopeAngle;
@@ -1226,6 +1239,81 @@ namespace
 		return true;
 	}
 
+	/**
+	 * A log nested in the valley between two lying logs that touch side by side (a pyramid / woodpile stack): it rests on both,
+	 * tangent to each, on the side of Lower the player aims at. Its start goes on the lower log's 75 cm module line.
+	 * False when Lower has no touching parallel neighbour on a usable side.
+	 */
+	bool ComputeNestPlacement(const ACarvableLog* Lower, const FVector& Aim, const ACarvableLog* Upper,
+		const TArray<ACarvableLog*>& Nearby, FTransform& Out)
+	{
+		FVector Centre, Axis;
+		float LowerRadius, HalfLength;
+		if (!Lower || !Upper || Lower == Upper || Lower->IsCarried()
+			|| !ACarvableLog::GetLogAxis(Lower, Centre, Axis, LowerRadius, HalfLength) || FMath::Abs(Axis.Z) > 0.3f)
+		{
+			return false;
+		}
+		Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+		const FVector Side = FVector::CrossProduct(FVector::UpVector, Axis);
+		const float AimSide = FVector::DotProduct(Aim - Centre, Side);
+		const float UpperRadius = Upper->GetRadius();
+		float BestScore = TNumericLimits<float>::Max();
+		float NeighbourRadius = 0.f, Offset = 0.f, NeighbourZ = 0.f;
+		for (const ACarvableLog* Other : Nearby)
+		{
+			FVector OtherCentre, OtherAxis;
+			float OtherRadius, OtherHalf;
+			if (!Other || Other == Lower || Other == Upper || Other->IsCarried()
+				|| !ACarvableLog::GetLogAxis(Other, OtherCentre, OtherAxis, OtherRadius, OtherHalf)
+				|| FMath::Abs(FVector::DotProduct(FVector(OtherAxis.X, OtherAxis.Y, 0.f).GetSafeNormal(), Axis)) < 0.95f
+				|| FMath::Abs(OtherCentre.Z - Centre.Z) > 10.f)
+			{
+				continue;
+			}
+			const float Across = FVector::DotProduct(OtherCentre - Centre, Side);
+			const float Along = FVector::DotProduct(OtherCentre - Centre, Axis);
+			const float Touch = LowerRadius + OtherRadius;
+			if (FMath::Abs(Across) < Touch - 8.f || FMath::Abs(Across) > Touch + 8.f || FMath::Abs(Along) > HalfLength + OtherHalf - ACarvableLog::ModuleLength)
+			{
+				continue;
+			}
+			// The valley on the side the player aims at, else the nearest one.
+			const float Score = (Across * AimSide >= 0.f ? 0.f : 1000.f) + FMath::Abs(Across - AimSide);
+			if (Score < BestScore)
+			{
+				BestScore = Score;
+				NeighbourRadius = OtherRadius;
+				Offset = Across;
+				NeighbourZ = OtherCentre.Z;
+			}
+		}
+		if (BestScore == TNumericLimits<float>::Max())
+		{
+			return false;
+		}
+		// Tangent to both: distance LowerRadius + UpperRadius from the lower axis, NeighbourRadius + UpperRadius from the other.
+		const float D = FMath::Abs(Offset);
+		const float A = LowerRadius + UpperRadius, B = NeighbourRadius + UpperRadius;
+		const float X = (D * D + A * A - B * B) / (2.f * D);
+		const float H2 = A * A - X * X;
+		if (H2 <= 0.f)
+		{
+			return false;
+		}
+		const float Height = FMath::Sqrt(H2);
+		const float Length = Upper->GetLength();
+		const FVector Start = Centre - Axis * HalfLength;
+		const float AimAlong = FVector::DotProduct(Aim - Start, Axis);
+		float UpperStart = FMath::RoundToFloat((AimAlong - Length * 0.5f) / ACarvableLog::ModuleLength) * ACarvableLog::ModuleLength;
+		UpperStart = FMath::Clamp(UpperStart, -Length * 0.5f, HalfLength * 2.f - Length * 0.5f);
+		const FVector UpperCentre = Start + Axis * (UpperStart + Length * 0.5f) + Side * (FMath::Sign(Offset) * X)
+			+ FVector(0.f, 0.f, Centre.Z - Start.Z + Height - 1.f);
+		const FQuat Rotation = FRotator(0.f, Axis.Rotation().Yaw, 0.f).Quaternion();
+		Out = FTransform(Rotation, UpperCentre - Rotation.RotateVector(FVector(Upper->GetCenterX(), 0.f, 0.f)));
+		return true;
+	}
+
 	/** A placement decision may inspect only the immediate construction neighbourhood, never every log in the level. */
 	void FindLocalLogs(UWorld* World, const FVector& Centre, float Radius, TArray<ACarvableLog*>& OutLogs)
 	{
@@ -1277,17 +1365,32 @@ namespace
 		ELogFace Face = ELogFace::Top;
 		float Along = 0.f;     // the chosen line (or ±Half on an end)
 		FName PointId = NAME_None;
+		bool bTargetVertical = false;
 
 		bool Init(const ACarvableLog* Log, const FVector& Point, const FVector& Normal)
 		{
 			TArray<LogSnapSystem::FPoint> Points;
 			if (!Log || !LogSnapSystem::BuildPoints(Log, Points)
-				|| !ACarvableLog::GetLogAxis(Log, Centre, Axis, Radius, Half) || FMath::Abs(Axis.Z) > 0.3f)
+				|| !ACarvableLog::GetLogAxis(Log, Centre, Axis, Radius, Half))
 			{
 				return false;
 			}
-			Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
-			Side = FVector::CrossProduct(FVector::UpVector, Axis).GetSafeNormal();
+			bTargetVertical = FMath::Abs(Axis.Z) > 0.7f;
+			if (bTargetVertical)
+			{
+				Axis = FVector(0.f, 0.f, Axis.Z >= 0.f ? 1.f : -1.f);
+				Side = Log->GetActorTransform().GetUnitAxis(EAxis::Y);
+				Side = FVector(Side.X, Side.Y, 0.f).GetSafeNormal();
+				if (Side.IsNearlyZero())
+				{
+					Side = FVector::ForwardVector;
+				}
+			}
+			else
+			{
+				Axis = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+				Side = FVector::CrossProduct(FVector::UpVector, Axis).GetSafeNormal();
+			}
 
 			LogSnapSystem::FQuery Query;
 			Query.HitPoint = Point;
@@ -1309,18 +1412,32 @@ namespace
 			}
 			Along = Selected.AlongAxis;
 			PointId = Selected.Id;
-			TArray<float> Local;
-			Log->GetModuleLines(Local);
-			const float CentreX = Log->GetActorTransform().InverseTransformPosition(Centre).X;
-			for (const float Line : Local)
+
+			Lines.Reset();
+			const int32 NumModules = FMath::Clamp(FMath::RoundToInt((2.f * Half) / ACarvableLog::ModuleLength), 1, 8);
+			for (int32 i = 0; i < NumModules; ++i)
 			{
-				Lines.Add(Line - CentreX);
+				const float LineAlong = (i == NumModules - 1) ? Half : (-Half + (i + 1) * ACarvableLog::ModuleLength);
+				Lines.Add(LineAlong);
 			}
 			return true;
 		}
 		bool IsEnd() const { return Face == ELogFace::EndA || Face == ELogFace::EndB; }
 		FVector FaceNormal() const
 		{
+			if (bTargetVertical)
+			{
+				const FVector Side2 = FVector::CrossProduct(Axis, Side).GetSafeNormal();
+				switch (Face)
+				{
+				case ELogFace::Front:  return Side;
+				case ELogFace::Back:   return -Side;
+				case ELogFace::Top:    return Side2;
+				case ELogFace::Bottom: return -Side2;
+				case ELogFace::EndA:   return -Axis;
+				default:               return Axis;
+				}
+			}
 			switch (Face)
 			{
 			case ELogFace::Top:    return FVector::UpVector;
@@ -1375,6 +1492,17 @@ namespace
 		// About a radius: posts and beams, posts and the logs they stand on, sit well into each other.
 		return 0.95f * FMath::Min(RadiusA, RadiusB);
 	}
+
+	/** The angle to the log being aimed at, forced to the placement mode picked with [G]: 0 straight, 1 forty-five degrees, 2 square. Negative = by look. */
+	float ForceSnapDelta(int32 Mode, float Delta)
+	{
+		if (Mode < 0)
+		{
+			return Delta;
+		}
+		const float Side = Delta < 0.f ? -1.f : 1.f;
+		return Mode == 0 || Mode == 3 ? 0.f : Mode == 1 ? 45.f * Side : 90.f * Side;
+	}
 }
 
 const FTransform& AForestCharacter::GetCarryPlacementTransform() const
@@ -1417,13 +1545,9 @@ bool AForestCharacter::EvaluateSupportPreview(const ACarvableLog* Piece, const F
 		&& CachedSupportPreviewTransform.GetLocation().Equals(Transform.GetLocation(), 2.f)
 		&& CachedSupportPreviewTransform.GetRotation().AngularDistance(Transform.GetRotation()) <= FMath::DegreesToRadians(2.f);
 
-	// The structure graph rebuild is expensive. Reuse an unchanged candidate indefinitely; when the candidate
-	// changes, throttle graph evaluation to 10 Hz. Placement commit passes bForce=true and always rechecks.
+	// The structure graph rebuild is expensive: an unchanged candidate reuses its result. A different candidate is always
+	// evaluated (a throttle that returned the previous candidate's answer made good fits look unsupported).
 	if (!bForce && bSameCandidate)
-	{
-		return bCachedSupportPreview;
-	}
-	if (!bForce && bSupportPreviewCacheValid && Now - LastSupportPreviewEvaluation < 0.1)
 	{
 		return bCachedSupportPreview;
 	}
@@ -1476,6 +1600,41 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		CarryPlace = Cart->CanLoad(Piece) ? ECarryPlace::Load : ECarryPlace::None;
 		return;
 	}
+	// A log held slanted and aimed at a standing post leans on it: the lower end on the ground on the player's side, the
+	// upper end on the post's top. The angle comes from those two ends (the post's height and the piece's length), not the view.
+	if (bPlaceSlope && !Piece->IsSplit())
+	{
+		FVector PostCentre, PostAxis;
+		float PostRadius, PostHalf;
+		if (const ACarvableLog* Post = Cast<ACarvableLog>(HitActor); Post && Post != Piece
+			&& ACarvableLog::GetLogAxis(Post, PostCentre, PostAxis, PostRadius, PostHalf) && FMath::Abs(PostAxis.Z) > 0.9f)
+		{
+			const float TopZ = PostCentre.Z + PostHalf;
+			const float BaseZ = PostCentre.Z - PostHalf;
+			FVector Out = GetActorLocation() - PostCentre;
+			Out.Z = 0.f;
+			Out = Out.IsNearlyZero() ? -FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal() : Out.GetSafeNormal();
+			// The upper end's centre sits on the post top, let into it like a beam.
+			const float Rp = Piece->GetRadius();
+			const FVector Upper(PostCentre.X, PostCentre.Y, TopZ + Rp - JointSeatDepth(PostRadius, Rp));
+			const float Length = Piece->GetLength();
+			const float Rise = Upper.Z - (BaseZ + Rp);
+			if (Rise > 5.f && Length > Rise + 5.f)
+			{
+				const float Run = FMath::Sqrt(Length * Length - Rise * Rise);
+				const float Angle = FMath::RadiansToDegrees(FMath::Atan2(Rise, Run));
+				const FVector LowEnd(Upper.X + Out.X * Run, Upper.Y + Out.Y * Run, BaseZ);
+				if (Angle >= 10.f && Angle <= 80.f && ACarvableLog::ComputeSlopePlacement(LowEnd, -Out, Angle, Piece, PlaceTransform))
+				{
+					PlaceTarget = HitActor;
+					CarryPlace = ECarryPlace::Slope;
+					SocketLabel = FString::Printf(TEXT("direğe yaslandı (%.0f°)"), Angle);
+					bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
+					return;
+				}
+			}
+		}
+	}
 	if (ACarvableLog* Damaged = Cast<ACarvableLog>(HitActor); Damaged && ACarvableLog::CanReplace(Damaged, Piece))
 	{
 		CarryPlace = ECarryPlace::Repair;
@@ -1488,8 +1647,11 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 		FVector PostCentre, PostAxis;
 		float PostRadius, PostHalf;
 		const bool bPost = ACarvableLog::GetLogAxis(Post, PostCentre, PostAxis, PostRadius, PostHalf) && FMath::Abs(PostAxis.Z) > 0.95f;
+		const float PostTopZ = PostCentre.Z + (PostAxis.Z > 0.f ? PostHalf : -PostHalf);
+		const bool bAimingAtTop = Hit.ImpactNormal.Z > 0.6f || Hit.ImpactPoint.Z > PostTopZ - 35.f;
+
 		// A post that already carries a beam takes a brace (a piece two to four modules long), nothing else on top.
-		if (bPost && ACarvableLog::FindBeamOnPost(Post))
+		if (bPost && bAimingAtTop && ACarvableLog::FindBeamOnPost(Post))
 		{
 			if (ACarvableLog::ComputeBracePlacement(Post, Piece, PlaceTransform))
 			{
@@ -1498,7 +1660,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			}
 			return;
 		}
-		if (bPost && Piece->GetLength() >= 3.f * ACarvableLog::ModuleLength - 1.f)
+		if (bPost && bAimingAtTop && Piece->GetLength() >= 3.f * ACarvableLog::ModuleLength - 1.f)
 		{
 			const FVector Top = PostCentre + PostAxis * (PostAxis.Z > 0.f ? PostHalf : -PostHalf);
 			const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
@@ -1538,7 +1700,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 	}
 	// A split piece onto a lying log: a floor board, flat face up, resting on it.
 	AActor* Lower = HitActor;
-	const FVector SnapAimPoint = SelectedSnapPointId != NAME_None && SocketNormal.Z > 0.5f ? SocketChosen : Hit.ImpactPoint;
+	FVector SnapAimPoint = FVector(Hit.ImpactPoint);
 	// Snap points on every face of a lying log: aimed at its front, back, bottom or an end (not the top, which keeps
 	// the wall rules below), the piece attaches to that face at the nearest 75 cm line. Its direction to the log is the
 	// nearest of 0 / 45 / 90 degrees from the view, as everywhere: parallel beside it, square into it (a T), or at 45.
@@ -1553,97 +1715,166 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 			SocketChosen = Sockets.SurfacePoint(Sockets.Along);
 			SelectedSnapPointId = Sockets.PointId;
 			SocketNormal = Sockets.FaceNormal();
-			if (Sockets.Face != ELogFace::Top)
+			if (SelectedSnapPointId != NAME_None && SocketNormal.Z > 0.5f)
+			{
+				SnapAimPoint = SocketChosen;
+			}
+			if (Sockets.Face != ELogFace::Top || Sockets.bTargetVertical)
 			{
 				const FVector Facing = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 				const FVector Desired = FVector::CrossProduct(FVector::UpVector, Facing);
-				// Angle of the piece to the log, folded into (-90, 90], snapped to 0 / 45 / -45 / 90.
-				const float Delta = LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(Sockets.Axis.Rotation().Yaw, Desired.Rotation().Yaw));
-				const float Sector = FMath::Abs(Delta) > 67.5f ? 90.f : FMath::Abs(Delta) < 22.5f ? 0.f : (Delta > 0.f ? 45.f : -45.f);
 				const float Rt = Sockets.Radius;
 				const float Rp = Piece->GetRadius();
 				const float Lp = Piece->GetLength();
-				const float BottomZ = Sockets.Centre.Z - Rt;   // pieces beside or at the ends rest at the same level
 				const FVector N = Sockets.FaceNormal();
 				FString What;
 				bool bFound = false;
-				if (bPlaceStanding)
+
+				if (Sockets.bTargetVertical)
 				{
-					// A post: under the log (its top touching the log's underside), beside it, or at an end.
-					FVector Foot;
-					float FootZ = BottomZ;
-					if (Sockets.Face == ELogFace::Bottom)
+					const FVector Tangent = FVector::CrossProduct(FVector::UpVector, N).GetSafeNormal();
+					const float Delta = ForceSnapDelta(SnapAngleMode, LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(Tangent.Rotation().Yaw, Facing.Rotation().Yaw)));
+					const float Sector = FMath::Abs(Delta) > 67.5f ? 90.f : FMath::Abs(Delta) < 22.5f ? 0.f : (Delta > 0.f ? 45.f : -45.f);
+
+					if (Sockets.IsEnd())
 					{
-						Foot = Sockets.Centre + Sockets.Axis * Sockets.Along;
-						FootZ = BottomZ - Lp;
-						What = TEXT("altına destek direği");
+						const FVector OutDir = Sockets.Face == ELogFace::EndB ? Sockets.Axis : -Sockets.Axis;
+						const FVector EndPoint = Sockets.Centre + OutDir * Sockets.Half;
+						if (bPlaceStanding)
+						{
+							PlaceTransform = Piece->GetStandTransform(EndPoint, Facing.Rotation().Yaw);
+							What = TEXT("direk üstüne direk");
+							bFound = true;
+						}
+						else
+						{
+							const FVector BeamCentre = EndPoint + FVector(0.f, 0.f, Rp - JointSeatDepth(Rt, Rp));
+							PlaceTransform = LyingAt(Piece, Facing, BeamCentre);
+							What = TEXT("direk tepesine kiriş");
+							bFound = true;
+						}
 					}
 					else
 					{
-						Foot = Sockets.SurfacePoint(Sockets.Along) + N * Rp;
-						What = Sockets.IsEnd() ? TEXT("ucuna direk") : TEXT("yanına direk");
+						const FVector SnapPos = Sockets.SurfacePoint(Sockets.Along);
+						if (bPlaceStanding)
+						{
+							const FVector Foot = SnapPos + N * Rp;
+							PlaceTransform = Piece->GetStandTransform(FVector(Foot.X, Foot.Y, Sockets.Centre.Z - Sockets.Half), Facing.Rotation().Yaw);
+							What = TEXT("direk yanına direk");
+							bFound = true;
+						}
+						else
+						{
+							if (Sector == 90.f)
+							{
+								const FVector Dir = N;
+								const FVector C = SnapPos + Dir * (Lp * 0.5f);
+								PlaceTransform = LyingAt(Piece, Dir, C);
+								What = TEXT("direğe dik (T)");
+							}
+							else if (Sector == 0.f)
+							{
+								const FVector Dir = Tangent;
+								const FVector C = SnapPos + N * Rp;
+								PlaceTransform = LyingAt(Piece, Dir, C);
+								What = TEXT("direğe paralel kiriş/çit");
+							}
+							else
+							{
+								const FVector Dir = (N * UE_INV_SQRT_2 + Tangent * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
+								const FVector C = SnapPos + Dir * (Lp * 0.5f);
+								PlaceTransform = LyingAt(Piece, Dir, C);
+								What = TEXT("direğe 45°");
+							}
+							bFound = true;
+						}
 					}
-					PlaceTransform = Piece->GetStandTransform(FVector(Foot.X, Foot.Y, FootZ), Facing.Rotation().Yaw);
-					bFound = true;
-				}
-				else if (Sockets.Face == ELogFace::Bottom)
-				{
-					// Under it, parallel (a sister log), its start on the log's module grid.
-					const float Start = FMath::RoundToFloat((Sockets.Along - Lp * 0.5f + Sockets.Half) / ACarvableLog::ModuleLength) * ACarvableLog::ModuleLength - Sockets.Half;
-					PlaceTransform = LyingAt(Piece, Sockets.Axis, Sockets.Centre + Sockets.Axis * (Start + Lp * 0.5f) - FVector::UpVector * (Rt + Rp));
-					What = TEXT("altına paralel");
-					bFound = true;
-				}
-				else if (!Sockets.IsEnd())
-				{
-					if (Sector == 0.f)
-					{
-						// Side by side, touching, ends on the same 75 cm grid.
-						const float Start = FMath::RoundToFloat((Sockets.Along - Lp * 0.5f + Sockets.Half) / ACarvableLog::ModuleLength) * ACarvableLog::ModuleLength - Sockets.Half;
-						FVector C = Sockets.Centre + Sockets.Axis * (Start + Lp * 0.5f) + N * (Rt + Rp);
-						C.Z = BottomZ + Rp;
-						PlaceTransform = LyingAt(Piece, Sockets.Axis, C);
-						What = TEXT("yan yana");
-					}
-					else
-					{
-						// Its end against the side at the line: square (a T) or at 45 degrees.
-						const FVector Dir = Sector == 90.f ? N
-							: (N * UE_INV_SQRT_2 + Sockets.Axis * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
-						FVector C = Sockets.SurfacePoint(Sockets.Along) + Dir * (Lp * 0.5f + (Sector == 90.f ? 0.f : Rp));
-						C.Z = BottomZ + Rp;
-						PlaceTransform = LyingAt(Piece, Dir, C);
-						What = Sector == 90.f ? TEXT("yanına dik (T)") : TEXT("yanından 45°");
-					}
-					bFound = true;
 				}
 				else
 				{
-					const FVector Out = Sockets.Face == ELogFace::EndB ? Sockets.Axis : -Sockets.Axis;
-					const FVector EndPoint = Sockets.Centre + Out * Sockets.Half;
-					if (Sector == 0.f)
+					// Angle of the piece to the log, folded into (-90, 90], snapped to 0 / 45 / -45 / 90.
+					const float Delta = ForceSnapDelta(SnapAngleMode, LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(Sockets.Axis.Rotation().Yaw, Desired.Rotation().Yaw)));
+					const float Sector = FMath::Abs(Delta) > 67.5f ? 90.f : FMath::Abs(Delta) < 22.5f ? 0.f : (Delta > 0.f ? 45.f : -45.f);
+					const float BottomZ = Sockets.Centre.Z - Rt;   // pieces beside or at the ends rest at the same level
+					if (bPlaceStanding)
 					{
-						// Carries on in line, end to end.
-						PlaceTransform = LyingAt(Piece, Out, EndPoint + Out * (Lp * 0.5f) + FVector(0.f, 0.f, Rp - Rt));
-						What = TEXT("uca uç (uzatma)");
+						// A post: under the log (its top touching the log's underside), beside it, or at an end.
+						FVector Foot;
+						float FootZ = BottomZ;
+						if (Sockets.Face == ELogFace::Bottom)
+						{
+							Foot = Sockets.Centre + Sockets.Axis * Sockets.Along;
+							FootZ = BottomZ - Lp;
+							What = TEXT("altına destek direği");
+						}
+						else
+						{
+							Foot = Sockets.SurfacePoint(Sockets.Along) + N * Rp;
+							What = Sockets.IsEnd() ? TEXT("ucuna direk") : TEXT("yanına direk");
+						}
+						PlaceTransform = Piece->GetStandTransform(FVector(Foot.X, Foot.Y, FootZ), Facing.Rotation().Yaw);
+						bFound = true;
 					}
-					else if (Sector == 90.f)
+					else if (Sockets.Face == ELogFace::Bottom)
 					{
-						// Square across the end, the log's end butting into its middle.
-						FVector C = EndPoint + Out * Rp;
-						C.Z = BottomZ + Rp;
-						PlaceTransform = LyingAt(Piece, Sockets.Side, C);
-						What = TEXT("ucuna dik (T)");
+						// Under it, parallel (a sister log), its start on the log's module grid.
+						const float Start = FMath::RoundToFloat((Sockets.Along - Lp * 0.5f + Sockets.Half) / ACarvableLog::ModuleLength) * ACarvableLog::ModuleLength - Sockets.Half;
+						PlaceTransform = LyingAt(Piece, Sockets.Axis, Sockets.Centre + Sockets.Axis * (Start + Lp * 0.5f) - FVector::UpVector * (Rt + Rp));
+						What = TEXT("altına paralel");
+						bFound = true;
+					}
+					else if (!Sockets.IsEnd())
+					{
+						if (Sector == 0.f)
+						{
+							// Side by side, touching, ends on the same 75 cm grid.
+							const float Start = FMath::RoundToFloat((Sockets.Along - Lp * 0.5f + Sockets.Half) / ACarvableLog::ModuleLength) * ACarvableLog::ModuleLength - Sockets.Half;
+							FVector C = Sockets.Centre + Sockets.Axis * (Start + Lp * 0.5f) + N * (Rt + Rp);
+							C.Z = BottomZ + Rp;
+							PlaceTransform = LyingAt(Piece, Sockets.Axis, C);
+							What = TEXT("yan yana");
+						}
+						else
+						{
+							// Its end against the side at the line: square (a T) or at 45 degrees.
+							const FVector Dir = Sector == 90.f ? N
+								: (N * UE_INV_SQRT_2 + Sockets.Axis * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
+							FVector C = Sockets.SurfacePoint(Sockets.Along) + Dir * (Lp * 0.5f + (Sector == 90.f ? 0.f : Rp));
+							C.Z = BottomZ + Rp;
+							PlaceTransform = LyingAt(Piece, Dir, C);
+							What = Sector == 90.f ? TEXT("yanına dik (T)") : TEXT("yanından 45°");
+						}
+						bFound = true;
 					}
 					else
 					{
-						const FVector Dir = (Out * UE_INV_SQRT_2 + Sockets.Side * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
-						FVector C = EndPoint + Dir * (Lp * 0.5f);
-						C.Z = BottomZ + Rp;
-						PlaceTransform = LyingAt(Piece, Dir, C);
-						What = TEXT("ucundan 45°");
+						const FVector Out = Sockets.Face == ELogFace::EndB ? Sockets.Axis : -Sockets.Axis;
+						const FVector EndPoint = Sockets.Centre + Out * Sockets.Half;
+						if (Sector == 0.f)
+						{
+							// Carries on in line, end to end: the two flat ends meet, lengths add (600 + 600 = 1200).
+							PlaceTransform = LyingAt(Piece, Out, EndPoint + Out * (Lp * 0.5f) + FVector(0.f, 0.f, Rp - Rt));
+							What = TEXT("uca uç (uzatma)");
+						}
+						else if (Sector == 90.f)
+						{
+							// Square across the end, the log's end butting into its middle.
+							FVector C = EndPoint + Out * Rp;
+							C.Z = BottomZ + Rp;
+							PlaceTransform = LyingAt(Piece, Sockets.Side, C);
+							What = TEXT("ucuna dik (T)");
+						}
+						else
+						{
+							const FVector Dir = (Out * UE_INV_SQRT_2 + Sockets.Side * (Sector > 0.f ? UE_INV_SQRT_2 : -UE_INV_SQRT_2)).GetSafeNormal();
+							FVector C = EndPoint + Dir * (Lp * 0.5f);
+							C.Z = BottomZ + Rp;
+							PlaceTransform = LyingAt(Piece, Dir, C);
+							What = TEXT("ucundan 45°");
+						}
+						bFound = true;
 					}
-					bFound = true;
 				}
 				if (bFound)
 				{
@@ -1799,7 +2030,7 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				CurrentCourse = BestSupport;
 			}
 			// Angle between the two axes, folded into (-90, 90]: a log has no front or back.
-			const float Delta = LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(LowerYaw, DesiredYaw));
+			const float Delta = ForceSnapDelta(SnapAngleMode, LogSnapSystem::FoldAxisYawDelta(FMath::FindDeltaAngleDegrees(LowerYaw, DesiredYaw)));
 			// A wall corner: square to the log and aimed at its last module joins the ends of the two (a log cabin's corner).
 			// The new log runs to the parallel log of the opposite wall when there is one and seats on both.
 			if (FMath::Abs(Delta) > 67.5f)
@@ -1830,6 +2061,18 @@ void AForestCharacter::UpdateCarryPlacementAt(const FHitResult& Hit, bool bHit)
 				const float Sector = Sectors[Index];
 				if (Sector == 0.f)
 				{
+					if (SnapAngleMode == 3)
+					{
+						TArray<ACarvableLog*> Neighbours;
+						FindLocalLogs(GetWorld(), SnapAimPoint, Piece->GetLength() + 100.f, Neighbours);
+						if (ComputeNestPlacement(LowerLog, FVector(Hit.ImpactPoint), Piece, Neighbours, PlaceTransform))
+						{
+							CarryPlace = ECarryPlace::Stack;
+							SocketLabel = TEXT("iki kütüğün arasına oturdu (yığın)");
+							bPlaceSupported = EvaluateSupportPreview(Piece, PlaceTransform);
+							return;
+						}
+					}
 					if (ComputeStackPlacement(LowerLog, SnapAimPoint, Piece, PlaceTransform))
 					{
 						CarryPlace = ECarryPlace::Stack;
@@ -1970,13 +2213,15 @@ bool AForestCharacter::PlaceCarried()
 	{
 		const FLogPlacementResult Placement = GetLogPlacementResult();
 		const FTransform& FinalTransform = Placement.Transform;
-		if (!EvaluateSupportPreview(Piece, FinalTransform, true))
+		// Not a block: an unsupported fit is allowed (the preview shows it as unsupported) and SettleStructure lets it fall.
+		bPlaceSupported = EvaluateSupportPreview(Piece, FinalTransform, true);
+		if (!bPlaceSupported)
 		{
-			ShowMessage(TEXT("Bu bağlantı yapısal olarak desteklenmiyor."));
-			return false;
+			ShowMessage(TEXT("Uyarı: bu bağlantı yapısal olarak desteklenmiyor, düşebilir."));
 		}
-		bPlaceSupported = true;
 	}
+	// Placing never snaps a beam for a long overhang (the second post comes next); removing a support still does.
+	TGuardValue<bool> PlacementGrace(StructureLink::bPlacementGrace, true);
 	CarriedLogs.Pop();
 	switch (CarryPlace)
 	{
@@ -1985,11 +2230,17 @@ bool AForestCharacter::PlaceCarried()
 		ShowMessage(TEXT("Kütük çaprazlama oturdu  —  altına eyer çentiği açıldı"));
 		SettleStructure();
 		break;
+	case ECarryPlace::Lay:
+		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
+		ShowMessage(TEXT("Kütük yere yatırıldı"));
+		SettleStructure();
+		break;
 	case ECarryPlace::Stand:
 		// A post stays exactly where it is put; on a lying log it is let into a seat cut in the log's top.
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
 		if (ACarvableLog* Base = StandBase.Get())
 		{
+			Base->Anchor();
 			FVector C, A;
 			float R, H;
 			if (ACarvableLog::GetLogAxis(Base, C, A, R, H))
@@ -2002,11 +2253,19 @@ bool AForestCharacter::PlaceCarried()
 		SettleStructure();
 		break;
 	case ECarryPlace::Stack:
+		if (ACarvableLog* LowerLog = Cast<ACarvableLog>(PlaceTarget.Get()))
+		{
+			LowerLog->Anchor();
+		}
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
 		ShowMessage(TEXT("Kütük alttakinin üstüne oturdu  —  duvar sırası"));
 		SettleStructure();
 		break;
 	case ECarryPlace::Socket:
+		if (ACarvableLog* LowerLog = Cast<ACarvableLog>(PlaceTarget.Get()))
+		{
+			LowerLog->Anchor();
+		}
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
 		ShowMessage(FString::Printf(TEXT("Kütük kondu: %s"), *SocketLabel));
 		SettleStructure();
@@ -2082,6 +2341,7 @@ bool AForestCharacter::PlaceCarried()
 				const float Top = OnBeam.Z + BR;
 				if (FVector::Dist2D(OnBeam, OnBoard) < BR && Top > Bottom + 0.5f && Top < Bottom + BR * 2.f)
 				{
+					Beam->Anchor();
 					Beam->CutSeat(OnBeam, FVector::UpVector, Piece->GetWidth() + 1.f, Top - Bottom + 0.5f);
 				}
 			}
@@ -2090,6 +2350,10 @@ bool AForestCharacter::PlaceCarried()
 		SettleStructure();
 		break;
 	case ECarryPlace::Slope:
+		if (ACarvableLog* LowerLog = Cast<ACarvableLog>(PlaceTarget.Get()))
+		{
+			LowerLog->Anchor();
+		}
 		Piece->PlaceAt(PlaceTransform, /*bAnchorIt*/ true);
 		ShowMessage(FString::Printf(TEXT("Eğik parça kondu (%.0f°)"), SlopeAngle));
 		SettleStructure();
@@ -2944,12 +3208,13 @@ void AForestCharacter::UpdateFocus()
 		return;
 	}
 	FocusHitPoint = Hit.ImpactPoint;
+	FocusHit = Hit;
 	if (ACarvableLog* Carvable = Cast<ACarvableLog>(Hit.GetActor()))
 	{
 		FocusedCarvable = Carvable;
 		if (RawLogShapes::FromLog(Carvable).IsValid())
 		{
-			// Raw logs are worked as finished shapes by where they are hit: no cut guide, no aim.
+			// Raw logs are worked as finished shapes by where they are hit: no cut guide; the HUD draws a dot where the axe lands.
 			CarvePreview->SetVisibility(false);
 			bCarveSpotValid = false;
 		}
@@ -3858,6 +4123,15 @@ void AForestCharacter::ToggleBuildMode()
 
 void AForestCharacter::DebugGiveMaterials()
 {
+	// While carrying a log, [G] changes how it is placed against another log: straight, forty-five degrees, square.
+	if (CarriedItem == EForestItem::Log && CarriedLogs.Num() > 0)
+	{
+		SnapAngleMode = (FMath::Max(SnapAngleMode, 0) + 1) % 4;
+		static const TCHAR* const Names[4] = { TEXT("düz (0°): yan yana / üst üste"), TEXT("45° çapraz"), TEXT("dik (90°, T / köşe)"),
+			TEXT("yığın: iki kütüğün arasındaki oyuğa") };
+		ShowMessage(FString::Printf(TEXT("Yerleştirme açısı: %s  —  [G] ile değiştir"), Names[SnapAngleMode]));
+		return;
+	}
 	if (!RequireAdmin())
 	{
 		return;
@@ -4817,14 +5091,14 @@ void AForestCharacter::DebugSpawnCarvableLogs()
 	const FVector Forward = FVector(GetActorForwardVector().X, GetActorForwardVector().Y, 0.f).GetSafeNormal();
 	const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward);
 	const TCHAR* Paths[] = {
-		TEXT("/Game/Greybox/Meshes/SM_GB_RawLog_500.SM_GB_RawLog_500"),
-		TEXT("/Game/Greybox/Meshes/SM_GB_RawLog_375.SM_GB_RawLog_375"),
-		TEXT("/Game/Greybox/Meshes/SM_GB_RawLog_250.SM_GB_RawLog_250"),
+		TEXT("/Game/UnrealExport/SM_RawLog_600.SM_RawLog_600"),
+		TEXT("/Game/UnrealExport/SM_RawLog_300.SM_RawLog_300"),
+		TEXT("/Game/UnrealExport/SM_RawLog_150.SM_RawLog_150"),
 	};
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
-		const FVector Location = GetActorLocation() + Forward * (220.f + Index * 90.f) + FVector(0.f, 0.f, 30.f);
+		const FVector Location = GetActorLocation() + Forward * (300.f + Index * 450.f) + FVector(0.f, 0.f, 30.f);
 		ACarvableLog::SpawnFromStaticMesh(GetWorld(), LoadObject<UStaticMesh>(nullptr, Paths[Index]), FTransform(Right.Rotation(), Location));
 	}
-	ShowMessage(TEXT("Test: oyulabilir kütükler (A 500, B 375, C 250)  —  baltayla bak, [R] araç, [Tekerlek] açı, 2 vuruş"));
+	ShowMessage(TEXT("Test: oyulabilir kütükler (A 600, B 300, C 150)  —  baltayla bak, [R] araç, [Tekerlek] açı, 2 vuruş"));
 }

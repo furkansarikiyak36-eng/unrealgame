@@ -97,4 +97,60 @@ bool FLogSnapResolveTieIsDeterministicTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("generation order breaks ties deterministically"), Resolved.Id == FName(TEXT("Top_00")));
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLogSnapVerticalPostResolveTest,
+	"MyProject2.LogPlacement.Snap.VerticalPostResolve",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FLogSnapVerticalPostResolveTest::RunTest(const FString& Parameters)
+{
+	// A 300 cm vertical post: 4 snap points along length (heights 75, 150, 225, 300 cm) + EndB on top
+	TArray<LogSnapSystem::FPoint> Points;
+	const FVector Centre(0.f, 0.f, 150.f);
+	const FVector Axis = FVector::UpVector;
+	const float Radius = 18.f;
+	const float Half = 150.f;
+
+	const float Heights[] = { 75.f, 150.f, 225.f, 300.f };
+	for (int32 i = 0; i < 4; ++i)
+	{
+		LogSnapSystem::FPoint FrontPoint;
+		FrontPoint.Id = FName(*FString::Printf(TEXT("Front_%02d"), i));
+		FrontPoint.Face = LogSnapSystem::EFace::Front;
+		FrontPoint.Normal = FVector::ForwardVector;
+		FrontPoint.Axis = Axis;
+		FrontPoint.AlongAxis = Heights[i] - 150.f;
+		FrontPoint.Position = Centre + Axis * FrontPoint.AlongAxis + FrontPoint.Normal * Radius;
+		Points.Add(FrontPoint);
+	}
+	// Add Top End (EndB at +150, Z=300)
+	LogSnapSystem::FPoint TopEnd;
+	TopEnd.Id = TEXT("EndB_00");
+	TopEnd.Face = LogSnapSystem::EFace::EndB;
+	TopEnd.Normal = Axis;
+	TopEnd.Axis = Axis;
+	TopEnd.AlongAxis = Half;
+	TopEnd.Position = Centre + Axis * Half;
+	TopEnd.bEnd = true;
+	Points.Add(TopEnd);
+
+	// Query aimed at height 220 cm on the front face
+	LogSnapSystem::FQuery Query;
+	Query.HitPoint = FVector(Radius, 0.f, 220.f);
+	Query.HitNormal = FVector::ForwardVector;
+	Query.MaxAlongAxisError = 45.f;
+
+	LogSnapSystem::FPoint Resolved;
+	TestTrue(TEXT("resolves to nearest height snap on vertical post"), LogSnapSystem::Resolve(Points, Query, Resolved));
+	TestTrue(TEXT("resolves to Front_02 at height 225"), Resolved.Id == FName(TEXT("Front_02")));
+
+	// Query aimed at top of post
+	LogSnapSystem::FQuery TopQuery;
+	TopQuery.HitPoint = FVector(0.f, 0.f, 300.f);
+	TopQuery.HitNormal = FVector::UpVector;
+	TopQuery.MaxAlongAxisError = 45.f;
+	TestTrue(TEXT("resolves to top end of vertical post"), LogSnapSystem::Resolve(Points, TopQuery, Resolved));
+	TestTrue(TEXT("resolves to EndB"), Resolved.Id == FName(TEXT("EndB_00")));
+	return true;
+}
 #endif

@@ -26,12 +26,25 @@ namespace
 			FCollisionObjectQueryParams(ECC_WorldStatic), Params) && !Hit.GetActor()->IsA<ACarvableLog>();
 	}
 
+	bool IsLogGrounded(const UWorld* World, const ACarvableLog* Log)
+	{
+		if (!World || !Log || Log->IsCarried())
+		{
+			return false;
+		}
+		const FTransform& Frame = Log->GetActorTransform();
+		const FBox Box = Log->GetLocalBox();
+		const FVector A = Frame.TransformPosition(FVector(Box.Min.X, 0.f, 0.f));
+		const FVector B = Frame.TransformPosition(FVector(Box.Max.X, 0.f, 0.f));
+		return IsGrounded(World, Log, A, B, Log->GetRadius());
+	}
+
 	TArray<ACarvableLog*> Installed(UWorld* World, const ACarvableLog* Except = nullptr)
 	{
 		TArray<ACarvableLog*> Logs;
 		for (TActorIterator<ACarvableLog> It(World); It; ++It)
 		{
-			if (*It != Except && It->IsAnchored() && !It->IsCarried())
+			if (*It != Except && !It->IsCarried() && (It->IsAnchored() || IsLogGrounded(World, *It)))
 			{
 				Logs.Add(*It);
 			}
@@ -138,7 +151,7 @@ TSet<int32> StructureLink::Evaluate(TArray<WoodStructure::FNode>& Nodes, const T
 					BreakAt = (At[Index] + At[Index - 1]) * 0.5f;
 				}
 			}
-			if (BreakAt >= 0.f)
+			if (BreakAt >= 0.f && !bPlacementGrace)
 			{
 				Beam.Damage = 1.f;
 				bFailed = true;
@@ -186,6 +199,7 @@ WoodStructure::FNode StructureLink::MakeNode(const ACarvableLog* Log, int32 Id, 
 }
 
 bool StructureLink::bLogFalls = false;
+bool StructureLink::bPlacementGrace = false;
 
 namespace
 {

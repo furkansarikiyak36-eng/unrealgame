@@ -1255,3 +1255,106 @@ Kullanıcı: "bize snap noktları daha düzenli ve çok laızm log dikey koysak 
     - `LayOut()` çağrısı yalnızca tam hayatta kalma haritalarıyla (`PerfTest`, `Main`) sınırlandırıldı; küçük test/kit sahnelerine vahşi doğa senaryosu kurulması engellendi.
   - `Scripts/setup_testkits_scene.py`:
     - Aktör temizleme filtresi etiket önekine bağlı olmaktan çıkarıldı; ışık, sis, gökyüzü, Floor ve PlayerStart dışındaki tüm yabancı ve eski aktörleri sıfırlayacak şekilde güncellendi.
+
+## 2026-10-24 — Harita temizliği
+- Kural: **Main** = asset'lerin dizildiği yer, **PerfTest** = görsellik testi, **MechanicsTest** = mekanik testi (yeni boş harita).
+- Main ve PerfTest dışındaki tüm haritalar silindi (KitShowcase, LogShowcase, SnapPlacementTest, TestKits, TestKitsV2, SampleMap, KiteDemo, SoulCave, ParagonProps AssetMap'leri).
+- Yedek: `Downloads/MapYedek_20261024` (18 .umap). Git'te izlenen ikisi (KitShowcase, LogShowcase) git geçmişinden de geri alınabilir.
+- Yeni boş harita: `/Game/Maps/MechanicsTest`.
+- Not: LogShowcase haritası silindiği için vitrin gerileme testi (`bake_log_showcase.sh`) MechanicsTest'e uyarlanana kadar çalışmaz.
+
+## 2026-10-24 — MechanicsTest ve Main dolduruldu
+- **MechanicsTest**: varsayılan şablondan (gökyüzü, güneş, sis, bulut) kuruldu; origin'de `ALogShowcase` (`bBuildOnPlay=true`, play'de istasyonları kurar ve rapor yazar) + PlayerStart. Betik: `Scripts/make_log_showcase_map.py` (PATH artık MechanicsTest).
+- **Main**: Content'teki tüm mesh'ler (1139 adet, 55 grup; statik + iskelet) kit/alt klasör/tür şeritleri halinde dizildi: 150 m x 5,9 km, her şerit bir etiketle. Betik: `Scripts/build_main_all_assets.py`; rapor `Saved/main_all.json`. Eski Main yedeği: `Downloads/MapYedek_20261024/Main_before.umap`.
+- Dikkat: Main artık oyun değil asset vitrini (GameDefaultMap hâlâ Main).
+
+## 2026-10-24 — MechanicsTest sadeleştirildi
+- `ALogShowcase` (play'de kuruluyordu) silindi. Haritada artık şablon ışığı + zemin + PlayerStart + `MechanicsFill` klasörü: 50 `SM_RawLog_300` (play'de taşınabilir CarvableLog olur) ve 50 Megascans küçük taş (play'de taş pickup'ı olur), ikişer ızgara.
+- Betik: `Scripts/mechanics_test_fill.py` (tekrar çalıştırılabilir, eskisini silip yeniden dizer).
+
+## 2026-10-24 — MechanicsTest: Play'de sadece log ve taş
+- Sorun: Play'de 292 actor çıkıyordu (demo istasyonları: taş ustalığı, log duvar, pencere/kapı kasası; voksel zemin 98 parça; ...). Sebep: `ForestGameMode::StartPlay` demo istasyonlarını `bDemoLevel` yoksa kuruyor; LogShowcase silinince MechanicsTest filtreye takılmadı. Voksel zemin de açıktı.
+- Düzeltme: `ForestGameMode.cpp` test-harita filtresine `MechanicsTest` eklendi (Live Coding ile derlendi). Zemin: şablon "Floor" üstü z=0, BlockAll, `NoDiggableGround` etiketi (`Scripts/mechanics_test_ground.py`).
+- Ölçüm (PIE): 50 `CarvableLog` + 50 `PickupItem` (taş) + sadece oyuncu, ışık ve zemin; fazladan actor yok.
+
+## 2026-10-24 — Uç uca eklem (yarım geçme)
+- `ForestCharacter.cpp`: log ucuna, log doğrultusunda bakınca (Sector 0) yuvarlak loglar için artık "uca uç eklem (yarım geçme)": 75 cm (1 modül) binme, ortak eksende buluşma. Alttaki logun ucu üstten, yeni logun ucu alttan eksene kadar kesilir (`CutEndSplice`, `CutSeat` ile). Bölünmüş (düz yüzlü) parçalar eskisi gibi düz dayanır ("uca uç (uzatma)").
+- Live Coding ile derlendi; Play'de denenmedi. Vitrin istasyonu 12'de artık merkez mesafesi 225 değil 150 (150 − 75 + 150).
+
+## 2026-10-24 — [G] ile yerleştirme açısı
+- Sorun: log başka logun üstüne/yanına konurken açı (düz / 45° / 90°) bakış yönüne göre seçiliyordu; çok seçenek kararsızlık yaratıyordu.
+- Çözüm: `ForestCharacter` `SnapAngleMode` (varsayılan 0 = düz). Log taşırken [G] sırayla: düz (0°) → 45° çapraz → dik (90°, T/köşe). Seçim ekranda yazılır. Açı, `ForceSnapDelta` ile üç yerleştirme kolunda (yüz soketleri ve üst yüz) bakış açısının yerine geçer; mümkün olmazsa komşu seçeneğe düşer. Taşımıyorken [G] eskisi gibi (admin) malzeme verir.
+- Vitrin (`PlaceForShowcase`) `-1` kullanır (bakışa göre, eski istasyonlar aynı kalır).
+- Başlık değişti, tam derleme + editör yeniden başlatıldı: derleme başarılı. Play'de denenmedi.
+
+## 2026-10-24 — Eklem geri alındı: uç uca düz dayama
+- Kullanıcı: bindirmeli yarım geçme çok içine girip kesiyor; uç uca toplam uzunluk olmalı (600 + 600 = 1200).
+- `ForestCharacter.cpp`: yarım geçme ve `CutEndSplice` kaldırıldı. "uca uç (uzatma)" yine iki düz ucu tam dayar, kesim yok, uzunluklar toplanır. [G] açı modu duruyor.
+
+## 2026-10-24 — Köşe geçmesi biraz daha içe
+- `CarvableLog.cpp`: `ComputeCornerPlacement` eksen aralığı `CornerBite = 0.2 × alt yarıçap` kadar azaltıldı (köşedeki iki log birbirine ~%20 daha fazla gömülür; end grain boşluğu azalır). `PlaceAcross` çentik derinliği artık gerçek bindirmeden hesaplanır (en az 0,5 R, en çok 0,8 R); düz çaprazlamada eskisi gibi 0,5 R.
+- Live Coding ile derlendi; Play'de denenmedi. Çentik önizleme çizgisi (`GetCrossNotchGuide`) köşede ~0,2 R farklı gösterebilir.
+
+## 2026-10-24 — Log evi üret + gerileme kök nedeni
+- `Scripts/probe_showcase.sh` (yeni, + `probe_add/build/del.py`): MechanicsTest'in play'inde geçici LogShowcase ile tüm 14 istasyonu çalıştırır, istasyon başına OK/XX yazar (`Saved/house_run.txt`). Harita kaydedilmez.
+- **Gerilemenin kök nedeni** (ChatGPT dalı): `PlaceCarried` içine her yerleştirmede zorla yapısal destek kontrolü eklenmiş; "desteklenmiyor" diye yerleştirmeyi reddediyordu (köşe, 45°, çatı kirişi, üst yüz...). Eskiden engel yoktu; kötü destek önizlemede uyarı, düşme `SettleStructure` ile. Şimdi: engel yok, uyarı mesajı ("düşebilir"). `EvaluateSupportPreview`teki 10 Hz zamanlayıcı da kaldırıldı (farklı aday için eski adayın sonucunu veriyordu); aynı aday için önbellek durur.
+- Sonuç: vitrin 97/151 → **178/180** (eski 180/181'e yakın). Kalan 2: mahya kirişi (bilinen) ve "-45 dik çapraz". Kütük ev: 12 sıra köşe, kapı, pencere, direkler, 14 çatı kirişi tamam; sadece mahya kirişi eksik.
+
+## 2026-10-24 — Log ev MechanicsTest'e yerleştirildi
+- `Scripts/place_house_view.py`: vitrinin 14. istasyonunu (kütük ev) PIE'de gerçek yerleştirmeyle kurup (`bake_showcase_capture.py`) statik parçalar olarak MechanicsTest'e koyar (klasör `LogHouse`, 60 parça, x≈1860–2460, y≈4000–4525; kütük/taş ızgarasından ayrı). Tekrar çalıştırılırsa eskisini değiştirir.
+- Zemin düzeltildi: önceki ayar kayıt olmamıştı (zemin üstü -310'daydı, ev havada görünüyordu). Şimdi `Floor` üstü z=0, `BlockAll`, `NoDiggableGround` etiketli; kaydedildi.
+- Görüntüde eksik: mahya kirişi evin tepesinde sabitlenmeden yan duruyor (bilinen açık iş).
+
+## 2026-10-24 — Vuruş noktası göstergesi (ham log kesme/yarma/düzleme)
+- Ham log mekaniği (`RawLogShapes`: ortaya vur = enine kes, uca vur = boyuna yar (yarım → çeyrek, kalas → 4 tahta), yana vur = düzle (Hewn1 → Hewn2 → Kalas), [R] = oluk) zaten vardı ama nereye vurulacağı görünmüyordu.
+- Yeni: `ForestHUD` baltanın indiği noktayı ekranda renkli bir kare ve adıyla çizer: kırmızı = enine kesiliyor, mavi = boyuna yarılıyor, turuncu = düzleniyor, yeşil = oluk, gri = olmaz (sebebi yazılı). `ForestCharacter` `FocusHit` + `GetFocusHit()`/`IsChannelMode()`.
+- MechanicsTest zemini: `Scripts/mechanics_test_ground.py` aktörü `modify()` ile işaretleyip kaydediyor (önceki sürümde etiket ve zemin yüksekliği kayıt olmuyordu çünkü harita "değişmedi" sayılıyordu); yeniden yükleyip okuyarak doğruluyor. Play'de voksel zemin parçası: 0.
+- Play'de doğrulandı: log'a bakınca "Enine kesiliyor" + kırmızı nokta.
+
+## 2026-10-24 — MechanicsTest: dört boyda ham log
+- `Scripts/mechanics_test_fill.py`: 50 ham log artık 600 / 300 / 150 / 75 cm (12+13+13+12), her boy ayrı sıra (y -1200 … -300), 50 taş aynı. Kesme/yarma/düzleme/oluk kuralları (`RawLogShapes`) boydan bağımsız; her boy için tüm mesh'ler (Half, Quarter_04, Hewn1/2, Kalas, Plank, Gutter, Trough) mevcut. 75 enine kesilmez (en kısa parça).
+
+## 2026-10-25 — MechanicsTest taşları: taş / duvar taşı / arnavut taşı
+- `Scripts/mechanics_test_fill.py`: 50 taş artık üç sırada: 17 küçük taş (Small_Stones_Pack; play'de taş pickup'ına döner), 17 duvar taşı (Castle_Wall_Stone, 40–55 cm; orta taşın kesilince dönüştüğü şey), 16 arnavut taşı (gri ve kahverengi Roadside_Construction_Cobblestone, 32–40 cm; yapı taşının dönüştüğü). Mesh listeleri `HarvestableActor.cpp` ile aynı.
+- Bilinen: `ConvertHarvestables` yalnız Small_Stones adlı mesh'leri pickup yapar; duvar ve arnavut taşı play'de statik durur (alınamaz).
+- Ölçek düzeltmesi: arnavut taşı (gri/kahverengi, 32–40 cm) en küçük; taş 50–75 cm; duvar taşı 60–85 cm (`mechanics_test_fill.py`).
+- Ölçek 2: kahverengi arnavut taşı 1,5x (48–60 cm, gri 32–40 cm kaldı), duvar taşı 2x (120–170 cm).
+
+## 2026-10-25 — Koyma düzeni: yığın (oyuğa oturtma) modu
+- [G] ile koyma modları artık dört: düz (0°: yan yana soket + üst üste), 45° çapraz, dik (90°), **yığın**. Yığın: yan yana değen iki logun arasındaki oyuğa üçüncü log oturur (odun yığını / piramit): iki loga da teğet, eksenlerin ortasında ve `H = sqrt((Rl+Ru)^2 - x^2)` yükseklikte; başlangıcı 75 cm modül çizgisinde; nişan aldığın yan seçilir. Komşu yoksa normal üst üste koyma.
+- `ForestCharacter.cpp`: `ComputeNestPlacement`, `SnapAngleMode == 3`. Vitrin regresyonu: 178/180 (değişmedi). Yığın modu Play'de elle denenmedi (vitrin istasyonu yok; ek istasyon başlık değişikliği ister).
+- Not: [G] tuşu `#if !UE_BUILD_SHIPPING` bloğunda; yayın derlemesinde açı/yığın modu tuşu ayrıca bağlanmalı.
+
+## 2026-10-25 — Taş / duvar taşı / arnavut taşı taşınabilir
+- Sorun: haritaya dizilen taş, duvar taşı ve arnavut taşı statik mesh'ti (yalnız küçük taşlar pickup oluyordu), taşınıp taş duvar yapılamıyordu.
+- Çözüm: `LooseResources::SpawnStoneFromMesh` (yeni): yerleştirilmiş taş mesh'inden gerçek `AStoneActor` (aynı mesh/ölçek, fizikli; kütle boyuta göre 3–75 kg, iki elle taşınır). `ForestGameMode::ConvertHarvestables`: `sdAta*` (Castle Wall Stone) → Flat, `xksldamqx*`/`xkqmdhaqx*` (gri/kahverengi arnavut taşı) → Carved, 30 cm ve büyük Small_Stones → Building; daha küçük Small_Stones eskisi gibi çantaya giren pickup.
+- Mevcut sistem kullanılır: [E] al (`StoneCarry`), sol tık yerleştirme önizlemesi, tekerlek yüz değiştirme, sol tık onay (`StonePlacement`).
+- Doğrulandı (PIE, MechanicsTest): 50 `StoneActor` (17+17+16), zeminde duruyor, üç türü de `PickUp` ile iki elle alınabiliyor (kütle 75/75/58,6 kg). Duvar kurma elle denenmedi.
+
+## 2026-10-25 — SotF log+taş dilimi planı
+- `Docs/DILIM_SOTF.md`: 18 kabul ID'si (LOG/CARRY/BUILD/ROOF/ACCESS/DEF/SUPPORT/AUTOCUT/STONE/FIRE/STORAGE/DAMAGE/SAVE/DIG-SAVE) bizim koddaki karşılıklarına ve vitrin istasyonlarına bağlandı; eksikler, sıra (A ölçüm → B kontroller → C yeni istasyonlar → D kayıt → E eksik özellikler → F oynanış koşusu) ve iş bölümü.
+- Kodda doğrulanan: `SaveGameSubsystem` yalnız `ALogActor`'ı kaydediyor; `ACarvableLog`, `AStoneActor`, `AStoneMasonryActor` kayıtta yok; oyuncunun kayıt tuşu/menüsü yok; phase-09 dalı bizden 925 dosya farklı (birleştirilemez).
+- Plan v2 (`Docs/DILIM_SOTF.md`): SotF mekanik kataloğu (STK, LOG-01..14, ASM-01..17, SUP-01..12, STN-01..15, CAR/STO, DEF, UTIL) bizim koda eşlendi. Kod taraması: 20 sınıf yazılmış ama oyuncuya/vitrine bağlı değil (ör. `ALogSled`, `ALogStorageRack`, `AStoneFireplace`, `AStoneSled`, `ASpringTrap`, `ATripWireAlarm`, `ATorchActor`, `ADryingRack`, `AWaterCollector`, `APlantPot`, `AZiplineActor`, `ACraftingBench`). Sıra: A ölçüm → B malzeme → C taşı/kur → D çökme → E taş+ahşap → F kayıt → G savunma/yardımcılar → H oynanış koşusu.
+- A aşaması yapıldı: `ALogShowcase::BuildStation`/`StationCount` (tek istasyon), `probe_showcase.sh [istasyon...]` + `Scripts/record_dilim.py` → `Docs/DILIM_SONUC.md` (kabul ID → PASS/KISMEN/FAIL/BLOCKED, tarih, dal, commit). İlk ölçüm: PASS 8, KISMEN 13, FAIL 2, BLOCKED 69. Kod taramasıyla netleşenler: `StructureLink` taşı hiç tanımıyor (STN-12 kilit risk); `AHaulCart` yalnız odun taşıyor (taş/çubuk yok); `ALogCart/ALogSled/ALogStorageRack` eski sınıflar, `AHaulCart` gerçek olan; hasarlı parça değiştirme (`Repair`) ve yük→hız bağlı.
+
+## 2026-10-25 — Kiriş düşmesi ve mahya: kök neden
+- Kullanıcı: kirişi direğe koyarken direk olmayan kısmı düşüyor; mahya kirişi yerleşmiyor.
+- Kök neden 1 (`StructureLink::Evaluate`): bir log iki destek arasında en çok 4,5 modül (337 cm) açılabiliyordu. Kütük evde köşe geçmeli 600'lük bir log yalnız iki uçtan (525 cm) destekleniyor; bu yüzden üst sıra logları "kırılıyor", üstündeki mahya direği desteksiz kalıp sabitlenmiyor, mahya kirişi `FindBeamOnPost` ile bulunamıyor ve yüz soketine düşüyordu (bilinen "mahya" hatası bu). Düzeltme: `MaxSupportGapModules` 8 (en uzun log 600 cm; kural fiilen kalktı). Evde mahya kirişi yerleşti.
+- Kök neden 2: yerleştirme anındaki `SettleStructure` taşan kısmı (destekten 150 cm'den fazla) hemen kırıyordu. Düzeltme: `StructureLink::bPlacementGrace` — `PlaceCarried` sırasında kırma yok (ikinci direk sonra gelir); destek sökülünce ya da başka bir yeniden değerlendirmede kural yine işler, önizleme "desteksiz" uyarısı verir.
+- Vitrin: **180/181** (kalan: -45 dik çapraz köşe). Geçici DBG satırları eklenip kaldırıldı (bir regex fazla sildi, HEAD'den geri alındı; dosya vs HEAD yalnız `BuildStation` farkı).
+- Plan v3 eki (`DILIM_SOTF.md` §11): SotF serbest inşa incelemesinden 24 yeni kabul ID'si (çubuk çit/kazık takviyesi, palisat kapısı ve devamlılığı, kesim önizlemesi = kesim, çakışma reddi, önizleme = yerleşim, iki uçlu yerleşim, bir ucu kaldırıp destekleme, merdiven/rampa ayrımı, A-çatı, çok katlı zincir, halat köprü rolleri, taş şömine tarifi, taş kolon/kiriş, taş şekil tanıma, kızakta taş, zipline). Bulgu: ahşap şekil tanıma zaten var (`StructureLink::DescribeFeaturesOf`, 16+ `EWoodFeatureKind`), ateş halkası tanıma da (`AFireStone::TryForm`); eksik olan bunların kabul istasyonları ve taşın destek grafiğine girmesi.
+- Plan v4 eki (`DILIM_SOTF.md` §12): malzeme → geometri → işlev katmanları; yeni ID'ler FUNC-01..05 (elle şömine tanıma, sökünce yeniden değerlendirme, tarif ↔ elle eşdeğerlik, ad + işlev koşulu, merdiven/rampa), SUP-14 (payandayla direk sökme), UI-01..03 (hedef, olası dönüşüm, sonuç geri bildirimi). Bizde işlev tanıma yalnız ateş halkasında (`AFireStone::TryForm`); diğer şekiller yalnız adla tanınıyor.
+- `Docs/MANTIKLAR.md`: kodda olan inşa kuralları tek sayfada (ölçü, işleme, taşıma, yerleştirme karar sırası, geçme ölçüleri, destek, hasar, taş, çubuk, şekil tanıma, zemin, kayıt) + her bölümde eksikler.
+- ChatGPT kapsamlı eksik analizi değerlendirildi; kararlar `DILIM_SOTF.md` §13 (alınan / sonraya kalan / düzeltilen).
+
+## 2026-10-25 — Yerleştirmede kesim kapalı, kesik çizgili önizleme
+- Kullanıcı: direk üstüne bir şey koyunca direk kesiliyor; bu kesimler şimdilik olmasın, yerleşim için kesik çizgiler olsun.
+- `ACarvableLog::bCutJointsOnPlace = false`: yerleştirmede yuva (`CutSeat`: direk altı, kiriş, döşeme) ve çentik (`PlaceAcross`: çapraz, köşe, ek kaplar) **kesilmiyor**; parçalar yine aynı derinlikte birbirine oturuyor. Açmak için tek satır.
+- Dikkat: `StructureLink` bağlantıyı logdaki kesim aralıklarından (`GetCutSpans` → çentik) tanıyor. Kesim kapanınca köşe bağlantıları kayboldu, ev üst sırası ve mahya düştü (vitrin 179). Çözüm: `MarkJointSpan`, kesmeden bağlantı aralığı kaydeder. Vitrin tekrar **180/181**.
+- Önizleme: tek taban çizgisi yerine parçanın tam **kesik çizgili dış hattı** (iki uç halkası + boyunca 4 çizgi; destekliyse mavi/yeşil, desteksizse kırmızı), `ForestOutline::DrawDashed` ile. Play'de doğrulandı (ekran görüntüsü).
+
+## 2026-10-25 — Eğik log direğe yaslanıyor (iki uçlu yerleşimin ilk adımı)
+- Kullanıcı: direk koyunca 45° eğik log "destek yok" diye yerleşmiyor; ikisi de yerleşmeli.
+- Sebep: eğik tutulan log için direğe yaslama yerleşimi yoktu (eğik log yalnız yatan logun üstüne ya da yere konabiliyordu).
+- `ForestCharacter.cpp`: eğik tutup dik bir direğe bakınca alt uç yerde (oyuncu tarafında), üst uç direk tepesine oturur; açı iki uçtan (direk yüksekliği + log boyu) hesaplanır, kameradan değil. Etiket "direğe yaslandı (N°)".
+- Vitrin istasyon 5'e iki kontrol eklendi: (1) direk → yaslanan log, ikisi de yapı değerlendirmesinden sonra yerinde; (2) önce yere eğik log, sonra kalkık ucunun altına direk, ikisi de yerinde. 16/16. Tüm vitrin: aşağıdaki sonuç.

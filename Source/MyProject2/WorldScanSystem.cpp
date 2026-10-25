@@ -199,7 +199,7 @@ WorldScanSystem::EPhysicalState WorldScanSystem::ClassifyPhysicalState(const FHi
 
 	if (Component && Component->IsSimulatingPhysics())
 	{
-		if (Component->IsAnyRigidBodyAwake())
+		if (const_cast<UPrimitiveComponent*>(Component)->IsAnyRigidBodyAwake())
 		{
 			const FVector Velocity = Component->GetPhysicsLinearVelocity();
 			if (Velocity.Z < -FallingVerticalSpeedCmPerSec) return EPhysicalState::Falling;

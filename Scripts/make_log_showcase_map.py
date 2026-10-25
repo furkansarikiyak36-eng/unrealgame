@@ -1,11 +1,11 @@
-"""Editor: creates /Game/Maps/LogShowcase from the default template: sky, sun, fog; the template floor lowered 3.1 m and
+"""Editor: creates /Game/Maps/MechanicsTest (log test stations, build on play) from the default template: sky, sun, fog; the template floor lowered 3.1 m and
 enlarged as a backdrop (the diggable voxel ground is the real ground); an ALogShowcase at the origin facing +X (its
 stations run along +X, 14 m apart) and a PlayerStart 9 m before it. py ".../make_log_showcase_map.py"
 -> Saved/make_log_showcase_map.json. Refuses to overwrite an existing LogShowcase map unless 'force' is given."""
 import json, os, sys
 import unreal
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'make_log_showcase_map.json')
-PATH = '/Game/Maps/LogShowcase'
+PATH = '/Game/Maps/MechanicsTest'
 res = {}
 les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
@@ -29,6 +29,7 @@ if res['open'] == PATH:
             eas.destroy_actor(a)
     show = eas.spawn_actor_from_class(unreal.LogShowcase, unreal.Vector(0, 0, 0), unreal.Rotator(roll=0, pitch=0, yaw=0))
     show.set_actor_label('LogShowcase')
+    show.set_editor_property('build_on_play', True)
     ps = eas.spawn_actor_from_class(unreal.PlayerStart, unreal.Vector(-900, 0, 120), unreal.Rotator(roll=0, pitch=0, yaw=0))
     res['saved'] = unreal.EditorLoadingAndSavingUtils.save_current_level()
 json.dump(res, open(OUT, 'w'), indent=1, default=str)

@@ -32,6 +32,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Showcase")
 	FString BuildAll();
 
+	/**
+	 * Builds one station (0 = cut chain ... 13 = log house; see StationCount) and returns its report, "no ForestCharacter" if
+	 * there is no player. The same station can be built again, each at its own place along the row. Used by the acceptance
+	 * runs (Scripts/probe_showcase.sh) to measure a single station.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Showcase")
+	FString BuildStation(int32 Index);
+
+	/** How many stations there are. */
+	UFUNCTION(BlueprintPure, Category = "Showcase")
+	static int32 StationCount() { return 14; }
+
 	UPROPERTY(EditAnywhere, Category = "Showcase")
 	float StationSpacingCm = 1400.f;
 
