@@ -424,6 +424,41 @@ bool TestStructuralIntegrity() {
   auto increasedCapacity=sharedSupport.Assess(); CHECK(increasedCapacity);
   CHECK(increasedCapacity.value.nodes[0].state==wm::SupportState::Supported);
   CHECK(!sharedSupport.SetNodeCapacity(1,-1.0));
+
+  auto savedGraph=sharedSupport.CreateSnapshot();
+  CHECK(savedGraph && savedGraph.value.schemaVersion==1);
+  CHECK(savedGraph.value.nodes.size()==3);
+  CHECK(savedGraph.value.edges.size()==1);
+  CHECK(savedGraph.value.nodes[0].id==1);
+  CHECK(savedGraph.value.edges[0].id==21);
+
+  wm::StructuralGraph restoredGraph;
+  CHECK(restoredGraph.AddNode({99,true,true,0,10,10,10,false}));
+  const auto oldRestoreRevision=restoredGraph.GetRevision();
+  CHECK(restoredGraph.RestoreSnapshot(savedGraph.value));
+  CHECK(restoredGraph.GetRevision()>oldRestoreRevision);
+  auto roundTripGraph=restoredGraph.CreateSnapshot();
+  CHECK(roundTripGraph && roundTripGraph.value.nodes.size()==3);
+  CHECK(roundTripGraph.value.edges.size()==1);
+  CHECK(roundTripGraph.value.nodes[0].id==1);
+
+  wm::StructuralGraph unchangedGraph;
+  CHECK(unchangedGraph.AddNode({99,true,true,0,10,10,10,false}));
+  const auto unchangedRevision=unchangedGraph.GetRevision();
+  auto corruptGraphSave=savedGraph.value;
+  corruptGraphSave.edges[0].supporterId=999;
+  auto rejectCorruptGraph=unchangedGraph.RestoreSnapshot(corruptGraphSave);
+  CHECK(!rejectCorruptGraph);
+  CHECK(unchangedGraph.GetRevision()==unchangedRevision);
+  auto stillUnchanged=unchangedGraph.CreateSnapshot();
+  CHECK(stillUnchanged && stillUnchanged.value.nodes.size()==1);
+  CHECK(stillUnchanged.value.nodes[0].id==99);
+
+  auto cyclicGraphSave=savedGraph.value;
+  cyclicGraphSave.edges.push_back({22,2,1,100,true});
+  auto rejectCycle=unchangedGraph.RestoreSnapshot(cyclicGraphSave);
+  CHECK(!rejectCycle);
+  CHECK(unchangedGraph.GetRevision()==unchangedRevision);
   return true;
 }
 
