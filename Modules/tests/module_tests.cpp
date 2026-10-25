@@ -249,6 +249,26 @@ bool TestSnapAndExcavation() {
   CHECK(!regionDenied&&regionDenied.error==wm::ErrorCode::Unsupported);
   auto overlapDenied=wm::PlacementSnapResolver::ValidateCommit(chosen.value,3,7,true,false);
   CHECK(!overlapDenied&&overlapDenied.error==wm::ErrorCode::Conflict);
+  auto occupiedAfterPreview=wm::PlacementSnapResolver::ValidateCommit(chosen.value,3,7,true,true,true,false,true);
+  CHECK(!occupiedAfterPreview&&occupiedAfterPreview.error==wm::ErrorCode::Conflict);
+  auto incompatibleAtCommit=wm::PlacementSnapResolver::ValidateCommit(chosen.value,3,7,true,true,false,true,true);
+  CHECK(!incompatibleAtCommit&&incompatibleAtCommit.error==wm::ErrorCode::Unsupported);
+  auto unsupportedAtCommit=wm::PlacementSnapResolver::ValidateCommit(chosen.value,3,7,true,true,true,true,false);
+  CHECK(!unsupportedAtCommit&&unsupportedAtCommit.error==wm::ErrorCode::MissingDependency);
+
+  auto occupiedCandidate=candidate; occupiedCandidate.socketOccupied=true;
+  auto occupiedResolve=wm::PlacementSnapResolver::Resolve(sr,{occupiedCandidate});
+  CHECK(!occupiedResolve&&occupiedResolve.error==wm::ErrorCode::NotFound);
+  auto incompatibleCandidate=candidate; incompatibleCandidate.targetCompatible=false;
+  auto incompatibleResolve=wm::PlacementSnapResolver::Resolve(sr,{incompatibleCandidate});
+  CHECK(!incompatibleResolve&&incompatibleResolve.error==wm::ErrorCode::NotFound);
+  auto unsupportedCandidate=candidate; unsupportedCandidate.supportValid=false;
+  auto unsupportedResolve=wm::PlacementSnapResolver::Resolve(sr,{unsupportedCandidate});
+  CHECK(!unsupportedResolve&&unsupportedResolve.error==wm::ErrorCode::NotFound);
+  wm::SnapRequest socketOnly=sr; socketOnly.requireExplicitSocket=true;
+  auto nonSocket=candidate; nonSocket.explicitSocket=false;
+  auto socketRequired=wm::PlacementSnapResolver::Resolve(socketOnly,{nonSocket});
+  CHECK(!socketRequired&&socketRequired.error==wm::ErrorCode::NotFound);
   wm::SnapRequest boundedRequest=sr; boundedRequest.maxCandidates=1;
   auto tooManyCandidates=wm::PlacementSnapResolver::Resolve(boundedRequest,{candidate,candidate});
   CHECK(!tooManyCandidates&&tooManyCandidates.error==wm::ErrorCode::BudgetExceeded);
