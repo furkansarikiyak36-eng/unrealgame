@@ -390,6 +390,40 @@ bool TestStructuralIntegrity() {
   CHECK(combined.value.nodes[0].state==wm::SupportState::Overloaded);
   CHECK(std::abs(combined.value.nodes[0].aggregateDemand-60.0)<1e-9);
   CHECK(std::abs(combined.value.nodes[0].demandCapacityRatio-1.2)<1e-9);
+
+  const auto revisionBeforeMutation=sharedSupport.GetRevision();
+  CHECK(sharedSupport.SetNodeDemand(2,40.0));
+  CHECK(sharedSupport.GetRevision()>revisionBeforeMutation);
+  auto updatedDemand=sharedSupport.Assess(); CHECK(updatedDemand);
+  CHECK(std::abs(updatedDemand.value.nodes[0].aggregateDemand-70.0)<1e-9);
+  CHECK(updatedDemand.value.nodes[0].state==wm::SupportState::Overloaded);
+
+  CHECK(sharedSupport.RemoveEdge(22));
+  auto supportRemoved=sharedSupport.Assess(); CHECK(supportRemoved);
+  bool dependentThreeUnsupported=false;
+  for(const auto& node:supportRemoved.value.nodes) {
+    if(node.nodeId==3) dependentThreeUnsupported=node.state==wm::SupportState::Unsupported;
+  }
+  CHECK(dependentThreeUnsupported);
+  CHECK(std::abs(supportRemoved.value.nodes[0].aggregateDemand-40.0)<1e-9);
+  auto missingEdge=sharedSupport.RemoveEdge(22);
+  CHECK(!missingEdge&&missingEdge.error==wm::ErrorCode::NotFound);
+  CHECK(sharedSupport.SetEdgeActive(21,false));
+  auto disabledEdge=sharedSupport.Assess(); CHECK(disabledEdge);
+  bool dependentTwoUnsupported=false;
+  for(const auto& node:disabledEdge.value.nodes) {
+    if(node.nodeId==2) dependentTwoUnsupported=node.state==wm::SupportState::Unsupported;
+  }
+  CHECK(dependentTwoUnsupported);
+  CHECK(sharedSupport.SetEdgeActive(21,true));
+  CHECK(sharedSupport.SetNodeGrounded(1,false));
+  auto lostGround=sharedSupport.Assess(); CHECK(lostGround);
+  CHECK(lostGround.value.nodes[0].state==wm::SupportState::Unsupported);
+  CHECK(sharedSupport.SetNodeGrounded(1,true));
+  CHECK(sharedSupport.SetNodeCapacity(1,80.0));
+  auto increasedCapacity=sharedSupport.Assess(); CHECK(increasedCapacity);
+  CHECK(increasedCapacity.value.nodes[0].state==wm::SupportState::Supported);
+  CHECK(!sharedSupport.SetNodeCapacity(1,-1.0));
   return true;
 }
 
