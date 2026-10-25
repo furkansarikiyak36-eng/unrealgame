@@ -343,7 +343,7 @@ void ACarvableLog::ShowFlames(bool bShow, float Strength)
 		// A flame per module along the log, and one light in the middle.
 		UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
 		UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-		const int32 Count = FMath::Clamp(FMath::RoundToInt((MaxX - MinX) / ModuleLength), 1, 6);
+		const int32 Count = FMath::Clamp(FMath::RoundToInt((MaxX - MinX) / ModuleLength), 1, 8);
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
 			UStaticMeshComponent* Flame = NewObject<UStaticMeshComponent>(this);
