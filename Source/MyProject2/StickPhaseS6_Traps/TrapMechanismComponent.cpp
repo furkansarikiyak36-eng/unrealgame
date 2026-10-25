@@ -39,8 +39,15 @@ void UTrapMechanismComponent::Disarm()
 
 bool UTrapMechanismComponent::Trigger(AActor* Victim)
 {
+	return TriggerFrom(Victim, TriggerType);
+}
+
+bool UTrapMechanismComponent::TriggerFrom(AActor* Victim, ETrapTriggerType SourceType)
+{
 	UWorld* World = GetWorld();
-	if (!World || !bArmed || LifecycleState != ETrapLifecycleState::Armed)
+	if (!World || !bArmed || LifecycleState != ETrapLifecycleState::Armed
+		|| SourceType != TriggerType || !FMath::IsFinite(Cooldown) || Cooldown < 0.f
+		|| !FMath::IsFinite(Damage) || Damage < 0.f)
 	{
 		return false;
 	}
@@ -69,14 +76,16 @@ bool UTrapMechanismComponent::Trigger(AActor* Victim)
 	}
 
 	LifecycleState = ETrapLifecycleState::Cooldown;
+	// Even zero-duration cooldowns must not allow two overlap callbacks in one frame to trigger twice.
+	const FTimerDelegate FinishDelegate = FTimerDelegate::CreateUObject(
+		this, &UTrapMechanismComponent::FinishCooldown);
 	if (SafeCooldown <= KINDA_SMALL_NUMBER)
 	{
-		FinishCooldown();
+		CooldownTimer = World->GetTimerManager().SetTimerForNextTick(FinishDelegate);
 	}
 	else
 	{
-		World->GetTimerManager().SetTimer(
-			CooldownTimer, this, &UTrapMechanismComponent::FinishCooldown, SafeCooldown, false);
+		World->GetTimerManager().SetTimer(CooldownTimer, FinishDelegate, SafeCooldown, false);
 	}
 	return true;
 }
