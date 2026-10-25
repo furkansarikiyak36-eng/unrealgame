@@ -1,6 +1,7 @@
 #include "StonePlacementComponent.h"
 #include "Engine/OverlapResult.h"
 #include "StonePhaseA_Mining/StoneActor.h"
+#include "StonePhaseF_Environment/StoneShapeRecognitionSubsystem.h"
 #include "StonePhaseB_Placement/StoneCarryComponent.h"
 #include "StoneCore/StoneDefinition.h"
 #include "StoneCore/StoneConnectionGraph.h"
@@ -639,6 +640,12 @@ bool UStonePlacementComponent::ConfirmPlacement()
     ManualYawDegrees = 0.0f;
     OriginalAttachComponent.Reset();
     OriginalAttachSocket = NAME_None;
+
+    // Pattern recognition is event-driven: evaluate the newly committed stone, not every frame.
+    if (UStoneShapeRecognitionSubsystem* Recognition = GetWorld()->GetSubsystem<UStoneShapeRecognitionSubsystem>())
+    {
+        Recognition->TryRecognizeManualFireplace(StoneToPlace);
+    }
     return true;
 }
 
