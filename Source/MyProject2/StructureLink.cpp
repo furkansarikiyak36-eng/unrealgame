@@ -81,11 +81,9 @@ namespace
 				Parts.Add(Stone);
 			}
 		}
-		Parts.Sort([](const AActor* A, const AActor* B)
+		Parts.Sort([](const AActor& A, const AActor& B)
 		{
-			if (!A) return B != nullptr;
-			if (!B) return false;
-			return A->GetPathName() < B->GetPathName();
+			return A.GetPathName() < B.GetPathName();
 		});
 		return Parts;
 	}
