@@ -10,13 +10,13 @@
 
 | Dosya | Değişiklik | Kod sınırı |
 |---|---|---|
-| Modules/GameplayIntegration/include/world_mechanics/stone_fireplace_lifecycle.hpp | Yeni | Motor bağımsız taş halka–şömine durum sözleşmesi |
-| Modules/GameplayIntegration/src/stone_fireplace_lifecycle.cpp | Yeni | Halka, yakıt, ateş, ısı ve pişirme kabı geçişleri |
-| Modules/GameplayIntegration/include/world_mechanics/trap_lifecycle.hpp | Yeni | Motor bağımsız tuzak state-machine sözleşmesi |
-| Modules/GameplayIntegration/src/trap_lifecycle.cpp | Yeni | Armed/cooldown/consumed, event dedupe ve revision kontrolü |
+| Modules/GameplayIntegration/include/world_mechanics/stone_fireplace_lifecycle.hpp | Güncellendi | Taş halka–şömine state machine ve versioned save record/restore sözleşmesi |
+| Modules/GameplayIntegration/src/stone_fireplace_lifecycle.cpp | Güncellendi | Halka, yakıt, ateş, ısı, kap ve güvenli save/restore geçişleri |
+| Modules/GameplayIntegration/include/world_mechanics/trap_lifecycle.hpp | Güncellendi | Tuzak state machine, event history ve cooldown-relative save record |
+| Modules/GameplayIntegration/src/trap_lifecycle.cpp | Güncellendi | Armed/cooldown/consumed, event dedupe, clock rebasing ve doğrulanan restore |
 | Modules/PlacementSnap/include/world_mechanics/placement_snap.hpp | Güncellendi | Doluluk, hedef uyumu, destek geçerliliği ve explicit socket filtresi |
-| Modules/StructuralIntegrity/include/world_mechanics/structural_integrity.hpp | Güncellendi | Destek kenarı/düğüm mutasyon API'leri |
-| Modules/StructuralIntegrity/src/structural_integrity.cpp | Güncellendi | Kenar kaldırma/kapama, yük/zemin/kapasite değişimini revision'a bağlama |
+| Modules/StructuralIntegrity/include/world_mechanics/structural_integrity.hpp | Güncellendi | Destek mutasyonları ve versioned structural snapshot API |
+| Modules/StructuralIntegrity/src/structural_integrity.cpp | Güncellendi | Kenar/düğüm mutasyonları; private candidate graph ile staged snapshot restore ve topology validation |
 | Source/MyProject2/StickPhaseS6_Traps/SpringTrap.cpp | Güncellendi | Eksik root component ve cooldown'ı bypass edebilen fırlatma sırası düzeltmesi |
 | Modules/CMakeLists.txt | Güncellendi | Yeni iki taşınabilir C++ kaynak dosyası kütüphaneye eklendi |
 | Modules/tests/module_tests.cpp | Güncellendi | Yeni edge case regresyon kaynakları eklendi; çalıştırılmadı |
@@ -37,43 +37,53 @@
 - 5284f699fda3a4f4158781f5c671a62b2cb30686 — Unreal SpringTrap düzeltmesi.
 - d9f229c7e48e318c8c9dfdb8c021166ec849de9b — şömine yapılandırma sınırı.
 - cd8c7bfeaa5d745558ecb85f6c3bea2be78804ad — tuzak Disarm yapılandırma doğrulaması.
+- 9cf88095aca4c44db310aac0f60546b36e6c7346 — şömine save record sözleşmesi.
+- b4e616f8fb47aeb80495930b4539fa824e1969ff — şömine güvenli save/restore ve halka yeniden doğrulama.
+- b954f6a8bb79b64949495923cdad89d844f85ecd — tuzak cooldown-relative save record.
+- c15a757f4730bf35da808efbb36e717c9a629618 — tuzak save/restore, zaman tabanını yeniden kurma.
+- fa463137c3475d17b2725c027cdb38bff05ec4ab — şömine/tuzak save-restore regresyon kaynakları.
+- b84b0903152946e95821798b7ea4ee49f15116fd — structural graph snapshot API.
+- e9b04928f2ea075a44f0e4427b7cb94465a18d33 — candidate graph üstünde staged restore/doğrulama.
+- 9627be9c429db68a3a5035f80bfe952e8c47db5b — structural snapshot regresyon kaynakları.
 - Bu rapor commit'i ayrıca aynı dalda oluşturulur.
 
 ## 2. Satır analizi: şömine yaşam döngüsü
 
-### stone_fireplace_lifecycle.hpp — toplam 81 satır
+### stone_fireplace_lifecycle.hpp — toplam 92 satır
 
 - **1–6:** Header koruması ve ortak sözleşmeler. core.hpp Result/ErrorCode/Revision/Seconds tiplerini, taş halka header'ı ise geometri tanıma veri tiplerini sağlar.
 - **8–14:** wm namespace'i ve StoneFireplaceState. NotBuilt halka geçersiz/yok; Ready geçerli halka var ama ateş yanmıyor; Burning yalnız yakıt varken aktif yanma.
 - **16–23:** StoneFireplaceConfig. Halkanın tanıma eşikleri dışarıdan ayarlanabilir; yakıt kapasitesi, yakıt tüketimi, nominal ısı, maksimum tek zaman adımı ve tek taramada kabul edilen taş örneği sayısı da sınırlandırılır.
 - **25–34:** StoneFireplaceSnapshot. Save/UI/adaptör tarafına yayınlanabilir durum: runtime revision'ı, halka kaynak revision'ı, state, halka tanıma sonucu, pişirme kabı varlığı, yakıt/ısı ve geometrik değerlendirme. Bu bir save dosyası codec'i değildir.
-- **36–43:** StoneFireplaceTick. Advance çağrısının sonuçlarını raporlar; tüketilen ve kalan yakıtı, ısıyı, yakıt bitişini ve işlemden sonraki revision'ı verir.
-- **45–47:** Motor sınırı açıkça belirtilir. Bu sınıf Actor spawn etmez, trace atmaz, inventory tüketmez ve partikül/light yaratmaz. Bunlar Unreal adaptörünün işidir.
-- **49–54:** ReassessRing: yerel taş örnekleri ve kaynak revision'ı alır.
-- **56–61:** Yakıt ekleme, ateş yakma/söndürme, kap koyma ve zaman ilerletme API'leri. Durum değiştiren çağrılar expectedStateRevision alır; eski preview/UI isteği state'i yanlışlıkla değiştiremez.
-- **63–64:** Salt-okunur snapshot ve revision sorgusu.
-- **66–77:** Dahili doğrulama, ısı hesabı ve otoritatif state. stateRevision_ her kabul edilen durum değişikliğinde ilerler; ringSourceRevision_ geometri girdisinin eskiliğini engeller.
+- **36–43:** StoneFireplaceTick. Advance çağrısının tüketim, kalan yakıt, ısı ve fuel-out sonucunu verir.
+- **45–51:** StoneFireplaceSaveRecord schema v1: saved revision, fuel, pişirme kabı ve yükleme öncesi ateş yanıyor muydu bilgisi. Taş geometrisi kaydedilen geçerli sonucuna güvenilmez.
+- **53–55:** Sınıfın motor sınırı ve otorite açıklaması.
+- **59–71:** Halka reassess, yakıt/ateş/kap/time API'leri ve save/restore entry point'leri.
+- **73–74:** Salt okunur snapshot/revision.
+- **76–88:** Internal state. 87. satırdaki pending-resume flag, load sonrası halka yeniden görüldüğünde önceki yangını yalnızca yeni halka doğrulaması başarılıysa geri getirir.
 
-### stone_fireplace_lifecycle.cpp — toplam 201 satır
+### stone_fireplace_lifecycle.cpp — toplam 257 satır
 
-- **8–9 — constructor:** Yalnızca ayarları saklar; dünyada bir şey spawn etmez.
-- **11–35 — ConfigValid:** Halkanın min/max taş sayısı ve yarıçapı, toleranslar, yakıt kapasitesi/tüketimi, ısı, zaman adımı ve örnek limiti doğrulanır. Eklenen kontrol, merkez boşluk yarıçapının minimum halka yarıçapından küçük olmasını zorunlu kılar; aksi durumda tanım geometrik olarak kendi kendisiyle çelişirdi.
-- **37–68 — ReassessRing:**
+- **9–10 — constructor:** Yalnız ayarları saklar; Actor/spawn/trace yapmaz.
+- **12–36 — ConfigValid:** Halka parametrelerini, center-clearance < min ring radius koşulunu, yakıt/ısı/time step/sample limitlerini doğrular.
+- **38–74 — ReassessRing:**
   1. Ayar, merkez koordinatları ve nonzero kaynak revision'ı doğrulanır.
   2. Örnek sayısı maxStoneSamples sınırını aşarsa state'e dokunmadan BudgetExceeded döner.
   3. sourceRevision <= ringSourceRevision_ reddedilir; eski/aynı gözlem state'i geri saramaz.
   4. LocalStoneRingRecognizer::Assess geometrik sonucu üretir.
   5. Yalnız çağrı seviyesi doğrulamaları geçince değerlendirme ve source revision atomik olarak saklanır.
-  6. Halka geçersizleşirse NotBuilt olur ve ısı kesilir. Halka geçerliyse NotBuilt → Ready geçişi yapılır. Mevcut yanan halka yeni ölçümde de geçerliyse Burning sürer.
-  7. Runtime revision bir artırılır. Geometrik olarak geçersiz halka bir API hatası değildir; geçerli bir gözlem sonucudur ve recognized=false döner.
-- **70–89 — AddFuel:** Pozitif/sonlu yakıt, geçerli config ve doğru state revision aranır. Tanınmış halka yoksa yakıt eklenemez. Kabul edilen miktar kalan kapasiteyle sınırlıdır. Hiç yer kalmadıysa hata döner; kabul edilmeyen miktar yakıt state'ine yazılmaz.
-- **91–110 — Ignite:** Eski revision reddedilir; halka tanınmamışsa veya yakıt yoksa ateş yakılmaz. Zaten yanıyorsa Success(false) idempotent no-op'tur. Başarılı yakma state'i Burning yapar ve revision'ı artırır.
-- **112–122 — Extinguish:** Eski revision reddedilir. Yanma yoksa no-op; yanma varsa geçerli halka için Ready, geçersiz halka için NotBuilt durumuna geçer. Kalan yakıt silinmez.
-- **124–137 — PlaceCookingPot:** Sadece geçerli halkada ve ateş yanarken kap eklenebilir. Zaten kap varsa ikinci bir kap yaratma kararı üretmez. Kap state'i ateş sönünce otomatik silinmez; dünya adaptörü fiziksel objeyi ayrı yönetmelidir.
-- **139–177 — Advance:** Negatif/NaN zaman adımı, config hatası, maksimum yakalama adımından büyük delta ve stale revision reddedilir. Yanma yoksa veya delta sıfırsa state değiştirmeyen snapshot sonuçlanır. Yanarken yakıt deltaSeconds * fuelUnitsPerSecond kadar azalır. Yakıt bittiğinde sıfıra sabitlenir ve state yanmıyor durumuna geçer. Yakıt/ısı hesaplaması deterministiktir; rastgele ışık titremesi bu saf mekanik modelde bulunmaz.
-- **179–190 — Snapshot:** Otoritatif state'i kopyalayarak verir; çağıran taraf internal state'e doğrudan yazamaz.
-- **192–198 — CurrentHeatOutput:** Ateş yanmıyorsa veya halka geçersizse ısı sıfırdır. Aksi durumda nominalHeatOutput × clamp(fuel/maxFuel, 0..1) hesaplanır.
-- **200:** Namespace kapanışı.
+  6. Halka kaybolursa ateş NotBuilt olur ve pending resume silinir. Restore sonrası halka yeniden tanınırsa, save kaydında ateş yanıyordu ve yakıt varsa yeniden Burning olur; aksi halde Ready.
+  7. Runtime revision bir artırılır. Geometrik başarısızlık API hatası değil, recognized=false sonucudur.
+- **75–95 — AddFuel:** Pozitif/sonlu yakıt, geçerli config ve doğru state revision aranır. Tanınmış halka yoksa yakıt eklenemez. Kabul edilen miktar kalan kapasiteyle sınırlıdır. Hiç yer kalmadıysa hata döner; kabul edilmeyen miktar yakıt state'ine yazılmaz.
+- **96–116 — Ignite:** Eski revision reddedilir; halka tanınmamışsa veya yakıt yoksa ateş yakılmaz. Zaten yanıyorsa Success(false) idempotent no-op'tur. Başarılı yakma state'i Burning yapar ve revision'ı artırır.
+- **117–128 — Extinguish:** Eski revision reddedilir. Yanma yoksa no-op; yanma varsa geçerli halka için Ready, geçersiz halka için NotBuilt durumuna geçer. Kalan yakıt silinmez.
+- **129–143 — PlaceCookingPot:** Sadece geçerli halkada ve ateş yanarken kap eklenebilir. Zaten kap varsa ikinci bir kap yaratma kararı üretmez. Kap state'i ateş sönünce otomatik silinmez; dünya adaptörü fiziksel objeyi ayrı yönetmelidir.
+- **144–183 — Advance:** Negatif/NaN zaman adımı, config hatası, maksimum yakalama adımından büyük delta ve stale revision reddedilir. Yanma yoksa veya delta sıfırsa state değiştirmeyen snapshot sonuçlanır. Yanarken yakıt deltaSeconds * fuelUnitsPerSecond kadar azalır. Yakıt bittiğinde sıfıra sabitlenir ve state yanmıyor durumuna geçer. Yakıt/ısı hesaplaması deterministiktir; rastgele ışık titremesi bu saf mekanik modelde bulunmaz.
+- **184–201 — CreateSaveRecord:** Yalnız internal state tutarlıyken schema v1 kaydı verir. wasBurning intent'ini saklar.
+- **202–234 — RestoreFromSaveRecord:** Schema/revision/fuel sınırlarını önce kontrol eder. Invalid kayıt durum değiştirmez. Geçerli kayıt yakıt/kap state'ini geri yükler fakat halka geometrisine güvenmez; state'i NotBuilt yapar ve source revision'ı resetler. Kayıt öncesi yanıyorsa pending resume intent saklanır. Revision max(current,saved)+1 olur.
+- **235–247 — Snapshot:** Otoritatif state'in salt okunur kopyası.
+- **248–254 — CurrentHeatOutput:** Yanma ve doğrulanmış halka yoksa 0; aksi halde yakıt oranına göre nominal ısı.
+- **256:** Namespace kapanışı.
 
 ### Şömine adaptöründe henüz yapılmayanlar
 
@@ -81,26 +91,24 @@ Portable state machine, mevcut AStoneFireplace Actor'una henüz bağlanmadı. St
 
 ## 3. Satır analizi: tuzak yaşam döngüsü
 
-### trap_lifecycle.hpp — toplam 90 satır
+### trap_lifecycle.hpp — toplam 108 satır
 
 - **1–5:** Ortak Result/revision/time sözleşmesi ve namespace.
-- **7–12:** Kaynağa göre olay türü: basınç, tripwire, yakınlık, manuel.
-- **14–19:** Yaşam döngüsü: Disarmed, Armed, CoolingDown, Consumed.
-- **21–29:** Konfigürasyon. Her tuzağın kararlı ID'si; izin verilen trigger kaynağı; cooldown, sıfır cooldown için en düşük tekrar-arming aralığı, damage ve tek kullanımlık olma kuralı.
-- **31–40:** Snapshot; son kabul edilen event/instigator kimliği, zaman, cooldown bitişi ve trigger sayısı.
-- **42–48:** Trigger isteği. eventId tuzak için monoton artmalıdır; expectedStateRevision gözlemin hazırlandığı state'i temsil eder.
-- **50–60:** Trigger kararı. Adapter'ın uygulayacağı damage ve event ID'si, sonuç state'i/revision'ı ve cooldown bitişini taşır.
-- **62–64:** Sınır açıklaması: damage, ses, partikül ve fizik etkisi bu sınıfta yapılmaz.
-- **66–74:** Arm, Disarm, TryTrigger, Advance, Snapshot public API.
-- **76–87:** Özel doğrulama ve state alanları.
+- **7–19:** Trigger kaynakları ve lifecycle durumları.
+- **21–29:** Konfigürasyon: kararlı trap ID, kaynak, cooldown/minimum rearm, damage, one-shot ve cooldown üst sınırı.
+- **31–41:** Runtime snapshot; event/instigator history, hasTriggered flag, zamanlar ve trigger count.
+- **43–54:** TrapLifecycleSaveRecord schema v1. Mutlak dünya zamanı yerine son tetiklenmeden beri geçen süre ve kalan cooldown saklanır.
+- **56–74:** Trigger request/decision contract. Karar alanları side effect uygulamaz; adaptörün uygulayacağı damage/event/state'i tarif eder.
+- **78–91:** Arm/Disarm/TryTrigger/Advance/save/restore/snapshot public API.
+- **93–104:** Config ve state. hasTriggered_ sentinel zamandan bağımsız olarak trigger geçmişini korur.
 
 ### trap_lifecycle.cpp — toplam 161 satır
 
-- **8–9 — constructor:** Konfigürasyonu alır; dünya işlemi yapmaz.
-- **11–26 — ConfigValid:** Tuzağın ID'si, enum kaynağı, cooldown aralığı, minimum tekrar aralığı, damage ve maksimum cooldown sonlu/sınır içinde olmalıdır.
-- **28–47 — Arm:** Config ve revision kontrolü; Consumed tuzak tekrar kurulamaz, zaten Armed ise no-op, CoolingDown iken erken kurma reddedilir. Yalnız Disarmed → Armed gerçek state değişimi revision artırır.
-- **49–65 — Disarm:** Config/revision doğrular. Consumed değiştirilemez; zaten kapalıysa no-op. Diğer durumlar Disarmed olur. Bu çağrı cooldown timer'ını iptal etmek isteyen Unreal adaptörü için authoritative karar noktasıdır.
-- **67–123 — TryTrigger:**
+- **9–10 — constructor:** Konfigürasyonu alır; dünya işlemi yapmaz.
+- **12–28 — ConfigValid:** ID, enum, cooldown, minimum rearm gecikmesi, damage ve üst sınırları doğrular.
+- **29–49 — Arm:** Config ve revision kontrolü; Consumed tuzak tekrar kurulamaz, zaten Armed ise no-op, CoolingDown iken erken kurma reddedilir. Yalnız Disarmed → Armed gerçek state değişimi revision artırır.
+- **50–67 — Disarm:** Config/revision doğrular. Consumed değiştirilemez; zaten kapalıysa no-op. Diğer durumlar Disarmed olur. Bu çağrı cooldown timer'ını iptal etmek isteyen Unreal adaptörü için authoritative karar noktasıdır.
+- **68–129 — TryTrigger:**
   1. Config, event ID ve zaman doğrulanır.
   2. Beklenen revision mevcut değilse StaleRevision.
   3. Event ID, son kabul edilmiş event ID'den büyük değilse tekrar/sıra dışı olay Conflict ile reddedilir.
@@ -110,8 +118,10 @@ Portable state machine, mevcut AStoneFireplace Actor'una henüz bağlanmadı. St
   7. Event ID, tetikleme zamanı ve instigator tek kabul işlemi olarak kaydedilir; trigger sayısı ve state revision artırılır.
   8. Tek kullanımlı tuzak Consumed, diğer tuzak CoolingDown olur.
   9. Dönen karar, adaptörün damage uygulayıp uygulamaması gerektiğini bildirir. instigatorId == 0 ise çevresel/kurbanı olmayan event damage uygulamaz.
-- **128–145 — Advance:** Zaman/config/revision kontrolü. Cooldown bitmediyse no-op; bitmişse CoolingDown → Armed ve revision artışı.
-- **147–159 — Snapshot:** Kalıcılık/diagnostics katmanına okunur state sunar. Snapshot tek başına disk serialization değildir.
+- **130–148 — Advance:** Zaman/config/revision kontrolü. Cooldown bitmediyse no-op; bitmişse CoolingDown → Armed ve revision artışı.
+- **149–181 — CreateSaveRecord:** Dünya saati geçerliyse ve son tetiklenmeden geriye gitmiyorsa state'i kayda çevirir; CoolingDown için cooldown bitimine kalan süreyi yazar.
+- **182–245 — RestoreFromSaveRecord:** Schema, trap ID, lifecycle/config tutarlılığı, trigger history ve zaman alanları doğrulanır. Kayıt yanlışsa live state değişmez. Mutlak dünya saati taşınmaz; elapsed ve remaining süreler yeni clock origin'e çevrilir. Revision stale request'leri geçersiz kılacak şekilde artırılır.
+- **246–259 — Snapshot:** Diagnostics/runtime snapshot; snapshot disk formatı değildir.
 
 ### Tuzak adaptörü kuralı
 
@@ -184,13 +194,37 @@ Destek yükü bir düğümün aktif supporting edge'lerine eşit bölünür. Kir
 
 ### Modules/tests/module_tests.cpp
 
-- **1–28:** Ortak modül başlıkları; 21–22 yeni şömine/tuzak header'ları. CHECK hata halinde ilgili test grubunu false döndürür.
-- **240–320 — TestSnapAndExcavation:** 252–271 yeni kontrol kaynakları: preview sonrası dolu socket, hedef uyumsuzluğu, destek kaybı; candidate-level occupancy/compatibility/support reddi; explicit socket zorunluluğu. 272 sonrası mevcut candidate bütçesi, eşik, plank grid ve excavate testleri sürer.
-- **366–428 — TestStructuralIntegrity:** Mevcut yük ve collapse testleri; 394–428 ek bölüm yük update'inin revision artırdığını, destek kenarı silmenin alt düğümü unsupported yaptığını, nonexistent edge'i reddettiğini, edge disable/enable ve grounded/capacity güncellemelerini kontrol eder.
-- **966–1007 — TestStoneFireplaceLifecycle:** Geçerli 8 taşlı ring; erken ignition reddi; stale ring revision; yakıt ekleme; stale ignition; ateş ve kap; 1.5 s içinde 3 yakıt birimi tüketme/135 heat; halkanın açılmasıyla ateş/ısı işlevinin kapanması fakat yakıt ve kap state'inin korunması.
-- **1009–1037 — TestTrapLifecycle:** Yanlış kaynak reddi; tek event'in kabulü; aynı event ID replay reddi; cooldown öncesi/sonrası; yeniden tetik; consumed tuzağın rearm edilememesi.
-- **1039–1070 — TestLocalStoneRingRecognition:** Önceden eklenmiş halka geometrisi kabul/reddetme durumları.
-- **1074–1104 — test table/runner:** Test grupları bu tabloda kayıtlıdır. Bu dilimde kaynak kapsamı 17'den 19 gruba çıktı. Bu yalnızca kayıt sayısıdır; PASS sayısı değildir.
+- **1–28:** Ortak modül başlıkları; 21–22 şömine/tuzak header'ları. CHECK hata halinde test grubu false döndürür.
+- **240–320 — TestSnapAndExcavation:** 252–271 yeni snap gate kaynakları; candidate budget/grid/kazı kontrolleri devam eder.
+- **366–463 — TestStructuralIntegrity:** Yük/collapse; snapshot roundtrip, bozuk/dangling edge ve cycle reddi kaynakları. Geçersiz restore'un hedef graph state/revision'ını değiştirmemesi amaçlanır.
+- **465–999 — diğer mevcut test grupları:** Çevre simülasyonu, raid scoring/spawn, chunk scheduler, material rule cache, plant/animal, crafting ve restore transaction testleri bu aralıkta kalır.
+- **1001–1060 — TestStoneFireplaceLifecycle:** Ring, fuel, ignition/pot/heat; 995–1011 aralığı save/restore, güvenli NotBuilt geçişi, geometri yeniden doğrulanınca yangının yeniden başlaması ve bozuk yakıt kaydını reddetme kaynaklarıdır.
+- **1062–1118 — TestTrapLifecycle / ring recognition başlangıcı:** Tuzak kaynak/tekrarlı event/cooldown; 1048–1068 save/restore sırasında relative cooldown ve event history; 1076–1081 consumed tuzak kalıcılık kaynakları. Halka tanıma testi 1120'de başlar.
+- **1120–1151 — TestLocalStoneRingRecognition:** Geometri kabul/reddetme durumları.
+- **1155–1185 — test table/runner:** 19 test group kayıtlıdır; bu kaynak sayısı PASS sayısı değildir.
+
+## 7A. Ek dilim — save/restore sözleşmesi ve structural graph snapshot
+
+### Şömine save record — yeni kaynak aralıkları
+- Header satırları **45–51**: schema v1, saved revision, fuel, pot ve yükleme öncesi ateş yanıyor muydu bilgisi.
+- Public API satırları **70–71**: CreateSaveRecord ve RestoreFromSaveRecord.
+- Private pending intent satırı **87**: yükleme öncesi ateş yanıyorsa, live taş geometrisi tekrar doğrulanana kadar yeniden yakma kararı tutulur.
+- C++ satırları **184–201 — CreateSaveRecord**: yalnız internal state tutarlıyken kayıt üretir.
+- C++ satırları **202–234 — RestoreFromSaveRecord**: schema, revision/fuel sınırı ve revizyon taşmasını önce kontrol eder; bozuk kayıt state'i değiştirmez. Yakıt/kap geri yüklenir fakat saved ring geometry live world kanıtı sayılmaz. State NotBuilt ve heat 0 olur; ring source revision sıfırlanır. Save öncesi yanıyorsa pending resume intent saklanır. Live halka tekrar tanınırsa ve yakıt varsa yangın devam edebilir. Bu binary codec değil, taşınabilir restore contract'ıdır.
+
+### Tuzak save record — yeni kaynak aralıkları
+- Header satırları **31–54**: runtime snapshot, hasTriggered, schema v1 save record ve cooldown'ı kalan süre olarak saklama.
+- Header satırları **86–88**: CreateSaveRecord/RestoreFromSaveRecord.
+- Private state **101–104**: hasTriggered_ boolean, restore edilen son trigger zamanı negatif bir clock-relative değer olsa bile “hiç tetiklenmedi” sentinel'ıyla karıştırılmasını engeller.
+- C++ **149–181 — CreateSaveRecord**: mutlak dünya saati yerine secondsSinceLastTrigger ve remainingCooldownSeconds kaydeder.
+- C++ **182–245 — RestoreFromSaveRecord**: schema, trap identity, state/config tutarlılığı, event history ve clock değerlerini kontrol eder; yeni world clock'ta cooldown end'i yeniden üretir. Bozuk kayıt commit edilmez; başarılı restore revision'ı artırılır.
+- Gerçek disk byte'larına çevirmek, save-slot sürüm geçişi ve UE SaveGame aktör kimliği eşlemesi hâlâ adapter/codec işidir.
+
+### Structural graph snapshot — yeni kaynak aralıkları
+- Header structural_integrity.hpp **37–42**: versioned graph snapshot (schemaVersion, saved graph revision, düğüm ve kenar listeleri); **58–61** snapshot create/restore public API.
+- structural_integrity.cpp **208–229 — CreateSnapshot**: limitler uygulanır; unordered map içerikleri kararlı ID sırasıyla kayıt listesine çevrilir.
+- structural_integrity.cpp **231–269 — RestoreSnapshot**: limit/schema/revision kontrolü; önce private candidate graph'a düğümler/kenarlar eklenir; dangling reference/duplicate/invalid node-edge ve aktif graph cycle kontrolü yapılır. Tüm kontroller bitmeden live map'ler değiştirilmez. Başarılı restore yeni revision'a geçer. Bu typed snapshot'tır; henüz byte codec veya UE SaveGame binding değildir.
+- Bu yaklaşım bozuk snapshot'taki kenarın mevcut live graph'ı kısmen değiştirmesini önlemek için tasarlandı.
 
 ## 8. Claude Code için entegrasyon sırası
 
@@ -217,7 +251,9 @@ Destek yükü bir düğümün aktif supporting edge'lerine eşit bölünür. Kir
 - [ ] PIE'de gerçek taş halkası tanıma/şömine kurma/ısı uygulaması bağlanmadı.
 - [ ] Portable trap model UE trap component'ine bağlanmadı.
 - [ ] StructuralGraph UE UStructuralIntegritySubsystem için tek otorite haline getirilmedi.
-- [ ] Save/load serialization, crash recovery ve gerçek resource/actor rollback kanıtı yok.
+- [x] Şömine ve tuzak için schema-versioned portable save record ve doğrulanan restore state geçişleri var.
+- [x] StructuralGraph için versioned snapshot oluşturma ve candidate graph üzerinde doğrulayıp restore etme akışı var.
+- [ ] Bu kayıtlar için binary byte codec, Unreal SaveGame serialization, crash recovery ve actor/inventory rollback kanıtı yok.
 - [ ] Performance profili yok; performans iyileşti iddiası yapılmamalı.
 
 Bu ayrım önemlidir: kod dilimleri ve test kaynakları mevcuttur; test sonucu ve motor entegrasyonu kanıtı henüz mevcut değildir.
